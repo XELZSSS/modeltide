@@ -1,4 +1,11 @@
-import { upstreamConfig, DEFAULT_TTL_MS, THIRTY_MINUTES, PARTIAL_FAIL_TTL_MS, cacheKeys, ttlFor, UPSTREAM_TIMEOUT_MS } from "@/shared/config";
+import {
+  upstreamConfig,
+  DEFAULT_TTL_MS,
+  THIRTY_MINUTES,
+  cacheKeys,
+  ttlFor,
+  UPSTREAM_TIMEOUT_MS,
+} from "@/shared/config";
 import type { OpenRouterRankingsPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
@@ -34,6 +41,13 @@ const PRICING_TTL_MS = THIRTY_MINUTES;
 const PER_MILLION = 1_000_000;
 const DIRECTORY_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
 
+function parsePrice(v: unknown): number {
+  if (v == null) return NaN;
+  if (typeof v === "string" && !v.trim()) return NaN;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 function buildPricingEntry(prompt: number, completion: number, inputCacheRead: number): PricingEntry | null {
   if (!Number.isFinite(prompt) || prompt < 0 || !Number.isFinite(completion) || completion < 0) return null;
   return { prompt, completion, input_cache_read: Number.isFinite(inputCacheRead) ? inputCacheRead : 0 };
@@ -52,9 +66,10 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
   const metaRecord: Record<string, ModelMetaEntry> = {};
   for (const m of rows) {
     if (typeof m?.id !== "string" || !m.id.trim() || !m.pricing) continue;
-    const prompt = Number(m.pricing.prompt);
-    const completion = Number(m.pricing.completion);
-    const inputCacheRead = Number(m.pricing.input_cache_read) || 0;
+    const prompt = parsePrice(m.pricing.prompt);
+    const completion = parsePrice(m.pricing.completion);
+    const rawCache = parsePrice(m.pricing.input_cache_read);
+    const inputCacheRead = Number.isFinite(rawCache) ? rawCache : 0;
     const pricingEntry = buildPricingEntry(prompt, completion, inputCacheRead);
     if (pricingEntry) {
       pricingRecord[m.id.trim()] = pricingEntry;
@@ -63,10 +78,9 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
     }
     const contextLength = numPositive(m.context_length);
     const agenticIndex = num(m.benchmarks?.artificial_analysis?.agentic_index);
-    const metaPricing =
-      pricingEntry
-        ? { input: prompt * PER_MILLION, output: completion * PER_MILLION, cacheHit: inputCacheRead * PER_MILLION }
-        : undefined;
+    const metaPricing = pricingEntry
+      ? { input: prompt * PER_MILLION, output: completion * PER_MILLION, cacheHit: inputCacheRead * PER_MILLION }
+      : undefined;
     if (contextLength == null && agenticIndex == null && metaPricing == null) continue;
     const metaEntry: ModelMetaEntry = {};
     if (contextLength != null) metaEntry.contextLength = contextLength;
@@ -93,14 +107,19 @@ async function fetchModelDirectory(
   ctx: AppContext,
 ): Promise<{ pricing: Map<string, PricingEntry>; meta: Record<string, ModelMetaEntry> }> {
   try {
-    const record = await ctx.cache.withTtl<DirectoryCacheEntry>(cacheKeys.openRouterPricing, PRICING_TTL_MS, async () => {
-      const res = await ctx.http.json<{ data: PricingRow[] }>(`${OPENROUTER}/api/v1/models`, DIRECTORY_FETCH_OPTS);
-      return { data: parseDirectoryRows(res?.data ?? []) };
-    });
+    const record = await ctx.cache.withTtl<DirectoryCacheEntry>(
+      cacheKeys.openRouterPricing,
+      PRICING_TTL_MS,
+      async () => {
+        const res = await ctx.http.json<{ data: PricingRow[] }>(`${OPENROUTER}/api/v1/models`, DIRECTORY_FETCH_OPTS);
+        return { data: parseDirectoryRows(res?.data ?? []) };
+      },
+    );
     return { pricing: new Map(Object.entries(record.pricing)), meta: record.meta };
   } catch (err) {
     ctx.log("warn", `[openrouter] directory fetch failed: ${errMsg(err)}`);
-    await ctx.cache.setSafe(cacheKeys.openRouterPricing, { pricing: {}, meta: {} }, PARTIAL_FAIL_TTL_MS);
+    // Do not overwrite good cached directory with empty object; withTtl already
+    // serves stale on failure. Return empty so callers degrade to partial data.
     return { pricing: new Map<string, PricingEntry>(), meta: {} };
   }
 }
@@ -113,12 +132,18 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
   ctx.cache.withTtl(cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async () => {
     let rankings: { data?: ModelRow[] };
     try {
-      rankings = await ctx.http.json<{ data: ModelRow[] }>(`${OPENROUTER}/api/frontend/v1/rankings/models`, DIRECTORY_FETCH_OPTS);
+      rankings = await ctx.http.json<{ data: ModelRow[] }>(
+        `${OPENROUTER}/api/frontend/v1/rankings/models`,
+        DIRECTORY_FETCH_OPTS,
+      );
     } catch (err) {
       throw new UpstreamError(`OpenRouter: all upstream requests failed (${errMsg(err)})`);
     }
     if (!Array.isArray(rankings?.data)) {
       throw new UpstreamError("OpenRouter: rankings upstream returned a non-array response");
+    }
+    if (rankings.data.length === 0) {
+      throw new UpstreamError("OpenRouter: rankings upstream returned empty array");
     }
     const validRows = rankings.data.filter((r) => typeof r.model_permaslug === "string" && r.model_permaslug.trim());
     if (validRows.length === 0 && rankings.data.length > 0) {

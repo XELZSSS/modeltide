@@ -4,7 +4,7 @@ import { useDevice } from "@/client/providers";
 import { Card, CardContent, Dot, Td, Th, Tr } from "@/client/components/ui";
 import { computeWinners, type CompareRow, type Winner } from "./logic";
 
-export interface CompareTableProps<T> {
+interface CompareTableProps<T> {
   rows: CompareRow<T>[];
   models: T[];
   getKey: (m: T, index: number) => string;
@@ -56,11 +56,13 @@ function DesktopTable<T>({
             </thead>
             <tbody>
               {rows.map((row) => (
-                <Tr key={row.label} className="hover:bg-hover transition-colors">
-                  <Td className="px-3 py-2.5 text-text-secondary sticky left-0 bg-bg-card z-10">{row.label}</Td>
+                <Tr key={row.id ?? row.label} className="hover:bg-hover transition-colors">
+                  <Th scope="row" className="px-3 py-2.5 text-text-secondary sticky left-0 bg-bg-card z-10">
+                    {row.label}
+                  </Th>
                   {models.map((model, index) => (
                     <Td key={getKey(model, index)} align="right" className="px-3 py-2.5">
-                      {renderValue(row, model, winners.get(row.label)?.get(getKey(model, index)) ?? null)}
+                      {renderValue(row, model, winners.get(row.id ?? row.label)?.get(getKey(model, index)) ?? null)}
                     </Td>
                   ))}
                 </Tr>
@@ -104,9 +106,9 @@ function MobileTable<T>({
               </p>
               <div className="flex flex-col gap-1">
                 {rows.map((row) => (
-                  <div key={row.label} className="flex items-center justify-between gap-2">
+                  <div key={row.id ?? row.label} className="flex items-center justify-between gap-2">
                     <span className="text-xs text-text-secondary">{row.label}</span>
-                    {renderValue(row, model, winners.get(row.label)?.get(getKey(model, index)) ?? null)}
+                    {renderValue(row, model, winners.get(row.id ?? row.label)?.get(getKey(model, index)) ?? null)}
                   </div>
                 ))}
               </div>
@@ -123,9 +125,12 @@ function MobileTable<T>({
       <CardContent padding="sm">
         <div className="flex flex-col divide-y divide-border">
           {rows.map((row) => {
-            const perModel = winners.get(row.label);
+            const perModel = winners.get(row.id ?? row.label);
             return (
-              <div key={row.label} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+              <div
+                key={row.id ?? row.label}
+                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+              >
                 <span className="text-xs font-medium text-text-secondary shrink-0">{row.label}</span>
                 <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
                   {models.map((model, index) => (

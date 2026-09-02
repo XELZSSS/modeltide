@@ -10,7 +10,9 @@ if ("fonts" in document) {
   void document.fonts.load('400 1em "JetBrains Mono Variable"');
 }
 
-createRoot(document.getElementById("root")!).render(
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("#root element is missing (index.html out of sync?)");
+createRoot(rootEl).render(
   <StrictMode>
     <App />
   </StrictMode>,

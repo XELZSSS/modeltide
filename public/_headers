@@ -6,15 +6,37 @@
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
+# App icons are versioned with the release; cache them long but revalidate.
+/icons/*
+  Cache-Control: public, max-age=86400, immutable
+
+# PWA manifest changes rarely; a day of caching is a safe middle ground.
+/manifest.webmanifest
+  Cache-Control: public, max-age=86400
+
+# SPA entry: must revalidate so deploys reach clients immediately.
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
 # Security headers for static responses (index.html, icons, manifest).
-# Note: Worker-generated responses (e.g. /api/*) set their own headers in code.
+# Note: Worker-generated responses (e.g. /api/*) set their own headers in code;
+# the /api/* block below is edge-level defense-in-depth for same-Worker hosting
+# (no CORS needed: client and API share one Worker/origin).
 # connect-src is 'self': pointing the client at a separate API origin via
 # VITE_API_BASE requires adding that origin to connect-src here.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  X-Frame-Options: SAMEORIGIN
   Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  # frame-ancestors 'none' already forbids embedding; no X-Frame-Options needed.
   # The sha256 hash allowlists the inline theme pre-paint script in index.html.
   # If that script changes, regenerate the hash: npm run hash:csp
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-9WIcVEt7UrE5boJZ9F0wlIgQvVepCfcQ5/a5gaDaYbU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-I9oetXEB+2G9QlOgXptPvqpZtvF/lsxN44jscjGDNuc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+
+# Defense-in-depth for API responses served by the same Worker.
+/api/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin

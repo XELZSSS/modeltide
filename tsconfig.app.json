@@ -5,6 +5,16 @@
     "jsx": "react-jsx",
     "types": ["vite/client"]
   },
-  "include": ["src/client/**/*.ts", "src/client/**/*.tsx", "src/shared/**/*.ts", "src/shared/**/*.tsx", "vite.config.ts", "vitest.config.ts"],
+  "include": [
+    "src/client/**/*.ts",
+    "src/client/**/*.tsx",
+    "src/shared/**/*.ts",
+    "src/shared/**/*.tsx",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ],
+  // NOTE: src/shared is also compiled by tsconfig.worker.json WITHOUT DOM lib,
+  // so shared code must stay DOM-free (no document/window/DOM types) or the
+  // worker build breaks. See tsconfig.json references.
   "exclude": ["dist", "node_modules"]
 }

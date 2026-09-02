@@ -10,7 +10,13 @@ import { Card, CardContent, StatCard, StatGrid } from "@/client/components/ui";
 import { formatUptimePct } from "@/client/utils";
 import "@/client/utils/charts";
 import { useChartTheme } from "@/client/hooks";
-import { defaultTooltipOptions, chartBase, axisTickStyle, axisGridStyle, axisDashedBorderStyle } from "@/client/utils/charts";
+import {
+  defaultTooltipOptions,
+  chartBase,
+  axisTickStyle,
+  axisGridStyle,
+  axisDashedBorderStyle,
+} from "@/client/utils/charts";
 import { SOURCE_LABELS, SOURCE_IDS, ONE_HOUR } from "@/shared/config";
 import type { SourceStatus } from "@/shared/types";
 import { UptimeStrip } from "./UptimeStrip";
@@ -22,13 +28,18 @@ function isSourceId(value: string | undefined): value is SourceStatus["id"] {
 
 // Beijing time (UTC+8, no DST). The offset is applied manually and the UTC fields are
 // read so the labels never depend on the viewer's host timezone.
+// NOTE: axis labels are Beijing wall-clock; overseas viewers see GMT+8, not local time.
 const BEIJING_OFFSET_MS = 8 * ONE_HOUR;
 const beijingHHMM = (ts: number): string => new Date(ts + BEIJING_OFFSET_MS).toISOString().slice(11, 16);
+
+/** Palette slot for the latency line; falls back to the tick color when the theme is minimal. */
+const LATENCY_COLOR_SLOT = 6;
 
 const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: number; latencyMs: number | null }[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();
 
+  const latencyColor = theme.palette[LATENCY_COLOR_SLOT] ?? theme.tick;
   const data = useMemo(
     () => ({
       labels: samples.map((s) => beijingHHMM(s.t)),
@@ -36,8 +47,8 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
         {
           label: t("latencyHistory"),
           data: samples.map((s) => (s.latencyMs != null ? s.latencyMs / 1000 : null)),
-          borderColor: theme.palette[6],
-          backgroundColor: theme.palette[6],
+          borderColor: latencyColor,
+          backgroundColor: latencyColor,
           borderWidth: 2,
           pointRadius: 0,
           pointHoverRadius: 4,
@@ -65,18 +76,22 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
         tooltip: {
           ...defaultTooltipOptions(theme),
           callbacks: {
-            title: (items) => (items[0] ? beijingHHMM(samples[items[0]!.dataIndex]?.t ?? 0) : ""),
+            // Labels already carry the Beijing HH:MM strings; read them off the
+            // chart instead of closing over `samples` so options stay stable.
+            title: (items) => items[0]?.label ?? "",
             label: (ctx) => (ctx.parsed.y == null ? "—" : `${Number(ctx.parsed.y).toFixed(2)}s`),
           },
         },
       },
     }),
-    [theme, samples],
+    [theme],
   );
 
   return (
     <div className="w-full h-[200px]">
-      <Line data={data} options={options} />
+      <figure className="h-full">
+        <Line data={data} options={options} role="img" aria-label={t("latencyHistory")} />
+      </figure>
     </div>
   );
 });
@@ -96,7 +111,14 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
       <PageHeader title={t(SOURCE_LABELS[id])} description={t("statusPageTitle")} />
 
       <StatGrid columns={4}>
-        <StatCard label={t("statusCurrent")} value={summary?.ok ? t("statusOnline") : t("statusOffline")} />
+        <StatCard
+          label={t("statusCurrent")}
+          value={
+            summary == null || summary.checkedAt == null
+              ? t("uptimeNoData")
+              : t(summary.ok ? "statusOnline" : "statusOffline")
+          }
+        />
         <StatCard label={t("uptime24h")} value={pct(summary?.uptime24h ?? null)} />
         <StatCard label={t("uptime7d")} value={pct(summary?.uptime7d ?? null)} />
         <StatCard
@@ -131,7 +153,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
         ) : (
           <div className="divide-y divide-border rounded-xl border border-border bg-bg-card">
             {events.map((event) => (
-              <StatusEventRow key={event.at} event={event} />
+              <StatusEventRow key={`${event.id}-${event.at}-${event.type}`} event={event} />
             ))}
           </div>
         )}

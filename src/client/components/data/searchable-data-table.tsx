@@ -1,8 +1,9 @@
 import { memo } from "react";
 import { useFilteredData } from "@/client/hooks";
+import { useSearchStore } from "@/client/stores";
 import { DataTable, type DataTableProps } from "./data-table";
 
-export interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
+interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
   data: T[];
   /** Fields the global search term matches against; keep identity stable (module-level const or useCallback). */
   getSearchFields: (row: T) => string[];
@@ -15,7 +16,8 @@ export interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "da
  */
 function SearchableDataTableInner<T>({ data, getSearchFields, ...tableProps }: SearchableDataTableProps<T>) {
   const filtered = useFilteredData(data, getSearchFields);
-  return <DataTable data={filtered} {...tableProps} />;
+  const searchTerm = useSearchStore((s) => s.searchTerm);
+  return <DataTable data={filtered} resetKey={searchTerm} {...tableProps} />;
 }
 
 export const SearchableDataTable = memo(SearchableDataTableInner) as typeof SearchableDataTableInner;

@@ -14,14 +14,24 @@ import {
 import type { ChartTheme } from "@/client/hooks/useChartTheme";
 
 // Register once centrally so lazy chunks don't each bundle a separate register call.
-ChartJS.register(CategoryScale, LinearScale, RadialLinearScale, BarElement, LineElement, PointElement, Tooltip, Legend, Filler);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  RadialLinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Tooltip,
+  Legend,
+  Filler,
+);
 
 // Canvas text cannot inherit the page font; align chart typography with the app webfont once.
 ChartJS.defaults.font.family = "'Inter', system-ui, sans-serif";
 ChartJS.defaults.font.size = 12;
 
 // Chart palette referencing CSS variables so colors adapt to the active theme (DOM usage).
-export const COOL_COLORS = [
+const COOL_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
   "var(--chart-3)",
@@ -64,15 +74,17 @@ export const lineSeriesStyle = {
 
 /** Concrete color for a series slot, cycling through the theme palette. */
 export function seriesColor(theme: ChartTheme, index: number): string {
-  return theme.palette[index % theme.palette.length]!;
+  if (theme.palette.length === 0) return "#888";
+  return theme.palette[index % theme.palette.length] as string;
 }
 
 /** Returns the chart color for a model, cycling through the palette. */
 export function getModelColor(index: number): string {
-  return COOL_COLORS[index % COOL_COLORS.length]!;
+  if (COOL_COLORS.length === 0) return "#888";
+  return COOL_COLORS[index % COOL_COLORS.length] as string;
 }
 
-/** Converts a hex color like "#2563eb" to an rgba() string, for canvas fills that cannot read CSS vars. */
+/** Converts a 3/6-digit hex color to an rgba() string, for canvas fills that cannot read CSS vars. */
 export function hexToRgba(hex: string, alpha: number): string {
   const value = hex.replace("#", "");
   if (!/^[0-9a-f]{3}$/i.test(value) && !/^[0-9a-f]{6}$/i.test(value)) {
@@ -109,5 +121,3 @@ export function defaultTooltipOptions(theme: ChartTheme): Partial<TooltipOptions
     bodyFont: { size: 12 },
   };
 }
-
-export { ChartJS };

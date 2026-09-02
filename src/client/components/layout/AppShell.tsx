@@ -20,7 +20,9 @@ const ACCENT_BY_PREFIX: readonly (readonly [string, string])[] = [
 ];
 
 function accentForPath(pathname: string): string {
-  return ACCENT_BY_PREFIX.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? "home";
+  // Segment-boundary match so /statusFoo or /model-xyz don't inherit a section accent.
+  const hit = ACCENT_BY_PREFIX.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return hit?.[1] ?? "home";
 }
 
 /** Application chrome: desktop/mobile nav, main scroll area, settings and "more" sheets. */

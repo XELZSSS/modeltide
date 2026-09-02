@@ -18,13 +18,17 @@ import {
   type PricingEntry,
 } from "@/server/sources/openrouter/mapping";
 import { getUptime } from "@/server/sources/uptime";
+import { getModels } from "@/server/sources/huggingface";
+import { CacheService } from "@/server/infra/cache";
 import { mergeSample } from "./status-history/merge";
 import { deriveEvents } from "./status-history/events";
 import { buildHistoryPayload } from "./status-history/payload";
 import { uptimeRatio, avgLatency } from "./status-history/utils";
 import { getStatusHistory, statusFromStore } from "./status-history/store";
 import type { HistoryStore } from "./status-history/types";
-import { aggregateProbes, type ProbeTarget } from "@/server/sources/probe";
+import { aggregateProbes, buildTargets, type ProbeTarget } from "@/server/sources/probe";
+import { normalizeModelLimit, PARTIAL_FAIL_TTL_MS, DEFAULT_TTL_MS } from "@/shared/config";
+import { readStore } from "./status-history/store";
 import type { AppContext } from "@/server/context";
 import { BENCHMARK_KEYS } from "@/shared/config";
 import type { DayBucket, UptimeSample } from "@/shared/types";
@@ -32,9 +36,6 @@ import type { SourceStatus } from "@/shared/types";
 
 // Consolidated tests for the upstream data sources: Artificial Analysis mapping,
 // OpenRouter mapping, the uptime KV helper and the status-history store.
-
-// -- artificial-analysis mapping ----------------------------------------------
-
 function rawModel(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: "m1",
@@ -290,8 +291,6 @@ describe("mapEntry (text-to-image)", () => {
   });
 });
 
-// -- openrouter mapping ---------------------------------------------------------
-
 function row(over: Partial<ModelRow> = {}): ModelRow {
   return {
     date: "2026-08-01",
@@ -423,8 +422,6 @@ describe("mapModels", () => {
   });
 });
 
-// -- uptime ---------------------------------------------------------------------
-
 function fakeKV(initial?: Record<string, string>) {
   const store = new Map<string, string>(Object.entries(initial ?? {}));
   return {
@@ -479,8 +476,6 @@ describe("getUptime", () => {
     expect(uptimeMs).toBeGreaterThanOrEqual(0);
   });
 });
-
-// -- status-history --------------------------------------------------------------
 
 const MIN = 60_000;
 const NOW = Date.UTC(2026, 7, 30, 12, 0, 0); // 2026-08-30T12:00Z
@@ -553,8 +548,6 @@ describe("uptimeRatio / avgLatency", () => {
     expect(avgLatency([sample(5, false), sample(1, false)], NOW - 30 * MIN)).toBeNull();
   });
 });
-
-// -- probe aggregation & status derivation --------------------------------------
 
 const target = (id: SourceStatus["id"]): ProbeTarget => ({ id, url: `https://upstream.test/${id}` });
 const okProbe = (status = 200, latencyMs = 500) => ({ ok: true, status, latencyMs, error: null });
@@ -736,5 +729,96 @@ describe("getStatusHistory sample-on-read", () => {
     expect(or.ok).toBe(false);
     expect(or.latencyMs).toBeNull();
     expect(or.uptime24h).toBe(0);
+  });
+});
+
+describe("normalizeModelLimit", () => {
+  it("snaps arbitrary limits to the 50/100/500 cache buckets", () => {
+    expect(normalizeModelLimit(1)).toBe(50);
+    expect(normalizeModelLimit(7)).toBe(50);
+    expect(normalizeModelLimit(50)).toBe(50);
+    expect(normalizeModelLimit(80)).toBe(100);
+    expect(normalizeModelLimit(500)).toBe(500);
+    expect(normalizeModelLimit(499)).toBe(500);
+  });
+});
+
+describe("buildTargets", () => {
+  it("samples one feed per news category instead of all 19 feeds", async () => {
+    const { NEWS_CATEGORIES } = await import("@/shared/config");
+    const targets = buildTargets();
+    const news = targets.filter((t) => t.id === "news");
+    expect(news).toHaveLength(NEWS_CATEGORIES.length);
+    expect(targets).toHaveLength(3 + NEWS_CATEGORIES.length);
+  });
+});
+
+describe("readStore", () => {
+  it("self-heals a corrupted history entry instead of throwing", async () => {
+    const deleted: string[] = [];
+    const ctx = {
+      kv: {
+        get: async () => "truncated-json{{{",
+        put: async () => {},
+        delete: async (key: string) => {
+          deleted.push(key);
+        },
+      },
+    } as unknown as AppContext;
+    await expect(readStore(ctx)).resolves.toEqual({ sources: {} });
+    expect(deleted).toContain("status:history:v1");
+  });
+});
+
+describe("getModels empty-result TTL", () => {
+  function hfCtx(
+    items: unknown[],
+    kvStore = new Map<string, string>(),
+  ): { ctx: AppContext; kvStore: Map<string, string> } {
+    const kv = {
+      get: async (key: string) => kvStore.get(key) ?? null,
+      put: async (key: string, value: string) => {
+        kvStore.set(key, value);
+      },
+    } as unknown as KVNamespace;
+    const ctx = {
+      cache: new CacheService(kv, "v1"),
+      http: { json: async () => items } as unknown as AppContext["http"],
+      kv,
+      log: () => {},
+    };
+    return { ctx, kvStore };
+  }
+
+  it("caches empty results briefly so transient failures are retried soon", async () => {
+    const { ctx, kvStore } = hfCtx([]);
+    await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 500 });
+    const envelope = JSON.parse([...kvStore.values()][0]!) as { e: number };
+    expect(envelope.e - Date.now()).toBeLessThan(DEFAULT_TTL_MS);
+    expect(envelope.e - Date.now()).toBeLessThanOrEqual(PARTIAL_FAIL_TTL_MS + 1000);
+  });
+
+  it("fetches with the normalized bucket limit so payload matches the cache key", async () => {
+    let fetchedUrl = "";
+    const kvStore = new Map<string, string>();
+    const kv = {
+      get: async (key: string) => kvStore.get(key) ?? null,
+      put: async (key: string, value: string) => {
+        kvStore.set(key, value);
+      },
+    } as unknown as KVNamespace;
+    const ctx = {
+      cache: new CacheService(kv, "v1"),
+      http: {
+        json: async (url: string) => {
+          fetchedUrl = url;
+          return [];
+        },
+      } as unknown as AppContext["http"],
+      kv,
+      log: () => {},
+    };
+    await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 7 });
+    expect(new URL(fetchedUrl).searchParams.get("limit")).toBe("50");
   });
 });

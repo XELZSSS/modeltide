@@ -1,7 +1,6 @@
 import { en } from "./en";
 import { zh } from "./zh";
 
-// Lightweight, type-safe i18n: dictionaries plus a small interpolation helper.
 export type EnDict = typeof en;
 
 export type Lang = "en" | "zh";
@@ -9,7 +8,10 @@ export type TranslationKey = keyof typeof en;
 export type TranslationParams = Record<string, string | number>;
 export type TFunction = (key: TranslationKey, params?: TranslationParams) => string;
 
-const dictionaries: Record<Lang, Record<TranslationKey, string>> = { en, zh };
+// Partial by design: a language file may lag behind `en`; createT falls back
+// per-key to English, then to the key itself. Keep zh/en key sets in sync
+// (a test asserts symmetry) so the fallback stays a backstop, not a path.
+const dictionaries: Record<Lang, Partial<Record<TranslationKey, string>>> = { en, zh };
 
 /** Replaces {key} placeholders in a template; unknown or null params are left as-is. */
 export function interpolate(template: string, params?: TranslationParams): string {
@@ -21,9 +23,20 @@ export function interpolate(template: string, params?: TranslationParams): strin
 }
 
 /** Returns a translate function for the language, falling back to English for missing keys. */
-export function createT(lang: Lang): TFunction {
+export function createT(
+  lang: Lang,
+  opts?: { onMissingParam?: (key: TranslationKey, rendered: string) => void },
+): TFunction {
   const dict = dictionaries[lang];
-  return (key, params) => interpolate(dict[key] ?? en[key] ?? key, params);
+  return (key, params) => {
+    const template = dict[key] ?? en[key] ?? key;
+    const out = interpolate(template, params);
+    // Surface missing interpolations via the hook instead of rendering "{count}".
+    // (Shared code stays free of import.meta/process checks; the Vite client passes
+    // a DEV-only warn, the Worker leaves it silent.)
+    if (opts?.onMissingParam && /\{\w+\}/.test(out)) opts.onMissingParam(key, out);
+    return out;
+  };
 }
 
 export { en, zh };

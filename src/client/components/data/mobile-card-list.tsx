@@ -1,7 +1,7 @@
 import { Fragment, memo, type ReactNode } from "react";
 import { cn } from "@/client/utils";
 import type { DataTableColumn } from "./types";
-import { ExpandToggle, getRowExpandState, isFromInteractive } from "./expandable-row";
+import { ExpandToggle, getRowExpandState } from "./expandable-row";
 
 interface MobileCardBodyProps<T> {
   pagedData: T[];
@@ -22,8 +22,9 @@ interface MobileColumnLayout<T> {
 // On mobile the table becomes a list: the first visible column is the row title, the
 // mobilePrimary-flagged column is emphasized, and the remaining columns are condensed
 // into small pairs.
-function resolveMobileColumns<T>(columns: DataTableColumn<T>[]): MobileColumnLayout<T> {
-  const primaryCol = columns.find((col) => !col.hiddenMd) ?? columns[0]!;
+function resolveMobileColumns<T>(columns: DataTableColumn<T>[]): MobileColumnLayout<T> | null {
+  if (columns.length === 0) return null;
+  const primaryCol = columns.find((col) => !col.hiddenMd) ?? (columns[0] as DataTableColumn<T>);
   // The emphasized stat may be flagged on a column that is hiddenMd (the rightCol /
   // mobilePrimaryCol builders default to hiddenMd); hiddenMd only excludes a column
   // from the desktop narrow table and from the secondary pairs below.
@@ -42,28 +43,23 @@ function MobileTableBodyInner<T>({
   onToggleExpand,
   renderExpandedRow,
 }: MobileCardBodyProps<T>) {
-  const { primaryCol, mainStatCol, secondaryCols } = resolveMobileColumns(columns);
+  const layout = resolveMobileColumns(columns);
+  if (!layout) return null;
+  const { primaryCol, mainStatCol, secondaryCols } = layout;
   return (
     <div className="flex flex-col gap-2.5">
       {pagedData.map((row) => {
         const { rowId, isExpanded, toggle } = getRowExpandState(row, getRowId, expandedRowId, onToggleExpand);
         return (
           <Fragment key={rowId}>
+            {/* Keyboard users expand via the ExpandToggle button; no card-level
+                onClick so there is no mouse-only interaction path. */}
             <div
               className={cn(
                 "border border-border bg-bg-card p-3.5 transition-colors",
-                isExpandable && "cursor-pointer active:bg-selected",
                 "hover:bg-hover",
                 isExpanded && "bg-accent-light",
               )}
-              onClick={
-                isExpandable
-                  ? (e) => {
-                      // Ignore clicks from links/buttons inside a card, matching the desktop guard.
-                      if (!isFromInteractive(e.target)) toggle();
-                    }
-                  : undefined
-              }
             >
               <div className="flex items-center gap-2 min-w-0">
                 {isExpandable ? <ExpandToggle isExpanded={isExpanded} onToggle={toggle} size={16} /> : null}

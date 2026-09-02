@@ -34,9 +34,9 @@ export function CompareChipBar({
   return (
     <div className="flex flex-wrap gap-3 sm:gap-4 items-center justify-between">
       <div className="flex flex-wrap gap-2 items-center">
-        {models.map((model) => (
+        {models.map((model, index) => (
           <span
-            key={modelId(model)}
+            key={modelId(model) || `idx-${index}`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-bg-card border border-border text-sm"
           >
             <span className="text-sm font-medium truncate max-w-[140px]">{model.short_name || model.name}</span>
@@ -45,7 +45,7 @@ export function CompareChipBar({
               size="icon"
               onClick={() => onRemove(model)}
               className="shrink-0 -mr-1"
-              aria-label={`${t("remove")} ${model.short_name || model.name}`}
+              aria-label={t("removeModel", { name: model.short_name || model.name })}
             >
               <X size={14} />
             </Button>

@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useMemo, type ComponentType } from "react";
+import { lazy, memo, useMemo, type ComponentType } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import {
@@ -7,12 +7,12 @@ import {
   useSuspenseOpenRouterRankings,
   useSuspenseHallucinationRankings,
 } from "@/client/api/queries";
-import { SuspenseQuery, Spinner } from "@/client/components/shared";
+import { SuspenseQuery } from "@/client/components/shared";
 import { SearchInput } from "@/client/search";
 import { Dot, type TabItem } from "@/client/components/ui";
 import { TabbedPage } from "@/client/components/layout";
 import { useUrlTab } from "@/client/hooks";
-import { DataTable, type DataTableColumn } from "@/client/components/data";
+import { SearchableDataTable, type DataTableColumn } from "@/client/components/data";
 import {
   formatScore,
   formatPricePerMillion,
@@ -45,20 +45,14 @@ const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
 
 const ModelRankingsTab = memo(function ModelRankingsTab() {
   const { data } = useSuspenseArtificialRankings();
-  return (
-    <Suspense fallback={<Spinner />}>
-      <ArtificialAnalysisView rankings={data} />
-    </Suspense>
-  );
+  // No inner Suspense: the lazy chunk suspends to the outer SuspenseQuery
+  // boundary, so there is exactly one loading state instead of two flashes.
+  return <ArtificialAnalysisView rankings={data} />;
 });
 
 const OpenRouterTab = memo(function OpenRouterTab() {
   const { data } = useSuspenseOpenRouterRankings();
-  return (
-    <Suspense fallback={<Spinner />}>
-      <OpenRouterRankingsView data={data} />
-    </Suspense>
-  );
+  return <OpenRouterRankingsView data={data} />;
 });
 
 const OpenSourceTab = memo(function OpenSourceTab() {
@@ -76,7 +70,7 @@ const getProviderRowId = (p: ProviderStats) => p.name;
 const ProviderCompareTab = memo(function ProviderCompareTab() {
   const { data } = useSuspenseArtificialRankings();
   const { t } = useTranslation();
-  const providerStats = useMemo(() => computeProviderStats(data), [data]);
+  const providerStats = useMemo(() => computeProviderStats(data, t("unknown")), [data, t]);
   const columns = useMemo<DataTableColumn<ProviderStats>[]>(
     () => [
       {
@@ -118,7 +112,14 @@ const ProviderCompareTab = memo(function ProviderCompareTab() {
     ],
     [t],
   );
-  return <DataTable columns={columns} data={providerStats} getRowId={getProviderRowId} />;
+  return (
+    <SearchableDataTable
+      columns={columns}
+      data={providerStats}
+      getRowId={getProviderRowId}
+      getSearchFields={(p) => [p.name]}
+    />
+  );
 });
 
 const TAB_COMPONENTS: Record<RankingTabId, ComponentType> = {

@@ -14,7 +14,7 @@ import {
   formatPricePerMillion,
 } from "@/client/utils/format";
 import { calcMonthlyCost } from "@/client/utils/model";
-import { matchTerm } from "@/client/search/useSearchAllRankings";
+import { matchTerm } from "@/shared/lib/match";
 import { buildCompareRows, buildRadarData, computeWinners, type CompareRow } from "@/client/features/compare/logic";
 import { createT, interpolate } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
@@ -22,9 +22,6 @@ import type { TFunction } from "@/shared/i18n";
 
 // Consolidated client tests: display formatters, cost estimation, search term
 // matching, compare feature logic and the i18n interpolation core.
-
-// -- shared test doubles -----------------------------------------------------------
-
 const t = (overrides: Record<string, string> = {}): TFunction => {
   return ((key: string, params?: Record<string, unknown>) => {
     const val = overrides[key] ?? key;
@@ -32,8 +29,6 @@ const t = (overrides: Record<string, string> = {}): TFunction => {
     return Object.entries(params).reduce((s, [k, v]) => s.replace(`{${k}}`, String(v)), val);
   }) as unknown as TFunction;
 };
-
-// -- formatters -----------------------------------------------------------------
 
 describe("formatTokens", () => {
   it("formats small token counts as-is", () => {
@@ -207,8 +202,6 @@ describe("formatRelativeTime", () => {
   });
 });
 
-// -- cost estimation --------------------------------------------------------------
-
 function makeModel(over: Partial<ArtificialAnalysisModel>): ArtificialAnalysisModel {
   return { id: "m", slug: "m", name: "M", intelligence_index: null, ...over };
 }
@@ -309,8 +302,6 @@ describe("calcMonthlyCost", () => {
   });
 });
 
-// -- search -----------------------------------------------------------------------
-
 describe("matchTerm", () => {
   it("scores exact matches highest", () => {
     const { matched, score } = matchTerm(["gpt-5"], "gpt-5");
@@ -335,8 +326,6 @@ describe("matchTerm", () => {
     expect(matchTerm(["gpt-5"], "zzz").matched).toBe(false);
   });
 });
-
-// -- compare feature logic ----------------------------------------------------------
 
 interface M {
   id: string;
@@ -503,8 +492,6 @@ describe("buildCompareRows", () => {
     expect(intelMetric.getValue!(model)).toBe("notAvailable");
   });
 });
-
-// -- i18n ----------------------------------------------------------------------------
 
 describe("interpolate", () => {
   it("replaces named placeholders with provided params", () => {

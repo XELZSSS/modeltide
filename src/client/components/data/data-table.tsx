@@ -1,4 +1,4 @@
-import { Fragment, memo, useState, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import { useDevice } from "@/client/providers";
 import { usePagedData } from "@/client/hooks";
@@ -6,7 +6,7 @@ import { cn } from "@/client/utils";
 import { Pagination } from "@/client/components/ui";
 import { EmptyState } from "@/client/components/shared";
 import type { DataTableColumn } from "./types";
-import { ExpandToggle, getRowExpandState, isFromInteractive } from "./expandable-row";
+import { ExpandToggle, getRowExpandState } from "./expandable-row";
 import { MobileTableBody } from "./mobile-card-list";
 
 /** Default rows per page; callers rarely need to override it. */
@@ -27,6 +27,8 @@ export interface DataTableProps<T> {
   renderExpandedRow?: (row: T) => ReactNode;
   onPageChange?: () => void;
   caption?: string;
+  /** Pagination resets to page 1 whenever this changes (e.g. the search term). */
+  resetKey?: string | number;
 }
 
 interface TableBodyProps<T> {
@@ -39,8 +41,8 @@ interface TableBodyProps<T> {
   renderExpandedRow?: (row: T) => ReactNode;
 }
 
-function cellClasses<T>(col: DataTableColumn<T>, isExpandable: boolean): string {
-  return cn("px-3 py-3 sm:py-2.5", col.hiddenMd && "hidden md:table-cell", isExpandable && "cursor-pointer");
+function cellClasses<T>(col: DataTableColumn<T>): string {
+  return cn("px-3 py-3 sm:py-2.5", col.hiddenMd && "hidden md:table-cell");
 }
 
 function cellInnerClasses<T>(col: DataTableColumn<T>): string {
@@ -65,7 +67,7 @@ function TableHeader<T>({
             <th
               key={col.id}
               scope="col"
-              className={cn(cellClasses(col, false), "font-medium text-text-tertiary whitespace-nowrap")}
+              className={cn(cellClasses(col), "font-medium text-text-tertiary whitespace-nowrap")}
               style={{ width: col.width }}
             >
               <div className={cellInnerClasses(col)}>
@@ -95,23 +97,17 @@ function TableBodyInner<T>({
         const { rowId, isExpanded, toggle } = getRowExpandState(row, getRowId, expandedRowId, onToggleExpand);
         return (
           <Fragment key={rowId}>
+            {/* Expansion is toggled only via the ExpandToggle button: a row-level
+                onClick would be mouse-only (tr has no keyboard equivalent). */}
             <tr
-              {...(isExpandable
-                ? {
-                    onClick: (e) => {
-                      if (!isFromInteractive(e.target)) toggle();
-                    },
-                  }
-                : {})}
               className={cn(
                 "border-b border-border last:border-b-0 transition-colors bg-bg-card",
                 "hover:bg-hover",
-                isExpandable && "cursor-pointer active:bg-selected",
                 isExpanded && "bg-accent-light",
               )}
             >
               {columns.map((col, colIdx) => (
-                <td key={col.id} className={cellClasses(col, isExpandable)} style={{ width: col.width }}>
+                <td key={col.id} className={cellClasses(col)} style={{ width: col.width }}>
                   <div className={cellInnerClasses(col)}>
                     {isExpandable && colIdx === 0 ? <ExpandToggle isExpanded={isExpanded} onToggle={toggle} /> : null}
                     {col.cell(row)}
@@ -145,6 +141,7 @@ function DataTableInner<T>({
   renderExpandedRow,
   onPageChange,
   caption,
+  resetKey,
 }: DataTableProps<T>) {
   const { isMobile } = useDevice();
   const { t } = useTranslation();
@@ -157,7 +154,13 @@ function DataTableInner<T>({
   const activeExpandedRowId = uncontrolled ? ownExpandedId : expandedRowId;
   const activeToggleExpand = uncontrolled ? setOwnExpandedId : onToggleExpand;
   const isExpandable = !!renderExpandedRow;
-  const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(data, getRowId, pageSize);
+  const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(data, getRowId, pageSize, resetKey);
+
+  // Collapse uncontrolled expansion when the dataset changes (e.g. search filter):
+  // a stale id could otherwise pop open on an unrelated row of the new data.
+  useEffect(() => {
+    if (uncontrolled) setOwnExpandedId(null);
+  }, [dedupedData, uncontrolled]);
 
   const handlePageChange = (p: number) => {
     goToPage(p);

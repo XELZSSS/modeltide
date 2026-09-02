@@ -3,14 +3,20 @@ import { ChevronRight } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { cn } from "@/client/utils";
 
-/** True if the click/keydown originated in an interactive element. */
-export function isFromInteractive(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest("button, a, input, select, textarea") !== null;
-}
-
-/** Deterministic content-based row id used when no getRowId is provided. */
+/**
+ * Deterministic content-based row id used when no getRowId is provided.
+ * Fallback only: JSON-hashing every row each render is O(n·m) and the 32-bit
+ * hash can collide — tables should pass an explicit getRowId instead.
+ */
 function rowContentId(row: unknown): string {
-  const json = JSON.stringify(row);
+  let json: string;
+  try {
+    json = JSON.stringify(row) ?? "";
+  } catch {
+    // Circular structures: fall back to a random id (loses expand persistence
+    // across renders, but never crashes the table).
+    return `row-${Math.random().toString(36).slice(2)}`;
+  }
   let hash = 0;
   for (let i = 0; i < json.length; i++) {
     hash = (hash * 31 + json.charCodeAt(i)) | 0;

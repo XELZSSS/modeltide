@@ -11,6 +11,10 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
     "esModuleInterop": true,
     "resolveJsonModule": true
   }

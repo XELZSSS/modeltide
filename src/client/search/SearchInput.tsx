@@ -7,7 +7,9 @@ import { useSearchStore } from "@/client/stores";
 import { useClickOutside, useListKeyboard } from "@/client/hooks";
 import type { SearchResult } from "@/shared/types";
 import { cn } from "@/client/utils";
-import { ONE_MINUTE } from "@/shared/config";
+
+/** Debounce for the local field -> global store sync. */
+const DEBOUNCE_MS = 200;
 
 /** Combobox search box with debounced query, keyboard navigation and click-outside close. */
 export function SearchInput() {
@@ -23,26 +25,34 @@ export function SearchInput() {
   const searchTerm = useSearchStore((s) => s.searchTerm);
   const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
   // Single debounce point for search: local field -> global store 200ms.
-  // useSearchAllRankings consumes the debounced store value directly without
-  // an extra useDeferredValue layer.
+  // useSearchAllRankings consumes the debounced store value directly.
   const [inputValue, setInputValue] = useState(searchTerm);
   useEffect(() => {
-    const timer = setTimeout(() => setSearchTerm(inputValue), ONE_MINUTE / 300); // ~200ms
+    const timer = setTimeout(() => setSearchTerm(inputValue), DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [inputValue, setSearchTerm]);
   useEffect(() => setInputValue(searchTerm), [searchTerm]);
 
   const { results, isPending, isError } = useSearchAllRankings(searchTerm);
 
+  // Clear the global term synchronously on select so the destination's
+  // SearchableDataTable never renders one frame filtered by the stale term
+  // (the route-change reset in useSearchResetOnNavigate stays as a backstop).
+  const clearSearch = useCallback(() => {
+    setSearchTerm("");
+    setInputValue("");
+  }, [setSearchTerm]);
+
   const handleSelect = useCallback(
     (idx: number) => {
       const r = results[idx];
       if (r) {
+        clearSearch();
         navigate(r.link);
         setIsOpen(false);
       }
     },
-    [results, navigate],
+    [results, navigate, clearSearch],
   );
 
   const { clampedIndex, setActiveIndex, handleKeyDown } = useListKeyboard(results.length, handleSelect, () => {
@@ -53,14 +63,17 @@ export function SearchInput() {
   useClickOutside(containerRef, () => setIsOpen(false));
 
   function handleResultClick(result: SearchResult) {
+    clearSearch();
     navigate(result.link);
     setIsOpen(false);
     setActiveIndex(-1);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // WAI-APG combobox: ArrowDown opens the popup when closed.
     if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
+      if (inputValue.length >= 2) setIsOpen(true);
       return;
     }
     if (!isOpen) return;
@@ -80,7 +93,7 @@ export function SearchInput() {
           type="text"
           value={inputValue}
           role="combobox"
-          aria-expanded={isOpen && results.length > 0}
+          aria-expanded={isOpen}
           aria-controls={listboxId}
           aria-activedescendant={clampedIndex >= 0 ? `${listboxId}-option-${clampedIndex}` : undefined}
           aria-autocomplete="list"
@@ -103,7 +116,9 @@ export function SearchInput() {
             type="button"
             aria-label={t("clear")}
             onClick={() => {
-              setInputValue("");
+              // Sync-clear the global store too; debounced sync alone would leave
+              // tables filtered by the stale term for one debounce window.
+              clearSearch();
               setIsOpen(false);
               setActiveIndex(-1);
               inputRef.current?.focus();
@@ -143,6 +158,10 @@ export function SearchInput() {
                   type="button"
                   role="option"
                   aria-selected={clampedIndex === index}
+                  ref={(el) => {
+                    // Keep the keyboard-focused option visible in the scrollable list.
+                    if (clampedIndex === index && el) el.scrollIntoView({ block: "nearest" });
+                  }}
                   className={cn(
                     "w-full text-left p-3 rounded-md transition-colors active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
                     clampedIndex === index ? "bg-hover" : "hover:bg-hover",

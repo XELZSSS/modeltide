@@ -1,4 +1,11 @@
-import { upstreamConfig, DEFAULT_TTL_MS, PARTIAL_FAIL_TTL_MS, cacheKeys, ttlFor, UPSTREAM_TIMEOUT_MS } from "@/shared/config";
+import {
+  upstreamConfig,
+  DEFAULT_TTL_MS,
+  PARTIAL_FAIL_TTL_MS,
+  cacheKeys,
+  ttlFor,
+  UPSTREAM_TIMEOUT_MS,
+} from "@/shared/config";
 import type { ArtificialAnalysisModel, TextToImageModel, TextToImagePayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { findNextData, parseRscPayload } from "@/server/parsers/rsc";
@@ -7,6 +14,7 @@ import { errMsg } from "@/server/infra/utils";
 import { getOpenRouterModelMeta } from "@/server/sources/openrouter";
 import { backfillFromMeta, compact, compactOmniscienceEnrich } from "./mapping";
 import { mergeBySlug } from "./merge";
+import { dedupeBy } from "@/shared/utils";
 import { mapEntry, type RawEntry } from "./text-to-image";
 
 // RSC request headers make Next.js serve raw flight payloads instead of rendered HTML.
@@ -20,16 +28,20 @@ const OMNISCIENCE_PATH = "/evaluations/omniscience";
 async function fetchAaRsc(ctx: AppContext, path: string): Promise<string> {
   return ctx.http.text(`${upstreamConfig.artificialAnalysis}${path}`, {
     headers: { ...RSC_HEADERS },
-    retries: 0,
+    retries: 1,
     // Two serial stages (index fetch, then parallel enrichment fetches) must fit
     // inside the 60s route timeout, so a single fetch is capped at 15s.
     timeoutMs: UPSTREAM_TIMEOUT_MS,
   });
 }
 
-/** A plausible model catalog: a large array of model-shaped rows (slug per row). */
+/** A plausible model catalog: an array of model-shaped rows (slug per row). */
 function isModelArray(arr: unknown): arr is Record<string, unknown>[] {
-  return Array.isArray(arr) && arr.length >= 20 && arr.some((m) => m && typeof m === "object" && "slug" in m);
+  return (
+    Array.isArray(arr) &&
+    arr.length >= 1 &&
+    arr.some((m) => m && typeof m === "object" && "slug" in m && typeof (m as { slug?: unknown }).slug === "string")
+  );
 }
 
 /**
@@ -116,6 +128,7 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
     // Fill gaps (context window, agentic index, blended price) using the OpenRouter
     // directory meta plus the model's own AA pricing; AA first-party values always win.
     const backfilled = backfillFromMeta(models, openRouterMeta);
+    // Debug-level: this fires on nearly every tick, keep info logs for real anomalies.
     if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
     // Refresh sooner when any enrichment failed so partial data is retried quickly.
     return { data: models, ttl: ttlFor(enrichFailures > 0) };
@@ -123,11 +136,9 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
 
 const TEXT_TO_IMAGE_PATH = "/image/models";
 
-const EMPTY_T2I: TextToImagePayload = { models: [] };
-
 function emptyT2i(ctx: AppContext, reason: string): { data: TextToImagePayload; ttl: number } {
   ctx.log("warn", `[text-to-image] ${reason}, returning empty`);
-  return { data: EMPTY_T2I, ttl: PARTIAL_FAIL_TTL_MS };
+  return { data: { models: [], partial: true, fetchedAt: new Date().toISOString() }, ttl: PARTIAL_FAIL_TTL_MS };
 }
 
 export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImagePayload> =>
@@ -135,15 +146,17 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
     let body: string | null = null;
     try {
       body = await fetchAaRsc(ctx, TEXT_TO_IMAGE_PATH);
-    } catch {
-      return emptyT2i(ctx, "fetch failed");
+    } catch (err) {
+      return emptyT2i(ctx, `fetch failed: ${errMsg(err)}`);
     }
     if (!body) {
       return emptyT2i(ctx, "empty body");
     }
     let rawModels: Record<string, unknown>[] | null = null;
     try {
-      rawModels = parseRscPayload<Record<string, unknown>>(body, "textToImage", (tree) => findNextData(tree, "textToImage"));
+      rawModels = parseRscPayload<Record<string, unknown>>(body, "textToImage", (tree) =>
+        findNextData(tree, "textToImage"),
+      );
     } catch {
       rawModels = null;
     }
@@ -151,14 +164,13 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
       return emptyT2i(ctx, "no marker found");
     }
     const mapped = rawModels.map((m) => mapEntry(m as RawEntry)).filter((m): m is TextToImageModel => m !== null);
-    const deduped = new Map<string, TextToImageModel>();
-    for (const m of mapped) {
-      const prev = deduped.get(m.slug);
-      if (!prev || (m.elo != null && (prev.elo == null || m.elo > prev.elo))) deduped.set(m.slug, m);
-    }
-    const models = [...deduped.values()].sort((a, b) => a.rank - b.rank);
+    // Keep the highest-elo duplicate: dedupeBy keeps first, so pre-sort by elo desc.
+    const models = dedupeBy(
+      [...mapped].sort((a, b) => (b.elo ?? -Infinity) - (a.elo ?? -Infinity)),
+      (m) => m.slug,
+    ).sort((a, b) => a.rank - b.rank);
     if (models.length === 0) {
       return emptyT2i(ctx, `mapped 0 models from raw=${rawModels.length}`);
     }
-    return { data: { models } };
+    return { data: { models, fetchedAt: new Date().toISOString() } };
   });

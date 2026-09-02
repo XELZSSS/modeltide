@@ -1,3 +1,8 @@
+// NOTE: the client re-exports its own query-string builders under the same
+// `apiPaths` name (see src/client/api/client.ts) with a different shape
+// (news is a function there). Import the shared map as `baseApiPaths` on the
+// client to avoid mixing the two. API_DOMAINS doubles as the KV key namespace;
+// "openRouterPricing" is cache-only (no route serves it).
 export const API_DOMAINS = {
   artificialIndex: "artificial-analysis-index",
   openSourceModels: "open-source-models",
@@ -5,7 +10,6 @@ export const API_DOMAINS = {
   news: "news",
   openRouterRankings: "openrouter-rankings",
   openRouterPricing: "openrouter-pricing-map",
-  sourcesStatus: "sources-status",
   statusHistory: "status-history",
   homeDashboard: "home-dashboard",
 } as const;
@@ -16,7 +20,6 @@ export const apiPaths = {
   openSourceReleases: `/api/${API_DOMAINS.openSourceReleases}`,
   news: `/api/${API_DOMAINS.news}`,
   openRouterRankings: `/api/${API_DOMAINS.openRouterRankings}`,
-  sourcesStatus: `/api/${API_DOMAINS.sourcesStatus}`,
   statusHistory: `/api/${API_DOMAINS.statusHistory}`,
   homeDashboard: `/api/${API_DOMAINS.homeDashboard}`,
 } as const;

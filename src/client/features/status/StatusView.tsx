@@ -112,8 +112,8 @@ function StatusContent() {
             <p className="text-sm text-text-secondary">{t("noRecentEvents")}</p>
           ) : (
             <div className="divide-y divide-border rounded-xl border border-border bg-bg-card">
-              {data.events.slice(0, 15).map((event, i) => (
-                <StatusEventRow key={`${event.id}-${event.at}-${i}`} event={event} showSource showTime />
+              {data.events.slice(0, 15).map((event) => (
+                <StatusEventRow key={`${event.id}-${event.at}-${event.type}`} event={event} showSource showTime />
               ))}
             </div>
           )}

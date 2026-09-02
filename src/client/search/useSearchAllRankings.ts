@@ -6,10 +6,9 @@ import {
   useOpenRouterRankings,
 } from "@/client/api/queries";
 import { modelDetailPath } from "@/client/utils";
-import type { SearchResult } from "@/shared/types";
+import type { SearchResult, SearchResultSource } from "@/shared/types";
+import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/shared/config";
 import { matchTerm } from "@/shared/lib/match";
-
-export { matchTerm } from "@/shared/lib/match";
 
 interface SourceConfig<T> {
   items: T[];
@@ -26,6 +25,10 @@ function collect<T>(config: SourceConfig<T>, term: string, out: { result: Search
   }
 }
 
+function detailLink(source: SearchResultSource, id: string): string {
+  return modelDetailPath(SEARCH_SOURCE_TO_MODEL_SOURCE[source], id);
+}
+
 interface SearchState {
   results: SearchResult[];
   isPending: boolean;
@@ -37,7 +40,8 @@ const MAX_RESULTS = 20;
 
 /** Searches all ranking datasets for `searchTerm`. */
 export function useSearchAllRankings(searchTerm: string): SearchState {
-  const enabled = searchTerm.length >= 2;
+  // Trim first: whitespace-only input must not trigger upstream queries.
+  const enabled = searchTerm.trim().length >= 2;
   const artificialQ = useArtificialRankings(enabled);
   const openSourceQ = useAllOpenSourceModels(enabled);
   const orQ = useOpenRouterRankings(enabled);
@@ -64,7 +68,7 @@ export function useSearchAllRankings(searchTerm: string): SearchState {
           source: "modelRankings",
           score: m.intelligence_index,
           provider: m.model_creators?.name || null,
-          link: modelDetailPath("aa", m.slug || m.id),
+          link: detailLink("modelRankings", m.slug || m.id),
         }),
       },
       term,
@@ -80,7 +84,7 @@ export function useSearchAllRankings(searchTerm: string): SearchState {
           source: "openRouterRankings",
           score: null,
           provider: m.creator || null,
-          link: modelDetailPath("or", m.id),
+          link: detailLink("openRouterRankings", m.id),
         }),
       },
       term,
@@ -89,14 +93,14 @@ export function useSearchAllRankings(searchTerm: string): SearchState {
     collect(
       {
         items: openSourceRankings ?? [],
-        getFields: (m) => [m.id, m.author],
+        getFields: (m) => [m.id, m.author ?? ""],
         map: (m) => ({
           id: m.id,
           name: m.id,
           source: "openSourceRankings",
           score: null,
           provider: m.author || null,
-          link: modelDetailPath("os", m.id),
+          link: detailLink("openSourceRankings", m.id),
         }),
       },
       term,
@@ -112,7 +116,7 @@ export function useSearchAllRankings(searchTerm: string): SearchState {
           source: "hallucinationRankings",
           score: m.omniscienceIndex,
           provider: null,
-          link: modelDetailPath("hall", m.slug || m.id),
+          link: detailLink("hallucinationRankings", m.slug || m.id),
         }),
       },
       term,

@@ -23,6 +23,9 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // Coverage is intentionally unthresholded: `vitest run` stays green without
+    // @vitest/coverage-v8 installed. To enforce, add the provider dep and e.g.
+    // coverage: { provider: "v8", thresholds: { lines: 50, branches: 40 } }.
   },
 });

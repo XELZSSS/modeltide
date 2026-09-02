@@ -3,24 +3,27 @@ import { type ChartOptions } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
 import { Card, CardContent } from "@/client/components/ui";
-import { PageSection } from "@/client/components/layout";
+import { EmptyState } from "@/client/components/shared";
 import { shortModelId } from "@/client/utils";
 import "@/client/utils/charts";
 import { useChartTheme } from "@/client/hooks";
-import { defaultTooltipOptions, chartBase, axisTickStyle, axisGridStyle, axisDashedBorderStyle, legendStyle, lineSeriesStyle, seriesColor } from "@/client/utils/charts";
+import {
+  defaultTooltipOptions,
+  chartBase,
+  axisTickStyle,
+  axisGridStyle,
+  axisDashedBorderStyle,
+  legendStyle,
+  lineSeriesStyle,
+  seriesColor,
+} from "@/client/utils/charts";
 import { intelligenceChartTitle } from "./chartTitle";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
-/** One ranked bar row: a display label, the numeric value, and its preformatted label. */
-export interface HomeBarStat {
-  label: string;
-  value: number;
-  valueLabel: string;
-}
-
 /**
  * Unified line chart of the top-10 models by intelligence index, plotting
- * coding and agentic indices together. Y-axis is fixed 0-100.
+ * coding and agentic indices together. Y-axis starts at 0 and grows past 100
+ * when the data exceeds it; empty data renders an EmptyState, not a blank box.
  * Merges former Home "Top 10 intelligence vs coding" and /trends "intelligence vs agentic".
  */
 export const IndexLineChart = memo(function IndexLineChart({ models }: { models: ArtificialAnalysisModel[] }) {
@@ -58,6 +61,19 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
     [top10, t, theme],
   );
 
+  // Indices are 0-100 today, but clamp the ceiling to the data so future
+  // above-100 scores aren't clipped off the top of the chart.
+  const yMax = useMemo(() => {
+    let peak = 100;
+    for (const m of top10) {
+      for (const k of ["intelligence_index", "coding_index", "agentic_index"] as const) {
+        const v = m[k];
+        if (typeof v === "number" && Number.isFinite(v) && v > peak) peak = v;
+      }
+    }
+    return Math.ceil(peak / 20) * 20;
+  }, [top10]);
+
   const options = useMemo<ChartOptions<"line">>(
     () => ({
       ...chartBase,
@@ -71,7 +87,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
         },
         y: {
           min: 0,
-          max: 100,
+          max: yMax,
           ticks: {
             ...axisTickStyle(theme),
             stepSize: 20,
@@ -95,70 +111,29 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
         },
       },
     }),
-    [theme],
+    [theme, yMax],
   );
+
+  if (top10.length === 0) {
+    return (
+      <Card>
+        <CardContent padding="md">
+          <p className="text-sm font-semibold mb-3">{intelligenceChartTitle(t)}</p>
+          <EmptyState message={t("noRankingsData")} />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
       <CardContent padding="md">
         <p className="text-sm font-semibold mb-3">{intelligenceChartTitle(t)}</p>
         <div className="w-full h-[210px] sm:h-[260px]">
-          {top10.length > 0 && <Line data={data} options={options} />}
+          <figure className="h-full">
+            <Line data={data} options={options} aria-label={intelligenceChartTitle(t)} role="img" />
+          </figure>
         </div>
-      </CardContent>
-    </Card>
-  );
-});
-
-/** Two ranked stat cards: open-source download counts and hallucination accuracy. */
-export const StatisticsSection = memo(function StatisticsSection({
-  downloadStats,
-  hallucinationStats,
-}: {
-  downloadStats: HomeBarStat[];
-  hallucinationStats: HomeBarStat[];
-}) {
-  const { t } = useTranslation();
-  return (
-    <PageSection title={t("statistics")}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <RankedStatCard title={t("openSourceDownloadsStats")} source={t("huggingFaceSource")} rows={downloadStats} />
-        <RankedStatCard title={t("hallucinationStats")} source={t("hallucinationSource")} rows={hallucinationStats} />
-      </div>
-    </PageSection>
-  );
-});
-
-const RankedStatCard = memo(function RankedStatCard({
-  title,
-  source,
-  rows,
-}: {
-  title: string;
-  source: string;
-  rows: HomeBarStat[];
-}) {
-  const { t } = useTranslation();
-  return (
-    <Card>
-      <CardContent padding="md">
-        <p className="text-sm sm:text-base font-semibold mb-1">{title}</p>
-        <p className="text-xs text-text-secondary mb-3">{source}</p>
-        {rows.length === 0 ? (
-          <p className="text-sm text-text-secondary">{t("notAvailable")}</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {rows.map((row, i) => (
-              <div key={`${row.label}-${i}`} className="flex items-center gap-3 h-7">
-                <span className="text-xs sm:text-sm font-medium text-text-tertiary w-6 text-center shrink-0">
-                  {i + 1}
-                </span>
-                <span className="text-sm truncate min-w-0 flex-1">{row.label}</span>
-                <span className="text-sm font-semibold font-mono shrink-0">{row.valueLabel}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </CardContent>
     </Card>
   );

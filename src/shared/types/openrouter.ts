@@ -1,5 +1,5 @@
 /** Usage-based ranking categories from OpenRouter. */
-type OpenRouterCategory = "coding" | "reasoning" | "general";
+export type OpenRouterCategory = "coding" | "reasoning" | "general";
 
 /** A model row in the OpenRouter usage rankings. */
 export interface OpenRouterRankEntry {

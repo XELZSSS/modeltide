@@ -10,13 +10,14 @@ export interface ProbeTarget {
 }
 
 export function buildTargets(): ProbeTarget[] {
-  const newsFeeds = [
-    ...new Set(
-      Object.values(rssConfig)
-        .flatMap((v) => v)
-        .filter((v): v is string => !!v),
-    ),
-  ];
+  // Health sampling: one representative feed per news category (4 probes)
+  // instead of all 19. A category is healthy when any feed responds, and the
+  // full fan-out already happens on the /api/news path — probing everything
+  // every 4 minutes would cost ~7k upstream GETs/day and risk the 50-subrequest
+  // Workers limit when combined with warmup traffic.
+  const newsSample = Object.values(rssConfig)
+    .map((feeds) => feeds[0])
+    .filter((v): v is string => !!v);
   return [
     {
       id: "artificialAnalysis",
@@ -24,7 +25,7 @@ export function buildTargets(): ProbeTarget[] {
     },
     { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
     { id: "openrouter", url: `${upstreamConfig.openrouter}/api/v1/models` },
-    ...newsFeeds.map((url): ProbeTarget => ({ id: "news", url })),
+    ...newsSample.map((url): ProbeTarget => ({ id: "news", url })),
   ];
 }
 
@@ -47,7 +48,9 @@ export interface SourceAggregate {
  * of its probes succeeds (the last successful probe donates status and latency),
  * otherwise the error summarizes how many feeds failed.
  */
-export function aggregateProbes(probed: { target: ProbeTarget; probe: ProbeResult }[]): Map<SourceStatus["id"], SourceAggregate> {
+export function aggregateProbes(
+  probed: { target: ProbeTarget; probe: ProbeResult }[],
+): Map<SourceStatus["id"], SourceAggregate> {
   type Mutable = SourceAggregate & { total: number; failures: number; firstError: string | null };
   const grouped = new Map<SourceStatus["id"], Mutable>();
 

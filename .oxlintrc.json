@@ -2,7 +2,7 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "rules": {
     "rules-of-hooks": "error",
-    "exhaustive-deps": "warn",
+    "exhaustive-deps": "error",
     "only-export-components": ["warn", { "allowConstantExport": true }],
     "jsx-key": "error",
     "no-children-prop": "error",

@@ -1,74 +1,77 @@
-html,
-body,
-#root {
-  min-height: 100%;
-}
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
 
-html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-  -webkit-tap-highlight-color: transparent;
-}
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.6;
-  letter-spacing: 0.01em;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-variant-numeric: tabular-nums;
-  font-synthesis: none;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-}
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-variant-numeric: tabular-nums;
+    font-synthesis: none;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
 
-* {
-  box-sizing: border-box;
-}
+  ::selection {
+    background-color: var(--color-selected);
+  }
 
-::selection {
-  background-color: var(--color-selected);
-}
+  /* Constrain replaced media, but never fight explicit sizing utilities:
+     [class*="h-"]/w- exclusions keep h-14/w-* classes authoritative. */
+  img:not([class*="h-"]):not([class*="w-"]),
+  video:not([class*="h-"]):not([class*="w-"]) {
+    max-width: 100%;
+    height: auto;
+  }
 
-img,
-video,
-svg,
-canvas,
-iframe {
-  max-width: 100%;
-  height: auto;
-}
+  svg:not([class*="h-"]):not([class*="w-"]),
+  canvas:not([class*="h-"]):not([class*="w-"]),
+  iframe:not([class*="h-"]):not([class*="w-"]) {
+    max-width: 100%;
+  }
 
-code,
-pre {
-  font-family: var(--font-mono);
-  word-break: break-word;
-}
+  code,
+  pre {
+    font-family: var(--font-mono);
+    word-break: break-word;
+  }
 
-table {
-  max-width: 100%;
-}
+  table {
+    max-width: 100%;
+  }
 
-p,
-li,
-th,
-td {
-  overflow-wrap: break-word;
-}
+  p,
+  li,
+  th,
+  td {
+    overflow-wrap: break-word;
+  }
 
-th,
-td {
-  font-variant-numeric: tabular-nums;
-}
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  line-height: 1.4;
-  letter-spacing: 0.005em;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.4;
+    letter-spacing: 0.005em;
+  }
 }

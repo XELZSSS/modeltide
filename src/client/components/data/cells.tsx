@@ -24,7 +24,7 @@ export const RankingNameCell = memo(function RankingNameCell({
   return (
     <div className={cn("flex items-center min-w-0", gapClassName)}>
       {prefix}
-      <p className={cn("truncate flex-1 min-w-0", nameClassName)}>{name}</p>
+      <p className={cn("truncate flex-1 min-w-0", nameClassName)}>{name || "—"}</p>
       {suffix}
     </div>
   );

@@ -1,4 +1,6 @@
 // Common HTML named entities seen in scraped content; numeric references are handled by ENTITY_RE below.
+// Kept intentionally small (~100 high-frequency entries) to stay lean in the
+// Worker bundle; unknown entities are left untouched by decodeEntities.
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
   lt: "<",
@@ -66,6 +68,42 @@ const NAMED_ENTITIES: Record<string, string> = {
   uuml: "\u00FC",
   ouml: "\u00F6",
   auml: "\u00E4",
+  // High-frequency extras (arrows, checks, math, Latin) seen in feed titles.
+  larr: "\u2190",
+  uarr: "\u2191",
+  rarr: "\u2192",
+  darr: "\u2193",
+  harr: "\u2194",
+  crarr: "\u21B5",
+  lArr: "\u21D0",
+  uArr: "\u21D1",
+  rArr: "\u21D2",
+  dArr: "\u21D3",
+  hArr: "\u21D4",
+  check: "\u2713",
+  cross: "\u2717",
+  star: "\u2605",
+  hearts: "\u2665",
+  sup1: "\u00B9",
+  frac13: "\u2153",
+  frac23: "\u2154",
+  frac15: "\u2155",
+  frac25: "\u2156",
+  infin: "\u221E",
+  ne: "\u2260",
+  le: "\u2264",
+  ge: "\u2265",
+  lowast: "\u2217",
+  radic: "\u221A",
+  sum: "\u2211",
+  prod: "\u220F",
+  part: "\u2202",
+  alpha: "\u03B1",
+  beta: "\u03B2",
+  pi: "\u03C0",
+  oelig: "\u0153",
+  OElig: "\u0152",
+  szlig: "\u00DF",
 };
 
 // Matches hex (&#x..) and decimal (&#..) with optional semicolon, and named entities requiring semicolon to avoid over-decoding.
@@ -80,37 +118,114 @@ export function decodeEntities(s: string): string {
   });
 }
 
-// Only emit valid Unicode scalar values; out-of-range or unassigned code points are dropped.
+// Only emit valid Unicode scalar values; surrogates, NUL and out-of-range
+// code points are dropped. Silent by design: feeds with malicious entities
+// must not spam Worker logs.
 function safeFromCodePoint(cp: number): string {
   if (!Number.isFinite(cp) || cp <= 0 || cp > 0x10ffff) return "";
+  if (cp >= 0xd800 && cp <= 0xdfff) return "";
   try {
     return String.fromCodePoint(cp);
-  } catch (e) {
-    console.warn("[html] invalid code point:", e);
+  } catch {
     return "";
   }
 }
 
-/** Strip tags while keeping text; ignores ">" inside quoted attributes and tolerates unterminated tags. Drops <script>/<style> content. */
+/** Block-level tags render with a break, so they become a space when stripped. */
+const BLOCK_TAGS = new Set([
+  "p",
+  "div",
+  "br",
+  "li",
+  "ul",
+  "ol",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "section",
+  "article",
+  "header",
+  "footer",
+  "blockquote",
+  "pre",
+  "hr",
+  "table",
+  "tr",
+  "td",
+  "th",
+  "thead",
+  "tbody",
+]);
+
+function tagNameOf(tagInner: string): string {
+  const m = /^[^\s/>]+/.exec(tagInner.trim());
+  return (m?.[0] ?? "").toLowerCase().replace(/^\//, "");
+}
+
+/**
+ * Strip tags while keeping text; quote-aware (ignores ">" inside attributes),
+ * skips comments/doctype/PI, drops <script>/<style> content, maps block tags
+ * to a space to avoid "HelloWorld"粘连, and collapses whitespace.
+ */
 export function stripHtml(s: string): string {
-  const clean = s
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ");
   let out = "";
   let i = 0;
-  while (i < clean.length) {
-    const lt = clean.indexOf("<", i);
-    if (lt === -1) return out + clean.slice(i);
-    out += clean.slice(i, lt);
-    const end = findTagEnd(clean, lt);
-    if (end === -1) {
-      out += clean.slice(lt, lt + 1);
-      i = lt + 1;
+  while (i < s.length) {
+    // HTML comments: skip whole <!-- ... --> block.
+    if (s.startsWith("<!--", i)) {
+      const end = s.indexOf("-->", i + 4);
+      if (end === -1) break;
+      i = end + 3;
       continue;
     }
+    const ch = s[i]!;
+    if (ch !== "<") {
+      out += ch;
+      i++;
+      continue;
+    }
+    // CDATA: keep inner text.
+    if (s.startsWith("<![CDATA[", i)) {
+      const end = s.indexOf("]]>", i + 9);
+      if (end === -1) {
+        out += s.slice(i + 9);
+        break;
+      }
+      out += s.slice(i + 9, end);
+      i = end + 3;
+      continue;
+    }
+    // Doctype / processing instructions: drop silently.
+    if (s.startsWith("<!", i) || s.startsWith("<?", i)) {
+      const end = findTagEnd(s, i);
+      if (end === -1) break;
+      i = end + 1;
+      continue;
+    }
+    const end = findTagEnd(s, i);
+    if (end === -1) {
+      out += "<";
+      i++;
+      continue;
+    }
+    const inner = s.slice(i + 1, end);
+    const name = tagNameOf(inner);
+    if (name === "script" || name === "style") {
+      // Quote-aware open tag already consumed; skip until matching close.
+      const closeRe = name === "script" ? /<\/script\s*>/gi : /<\/style\s*>/gi;
+      closeRe.lastIndex = end + 1;
+      const m = closeRe.exec(s);
+      out += " ";
+      i = m ? m.index + m[0].length : s.length;
+      continue;
+    }
+    out += BLOCK_TAGS.has(name) ? " " : "";
     i = end + 1;
   }
-  return out;
+  return out.replace(/\s+/g, " ").trim();
 }
 
 function findTagEnd(html: string, start: number): number {

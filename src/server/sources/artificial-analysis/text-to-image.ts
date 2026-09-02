@@ -1,10 +1,5 @@
 import type { TextToImageModel } from "@/shared/types";
-import {
-  num,
-  numNonNegative,
-  toStringOrNull,
-  isFiniteNumber,
-} from "@/server/parsers/primitives";
+import { num, numNonNegative, toStringOrNull, isFiniteNumber } from "@/server/parsers/primitives";
 
 const intOrNull = (v: unknown): number | null => (isFiniteNumber(v) ? Math.trunc(v) : null);
 
@@ -38,7 +33,10 @@ export function mapEntry(raw: RawEntry): TextToImageModel | null {
   if (rank == null) return null;
 
   const elos = Array.isArray(raw.elos) ? (raw.elos as RawElo[]) : [];
-  const overallEloEntry = elos.find((e) => (e as Record<string, unknown>).tag == null) ?? elos[0] ?? null;
+  const overallEloEntry =
+    elos.find((e) => e != null && typeof e === "object" && (e as Record<string, unknown>).tag == null) ??
+    elos.find((e) => e != null && typeof e === "object") ??
+    null;
 
   let elo: number | null = null;
   let ciDelta: number | null = null;

@@ -1,9 +1,17 @@
-import { upstreamConfig, DEFAULT_TTL_MS, cacheKeys, ONE_MINUTE } from "@/shared/config";
+import {
+  upstreamConfig,
+  DEFAULT_TTL_MS,
+  PARTIAL_FAIL_TTL_MS,
+  UPSTREAM_TIMEOUT_MS,
+  cacheKeys,
+  normalizeModelLimit,
+  sliceToLimit,
+} from "@/shared/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
 import { getOpenLicense } from "@/server/parsers/licenses";
-import { isoDate, numNonNegative, toStringOrNull } from "@/server/parsers/primitives";
+import { isoDate, numIntNonNegative, toStringOrNull } from "@/server/parsers/primitives";
 import { dedupeBy } from "@/shared/utils";
 
 interface HFModel {
@@ -23,17 +31,17 @@ interface ModelQuery {
   limit: number;
 }
 
-function resolveAuthor(m: HFModel, id: string): string {
-  return toStringOrNull(m.author) ?? (id.split("/")[0]?.trim() || "unknown");
+function resolveAuthor(m: HFModel, id: string): string | null {
+  return toStringOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
 }
 
 function mapModel(m: HFModel): OpenSourceModelEntry | null {
   const id = typeof m.id === "string" ? m.id.trim() : "";
   if (!id) return null;
-  const downloads = Math.trunc(numNonNegative(m.downloads) ?? 0);
-  const likes = Math.trunc(numNonNegative(m.likes) ?? 0);
+  const downloads = numIntNonNegative(m.downloads) ?? 0;
+  const likes = numIntNonNegative(m.likes) ?? 0;
   const tags = Array.isArray(m.tags) ? m.tags.filter((t): t is string => typeof t === "string") : [];
-  const license = getOpenLicense(tags) ?? "unknown";
+  const license = getOpenLicense(tags);
   return {
     id,
     author: resolveAuthor(m, id),
@@ -55,7 +63,12 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
   url.searchParams.set("direction", direction);
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("full", "true");
-  const items = await ctx.http.json<HFModel[]>(url.toString(), { timeoutMs: 15 * ONE_MINUTE / 60, retries: 1 }); // 15s timeout
+  const headers = ctx.hfToken ? { authorization: `Bearer ${ctx.hfToken}` } : undefined;
+  const items = await ctx.http.json<HFModel[]>(url.toString(), {
+    timeoutMs: UPSTREAM_TIMEOUT_MS,
+    retries: 1,
+    ...(headers ? { headers } : {}),
+  });
   if (!Array.isArray(items))
     throw new UpstreamError(
       `HuggingFace API returned non-array response (got ${items === null ? "null" : typeof items})`,
@@ -73,9 +86,17 @@ function normalizeHfModels(items: HFModel[], filterFn?: (m: HFModel) => boolean)
 
 export const getModels = (ctx: AppContext, p: ModelQuery): Promise<OpenSourceModelEntry[]> =>
   ctx.cache.withTtl(cacheKeys.openSourceModels(p.sort, p.direction, p.limit), DEFAULT_TTL_MS, async () => {
-    const items = await fetchHFModels(ctx, p.sort, p.direction, p.limit);
-    const mapped = normalizeHfModels(items).filter((m) => m.downloads > 0);
-    return { data: mapped };
+    // Snap to the normalized bucket so the fetched payload matches the cache key,
+    // then slice back to the requested limit so ?limit=101 doesn't return 500 rows.
+    const limit = normalizeModelLimit(p.limit);
+    const items = await fetchHFModels(ctx, p.sort, p.direction, limit);
+    const mapped = sliceToLimit(
+      normalizeHfModels(items).filter((m) => m.downloads > 0),
+      p.limit,
+    );
+    // Empty result means transient upstream failure — cache briefly to avoid
+    // poisoning the key for 30m (mirrors news/openrouter partial-TTL policy).
+    return { data: mapped, ttl: mapped.length === 0 ? PARTIAL_FAIL_TTL_MS : DEFAULT_TTL_MS };
   });
 
 // mapModel only keeps entries whose createdAt parses (isoDate), so Date.parse below is always finite.

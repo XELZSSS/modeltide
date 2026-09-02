@@ -1,17 +1,30 @@
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
+import { UpstreamError } from "@/server/infra/errors";
 import { decodeEntities, stripHtml } from "./html";
 
 /** Cap per-feed items before merging so one noisy feed cannot dominate the response. */
 const MAX_ITEMS_PER_FEED = 50;
 
 /** Maximum XML feed size in bytes (2MB) to prevent Billion Laughs attacks. */
-const MAX_XML_BYTES = 2 * 1024 * 1024;
+export const MAX_XML_BYTES = 2 * 1024 * 1024;
+
+/** Truncation caps to prevent abusive upstream titles/links from bloating cache. */
+const MAX_TITLE_CHARS = 300;
+const MAX_LINK_CHARS = 2048;
+const MAX_ID_CHARS = 2048;
 
 /** Accept header for RSS/Atom fetches. */
 export const FEED_ACCEPT = "application/rss+xml,application/xml,text/xml,*/*";
 
-const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  // Harden against entity-expansion (Billion Laughs) inside the 2MB window:
+  // leave entities unexpanded here; decodeEntities() normalizes text later.
+  processEntities: false,
+  htmlEntities: false,
+});
 
 /** Type guard for plain objects with string keys. */
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -21,32 +34,34 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 function sourceNameFrom(sourceUrl: string): string {
   try {
     return new URL(sourceUrl).hostname;
-  } catch (e) {
-    console.warn("[rss] failed to parse source URL:", e);
+  } catch {
+    // Callers already count per-feed failures; stay silent to avoid log spam.
     return "Unknown";
   }
 }
 
-/** Extract text from a simple element value: a string, or an object with a "#text" node. */
+/** Extract text from a simple element value: a string, number, or an object with a "#text" node. */
 function textOf(v: unknown): string | null {
   if (typeof v === "string") return v.trim() ? v : null;
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
   if (isRecord(v)) {
-    const t = v["#text"];
+    const t = v["#text"] ?? v.text;
     if (typeof t === "string" && t.trim()) return t;
+    if (typeof t === "number" && Number.isFinite(t)) return String(t);
   }
   return null;
 }
 
 function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string {
   const text = textOf(channel.title) ?? "";
-  return decodeEntities(text) || sourceNameFrom(sourceUrl);
+  return decodeEntities(stripHtml(text).slice(0, MAX_TITLE_CHARS)).trim() || sourceNameFrom(sourceUrl);
 }
 
 function linkHref(link: unknown): string | null {
-  if (typeof link === "string") return link;
+  if (typeof link === "string") return link.trim() || null;
   if (!isRecord(link)) return null;
-  const href = link["@_href"] ?? link.href;
-  return typeof href === "string" ? href : null;
+  const href = link["@_href"] ?? link.href ?? link["#text"];
+  return typeof href === "string" ? href.trim() || null : null;
 }
 
 function itemLink(item: Record<string, unknown>): string | null {
@@ -61,51 +76,73 @@ function itemLink(item: Record<string, unknown>): string | null {
 
 function itemId(item: Record<string, unknown>, link: string | null, title: string): string {
   const raw = item.guid ?? item.id;
-  if (typeof raw === "string" && raw.trim()) return raw;
+  if (typeof raw === "string" && raw.trim()) return raw.trim().slice(0, MAX_ID_CHARS);
+  if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
   if (isRecord(raw)) {
     const text = raw["#text"] ?? raw.text;
-    if (typeof text === "string" && text.trim()) return text;
+    if (typeof text === "string" && text.trim()) return text.trim().slice(0, MAX_ID_CHARS);
+    if (typeof text === "number" && Number.isFinite(text)) return String(text);
   }
   if (link) return link;
   return `title:${title}`;
 }
 
+/** UTF-8 byte length (xml.length counts UTF-16 units and undercounts CJK). */
+function utf8ByteLength(s: string): number {
+  // TextEncoder is available in Workers and Node 18+; fall back to a cheap
+  // over-estimate (3 bytes per char) if unavailable.
+  try {
+    return new TextEncoder().encode(s).length;
+  } catch {
+    return s.length * 3;
+  }
+}
+
 /**
  * Parse an RSS or Atom feed into normalized news items.
- * An unparseable/garbage feed throws so partial-failure accounting upstream can react to it.
+ * An unparseable/garbage feed throws UpstreamError so partial-failure
+ * accounting upstream can react to it (maps to 502, shortens TTL).
  */
 export function parseFeed(xml: string, sourceUrl: string): NewsItem[] {
   // Guard against gigantic payloads (Billion laughs / oversized feeds).
-  if (xml.length > MAX_XML_BYTES) {
-    throw new Error(`Feed too large at ${sourceUrl} (${xml.length} bytes)`);
+  const bytes = utf8ByteLength(xml);
+  if (bytes > MAX_XML_BYTES) {
+    throw new UpstreamError(`Feed too large at ${sourceUrl} (${bytes} bytes)`);
   }
-  return parseChannel(parser.parse(xml), sourceUrl);
+  let parsed: unknown;
+  try {
+    parsed = parser.parse(xml);
+  } catch (err) {
+    throw new UpstreamError(`Unparseable feed at ${sourceUrl}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return parseChannel(parsed, sourceUrl);
 }
 
 function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
-  const rss = isRecord(feed) ? (feed["rss"] as Record<string, unknown> | undefined) : undefined;
-  const rawChannel: unknown =
-    rss != null
-      ? (rss.channel ?? (isRecord(feed) ? feed.channel : undefined) ?? (isRecord(feed) ? feed.feed : undefined) ?? feed)
-      : ((isRecord(feed) ? feed.channel : undefined) ?? (isRecord(feed) ? feed.feed : undefined) ?? feed);
+  if (!isRecord(feed)) return undefined;
+  // Canonical shapes: <rss><channel>, bare <channel>, Atom <feed>.
+  const rss = isRecord(feed.rss) ? (feed.rss as Record<string, unknown>) : undefined;
+  const rawChannel: unknown = rss?.channel ?? feed.channel ?? feed.feed ?? feed;
   return isRecord(rawChannel) ? rawChannel : undefined;
 }
 
 function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | null {
-  const link = itemLink(item);
-  const title = decodeEntities(stripHtml(String(item.title ?? ""))).trim();
+  const rawLink = itemLink(item);
+  if (!rawLink) return null;
+  const link = rawLink.trim().slice(0, MAX_LINK_CHARS);
+  const title = decodeEntities(stripHtml(String(item.title ?? "")).slice(0, MAX_TITLE_CHARS)).trim();
   if (!title || !link) return null;
   try {
-    const u = new URL(String(link));
+    const u = new URL(link);
     if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-  } catch (e) {
-    console.warn("[rss] invalid link URL:", e);
+  } catch {
+    // Invalid per-item link: skip the item silently (feed-level failures throw).
     return null;
   }
   return {
     id: itemId(item, link, title),
     title,
-    link: String(link),
+    link,
     pubDate: textOf(item.pubDate) ?? textOf(item.published) ?? textOf(item.updated) ?? "1970-01-01T00:00:00Z",
     source,
   };
@@ -114,8 +151,9 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
 function parseChannel(feed: unknown, sourceUrl: string): NewsItem[] {
   const channel = resolveChannel(feed);
   if (!channel || (channel.item == null && channel.entry == null && channel.title == null)) {
-    if (channel) return [];
-    throw new Error(`Unrecognized feed format at ${sourceUrl}`);
+    // Garbage feed: throw so upstream partial-failure accounting shortens TTL
+    // instead of caching an empty success.
+    throw new UpstreamError(`Unrecognized feed format at ${sourceUrl}`);
   }
   let items = (channel.item ?? channel.entry ?? []) as unknown;
   if (!Array.isArray(items)) items = [items];

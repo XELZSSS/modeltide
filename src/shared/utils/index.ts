@@ -1,7 +1,11 @@
 // Isomorphic utilities shared between the React app and the Cloudflare Worker.
 // App-only helpers (charts, cn, format, model) live in `src/client/utils`.
 
-/** Keeps the first occurrence of each key; items with an empty key are always kept. */
+/**
+ * Keeps the first occurrence of each key ("first wins"); items with an empty key
+ * are always kept. Callers relying on priority (e.g. highest-elo) must pre-sort
+ * so the winner comes first.
+ */
 export function dedupeBy<T>(items: T[], keyFn: (item: T) => string | null | undefined): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -25,9 +29,13 @@ export function toStringOrNull(v: unknown): string | null {
  * Percent-like benchmark values arrive in mixed scales (0-1 fractions from some
  * benchmarks, 0-100 percentage points from others); fractions are scaled up so
  * everything renders on one 0-100 scale, then clamped into the valid range.
+ *
+ * Scale ambiguity: a literal `1` always becomes `100` (it reads as "100%"), so a
+ * source whose unit is "1%" must pre-scale. Non-finite input (NaN/Infinity)
+ * returns null instead of leaking into formatPercent ("NaN%").
  */
 export function normalizePercent(value: number | null | undefined): number | null {
-  if (value == null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
   const percent = value > 0 && value <= 1 ? value * 100 : value;
   return Math.max(0, Math.min(100, percent));
 }

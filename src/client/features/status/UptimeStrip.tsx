@@ -16,11 +16,18 @@ function barClass(ratio: number | null): string {
 export const UptimeStrip = memo(function UptimeStrip({ buckets }: { buckets: DayBucket[] }) {
   const { t } = useTranslation();
   const byDay = useMemo(() => new Map(buckets.map((b) => [b.day, b])), [buckets]);
-  const days: string[] = [];
-  const now = Date.now();
-  for (let i = 89; i >= 0; i--) {
-    days.push(new Date(now - i * ONE_DAY).toISOString().slice(0, 10));
-  }
+  // Day-granular key: the 90-slot window only changes at midnight, so memoize
+  // the slot list instead of rebuilding 90 ISO strings on every parent render.
+  const dayKey = new Date(Date.now()).toISOString().slice(0, 10);
+  const days = useMemo(() => {
+    const out: string[] = [];
+    const now = Date.now();
+    for (let i = 89; i >= 0; i--) {
+      out.push(new Date(now - i * ONE_DAY).toISOString().slice(0, 10));
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey]);
   return (
     <div className="flex items-end gap-px h-7" role="img" aria-label={t("last90Days")}>
       {days.map((day) => {

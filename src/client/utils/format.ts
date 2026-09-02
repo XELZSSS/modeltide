@@ -5,6 +5,8 @@ export function safeHref(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
   if (!trimmed) return undefined;
+  // Allow app-relative links; only external URLs need protocol validation.
+  if (trimmed.startsWith("/")) return trimmed;
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol === "https:" || parsed.protocol === "http:") return trimmed;
@@ -27,8 +29,8 @@ function compactParts(n: number) {
 }
 
 // Threshold where rounding promotes to the next unit: 1000 - 0.5 * 10^-decimals
-const PROMOTE_2DEC = 999.995; // for toFixed(2)
-const PROMOTE_1DEC = 999.95; // for toFixed(1)
+const PROMOTE_2DEC = 999.995;
+const PROMOTE_1DEC = 999.95;
 
 const strip1Dec = (v: number, suffix: string) => {
   const out = v.toFixed(1);
@@ -59,14 +61,14 @@ export function formatScore(t: TFunction, n?: number | null) {
   return n.toFixed(2);
 }
 
-/** Percent with one decimal; null/undefined falls back to the localized "N/A". */
+/** Percent with one decimal; null/NaN/Infinity falls back to the localized "N/A". */
 export function formatPercent(t: TFunction, v: number | null | undefined): string {
-  return v == null ? t("notAvailable") : `${v.toFixed(1)}%`;
+  return typeof v !== "number" || !Number.isFinite(v) ? t("notAvailable") : `${v.toFixed(1)}%`;
 }
 
 /** Uptime ratio in [0,1] rendered as a two-decimal percentage; null falls back to the localized "no data". */
 export function formatUptimePct(t: TFunction, v: number | null | undefined): string {
-  return v == null ? t("uptimeNoData") : `${(v * 100).toFixed(2)}%`;
+  return typeof v !== "number" || !Number.isFinite(v) ? t("uptimeNoData") : `${(v * 100).toFixed(2)}%`;
 }
 
 /** Output speed in tokens/s at one decimal with digit grouping; null falls back to the localized "N/A". */
@@ -76,6 +78,7 @@ export function formatSpeed(t: TFunction, v: number | null | undefined): string 
 
 /** Number at one decimal with digit grouping (speeds, index values). */
 export function formatIndex(v: number): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return v.toLocaleString("en-US", { maximumFractionDigits: 1 });
 }
 
@@ -94,12 +97,12 @@ export function formatDollar(v: number | null | undefined, t?: TFunction): strin
 }
 
 export function formatPricePerMillion(v: number | null | undefined, t?: TFunction): string {
-  if (typeof v === "number") return `${usdString(v)}${t ? t("perMTokens") : "/M tokens"}`;
-  return t ? t("notAvailable") : "N/A";
+  if (typeof v !== "number" || !Number.isFinite(v)) return t ? t("notAvailable") : "N/A";
+  return `${usdString(v)}${t ? t("perMTokens") : "/M tokens"}`;
 }
 
 export function formatTrend(change?: number | null, t?: TFunction): string {
-  if (change == null) return t ? t("notAvailable") : "N/A";
+  if (typeof change !== "number" || !Number.isFinite(change)) return t ? t("notAvailable") : "N/A";
   if (change === 0) return "0.0%";
   return `${change > 0 ? "+" : ""}${change.toFixed(1)}%`;
 }
@@ -133,7 +136,8 @@ function localeOf(lang: string): string {
 export function formatDate(isoString: string | number | Date, lang: string): string {
   const date = new Date(isoString);
   if (isNaN(date.getTime())) return String(isoString);
-  return date.toLocaleDateString(localeOf(lang), { timeZone: "UTC" });
+  // Local timezone: UTC rendering shifted Chinese-evening dates a day behind.
+  return date.toLocaleDateString(localeOf(lang));
 }
 
 export function orNA(value: string | null | undefined, t: TFunction): string {

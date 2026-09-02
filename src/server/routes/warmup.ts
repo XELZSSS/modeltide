@@ -14,21 +14,27 @@ function withQuery(url: string, params: Record<string, string>): string {
  */
 export function buildWarmUrls(base: string, routes: readonly RouteDef[], now: Date = new Date()): string[] {
   const includeWarmWindow = newsWarmDue(now.getUTCMinutes());
-  return routes
-    .filter((route) => route.warm !== "window" || includeWarmWindow)
-    .flatMap((route) => {
-      const specs = route.query ?? {};
-      const defaults: Record<string, string> = {};
-      for (const [name, spec] of Object.entries(specs)) {
-        if (spec.default !== undefined) defaults[name] = spec.default;
-      }
-      if (!route.warm) return [withQuery(base + route.path, defaults)];
+  return (
+    routes
+      // noStore routes (live probe results, self-healing history) gain nothing
+      // from CDN warming — and warming status-history would trigger a duplicate
+      // 7-target probe round on top of the scheduled sampler. Skip them.
+      .filter((route) => route.noStore !== true)
+      .filter((route) => route.warm !== "window" || includeWarmWindow)
+      .flatMap((route) => {
+        const specs = route.query ?? {};
+        const defaults: Record<string, string> = {};
+        for (const [name, spec] of Object.entries(specs)) {
+          if (spec.default !== undefined) defaults[name] = spec.default;
+        }
+        if (!route.warm) return [withQuery(base + route.path, defaults)];
 
-      let combos: Record<string, string>[] = [{}];
-      for (const [name, spec] of Object.entries(specs)) {
-        if (spec.type !== "enum") continue;
-        combos = combos.flatMap((combo) => spec.values.map((v) => ({ ...combo, [name]: v })));
-      }
-      return combos.map((combo) => withQuery(base + route.path, { ...defaults, ...combo }));
-    });
+        let combos: Record<string, string>[] = [{}];
+        for (const [name, spec] of Object.entries(specs)) {
+          if (spec.type !== "enum") continue;
+          combos = combos.flatMap((combo) => spec.values.map((v) => ({ ...combo, [name]: v })));
+        }
+        return combos.map((combo) => withQuery(base + route.path, { ...defaults, ...combo }));
+      })
+  );
 }

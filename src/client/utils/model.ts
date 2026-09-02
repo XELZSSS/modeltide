@@ -33,9 +33,12 @@ function calcCost(
   opts?: CostEstimateOptions,
 ): number | null {
   if (!pricing || typeof pricing.input !== "number" || typeof pricing.output !== "number") return null;
+  if (!Number.isFinite(pricing.input) || !Number.isFinite(pricing.output)) return null;
+  const cacheRaw = pricing.cacheHit ?? pricing.cache_hit;
+  if (cacheRaw !== undefined && cacheRaw !== null && !Number.isFinite(cacheRaw)) return null;
   if (!Number.isFinite(promptTokens) || !Number.isFinite(completionTokens)) return null;
   const hitRate = clamp01(opts?.cacheHitRate ?? 0);
-  const cached = typeof pricing.cache_hit === "number" ? pricing.cache_hit : pricing.input;
+  const cached = typeof cacheRaw === "number" ? cacheRaw : pricing.input;
   const inputRate = (1 - hitRate) * pricing.input + hitRate * cached;
   const reasoning = nonNeg(opts?.reasoningTokens ?? 0);
   return (
@@ -44,7 +47,7 @@ function calcCost(
   );
 }
 
-export interface MonthlyCostOptions {
+interface MonthlyCostOptions {
   dailyInput: number;
   dailyOutput: number;
   dailyReasoning?: number;
@@ -64,10 +67,10 @@ export function getOutputSpeed(model: ArtificialAnalysisModel): number | null {
   return model.speed?.median_output_speed ?? null;
 }
 
-function groupByProvider(models: ArtificialAnalysisModel[]) {
+function groupByProvider(models: ArtificialAnalysisModel[], unknownLabel = "Unknown") {
   const providers = new Map<string, { name: string; color: string; models: ArtificialAnalysisModel[] }>();
   for (const m of models) {
-    const name = m.model_creators?.name || "Unknown";
+    const name = m.model_creators?.name || unknownLabel;
     const color = m.model_creators?.color || "var(--text-tertiary)";
     let bucket = providers.get(name);
     if (!bucket) {
@@ -92,8 +95,8 @@ export interface ProviderStats {
   avgIntelligence: number | null;
 }
 
-export function computeProviderStats(models: ArtificialAnalysisModel[]): ProviderStats[] {
-  return groupByProvider(models)
+export function computeProviderStats(models: ArtificialAnalysisModel[], unknownLabel = "Unknown"): ProviderStats[] {
+  return groupByProvider(models, unknownLabel)
     .map(({ name, color, models: group }) => {
       const count = group.length;
       const avgPrice = avg(group.map((m) => m.pricing?.input).filter((p): p is number => p != null));

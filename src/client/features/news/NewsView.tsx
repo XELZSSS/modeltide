@@ -22,42 +22,44 @@ const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
   funding: "catFunding",
 };
 
+// Server dedupes by link, so the link is the stable row identity.
+// Module-level so the reference is stable across renders (usePagedData memoizes on it).
+const getNewsRowId = (item: NewsItem): string => item.link;
+
 function NewsList({ news }: { news: NewsItem[] }) {
   const { t } = useTranslation();
   const { isMobile } = useDevice();
-  // Fewer items per page on mobile to keep the list manageable.
-  const { page, totalPages, pagedData: currentNews, goToPage } = usePagedData(news, undefined, isMobile ? 10 : 20);
+  const { page, totalPages, pagedData: currentNews, goToPage } = usePagedData(news, getNewsRowId, isMobile ? 10 : 20);
 
   if (news.length === 0) return <EmptyState icon={Search} message={t("noResults")} />;
 
   return (
     <div className="flex flex-col">
-      <div className="flex flex-col divide-y divide-border">
+      <ul className="flex flex-col divide-y divide-border">
         {currentNews.map((item) => (
-          <a
-            // Keys must be unique across feeds; guids are only feed-scoped, but the
-            // server dedupes by link, so the link is the collision-free identifier.
-            key={item.link}
-            href={safeHref(item.link) ?? undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-start justify-between gap-4 py-3 transition-colors"
-            aria-label={`${item.title} - ${item.source}`}
-          >
-            <h3 className="text-sm font-medium text-text-primary leading-relaxed group-hover:text-accent transition-colors min-w-0 break-words">
-              {item.title}
-            </h3>
-            <div className="flex items-center gap-3 shrink-0 text-xs text-text-tertiary mt-0.5">
-              <span className="hidden sm:inline">{item.source}</span>
-              <span className="flex items-center gap-1">
-                <Clock size={12} />
-                {formatRelativeTime(item.pubDate, t)}
-              </span>
-              <ExternalLink size={14} className="md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
-            </div>
-          </a>
+          <li key={item.link}>
+            <a
+              href={safeHref(item.link)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-start justify-between gap-4 py-3 transition-colors"
+              aria-label={t("newsItemLabel", { title: item.title, source: item.source })}
+            >
+              <h3 className="text-sm font-medium text-text-primary leading-relaxed group-hover:text-accent transition-colors min-w-0 break-words">
+                {item.title}
+              </h3>
+              <div className="flex items-center gap-3 shrink-0 text-xs text-text-tertiary mt-0.5">
+                <span className="hidden sm:inline">{item.source}</span>
+                <span className="flex items-center gap-1">
+                  <Clock size={12} />
+                  {formatRelativeTime(item.pubDate, t)}
+                </span>
+                <ExternalLink size={14} className="md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
+              </div>
+            </a>
+          </li>
         ))}
-      </div>
+      </ul>
       {totalPages > 1 && (
         <div className="mt-4 flex justify-center">
           <Pagination page={page} totalPages={totalPages} onChange={goToPage} />
@@ -81,12 +83,7 @@ export function NewsView() {
   const tabs: TabItem[] = useMemo(() => NEWS_CATEGORIES.map((id) => ({ id, label: t(CATEGORY_LABELS[id]) })), [t]);
 
   return (
-    <TabbedPage
-      title={t("aiNews")}
-      tabs={tabs}
-      activeTab={activeCategory}
-      onTabChange={setActiveCategory}
-    >
+    <TabbedPage title={t("aiNews")} tabs={tabs} activeTab={activeCategory} onTabChange={setActiveCategory}>
       {/* Keyed by category so tab switches get a fresh Suspense fallback and error boundary. */}
       <SuspenseQuery key={activeCategory}>
         <NewsCategoryContent categoryId={activeCategory} />

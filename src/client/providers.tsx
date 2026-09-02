@@ -4,14 +4,11 @@ import { useIsMobile } from "@/client/hooks";
 import type { Lang, TFunction } from "@/shared/i18n";
 import { createT } from "@/shared/i18n";
 
-// ============================================================================
-// I18n
-// ============================================================================
-
 interface I18nContextValue {
   lang: Lang;
   t: TFunction;
   toggleLang: () => void;
+  setLang: (lang: Lang) => void;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -35,22 +32,32 @@ function syncDocumentMeta(lang: Lang) {
 export function I18nProvider({ children }: { children: ReactNode }) {
   const lang = useSettingsStore((s) => s.lang);
   const toggleLang = useSettingsStore((s) => s.toggleLang);
+  const setLang = useSettingsStore((s) => s.setLang);
 
   useEffect(() => {
     syncDocumentMeta(lang);
   }, [lang]);
 
   // Rebuild the translator bound to the current language only when the language changes.
-  const t = useMemo(() => createT(lang), [lang]);
+  // In dev, warn when a key renders with an uninterpolated "{param}" placeholder.
+  const t = useMemo(
+    () =>
+      createT(
+        lang,
+        import.meta.env.DEV
+          ? { onMissingParam: (key, out) => console.warn(`[i18n] missing param for key "${key}": "${out}"`) }
+          : undefined,
+      ),
+    [lang],
+  );
 
-  const contextValue = useMemo<I18nContextValue>(() => ({ lang, t, toggleLang }), [lang, t, toggleLang]);
+  const contextValue = useMemo<I18nContextValue>(
+    () => ({ lang, t, toggleLang, setLang }),
+    [lang, t, toggleLang, setLang],
+  );
 
   return <I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>;
 }
-
-// ============================================================================
-// Device
-// ============================================================================
 
 const MOBILE_BREAKPOINT = 768;
 

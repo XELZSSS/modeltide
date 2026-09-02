@@ -1,4 +1,7 @@
 {
   "files": [],
+  // Solution-style root: app (DOM) + worker (no DOM) share src/shared, which is
+  // kept DOM-free by contract (see notes in both projects). If shared ever needs
+  // DOM types, split out a tsconfig.shared.json instead of adding DOM to worker.
   "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.worker.json" }]
 }

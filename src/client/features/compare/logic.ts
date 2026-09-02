@@ -6,6 +6,8 @@ import { getOutputSpeed } from "@/client/utils/model";
 
 /** A single comparable metric row: label plus optional numeric accessors and best/worst direction. */
 export interface CompareRow<T> {
+  /** Stable row identity for winner maps; defaults to `label` when omitted. */
+  id?: string;
   label: string;
   getValue?: (m: T) => string;
   getNumeric?: (m: T) => number | null | undefined;
@@ -32,6 +34,9 @@ export function computeWinners<T>(
   for (const row of rows) {
     const accessor = row.getNumeric;
     if (!accessor || !row.bestIs) continue;
+    // Key winners by stable row id, not the translated label: two rows can share
+    // a label after translation and would otherwise overwrite each other.
+    const rowKey = row.id ?? row.label;
     const values = models
       .map((model, index) => ({ key: getKey(model, index), val: accessor(model) }))
       .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val))
@@ -47,12 +52,10 @@ export function computeWinners<T>(
         row.worstIs === "min" ? Math.min(...values.map((v) => v.val)) : Math.max(...values.map((v) => v.val));
       for (const v of values) if (!perModel.has(v.key) && approxEq(v.val, worst)) perModel.set(v.key, "loss");
     }
-    winners.set(row.label, perModel);
+    winners.set(rowKey, perModel);
   }
   return winners;
 }
-
-// -- Radar chart and comparison rows for Artificial Analysis models ------------
 
 function scoreMetric(
   t: TFunction,
@@ -60,6 +63,7 @@ function scoreMetric(
   getScore: (m: ArtificialAnalysisModel) => number | null | undefined,
 ): CompareRow<ArtificialAnalysisModel> {
   return {
+    id: labelKey,
     label: t(labelKey),
     getValue: (model) => formatScore(t, getScore(model)),
     getNumeric: getScore,
@@ -74,6 +78,7 @@ function percentMetric(
   getScore: (m: ArtificialAnalysisModel) => number | null | undefined,
 ): CompareRow<ArtificialAnalysisModel> {
   return {
+    id: labelKey,
     label: t(labelKey),
     getValue: (m) => formatPercent(t, normalizePercent(getScore(m))),
     getNumeric: (m) => normalizePercent(getScore(m)),
@@ -104,10 +109,12 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]) 
 export function buildCompareRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
   return [
     {
+      id: "creator",
       label: t("creator"),
       getValue: (model) => model.model_creators?.name || t("notAvailable"),
     },
     {
+      id: "releaseDate",
       label: t("releaseDate"),
       getValue: (model) => model.release_date || t("notAvailable"),
     },
@@ -119,6 +126,7 @@ export function buildCompareRows(t: TFunction): CompareRow<ArtificialAnalysisMod
     percentMetric(t, "scicode", (m) => m.benchmarks?.scicode),
     percentMetric(t, "ifbench", (m) => m.benchmarks?.ifbench),
     {
+      id: "outputSpeed",
       label: t("outputSpeed"),
       getValue: (model) => formatSpeed(t, getOutputSpeed(model)),
       getNumeric: getOutputSpeed,
@@ -126,6 +134,7 @@ export function buildCompareRows(t: TFunction): CompareRow<ArtificialAnalysisMod
       worstIs: "min",
     },
     {
+      id: "openWeights",
       label: t("openWeights"),
       getValue: (model) => formatBoolean(t, model.is_open_weights),
     },

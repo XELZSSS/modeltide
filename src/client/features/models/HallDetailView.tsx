@@ -43,7 +43,11 @@ export function HallDetail({ decodedId }: { decodedId: string }) {
   const { data: aaData } = useSuspenseArtificialRankings();
   const hallucinationRankings = useSuspenseHallucinationRankings();
   const entry = findModel(hallucinationRankings, decodedId, "id", "slug");
-  const aaModel = findModel(aaData, decodedId, "id", "slug");
+  // Hall ids/slugs don't always match AA's; fall back to a name match before
+  // hiding the linked AA section (a silent empty section looks like a bug).
+  const aaModel =
+    findModel(aaData, decodedId, "id", "slug") ??
+    (entry ? aaData.find((m) => m.name === entry.model || m.slug === entry.slug) : undefined);
   if (!entry) return <NotFound />;
   return (
     <DetailShell source="hall" title={entry.model}>

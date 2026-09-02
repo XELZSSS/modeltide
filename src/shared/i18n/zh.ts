@@ -1,13 +1,11 @@
 import type { EnDict } from "./index";
 
-// Simplified Chinese translations, type-checked against the English dictionary.
 export const zh = {
   home: "首页",
   rankings: "排行榜",
   statistics: "统计",
   openSourceDownloadsStats: "开源下载排行",
   hallucinationStats: "最高准确率",
-  all: "全部",
   backToList: "返回排行",
   backToHome: "返回首页",
   downloads: "下载次数",
@@ -16,7 +14,6 @@ export const zh = {
   task: "任务类型",
   compareSelected: "开始对比",
   clear: "清空",
-  remove: "移除",
   compareLimit: "请至少选择 2 个模型进行对比。",
   compareLimitTwo: "最多只能选择 2 个模型进行对比。",
   outputSpeed: "输出速度",
@@ -51,6 +48,7 @@ export const zh = {
   noResults: "未找到匹配结果",
   searching: "搜索中...",
   searchFailed: "搜索失败，请重试",
+  loading: "加载中...",
   loadFailed: "数据加载失败，请稍后重试",
   previousPage: "上一页",
   nextPage: "下一页",
@@ -88,6 +86,7 @@ export const zh = {
   priceComparison: "价格对比",
   priceBreakdown: "价格明细",
   perMTokens: "/百万 Token",
+  per1kImages: "/千张图",
   lastUpdated: "最后更新",
   timeJustNow: "刚刚",
   timeMinutesAgo: "{value}分钟前",
@@ -124,6 +123,7 @@ export const zh = {
 
   modelRankings: "模型排行",
   pricing: "价格",
+  viewMode: "视图模式",
   hallucinationRankings: "幻觉率排行",
   openSourceRankings: "开源下载排行",
   intelligenceIndex: "智能指数",
@@ -191,6 +191,8 @@ export const zh = {
   collapseRow: "收起行",
   expandRow: "展开行",
   removeFromCompare: "从对比中移除",
+  removeModel: "将 {name} 从对比中移除",
+  newsItemLabel: "{title} — {source}",
   addToCompare: "加入对比",
   mainContent: "主内容区",
   navPrimary: "主导航",
@@ -207,7 +209,6 @@ export const zh = {
   statusDegraded: "{total} 个数据源中 {down} 个异常",
   uptime24h: "24 小时可用率",
   uptime7d: "7 天可用率",
-  uptime90d: "90 天可用率",
   latencyAvg24h: "平均延迟（24 小时）",
   latencyHistory: "响应延迟 —— 近 24 小时",
   last90Days: "近 90 天",
@@ -220,5 +221,4 @@ export const zh = {
   noRecentEvents: "近 24 小时无事件",
   uptimeNoData: "无数据",
   backToStatus: "返回状态页",
-  viewFullStatus: "完整状态页",
 } as const satisfies Record<keyof EnDict, string>;

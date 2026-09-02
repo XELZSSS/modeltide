@@ -18,7 +18,12 @@ export function mergeSample(
   const recent = [...prevEntry.recent];
   const last = recent[recent.length - 1];
   // Re-serialised cron runs may land inside the same interval: upsert instead of duplicating.
-  if (last && sample.t - last.t < SAMPLE_INTERVAL_MS / 2) {
+  // Upserts replace the sample but must NOT double-count the daily bucket.
+  // Only newer samples within half an interval upsert; older ones are ignored below.
+  const isUpsert = last != null && sample.t >= last.t && sample.t - last.t < SAMPLE_INTERVAL_MS / 2;
+  // Stale/retried sample older than the newest stored one: ignore to avoid time travel.
+  if (last != null && sample.t <= last.t) return prevEntry;
+  if (isUpsert) {
     recent[recent.length - 1] = sample;
   } else {
     recent.push(sample);
@@ -32,6 +37,14 @@ export function mergeSample(
   if (!bucket) {
     bucket = { day, total: 0, ok: 0, latencySum: 0, latencyN: 0, incidents: 0 };
     daily.push(bucket);
+  }
+  // Upserts already counted this interval: skip daily accumulation to avoid dilution.
+  if (isUpsert) {
+    const cutoffDay = utcDay(now - RETAINED_DAYS * ONE_DAY);
+    return {
+      recent: recent.filter((s) => s.t > now - RECENT_WINDOW_MS),
+      daily: daily.filter((b) => b.day >= cutoffDay).slice(-RETAINED_DAYS),
+    };
   }
   bucket.total += 1;
   if (sample.ok) {

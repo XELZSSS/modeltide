@@ -5,6 +5,7 @@ interface ErrorBoundaryProps {
   errorTitle?: string;
   retryLabel?: string;
   children: ReactNode;
+  onReset?: () => void;
 }
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -22,7 +23,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     console.error("[ErrorBoundary]", error, info.componentStack);
   }
   // Bump resetKey so children are remounted from scratch on retry.
+  // Also notifies QueryErrorResetBoundary so suspended queries can retry.
   private handleRetry = () => {
+    this.props.onReset?.();
     this.setState((s) => ({ hasError: false, error: null, resetKey: s.resetKey + 1 }));
   };
   render() {

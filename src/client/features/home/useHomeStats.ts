@@ -3,7 +3,7 @@ import { Rocket, Image, BarChart3, Lightbulb } from "lucide-react";
 import { computeProviderStats, formatShortNumber, shortModelId } from "@/client/utils";
 import type { ArtificialAnalysisModel, HallucinationRankingEntry, HomeDashboardData } from "@/shared/types";
 import type { TranslationKey } from "@/shared/i18n";
-import type { HomeBarStat } from "./charts";
+import type { HomeBarStat } from "./stats";
 
 interface HomeKpi {
   label: string;
@@ -27,7 +27,9 @@ export function useHomeStats(
   t: (key: TranslationKey, params?: Record<string, string | number>) => string,
 ) {
   const openSourceRankings = dashboardData.opensource ?? [];
-  const t2iModels = dashboardData.textToImage?.models ?? [];
+  // Stabilize the array identity: dashboardData.textToImage is a fresh object per
+  // query resolution, and `?? []` would otherwise bust the kpiStrip memo below.
+  const t2iModels = useMemo(() => dashboardData.textToImage?.models ?? [], [dashboardData.textToImage?.models]);
   const latestOpenRouterModel = dashboardData.orRankings?.tokenUsageRankings?.[0] ?? null;
 
   const downloadStats = useMemo<HomeBarStat[]>(
@@ -55,10 +57,21 @@ export function useHomeStats(
 
   const { latestRelease, bestReasoningModel } = useMemo(() => {
     let latest: ArtificialAnalysisModel | null = null;
+    let latestTs = -Infinity;
     let bestReasoning: ArtificialAnalysisModel | null = null;
     for (const m of artificialData) {
-      if (m.release_date && (!latest?.release_date || m.release_date > latest.release_date)) latest = m;
-      if (m.is_reasoning === true && (!bestReasoning || (m.intelligence_index ?? -Infinity) > (bestReasoning.intelligence_index ?? -Infinity))) bestReasoning = m;
+      // Compare timestamps, not strings: non-zero-padded dates ("2024-1-2")
+      // sort incorrectly under lexicographic comparison.
+      const ts = m.release_date ? Date.parse(m.release_date) : NaN;
+      if (Number.isFinite(ts) && ts > latestTs) {
+        latestTs = ts;
+        latest = m;
+      }
+      if (
+        m.is_reasoning === true &&
+        (!bestReasoning || (m.intelligence_index ?? -Infinity) > (bestReasoning.intelligence_index ?? -Infinity))
+      )
+        bestReasoning = m;
     }
     return { latestRelease: latest, bestReasoningModel: bestReasoning };
   }, [artificialData]);
@@ -83,13 +96,13 @@ export function useHomeStats(
 
   const providerStats = useMemo<HomeProviderStat[]>(
     () =>
-      computeProviderStats(artificialData)
+      computeProviderStats(artificialData, t("unknown"))
         // Providers without speed samples would render as "0.0 tokens/s"; drop them
         // instead of implying a measured speed of zero.
         .filter(({ avgSpeed }) => avgSpeed != null)
         .map(({ name, color, count, avgSpeed }) => ({ name, color, avgSpeed: avgSpeed ?? 0, count }))
         .sort((a, b) => b.avgSpeed - a.avgSpeed),
-    [artificialData],
+    [artificialData, t],
   );
 
   return { downloadStats, hallucinationStats, kpiStrip, providerStats, t2iModels };

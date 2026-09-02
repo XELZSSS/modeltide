@@ -52,9 +52,11 @@ export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabel
       }
     };
     document.addEventListener("keydown", handler);
+    // Focus the panel's first control on the next frame, but only when focus
+    // isn't already somewhere meaningful (don't steal it from the trigger flow).
     const timer = setTimeout(() => {
-      const firstFocusable = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-      firstFocusable?.focus();
+      if (document.activeElement && document.activeElement !== document.body) return;
+      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
     }, 50); // Small delay to ensure DOM is ready
     return () => {
       document.removeEventListener("keydown", handler);

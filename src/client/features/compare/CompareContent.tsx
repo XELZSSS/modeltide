@@ -7,7 +7,7 @@ import { CompareTable } from "./CompareTable";
 import type { CompareRow } from "./logic";
 import { useTranslation } from "@/client/providers";
 import { modelId, cn } from "@/client/utils";
-import { hexToRgba, getModelColor, chartBase, axisTickStyle, legendStyle, seriesColor } from "@/client/utils/charts";
+import { hexToRgba, chartBase, axisTickStyle, legendStyle, seriesColor } from "@/client/utils/charts";
 import "@/client/utils/charts";
 import { useChartTheme } from "@/client/hooks";
 import { defaultTooltipOptions } from "@/client/utils/charts";
@@ -42,13 +42,14 @@ const MetricCompareTable = memo(function MetricCompareTable({
   rows: CompareRow<ArtificialAnalysisModel>[];
   models: ArtificialAnalysisModel[];
 }) {
+  const theme = useChartTheme();
   return (
     <CompareTable
       rows={rows}
       models={models}
-      getKey={(m) => modelId(m)}
+      getKey={(m, index) => modelId(m) || `idx-${index}`}
       getName={(m) => m.short_name || m.name}
-      getColor={getModelColor}
+      getColor={(index) => seriesColor(theme, index)}
       renderValue={(row, model, winner) => <MetricValueDisplay value={row.getValue?.(model) ?? ""} winner={winner} />}
     />
   );
@@ -113,7 +114,9 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
       <Card className="w-full md:w-1/2">
         <CardContent padding="md" className="h-full flex items-center justify-center">
           <div className="w-full h-[240px] sm:h-[320px]">
-            <Radar data={data} options={options} />
+            <figure className="h-full">
+              <Radar data={data} options={options} role="img" aria-label={t("modelComparison")} />
+            </figure>
           </div>
         </CardContent>
       </Card>

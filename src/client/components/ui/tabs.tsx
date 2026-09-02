@@ -11,6 +11,12 @@ interface TabButtonProps {
   id?: string;
   tabIndex?: number;
   "aria-controls"?: string;
+  /**
+   * ARIA role override. Defaults to "tab" for use inside a tablist (TabContainer).
+   * View-mode switches (e.g. rankings/pricing toggle) must pass role="radio"
+   * inside a radiogroup — a bare role="tab" outside a tablist is invalid ARIA.
+   */
+  role?: "tab" | "radio" | "button";
 }
 
 /** Accessible tab button; only the active tab is keyboard-focusable (roving tabindex). */
@@ -23,15 +29,21 @@ export const TabButton = memo(function TabButton({
   id,
   tabIndex,
   "aria-controls": ariaControls,
+  role = "tab",
 }: TabButtonProps) {
+  const checkedProps =
+    role === "tab"
+      ? { "aria-selected": active, tabIndex: tabIndex ?? (active ? 0 : -1) }
+      : role === "radio"
+        ? { "aria-checked": active, tabIndex: tabIndex ?? 0 }
+        : { "aria-pressed": active, tabIndex: tabIndex ?? 0 };
   return (
     <button
       type="button"
-      role="tab"
+      role={role}
       id={id}
-      aria-selected={active}
       aria-controls={ariaControls}
-      tabIndex={tabIndex ?? (active ? 0 : -1)}
+      {...checkedProps}
       onClick={onClick}
       className={cn(
         "rounded-md font-medium transition-colors duration-150 whitespace-nowrap shrink-0",
@@ -66,6 +78,7 @@ interface TabContainerProps {
  */
 export function TabContainer({ tabs, activeTab, className, tabSize = "md", onTabChange, children }: TabContainerProps) {
   const handleTablistKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (tabs.length === 0) return;
     const currentIndex = tabs.findIndex((tab) => tab.id === activeTab);
     if (currentIndex < 0) return;
     let nextIndex: number | null = null;

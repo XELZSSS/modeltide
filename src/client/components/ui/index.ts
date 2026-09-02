@@ -1,4 +1,3 @@
-// Barrel for UI primitives; consumers import from "@/client/components/ui".
 export { Button } from "./button";
 export { Card, CardContent } from "./card";
 export { Input } from "./input";

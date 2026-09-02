@@ -16,16 +16,58 @@ let memoryStore: HistoryStore = { sources: {} };
 
 async function acquireSampleLock(ctx: AppContext): Promise<boolean> {
   if (!ctx.kv) return true;
-  const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
-  if (held) return false;
-  await ctx.kv.put(SAMPLE_LOCK_KEY, "1", { expirationTtl: SAMPLE_LOCK_TTL_S });
+  try {
+    const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
+    if (held) return false;
+    await ctx.kv.put(SAMPLE_LOCK_KEY, "1", { expirationTtl: SAMPLE_LOCK_TTL_S });
+    return true;
+  } catch {
+    // Best-effort lock: KV hiccup must not block sampling.
+    return true;
+  }
+}
+
+async function releaseSampleLock(ctx: AppContext): Promise<void> {
+  if (!ctx.kv) return;
+  try {
+    await ctx.kv.delete(SAMPLE_LOCK_KEY);
+  } catch {
+    // Lock expires via TTL; ignore delete failures.
+  }
+}
+
+function isValidStoreShape(v: unknown): v is HistoryStore {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const sources = (v as { sources?: unknown }).sources;
+  if (!sources || typeof sources !== "object" || Array.isArray(sources)) return false;
+  for (const entry of Object.values(sources as Record<string, unknown>)) {
+    if (entry == null) continue;
+    if (typeof entry !== "object" || Array.isArray(entry)) return false;
+    const { recent, daily } = entry as { recent?: unknown; daily?: unknown };
+    if (!Array.isArray(recent) || !Array.isArray(daily)) return false;
+  }
   return true;
 }
 
 export async function readStore(ctx: AppContext): Promise<HistoryStore> {
   if (!ctx.kv) return memoryStore;
-  const raw = await ctx.kv.get(HISTORY_KEY);
-  return raw ? (JSON.parse(raw) as HistoryStore) : { sources: {} };
+  let raw: string | null;
+  try {
+    raw = await ctx.kv.get(HISTORY_KEY);
+  } catch {
+    return memoryStore;
+  }
+  if (!raw) return { sources: {} };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isValidStoreShape(parsed)) throw new Error("invalid shape");
+    return parsed;
+  } catch {
+    // Corrupted history (truncated write or bad shape): self-heal instead of 500.
+    // Delete async — a failed delete must not break the read path.
+    ctx.kv.delete(HISTORY_KEY).catch(() => {});
+    return { sources: {} };
+  }
 }
 
 function newestSampleTime(store: HistoryStore): number {
@@ -39,8 +81,12 @@ function newestSampleTime(store: HistoryStore): number {
 
 export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Promise<void> {
   if (!(await acquireSampleLock(ctx))) return;
-  const probed = await probeTargets(ctx);
-  await mergeSamplesIntoStore(ctx, aggregateProbes(probed), now);
+  try {
+    const probed = await probeTargets(ctx);
+    await mergeSamplesIntoStore(ctx, aggregateProbes(probed), now);
+  } finally {
+    await releaseSampleLock(ctx);
+  }
 }
 
 export async function mergeSamplesIntoStore(
@@ -50,21 +96,43 @@ export async function mergeSamplesIntoStore(
 ): Promise<HistoryStore> {
   const store = await readStore(ctx);
   for (const [id, agg] of aggregates) {
-    store.sources[id] = mergeSample(store.sources[id], { t: now, ok: agg.ok, latencyMs: agg.latencyMs, status: agg.status, error: agg.error }, now);
+    store.sources[id] = mergeSample(
+      store.sources[id],
+      { t: now, ok: agg.ok, latencyMs: agg.latencyMs, status: agg.status, error: agg.error },
+      now,
+    );
   }
   if (!ctx.kv) {
     memoryStore = store;
     return store;
   }
-  await ctx.kv.put(HISTORY_KEY, JSON.stringify(store));
+  try {
+    await ctx.kv.put(HISTORY_KEY, JSON.stringify(store));
+  } catch (err) {
+    // KV write failure must not break reads; keep serving stale/memory.
+    ctx.log(
+      "warn",
+      `[status-history] KV write failed, serving memory: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    memoryStore = store;
+  }
   return store;
 }
 
 export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore> {
-  let store = await readStore(ctx);
-  if (newestSampleTime(store) < Date.now() - SAMPLE_INTERVAL_MS) {
-    await recordStatusSamples(ctx);
+  let store: HistoryStore;
+  try {
     store = await readStore(ctx);
+  } catch {
+    return memoryStore;
+  }
+  if (newestSampleTime(store) < Date.now() - SAMPLE_INTERVAL_MS) {
+    try {
+      await recordStatusSamples(ctx);
+      store = await readStore(ctx);
+    } catch {
+      // Sampling failure: fall through with stale store.
+    }
   }
   return store;
 }
@@ -91,7 +159,14 @@ export function statusFromStore(store: HistoryStore, now = Date.now()): { source
           error: last.ok ? null : (last.error ?? "probe failed"),
           checkedAt: new Date(last.t).toISOString(),
         }
-      : { id, ok: false, status: null, latencyMs: null, error: "no samples yet", checkedAt: new Date(now).toISOString() };
+      : {
+          id,
+          ok: false,
+          status: null,
+          latencyMs: null,
+          error: "no samples yet",
+          checkedAt: new Date(now).toISOString(),
+        };
   });
   return { sources, checkedAt: new Date(newest || now).toISOString() };
 }

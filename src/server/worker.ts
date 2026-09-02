@@ -10,7 +10,9 @@ const app = createApp(routeDefs);
 // Pre-populate caches and CDN edges for all warm routes on the scheduled trigger.
 async function warmUrls(env: Env): Promise<void> {
   const warmUrlsList = buildWarmUrls(WARM_ORIGIN, routeDefs, new Date());
-  const CONCURRENCY = 8;
+  // Keep concurrency low: each warm request fans out (home=3, AA=4, news=6),
+  // and Workers caps subrequests per invocation (~50). 8-way bursts tripped it.
+  const CONCURRENCY = 3;
   let failures = 0;
   const failed: string[] = [];
   const queue = [...warmUrlsList];
@@ -19,7 +21,7 @@ async function warmUrls(env: Env): Promise<void> {
       const url = queue.shift() ?? "?";
       try {
         // The internal-origin header lets the API skip per-request logging for
-        // cron traffic (pure noise at 4-minute cadence); never exposed publicly.
+        // cron traffic (pure noise at a 30-minute cadence); never exposed publicly.
         const res = await app.request(url, { headers: { "x-warmup": "1" } }, env);
         if (res.status < 200 || res.status >= 300) {
           failures++;
@@ -40,25 +42,33 @@ async function warmUrls(env: Env): Promise<void> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const isApi = url.pathname === "/api" || url.pathname.startsWith("/api/");
-    const response = await app.fetch(request, env);
-    // Non-API 404s fall back to the static-assets fetcher so the Worker can host pages alongside the API.
-    if (!isApi && response.status === 404 && env.ASSETS) {
-      return env.ASSETS.fetch(request);
+    try {
+      const url = new URL(request.url);
+      const isApi = url.pathname === "/api" || url.pathname.startsWith("/api/");
+      const response = await app.fetch(request, env);
+      // Non-API 404s fall back to the static-assets fetcher so the Worker can host pages alongside the API.
+      if (!isApi && response.status === 404 && env.ASSETS) {
+        return env.ASSETS.fetch(request);
+      }
+      return response;
+    } catch (err) {
+      console.error("[worker] unhandled fetch error:", err instanceof Error ? err.message : String(err));
+      return Response.json({ error: { code: 500, message: "Internal server error" } }, { status: 500 });
     }
-    return response;
   },
 
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-    // One probe round per tick feeds BOTH the rolling history and the sources-status
-    // route (which reads the store instead of probing again), halving upstream probes.
-    // Sampling failures must not block the warmup.
+    // One probe round per tick feeds the rolling history store that the
+    // status-history route reads; sampling failures must not block the warmup.
     try {
       await recordStatusSamples(buildContext(env));
     } catch (err) {
       console.warn("[status-history] sampling failed:", err instanceof Error ? err.message : String(err));
     }
-    await warmUrls(env);
+    try {
+      await warmUrls(env);
+    } catch (err) {
+      console.warn("[warm] warmup failed:", err instanceof Error ? err.message : String(err));
+    }
   },
 };

@@ -13,9 +13,9 @@ import { useHomeStats } from "./useHomeStats";
 import { KpiStrip, ProviderSpeedCard, TextToImageSection } from "./HomeSections";
 import { intelligenceChartTitle } from "./chartTitle";
 
-const chartsImport = () => import("./charts");
-const IndexLineChart = lazy(() => chartsImport().then((m) => ({ default: m.IndexLineChart })));
-const StatisticsSection = lazy(() => chartsImport().then((m) => ({ default: m.StatisticsSection })));
+const IndexLineChart = lazy(() => import("./charts").then((m) => ({ default: m.IndexLineChart })));
+// Light DOM-only stats ride a separate chunk so they don't wait for chart.js.
+const StatisticsSection = lazy(() => import("./stats").then((m) => ({ default: m.StatisticsSection })));
 
 function HomeContent() {
   const { t } = useTranslation();

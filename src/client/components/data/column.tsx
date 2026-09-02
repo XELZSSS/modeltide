@@ -11,6 +11,11 @@ export function textCol<T>(
   return { id, header, cell, ...opts };
 }
 
+/**
+ * Right-aligned numeric column. NOTE: `hiddenMd` defaults to true (narrow-table
+ * behavior) and is only overridden when `opts` explicitly passes it — callers
+ * relying on visibility must pass `hiddenMd: false` explicitly.
+ */
 export function rightCol<T>(
   id: string,
   header: string,

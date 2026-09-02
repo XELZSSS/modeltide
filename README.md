@@ -36,13 +36,13 @@
 
 ## ✨ Features
 
-| Feature | Description |
-|---------|-------------|
-| 🏆 **Model Rankings** | Intelligence index, hallucination rates, provider stats and per-model details |
-| 📢 **Release Tracking** | Newest model & open-source releases with download stats |
-| 📰 **News Aggregation** | Multi-source RSS for industry / open source / hardware / funding |
-| ⚖️ **Model Comparison** | Radar-chart metrics, price breakdown and a monthly cost estimator |
-| 🩺 **Source Status** | Live availability & latency monitoring of upstream sources |
+| Feature                 | Description                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| 🏆 **Model Rankings**   | Intelligence index, hallucination rates, provider stats and per-model details |
+| 📢 **Release Tracking** | Newest model & open-source releases with download stats                       |
+| 📰 **News Aggregation** | Multi-source RSS for industry / open source / hardware / funding              |
+| ⚖️ **Model Comparison** | Radar-chart metrics, price breakdown and a monthly cost estimator             |
+| 🩺 **Source Status**    | Live availability & latency monitoring of upstream sources                    |
 
 ---
 
@@ -74,7 +74,9 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000` — the dev server runs the React client and the Worker API together, backed by a local in-memory KV, so no extra setup is needed
+Open `http://localhost:3000` — the dev server runs the React client and the Worker API together with no extra setup needed (without a KV binding the API fetches upstream directly and keeps status history in memory)
+
+Single entry: use `npm run dev` (Vite owns port 3000). `wrangler dev` serves the same Worker on port 8787 when you need raw Worker parity side by side.
 
 > Tip: for production, run `npm run build` then `npm run deploy` — see [Commands](#-commands)
 
@@ -86,8 +88,8 @@ Open `http://localhost:3000` — the dev server runs the React client and the Wo
 
 ```bash
 npm run dev        # Start the dev server (port 3000, Vite + Workers)
-npm run build      # Production build (recomputes the CSP hash)
-npm run preview    # Build + serve the production bundle locally
+npm run build      # Production build (recomputes the CSP hash; Vite empties dist, no rimraf needed)
+npm run preview    # Build + serve the production bundle locally (pure Vite static preview, NOT the Worker — use `wrangler dev` on 8787 for Worker parity)
 ```
 
 ### Deploy
@@ -115,14 +117,15 @@ npm run audit      # Security scan of dependencies
 
 ## 📦 Deployment
 
-A single Cloudflare Worker serves both static assets and the API — upstream data is cached in a KV namespace and refreshed by a scheduled cron
+A single Cloudflare Worker serves both static assets and the API — upstream data is cached and refreshed by a scheduled cron
 
 1. **Fork** this repository
-2. In [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **KV**, create a namespace and copy its ID
-3. **Configure** — paste the KV namespace ID into the `id` field in `wrangler.jsonc` and commit
-4. **Deploy** — in **Workers & Pages** → **Create application** → **Import a repository**, select your fork and click **Save and Deploy**
-5. **Stay updated** — every push to the repository automatically triggers a rebuild and redeploy
+2. **(Optional) KV cache** — in [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **KV**, create a namespace and copy its ID; paste it into the `id` field in `wrangler.jsonc` (uncomment `kv_namespaces`) and commit
+3. **Deploy** — in **Workers & Pages** → **Create application** → **Import a repository**, select your fork and click **Save and Deploy**
+4. **Stay updated** — every push to the repository automatically triggers a rebuild and redeploy
 
+> **Without KV** (default) the deployment still works: every request fetches upstream directly, status history lives only in memory (lost on isolate restart), and per-IP rate limiting is disabled. **With KV** you get 30-minute cached responses, persistent 90-day status history, and rate limiting.
+>
 > **Note on the KV free plan** — the free tier caps KV at **1,000 writes/day**, and the cron scheduler (status-history sampling + cache warmup) consumes most of that. The deployment keeps working, but cache writes start failing near the cap, so data refreshes less often. The **Workers Paid** plan (1M writes/day) removes the limit.
 
 > `worker-configuration.d.ts` at the repo root is **generated** by `npx wrangler types` (Cloudflare bindings types). Don't edit it by hand; regenerate it after changing `wrangler.jsonc`.

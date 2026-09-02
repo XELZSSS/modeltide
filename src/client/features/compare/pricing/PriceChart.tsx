@@ -2,7 +2,15 @@ import { memo, useMemo } from "react";
 import { type ChartOptions } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { Card, CardContent } from "@/client/components/ui";
-import { hexToRgba, chartBase, axisTickStyle, axisGridStyle, axisDashedBorderStyle, legendStyle, seriesColor } from "@/client/utils/charts";
+import {
+  hexToRgba,
+  chartBase,
+  axisTickStyle,
+  axisGridStyle,
+  axisDashedBorderStyle,
+  legendStyle,
+  seriesColor,
+} from "@/client/utils/charts";
 import "@/client/utils/charts";
 import { useChartTheme } from "@/client/hooks";
 import { defaultTooltipOptions } from "@/client/utils/charts";
@@ -76,7 +84,9 @@ export const PriceChart = memo(function PriceChart({
       <CardContent padding="md">
         <p className="text-sm font-semibold mb-3">{t("priceComparison")}</p>
         <div className="w-full h-[220px] sm:h-[200px]">
-          <Bar data={data} options={options} />
+          <figure className="h-full">
+            <Bar data={data} options={options} role="img" aria-label={t("priceComparison")} />
+          </figure>
         </div>
       </CardContent>
     </Card>

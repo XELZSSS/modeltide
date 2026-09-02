@@ -43,28 +43,21 @@ function ensureObserver(): void {
   media?.addEventListener?.("change", notify);
 }
 
-const SSR_FALLBACK: ChartTheme = {
-  grid: "#e4e4e7",
-  tick: "#8f97a5",
-  tickSecondary: "#5b6472",
-  tooltipBg: "#f4f4f5",
-  tooltipText: "#0b1220",
-  palette: ["#2563eb", "#ea580c", "#0d9488", "#7c3aed", "#e11d48", "#d97706", "#0891b2", "#db2777", "#059669", "#c026d3"],
-};
-
 /**
  * Resolves the CSS-variable chart palette into concrete colors for canvas rendering
  * (canvas cannot read var()). Backed by a shared observer so dark-mode toggles
  * restyle every mounted chart regardless of React effect ordering.
+ *
+ * CSR-only app: `document` always exists at runtime, so the theme is resolved
+ * synchronously on first render. There is intentionally no hardcoded fallback
+ * copy of the palette — it would drift from `--chart-N` (as it did before).
  */
 export function useChartTheme(): ChartTheme {
   const [theme, setTheme] = useState<ChartTheme>(() => {
-    if (typeof document === "undefined") return SSR_FALLBACK;
     ensureObserver();
-    return sharedTheme!;
+    return sharedTheme ?? resolveChartTheme();
   });
   useEffect(() => {
-    if (typeof document === "undefined") return;
     ensureObserver();
     const listener = (next: ChartTheme) => setTheme(next);
     listeners.add(listener);

@@ -1,3 +1,9 @@
+// Upstream endpoints are intentionally static (no per-env switching): the Worker
+// has no staging tier, and dev uses the same public sources. If a staging mirror
+// is ever needed, inject overrides via Wrangler vars (keep_vars is false, so this
+// file stays the source of truth) rather than branching on NODE_ENV here.
+// NOTE: repo lives at .../aiinsights locally but deploys as "aitiweta" (USER_AGENT,
+// WARM_ORIGIN, REPO_URL all use the deployed name) — keep them in sync on rename.
 export const upstreamConfig = {
   artificialAnalysis: "https://artificialanalysis.ai",
   huggingface: "https://huggingface.co/api/models",
@@ -9,5 +15,5 @@ export const UPSTREAM_TIMEOUT_MS = 15_000;
 /** Probe (source health check) timeout */
 export const PROBE_TIMEOUT_MS = 8_000;
 
-export const USER_AGENT = "AITIWETA/1.0";
+export const USER_AGENT = "AITIWETA/1.0 (+https://github.com/XELZSSS/aitiweta)";
 export const WARM_ORIGIN = "https://aitiweta.internal";

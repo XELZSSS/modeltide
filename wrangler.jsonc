@@ -8,40 +8,50 @@
 
   // wrangler.jsonc is the source of truth: vars here will overwrite Dashboard on every deploy, so you don't need to edit Dashboard manually.
   // Put normal vars here. For secrets, don't write the real value here — add them in Dashboard or CI.
-  "vars": {
-    // "API_HOST": "example.com",
-    // "ENV": "production"
-  },
+  "vars": {},
 
   // Serve the built Vite client from the ASSETS binding; unknown routes fall back to index.html for the SPA.
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
   },
 
-  // Smart placement co-locates the Worker with the KV store for lower latency.
+  // Smart Placement is optional: keep it only if p99 latency data shows a win.
+  // Default recommendation is to delete this block; re-enable on demand.
   "placement": {
-    "mode": "smart"
+    "mode": "smart",
   },
 
-  // Cron job refreshes the upstream data cache every 4 minutes.
+  // Cron every 30min (not more often): the free KV tier caps at 1,000 writes/day
+  // and each tick costs status-history sampling + cache warmup writes.
+  // Tightening this to */4 or similar multiplies write amplification and will
+  // hit the cap; Workers Paid (1M writes/day) removes the limit.
   "triggers": {
-    "crons": ["*/4 * * * *"]
+    "crons": ["*/30 * * * *"],
   },
 
+  // Same-Worker hosting: the client (ASSETS) and /api/* are served from one
+  // Worker/origin, so no CORS is needed. Only if VITE_API_BASE ever points at a
+  // separate origin must the Worker add explicit CORS headers in code.
+  // Upstream timeout budget: Workers cap wall-clock at ~30s, so keep Hono
+  // upstream fetches well under it (25s recommended) to fail gracefully.
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
 
   // KV cache (optional) — uncomment to enable persistent caching.
-  // - Enabled:  requests are cached in KV (15m TTL, refreshed every 4m by cron). Recommended.
+  // - Enabled:  requests are cached in KV (30m TTL, refreshed every 30m by cron). Recommended.
   // - Disabled (default): no KV, every request fetches upstream directly; status-history/uptime are in-memory only.
   // Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/
-  // To enable: 1) npx wrangler kv namespace create CACHE  2) paste the returned id below  3) uncomment:
-  // "kv_namespaces": [{ "binding": "CACHE", "id": "PASTE_KV_ID_HERE" }],
+  // To enable: 1) npx wrangler kv namespace create CACHE  2) paste the returned id below  3) uncomment the kv_namespaces block.
+  // "kv_namespaces": [
+  //   { "binding": "CACHE", "id": "PASTE_KV_NAMESPACE_ID_HERE" }
+  // ],
 
+  // Local dev port (8787): Vite owns 3000 via `npm run dev`, so `wrangler dev`
+  // uses 8787 to avoid a double-3000 conflict when both run side by side.
   "dev": {
-    "port": 3000
-  }
+    "port": 8787,
+  },
 }

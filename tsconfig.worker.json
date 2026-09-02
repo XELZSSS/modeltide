@@ -7,5 +7,8 @@
     "types": ["@cloudflare/vitest-pool-workers/types"]
   },
   "include": ["src/server/**/*.ts", "src/shared/**/*.ts", "worker-configuration.d.ts"],
+  // NOTE: lib intentionally omits DOM (Workers runtime, not browser); src/shared
+  // must therefore stay DOM-free — it is shared with tsconfig.app.json which
+  // adds DOM. A DOM API in shared/ fails this project, not the client one.
   "exclude": ["dist", "node_modules"]
 }

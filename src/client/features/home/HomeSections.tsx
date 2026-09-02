@@ -2,7 +2,7 @@ import { memo } from "react";
 import { useTranslation } from "@/client/providers";
 import { StatCard, CardGrid, Card, CardContent, Dot } from "@/client/components/ui";
 import { PageSection } from "@/client/components/layout";
-import { formatSpeed } from "@/client/utils";
+import { formatDollar, formatSpeed } from "@/client/utils";
 import type { TextToImageModel } from "@/shared/types";
 import type { HomeKpi, HomeProviderStat } from "./useHomeStats";
 
@@ -14,8 +14,9 @@ function formatRatingInterval(entry: TextToImageModel): string {
 export const KpiStrip = memo(function KpiStrip({ kpis }: { kpis: HomeKpi[] }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-      {kpis.map((kpi, idx) => (
-        <StatCard key={idx} icon={kpi.Icon} label={kpi.label} value={kpi.value} />
+      {/* KPI order is fixed, but label keys are stable while positions are not. */}
+      {kpis.map((kpi) => (
+        <StatCard key={kpi.label} icon={kpi.Icon} label={kpi.label} value={kpi.value} />
       ))}
     </div>
   );
@@ -50,7 +51,8 @@ export const ProviderSpeedCard = memo(function ProviderSpeedCard({
 });
 
 const TextToImageCard = memo(function TextToImageCard({ entry }: { entry: TextToImageModel }) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
+  const locale = lang === "zh" ? "zh-CN" : "en-US";
   return (
     <Card>
       <div className="flex flex-col gap-2.5 p-4 w-full">
@@ -73,13 +75,16 @@ const TextToImageCard = memo(function TextToImageCard({ entry }: { entry: TextTo
           <span>
             {t("votes")}:{" "}
             <strong className="text-text-primary font-semibold">
-              {entry.appearances != null ? entry.appearances.toLocaleString() : t("notAvailable")}
+              {entry.appearances != null ? entry.appearances.toLocaleString(locale) : t("notAvailable")}
             </strong>
           </span>
           {entry.pricePer1kImages != null ? (
             <span>
               {t("price")}:{" "}
-              <strong className="text-text-primary font-semibold">${entry.pricePer1kImages.toFixed(2)}/1k</strong>
+              <strong className="text-text-primary font-semibold">
+                {formatDollar(entry.pricePer1kImages, t)}
+                {t("per1kImages")}
+              </strong>
             </span>
           ) : null}
           {entry.winRate != null ? (

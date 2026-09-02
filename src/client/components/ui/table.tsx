@@ -6,11 +6,13 @@ interface ThProps {
   className?: string;
   style?: React.CSSProperties;
   children?: ReactNode;
+  scope?: "col" | "row";
 }
 
-export const Th = memo(function Th({ align = "left", className, style, children }: ThProps) {
+export const Th = memo(function Th({ align = "left", className, style, children, scope }: ThProps) {
   return (
     <th
+      scope={scope}
       className={cn(
         "px-2.5 py-2.5 text-xs font-medium text-text-tertiary",
         align === "right" ? "text-right" : "text-left",

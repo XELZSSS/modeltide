@@ -13,11 +13,20 @@ import { Spinner } from "./Spinner";
 export function SuspenseQuery({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const location = useLocation();
+  // Include the search string so ?tab= switches reset a failed boundary.
+  const resetKey = `${location.pathname}${location.search}`;
   return (
     <QueryErrorResetBoundary>
-      <ErrorBoundary key={location.pathname} errorTitle={t("errorBoundaryTitle")} retryLabel={t("errorBoundaryRetry")}>
-        <Suspense fallback={<Spinner />}>{children}</Suspense>
-      </ErrorBoundary>
+      {({ reset }) => (
+        <ErrorBoundary
+          key={resetKey}
+          errorTitle={t("errorBoundaryTitle")}
+          retryLabel={t("errorBoundaryRetry")}
+          onReset={reset}
+        >
+          <Suspense fallback={<Spinner />}>{children}</Suspense>
+        </ErrorBoundary>
+      )}
     </QueryErrorResetBoundary>
   );
 }

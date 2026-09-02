@@ -13,9 +13,6 @@ import type { Env } from "@/server/context";
 // Consolidated server tests: route registry behavior (cache headers, query
 // defaults, rate limiting, warmup expansion) plus end-to-end Worker API tests
 // running inside the workerd test runtime with mocked upstreams.
-
-// -- route registry -------------------------------------------------------------
-
 // Minimal KV stub: registry tests never touch the cache, but buildContext wires it.
 const fakeEnv = { CACHE: { get: async () => null, put: async () => {} } } as unknown as Env;
 
@@ -61,8 +58,6 @@ describe("route registry", () => {
   });
 });
 
-// -- rate limiting ----------------------------------------------------------------
-
 function statefulEnv(): Env {
   const store = new Map<string, string>();
   return {
@@ -104,8 +99,6 @@ describe("route rate limiting", () => {
     }
   });
 });
-
-// -- warmup -----------------------------------------------------------------------
 
 const warmRoutes: RouteDef[] = [
   {
@@ -150,9 +143,21 @@ describe("buildWarmUrls", () => {
   it("emits a single defaults-only URL for non-warm routes", () => {
     expect(buildWarmUrls("https://api.test", [warmRoutes[0]!], due)).toEqual(["https://api.test/api/index"]);
   });
-});
 
-// -- Worker API integration ------------------------------------------------------
+  it("skips noStore routes so live-state endpoints are never warmed", () => {
+    const routes: RouteDef[] = [
+      { path: "/api/live", noStore: true, handler: async () => ({}) },
+      { path: "/api/cached", handler: async () => ({}) },
+    ];
+    const urls = buildWarmUrls("https://api.test", routes, due);
+    expect(urls).toEqual(["https://api.test/api/cached"]);
+  });
+
+  it("rejects oversized URLs with a 400 envelope", async () => {
+    const res = await registryApp.request(`/api/cached?x=${"y".repeat(2100)}`, {}, fakeEnv);
+    expect(res.status).toBe(400);
+  });
+});
 
 const OR = upstreamConfig.openrouter;
 
@@ -317,5 +322,7 @@ describe("Worker API integration (workerd runtime)", () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as { error: { code: number; message: string } };
     expect(body.error.code).toBe(502);
+    // Upstream details (URLs, statuses) stay server-side; clients get a generic message.
+    expect(body.error.message).toBe("Upstream data source temporarily unavailable");
   });
 });

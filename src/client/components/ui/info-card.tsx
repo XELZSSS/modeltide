@@ -28,9 +28,10 @@ export const InfoRow = memo(function InfoRow({
   return (
     <div className={cn("flex flex-row justify-between min-w-0 py-1.5", compact ? "gap-2" : "gap-4")}>
       <p className={cn(textSize, "text-text-secondary truncate")}>{label}</p>
-      <p className={cn(textSize, "font-mono tabular-nums text-right truncate text-text-primary font-medium")}>
+      {/* div (not p): values can be links/code blocks, which must not nest inside <p>. */}
+      <div className={cn(textSize, "font-mono tabular-nums text-right truncate text-text-primary font-medium min-w-0")}>
         {value}
-      </p>
+      </div>
     </div>
   );
 });

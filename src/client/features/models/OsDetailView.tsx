@@ -40,7 +40,7 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
         <InfoCard title={t("repository")}>
           {/* Hugging Face URLs must not start with a slash, so strip it from the model id. */}
           <a
-            href={`https://huggingface.co/${model.id.replace(/^\//, "")}`}
+            href={`https://huggingface.co/${(model.id ?? "").replace(/^\//, "")}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-accent hover:underline break-all"
@@ -49,10 +49,10 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
           </a>
         </InfoCard>
       </InfoGrid>
-      {model.tags.length > 0 && (
+      {(model.tags ?? []).length > 0 && (
         <DetailSection title={t("tags")}>
           <div className="flex flex-wrap gap-1.5">
-            {model.tags.map((tag) => (
+            {(model.tags ?? []).map((tag) => (
               <Badge key={tag}>{tag}</Badge>
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import type { Ref } from "react";
 import { cn } from "@/client/utils";
 
 type ButtonVariant = "primary" | "outline" | "ghost" | "link" | "destructive";
@@ -7,6 +7,8 @@ type ButtonSize = "sm" | "icon" | "md";
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** Ref to the underlying button element (React 19 ref-as-prop, no forwardRef needed). */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const baseClass =
@@ -26,15 +28,21 @@ const sizeClass: Record<ButtonSize, string> = {
   icon: "size-9 rounded-md",
 };
 
-/** Shared button with variant/size presets; resets the default form submit type. */
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "ghost", size = "sm", className, children, disabled, ...props },
+/** Shared button with variant/size presets; defaults to type="button" (pass type="submit" in forms). */
+export function Button({
+  variant = "ghost",
+  size = "sm",
+  type = "button",
+  className,
+  children,
+  disabled,
   ref,
-) {
+  ...props
+}: ButtonProps) {
   return (
     <button
       ref={ref}
-      type="button"
+      type={type}
       disabled={disabled}
       className={cn(baseClass, variantClass[variant], sizeClass[size], className)}
       {...props}
@@ -42,5 +50,4 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {children}
     </button>
   );
-});
-Button.displayName = "Button";
+}

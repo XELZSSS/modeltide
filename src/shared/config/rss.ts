@@ -2,30 +2,22 @@ import type { NewsCategory } from "@/shared/types";
 
 // Every feed below is verified reachable with the worker's plain fetch + UA and
 // serves topic-matched items for its category (sampled titles, not just status codes).
-
-// -- Industry: mainstream AI business/industry news --------------------------------
 const VENTUREBEAT_AI = "https://venturebeat.com/category/ai/feed/";
 const TECHCRUNCH_AI = "https://techcrunch.com/category/artificial-intelligence/feed/";
 const SILICONANGLE_AI = "https://siliconangle.com/category/ai/feed/";
 const ARS_TECHNICA = "https://feeds.arstechnica.com/arstechnica/index";
 const MIT_TECH_REVIEW = "https://www.technologyreview.com/topic/artificial-intelligence/feed/";
 const WIRED_AI = "https://www.wired.com/feed/tag/ai/latest/rss";
-
-// -- Open source & community -------------------------------------------------------
 const ANALYTICS_VIDHYA = "https://www.analyticsvidhya.com/blog/category/artificial-intelligence/feed/";
 const HF_BLOG = "https://huggingface.co/blog/feed.xml";
 const IMPORT_AI = "https://www.importai.net/feed";
 const LAST_WEEK_IN_AI = "https://lastweekinai.substack.com/feed";
 const PHORONIX = "https://www.phoronix.com/rss.php";
-
-// -- Compute & hardware ------------------------------------------------------------
 const TOMS_HARDWARE = "https://www.tomshardware.com/feeds/all";
 const TECHPOWERUP = "https://www.techpowerup.com/rss/news";
 const SERVE_THE_HOME = "https://www.servethehome.com/feed/";
 const TECHCRUNCH_HARDWARE = "https://techcrunch.com/category/hardware/feed/";
 const TECHCRUNCH_GADGETS = "https://techcrunch.com/category/gadgets/feed/";
-
-// -- VC & funding ------------------------------------------------------------------
 const TECHCRUNCH_STARTUPS = "https://techcrunch.com/category/startups/feed/";
 const CRUNCHBASE_NEWS = "https://news.crunchbase.com/feed/";
 const BLOCKS_AND_FILES = "https://blocksandfiles.com/feed/";

@@ -9,9 +9,13 @@ const RankingsHubView = lazy(() =>
   import("./features/rankings/RankingsHubView").then((m) => ({ default: m.RankingsHubView })),
 );
 const ReleasesView = lazy(() => import("./features/releases/ReleasesView").then((m) => ({ default: m.ReleasesView })));
-const compareImport = import("./features/compare");
-const CompareView = lazy(() => compareImport.then((m) => ({ default: m.CompareView })));
-const PriceCompareView = lazy(() => compareImport.then((m) => ({ default: m.PriceCompareView })));
+// Separate entry modules so /compare and /price-compare load independent chunks
+// on first navigation instead of sharing one (two lazy() of the same module
+// would be deduped by the bundler into a single chunk).
+const CompareView = lazy(() => import("./features/compare/CompareView.lazy").then((m) => ({ default: m.CompareView })));
+const PriceCompareView = lazy(() =>
+  import("./features/compare/PriceCompareView.lazy").then((m) => ({ default: m.PriceCompareView })),
+);
 const NewsView = lazy(() => import("./features/news/NewsView").then((m) => ({ default: m.NewsView })));
 const ModelDetailView = lazy(() =>
   import("./features/models/ModelDetailView").then((m) => ({ default: m.ModelDetailView })),

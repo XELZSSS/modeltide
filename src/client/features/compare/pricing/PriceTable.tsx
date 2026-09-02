@@ -1,7 +1,8 @@
 import { memo } from "react";
 import { TrendingUp } from "lucide-react";
-import { cn, formatDollar } from "@/client/utils";
-import { getModelColor } from "@/client/utils/charts";
+import { cn, formatDollar, modelId } from "@/client/utils";
+import { useChartTheme } from "@/client/hooks";
+import { seriesColor } from "@/client/utils/charts";
 import { CompareTable } from "@/client/features/compare/CompareTable";
 import type { CompareRow } from "../logic";
 import { useTranslation } from "@/client/providers";
@@ -28,7 +29,7 @@ function PriceValue({
   const value = row.getNumeric?.(model);
   return typeof value === "number" ? (
     <span className={cn("font-mono", winner === "win" && "font-semibold text-success")}>
-      {formatDollar(value)}
+      {formatDollar(value, t)}
       {winner === "win" && <WinnerMark />}
     </span>
   ) : (
@@ -43,13 +44,14 @@ export const PriceTable = memo(function PriceTable({
   priceRows: CompareRow<ArtificialAnalysisModel>[];
   models: ArtificialAnalysisModel[];
 }) {
+  const theme = useChartTheme();
   return (
     <CompareTable
       rows={priceRows}
       models={models}
-      getKey={(m) => m.id || m.slug}
+      getKey={(m, index) => modelId(m) || `idx-${index}`}
       getName={(m) => m.short_name || m.name}
-      getColor={getModelColor}
+      getColor={(index) => seriesColor(theme, index)}
       mobileLayout="model-cards"
       renderValue={(row, model, winner) => <PriceValue row={row} model={model} winner={winner} />}
     />

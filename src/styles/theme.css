@@ -8,18 +8,16 @@
   --text-secondary: #5b6472;
   --text-tertiary: #8f97a5;
   --border: rgba(15, 23, 42, 0.08);
-  --accent: #2563eb;
-  --accent-light: rgba(37, 99, 235, 0.1);
+  --accent: #4f46e5;
+  --accent-light: rgba(79, 70, 229, 0.1);
   --accent-contrast: #ffffff;
-  --hover: rgba(37, 99, 235, 0.07);
-  --selected: rgba(37, 99, 235, 0.12);
+  --hover: rgba(79, 70, 229, 0.07);
+  --selected: rgba(79, 70, 229, 0.12);
   --destructive: #dc2626;
   --success: #15803d;
   --warning: #ffb224;
-  --success-soft: rgba(21, 128, 61, 0.12);
-  --destructive-soft: rgba(220, 38, 38, 0.12);
   --nav-bg: rgba(255, 255, 255, 0.82);
-  --chart-1: #2563eb;
+  --chart-1: #4f46e5;
   --chart-2: #ea580c;
   --chart-3: #0d9488;
   --chart-4: #7c3aed;
@@ -41,18 +39,16 @@
   --text-secondary: #98a1b3;
   --text-tertiary: #626b7e;
   --border: rgba(148, 163, 184, 0.11);
-  --accent: #60a5fa;
-  --accent-light: rgba(96, 165, 250, 0.1);
+  --accent: #818cf8;
+  --accent-light: rgba(129, 140, 248, 0.1);
   --accent-contrast: #06121c;
-  --hover: rgba(96, 165, 250, 0.07);
-  --selected: rgba(96, 165, 250, 0.12);
+  --hover: rgba(129, 140, 248, 0.07);
+  --selected: rgba(129, 140, 248, 0.12);
   --destructive: #f2555a;
   --success: #4cc38a;
   --warning: #ffc53d;
-  --success-soft: rgba(76, 195, 138, 0.16);
-  --destructive-soft: rgba(242, 85, 90, 0.16);
   --nav-bg: rgba(9, 10, 11, 0.82);
-  --chart-1: #60a5fa;
+  --chart-1: #818cf8;
   --chart-2: #fb923c;
   --chart-3: #2dd4bf;
   --chart-4: #a78bfa;
@@ -65,25 +61,25 @@
 }
 
 body[data-accent="home"] {
-  --section-accent: #2563eb;
+  --section-accent: #4f46e5;
 }
 body[data-accent="rankings"] {
-  --section-accent: #7c3aed;
+  --section-accent: #9333ea;
 }
 body[data-accent="releases"] {
-  --section-accent: #047857;
+  --section-accent: #059669;
 }
 body[data-accent="news"] {
-  --section-accent: #c2410c;
+  --section-accent: #ea580c;
 }
 body[data-accent="status"] {
-  --section-accent: #0e7490;
+  --section-accent: #0284c7;
 }
 .dark body[data-accent="home"] {
-  --section-accent: #60a5fa;
+  --section-accent: #818cf8;
 }
 .dark body[data-accent="rankings"] {
-  --section-accent: #a78bfa;
+  --section-accent: #c084fc;
 }
 .dark body[data-accent="releases"] {
   --section-accent: #34d399;
@@ -92,10 +88,15 @@ body[data-accent="status"] {
   --section-accent: #fb923c;
 }
 .dark body[data-accent="status"] {
-  --section-accent: #22d3ee;
+  --section-accent: #38bdf8;
 }
 body[data-accent] {
   --color-accent: var(--section-accent);
+  /* Plain-color fallbacks first: browsers without color-mix() ignore the
+     color-mix lines below and keep these (slightly stronger) tints. */
+  --color-accent-light: var(--bg-secondary);
+  --color-hover: var(--bg-secondary);
+  --color-selected: var(--bg-tertiary);
   --color-accent-light: color-mix(in srgb, var(--section-accent) 10%, transparent);
   --color-hover: color-mix(in srgb, var(--section-accent) 7%, transparent);
   --color-selected: color-mix(in srgb, var(--section-accent) 12%, transparent);

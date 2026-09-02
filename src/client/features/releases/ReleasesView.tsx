@@ -33,7 +33,13 @@ function parseTs(value: string): number | null {
 }
 
 function toDateStr(ts: number): string {
-  return new Date(ts).toISOString().split("T")[0]!;
+  // Local calendar day, consistent with formatDate() below (which renders local).
+  // Column headers say "date" without a zone; UTC slicing shifted UTC+8 mornings back a day.
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function useReleaseFeedEntries(openSourceReleases: OpenSourceModelEntry[]): FeedEntry[] {
@@ -116,7 +122,14 @@ function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
     ];
   }, [t, lang]);
 
-  return <SearchableDataTable data={allEntries} columns={feedColumns} getRowId={getFeedRowId} getSearchFields={getFeedSearchFields} />;
+  return (
+    <SearchableDataTable
+      data={allEntries}
+      columns={feedColumns}
+      getRowId={getFeedRowId}
+      getSearchFields={getFeedSearchFields}
+    />
+  );
 }
 
 function ReleaseDatesTab({ releaseRows }: { releaseRows: DatedModel[] }) {
@@ -158,7 +171,7 @@ function ReleaseDatesTab({ releaseRows }: { releaseRows: DatedModel[] }) {
     [t, lang],
   );
 
-  return <DataTable data={releaseRows} columns={releaseColumns} />;
+  return <DataTable data={releaseRows} columns={releaseColumns} getRowId={(row) => `${row.model.id}|${row.ts}`} />;
 }
 
 const TAB_IDS = ["feed", "release-dates"] as const;

@@ -1,15 +1,28 @@
 import { UpstreamError } from "@/server/infra/errors";
 
-const MAX_RSC_BYTES = 5 * 1024 * 1024;
+export const MAX_RSC_BYTES = 5 * 1024 * 1024;
+/** Cap traversed JSON nodes so a malicious 5MB payload cannot burn Worker CPU. */
+const MAX_RSC_NODES = 50_000;
+/** Skip absurd single lines early to keep per-line scans bounded. */
+const MAX_RSC_LINE_CHARS = 2 * 1024 * 1024;
 
+/** BFS traversal (shallowest-first, cycle-safe) with a node budget. */
 function* traverse(root: unknown): Generator<unknown> {
-  const stack: unknown[] = [root];
-  while (stack.length) {
-    const cur = stack.pop();
+  const seen = new Set<object>();
+  const queue: unknown[] = [root];
+  let visited = 0;
+  while (queue.length) {
+    const cur = queue.shift()!;
     if (!cur || typeof cur !== "object") continue;
+    if (seen.has(cur as object)) continue;
+    seen.add(cur as object);
+    visited++;
+    if (visited > MAX_RSC_NODES) {
+      throw new UpstreamError(`RSC payload too complex (>${MAX_RSC_NODES} nodes)`);
+    }
     yield cur;
     const children = Array.isArray(cur) ? cur : Object.values(cur as Record<string, unknown>);
-    for (const v of children) if (v !== null && typeof v === "object") stack.push(v);
+    for (const v of children) if (v !== null && typeof v === "object") queue.push(v);
   }
 }
 
@@ -28,25 +41,18 @@ export function findNextData<T>(root: unknown, key: string): T[] | null {
   });
 }
 
-/**
- * Finds the largest array in the tree whose items match: upstream spreads one
- * logical list across several payload chunks, so the longest fragment wins.
- */
-export function findArrayInTree<T>(root: unknown, matches: (item: unknown) => boolean): T[] | null {
-  let best: T[] | null = null;
-  for (const node of traverse(root)) {
-    if (Array.isArray(node) && node.some(matches) && (!best || node.length > best.length)) best = node as T[];
-  }
-  return best;
-}
-
 function isMarkerBoundary(line: string, marker: string): boolean {
   const q = `"${marker}"`;
   let idx = line.indexOf(q);
   while (idx !== -1) {
     const after = line.slice(idx + q.length);
     const trimmed = after.trimStart();
-    if (!trimmed) return after.length !== 0;
+    // Whitespace-only tail (e.g. `"marker"   \n`) is NOT a boundary: require a
+    // structural char to avoid false positives from prose containing the marker.
+    if (!trimmed) {
+      idx = line.indexOf(q, idx + 1);
+      continue;
+    }
     const c = trimmed[0]!;
     if (c === ":" || c === "[" || c === '"' || c === "," || c === "}" || c === "]") return true;
     idx = line.indexOf(q, idx + 1);
@@ -54,9 +60,9 @@ function isMarkerBoundary(line: string, marker: string): boolean {
   return false;
 }
 
-// Next.js flight chunk ids are hex (e.g. `26:`, `c:`, `2e:`) but typically
-// lowercase; match any hex run so letters like `c:` are not dropped.
-const STREAM_LINE_RE = /^[0-9a-f]+:(.*)$/;
+// Next.js flight chunk ids are hex (e.g. `26:`, `c:`, `2E:`); match both cases
+// so uppercase ids from newer Next builds are not dropped.
+const STREAM_LINE_RE = /^[0-9a-fA-F]+:(.*)$/;
 
 function tryParseCandidates<T>(line: string, extract: (data: unknown) => T[] | null): T[] | null {
   const prefixed = STREAM_LINE_RE.exec(line)?.[1];
@@ -76,10 +82,17 @@ function tryParseCandidates<T>(line: string, extract: (data: unknown) => T[] | n
 export function parseRscPayload<T>(body: string, marker: string, extract: (data: unknown) => T[] | null): T[] {
   if (body.length > MAX_RSC_BYTES)
     throw new UpstreamError(`RSC body too large (${body.length} bytes, limit ${MAX_RSC_BYTES})`);
+  if (!body.includes(marker)) {
+    throw new UpstreamError(
+      `RSC marker "${marker}" not found or payload empty. body length=${body.length} snippet=${JSON.stringify(body.slice(0, 200))}`,
+    );
+  }
   for (const line of body.split(/\r?\n/)) {
-    if (!isMarkerBoundary(line, marker)) continue;
+    if (line.length > MAX_RSC_LINE_CHARS || !isMarkerBoundary(line, marker)) continue;
     const res = tryParseCandidates(line, extract);
     if (res) return res;
   }
-  throw new UpstreamError(`RSC marker "${marker}" not found or payload empty. body length=${body.length}`);
+  throw new UpstreamError(
+    `RSC marker "${marker}" not found or payload empty. body length=${body.length} snippet=${JSON.stringify(body.slice(0, 200))}`,
+  );
 }

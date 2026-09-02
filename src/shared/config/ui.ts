@@ -1,16 +1,25 @@
 import type { TranslationKey } from "@/shared/i18n";
-import type { SourceStatus } from "@/shared/types";
+import type { SearchResultSource, SourceStatus } from "@/shared/types";
 
+// as-const storage keys; add new keys as literals so typos fail at the use site.
+// NOTE: values are persisted in users' localStorage — never rename them.
 export const STORAGE_KEYS = {
-  // Legacy single-purpose keys, superseded by the merged `settings` store; kept
-  // only so a rollback to an older deployed client still finds its data.
-  lang: "lang",
-  theme: "theme",
   settings: "settings",
   compare: "compare-store",
-} as const satisfies Record<string, string>;
+} as const;
 
 export type ModelSource = "aa" | "or" | "os" | "hall";
+
+/**
+ * Central map from search-result source tabs to model-detail source ids.
+ * Previously hardcoded at each useSearchAllRankings call site with no checking.
+ */
+export const SEARCH_SOURCE_TO_MODEL_SOURCE: Record<SearchResultSource, ModelSource> = {
+  modelRankings: "aa",
+  openRouterRankings: "or",
+  openSourceRankings: "os",
+  hallucinationRankings: "hall",
+};
 
 export const MODEL_SOURCES = {
   aa: {

@@ -61,8 +61,21 @@ const SettingRow = memo(function SettingRow({
 }) {
   return (
     <div
+      role={onActivate ? "button" : undefined}
+      tabIndex={onActivate ? 0 : undefined}
+      aria-label={onActivate ? label : undefined}
       className={cn("flex items-center justify-between gap-4 px-3 py-2.5", onActivate && "cursor-pointer")}
       onClick={onActivate}
+      onKeyDown={
+        onActivate
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onActivate();
+              }
+            }
+          : undefined
+      }
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-text-secondary shrink-0">{icon}</span>
@@ -75,9 +88,11 @@ const SettingRow = memo(function SettingRow({
 
 /** Settings dialog: language/theme segmented controls, GitHub link and upstream source status. */
 export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { t, lang, toggleLang } = useTranslation();
+  const { t, lang, setLang } = useTranslation();
   const themeMode = useSettingsStore((s) => s.themeMode);
+  const setThemeMode = useSettingsStore((s) => s.setThemeMode);
   const toggleTheme = useSettingsStore((s) => s.toggleTheme);
+  const toggleLang = useSettingsStore((s) => s.toggleLang);
 
   return (
     <Sheet open={open} onClose={onClose} ariaLabel={t("settings")}>
@@ -96,7 +111,10 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             <Segmented
               label={t("language")}
               value={lang}
-              onChange={(v) => v !== lang && toggleLang()}
+              // Honor the selected value (not just toggle) so a third language can't break selection.
+              onChange={(v) => {
+                if (v === "zh" || v === "en") setLang(v);
+              }}
               options={[
                 { value: "zh", label: "中文" },
                 { value: "en", label: "EN" },
@@ -107,7 +125,9 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             <Segmented
               label={t("themeToggle")}
               value={themeMode}
-              onChange={(v) => v !== themeMode && toggleTheme()}
+              onChange={(v) => {
+                if (v === "light" || v === "dark") setThemeMode(v);
+              }}
               options={[
                 { value: "light", label: t("themeLight") },
                 { value: "dark", label: t("themeDark") },

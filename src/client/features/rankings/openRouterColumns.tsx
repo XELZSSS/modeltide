@@ -10,21 +10,26 @@ function trendClass(change?: number | null) {
   return change > 0 ? "text-success" : "text-destructive";
 }
 
+/** Token count or an em-dash when the upstream value is missing (null ≠ 0). */
+function tokenText(v: number | null | undefined): string {
+  return typeof v === "number" && Number.isFinite(v) ? formatShortNumber(v) : "—";
+}
+
 /** OpenRouter token-usage columns plus the request-count trend badge. */
 export function buildOpenRouterColumns(t: (key: TranslationKey) => string): DataTableColumn<OpenRouterRankEntry>[] {
   return [
     textCol("model", t("model"), (item) => <RankingNameCell name={item.name} />, { width: "45%" }),
     rightCol("totalTokens", t("totalTokens"), (item) => (
-      <span className="font-mono font-semibold text-text-primary">{formatShortNumber(item.totalTokens || 0)}</span>
+      <span className="font-mono font-semibold text-text-primary">{tokenText(item.totalTokens)}</span>
     )),
     rightCol("inputTokens", t("inputTokens"), (item) => (
-      <span className="font-mono font-semibold text-text-primary">{formatShortNumber(item.promptTokens || 0)}</span>
+      <span className="font-mono font-semibold text-text-primary">{tokenText(item.promptTokens)}</span>
     )),
     rightCol("outputTokens", t("outputTokens"), (item) => (
-      <span className="font-mono font-semibold text-text-primary">{formatShortNumber(item.completionTokens || 0)}</span>
+      <span className="font-mono font-semibold text-text-primary">{tokenText(item.completionTokens)}</span>
     )),
     rightCol("requests", t("requests"), (item) => (
-      <span className="font-mono text-text-secondary">{formatShortNumber(item.requestCount || 0)}</span>
+      <span className="font-mono text-text-secondary">{tokenText(item.requestCount)}</span>
     )),
     rightCol("creator", t("creator"), (item) => (
       <RightAlignedText className="text-xs">{item.creator || t("unknown")}</RightAlignedText>

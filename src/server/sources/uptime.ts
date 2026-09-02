@@ -13,7 +13,6 @@ interface UptimePayload {
 
 export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
   const now = Date.now();
-  // No KV: use in-memory timestamp, no persistence
   if (!ctx.kv) {
     memoryFirstLaunch ??= now;
     return {
@@ -21,7 +20,17 @@ export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
       uptimeMs: Math.max(0, now - memoryFirstLaunch),
     };
   }
-  const raw = await ctx.kv.get(FIRST_LAUNCH_KEY);
+  let raw: string | null;
+  try {
+    raw = await ctx.kv.get(FIRST_LAUNCH_KEY);
+  } catch (err) {
+    ctx.log("warn", `[uptime] KV read failed, using memory: ${errMsg(err)}`);
+    memoryFirstLaunch ??= now;
+    return {
+      firstLaunchAt: new Date(memoryFirstLaunch).toISOString(),
+      uptimeMs: Math.max(0, now - memoryFirstLaunch),
+    };
+  }
   let firstLaunchMs = raw ? Number(raw) : NaN;
   if (!Number.isFinite(firstLaunchMs)) {
     firstLaunchMs = now;

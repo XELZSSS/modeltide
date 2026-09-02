@@ -15,7 +15,7 @@ export interface CostInputState {
   setDaysPerMonth: (v: string) => void;
 }
 
-export interface CostEstimatorState extends CostInputState {
+interface CostEstimatorState extends CostInputState {
   calcInput: number;
   calcOutput: number;
   calcReasoning: number;
@@ -23,14 +23,26 @@ export interface CostEstimatorState extends CostInputState {
   calcDays: number;
 }
 
-export function useCostEstimator(): CostEstimatorState {
-  const [dailyInput, setDailyInput] = useState("2");
-  const [dailyOutput, setDailyOutput] = useState("1");
-  const [dailyReasoning, setDailyReasoning] = useState("2");
-  const [cacheHitRate, setCacheHitRate] = useState("50");
-  const [daysPerMonth, setDaysPerMonth] = useState("22");
+/** Default estimator inputs: 2M prompt + 1M completion + 2M reasoning tokens/day, 50% cache hits, 22 workdays. */
+export const DEFAULT_COST_INPUTS = {
+  dailyInput: "2",
+  dailyOutput: "1",
+  dailyReasoning: "2",
+  cacheHitRate: "50",
+  daysPerMonth: "22",
+} as const;
+
+function useCostEstimator(): CostEstimatorState {
+  const [dailyInput, setDailyInput] = useState<string>(DEFAULT_COST_INPUTS.dailyInput);
+  const [dailyOutput, setDailyOutput] = useState<string>(DEFAULT_COST_INPUTS.dailyOutput);
+  const [dailyReasoning, setDailyReasoning] = useState<string>(DEFAULT_COST_INPUTS.dailyReasoning);
+  const [cacheHitRate, setCacheHitRate] = useState<string>(DEFAULT_COST_INPUTS.cacheHitRate);
+  const [daysPerMonth, setDaysPerMonth] = useState<string>(DEFAULT_COST_INPUTS.daysPerMonth);
 
   // Defer parsing so heavy list re-renders don't block typing in the inputs.
+  // NOTE: non-numeric input (e.g. "e") parses to NaN → `|| 0` coerces to 0 silently;
+  // the input stays visible so the user sees what they typed, and the estimate
+  // treats it as zero rather than crashing.
   const deferredInput = useDeferredValue(dailyInput);
   const deferredOutput = useDeferredValue(dailyOutput);
   const deferredReasoning = useDeferredValue(dailyReasoning);

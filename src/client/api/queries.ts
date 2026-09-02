@@ -1,12 +1,6 @@
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import {
-  API_DOMAINS,
-  FIFTEEN_MINUTES,
-  FIVE_MINUTES,
-  OPEN_SOURCE_MODELS_DEFAULTS,
-  THIRTY_MINUTES,
-} from "@/shared/config";
+import { API_DOMAINS, FIVE_MINUTES, OPEN_SOURCE_MODELS_DEFAULTS, THIRTY_MINUTES } from "@/shared/config";
 import type {
   ArtificialAnalysisModel,
   HallucinationRankingEntry,
@@ -20,12 +14,9 @@ import type {
 import { normalizePercent, dedupeBy } from "@/client/utils";
 import { fetcher, apiPaths, type QueryCtx } from "./client";
 
-// ============================================================================
 // Query keys — derived from the shared API domain suffixes, the same source the
 // server KV cache keys use (`cacheKeys` in shared/config), so the client/server
 // naming can never drift apart.
-// ============================================================================
-
 export const queryKeys = {
   artificialIndex: ["api", API_DOMAINS.artificialIndex] as const,
   openSourceReleases: ["api", API_DOMAINS.openSourceReleases] as const,
@@ -44,11 +35,7 @@ export const queryKeys = {
   news: (category: string) => ["api", API_DOMAINS.news, category] as const,
 };
 
-// ============================================================================
-// Typed query factory
-// ============================================================================
-
-export interface ApiQueryOptions<T> {
+interface ApiQueryOptions<T> {
   /** Refetch cadence; also used as staleTime so the two never drift apart. */
   ttl?: number;
   staleTime?: number;
@@ -57,44 +44,42 @@ export interface ApiQueryOptions<T> {
 }
 
 /** Creates a typed query for `path` with `key`, exposing `use` and `useSuspense`. */
-export function createApiQuery<T>(key: readonly (string | number)[], path: string, opts?: ApiQueryOptions<T>) {
+function createApiQuery<T>(key: readonly (string | number)[], path: string, opts?: ApiQueryOptions<T>) {
   const { queryFn: customFn, ttl, ...rest } = opts ?? {};
   const queryFn = customFn ?? fetcher<T>(path);
-  const timing = { staleTime: ttl, refetchInterval: ttl, ...rest };
+  // No background polling by default: data refetches on mount when stale.
+  // Pass refetchInterval explicitly for live data (e.g. status history).
+  const timing = { staleTime: ttl, refetchInterval: false as const, ...rest };
   return {
     use: (enabled = true) => useQuery<T>({ queryKey: key, queryFn, ...timing, enabled }),
     useSuspense: () => useSuspenseQuery<T>({ queryKey: key, queryFn, ...timing }),
   };
 }
 
-// ============================================================================
-// Query definitions (staleTime matches the server TTLs)
-// ============================================================================
-
 export const qArtificial = createApiQuery<ArtificialAnalysisModel[]>(
   queryKeys.artificialIndex,
   apiPaths.artificialIndex,
-  // Match the server's DEFAULT_TTL_MS (15 min): a longer staleTime would let a
-  // long-lived tab show data well past the server's 4-min cron refresh.
-  { ttl: FIFTEEN_MINUTES },
+  // Match the server's DEFAULT_TTL_MS (30 min): a longer staleTime would let a
+  // long-lived tab show data well past the server's cron refresh.
+  { ttl: THIRTY_MINUTES },
 );
 export const qOpenSourceReleases = createApiQuery<OpenSourceModelEntry[]>(
   queryKeys.openSourceReleases,
   apiPaths.openSourceReleases,
-  { ttl: FIFTEEN_MINUTES },
+  { ttl: THIRTY_MINUTES },
 );
 export const qOpenRouter = createApiQuery<OpenRouterRankingsPayload>(
   queryKeys.openRouterRankings,
   apiPaths.openRouterRankings,
-  { ttl: FIFTEEN_MINUTES },
+  { ttl: THIRTY_MINUTES },
 );
 export const qHomeDashboard = createApiQuery<HomeDashboardData>(queryKeys.homeDashboard, apiPaths.homeDashboard, {
-  ttl: FIFTEEN_MINUTES,
+  ttl: THIRTY_MINUTES,
 });
 export const qOpenSourceModels = createApiQuery<OpenSourceModelEntry[]>(
   queryKeys.openSourceModels,
   apiPaths.openSourceModels,
-  { ttl: FIFTEEN_MINUTES },
+  { ttl: THIRTY_MINUTES },
 );
 
 // One stable query per category (module-level cache) instead of rebuilding the
@@ -109,15 +94,12 @@ export const qNews = (c: NewsCategory) => {
   return q;
 };
 
-// The rolling store updates on the 4-minute cron; a 5-minute staleTime keeps one
-// sample of headroom before the client refetches.
+// The rolling store updates on the cron; keep light polling here only —
+// rankings/news/home refetch on mount when stale instead of on an interval.
 export const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHistory, apiPaths.statusHistory, {
   ttl: FIVE_MINUTES,
+  refetchInterval: FIVE_MINUTES,
 });
-// ============================================================================
-// Derived hooks — combine or transform the queries above
-// ============================================================================
-
 export const useArtificialRankings = qArtificial.use;
 export const useSuspenseArtificialRankings = qArtificial.useSuspense;
 export const useSuspenseHomeDashboard = qHomeDashboard.useSuspense;
@@ -125,12 +107,10 @@ export const useOpenRouterRankings = qOpenRouter.use;
 export const useSuspenseOpenRouterRankings = qOpenRouter.useSuspense;
 export const useSuspenseOpenSourceModels = qOpenSourceModels.useSuspense;
 export const useSuspenseOpenSourceReleases = qOpenSourceReleases.useSuspense;
-export const useStatusHistory = qStatusHistory.use;
 export const useSuspenseStatusHistory = qStatusHistory.useSuspense;
-export const useNewsByCategory = (c: NewsCategory) => qNews(c).use();
 export const useSuspenseNewsByCategory = (c: NewsCategory) => qNews(c).useSuspense();
 
-export interface OpenSourceModelsQuery {
+interface OpenSourceModelsQuery {
   data: OpenSourceModelEntry[];
   isPending: boolean;
   isError: boolean;
@@ -163,8 +143,6 @@ export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
     error,
   };
 }
-
-// -- Hallucination rankings (derived from the Artificial Analysis payload) ----
 
 // One entry per model that has an omniscience breakdown; models without one are skipped.
 // Sorted by accuracy descending so the most reliable models rank first.

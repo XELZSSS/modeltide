@@ -12,7 +12,7 @@ import { ONE_MINUTE, ONE_DAY } from "@/shared/config";
 
 export const HISTORY_KEY = "status:history:v1";
 export const SAMPLE_INTERVAL_MS = 4 * ONE_MINUTE;
-export const RECENT_WINDOW_MS = ONE_DAY; // 24 hours
+export const RECENT_WINDOW_MS = ONE_DAY;
 export const RETAINED_DAYS = 90;
 export const MAX_EVENTS = 50;
 // Outlives one sampling round (~seconds) but expires well before the next tick,

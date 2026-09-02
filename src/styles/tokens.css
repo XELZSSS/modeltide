@@ -15,17 +15,13 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --color-success-soft: var(--success-soft);
-  --color-destructive-soft: var(--destructive-soft);
   --color-nav-bg: var(--nav-bg);
 
-  --radius-sm: 8px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 16px;
   --radius-2xl: 20px;
   --shadow-sm: 0 1px 2px rgba(2, 12, 27, 0.05);
-  --shadow-md: 0 4px 16px rgba(2, 12, 27, 0.06);
   --shadow-lg: 0 4px 24px rgba(2, 12, 27, 0.1);
 
   --font-sans:

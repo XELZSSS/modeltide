@@ -74,6 +74,11 @@ export function ModelDetailContent({
   showBenchmarks?: boolean;
 }) {
   const { t } = useTranslation();
+  const modalityKeys = (["text", "image", "speech", "video"] as const).flatMap((m) => [
+    `input_modality_${m}` as keyof ArtificialAnalysisModel,
+    `output_modality_${m}` as keyof ArtificialAnalysisModel,
+  ]);
+  const hasAnyModality = modalityKeys.some((k) => model[k]);
   return (
     <DetailLayout>
       <StatGrid columns={4}>
@@ -93,7 +98,11 @@ export function ModelDetailContent({
         <InfoCard title={t("pricing")}>
           <InfoRow compact label={t("promptPrice")} value={formatPricePerMillion(model.pricing?.input, t)} />
           <InfoRow compact label={t("completionPrice")} value={formatPricePerMillion(model.pricing?.output, t)} />
-          <InfoRow compact label={t("cacheHitPrice")} value={formatPricePerMillion(model.pricing?.cache_hit, t)} />
+          <InfoRow
+            compact
+            label={t("cacheHitPrice")}
+            value={formatPricePerMillion(model.pricing?.cacheHit ?? model.pricing?.cache_hit, t)}
+          />
           <InfoRow compact label={t("blendedPrice")} value={formatPricePerMillion(model.blended_price, t)} />
         </InfoCard>
       </InfoGrid>
@@ -117,12 +126,14 @@ export function ModelDetailContent({
           </StatGrid>
         </DetailSection>
       )}
-      <DetailSection title={t("modalities")}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ModalitySection label={t("inputModality")} prefix="input" model={model} t={t} />
-          <ModalitySection label={t("outputModality")} prefix="output" model={model} t={t} />
-        </div>
-      </DetailSection>
+      {hasAnyModality && (
+        <DetailSection title={t("modalities")}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ModalitySection label={t("inputModality")} prefix="input" model={model} t={t} />
+            <ModalitySection label={t("outputModality")} prefix="output" model={model} t={t} />
+          </div>
+        </DetailSection>
+      )}
     </DetailLayout>
   );
 }

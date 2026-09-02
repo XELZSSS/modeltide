@@ -31,13 +31,15 @@ export interface ModelMetaEntry {
   pricing?: { input: number; output: number; cacheHit: number };
 }
 
-/** Effort/variant qualifier tokens stripped when building loose cross-source match keys. */
+/** Effort/variant qualifier tokens stripped when building loose cross-source match keys.
+ * NOTE: bare "max" is intentionally NOT stripped — it collides real model names
+ * ("Model Max" vs "Model"). Parenthesized "(Max Effort)" labels are already removed
+ * by the paren regex in normalizeModelKey, so effort matching still works. */
 const QUALIFIER_TOKENS = new Set([
   "adaptive",
   "reasoning",
   "thinking",
   "effort",
-  "max",
   "xhigh",
   "high",
   "medium",
@@ -133,6 +135,7 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
     agg: ModelRow;
     dominant: ModelRow;
     dominantTokens: number;
+    latestDate: string;
   }
   const grouped = new Map<string, Group>();
   for (const row of rows) {
@@ -141,13 +144,25 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
     const tokens = numOr(row.total_prompt_tokens, 0) + numOr(row.total_completion_tokens, 0);
     const group = grouped.get(id);
     if (!group) {
-      grouped.set(id, { agg: { ...row, model_permaslug: id }, dominant: row, dominantTokens: tokens });
+      grouped.set(id, {
+        agg: { ...row, model_permaslug: id },
+        dominant: row,
+        dominantTokens: tokens,
+        latestDate: row.date ?? "",
+      });
       continue;
     }
     for (const k of SUM_KEYS) group.agg[k] = numOr(group.agg[k], 0) + numOr(row[k], 0);
-    if (row.date && (!group.agg.date || row.date > group.agg.date)) group.agg.date = row.date;
-    const parsedChange = parseChange(row.change);
-    if (parsedChange != null) group.agg.change = parsedChange;
+    // `change` belongs to the latest-dated row; only overwrite when this row is newer.
+    if (row.date && (!group.latestDate || row.date > group.latestDate)) {
+      group.latestDate = row.date;
+      group.agg.date = row.date;
+      const parsedChange = parseChange(row.change);
+      if (parsedChange != null) group.agg.change = parsedChange;
+    } else if (!group.latestDate) {
+      const parsedChange = parseChange(row.change);
+      if (parsedChange != null && group.agg.change == null) group.agg.change = parsedChange;
+    }
     if (tokens > group.dominantTokens) {
       group.dominant = row;
       group.dominantTokens = tokens;

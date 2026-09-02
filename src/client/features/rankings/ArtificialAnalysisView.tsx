@@ -21,10 +21,15 @@ interface PricingRow {
 }
 
 /** Stable search-field selector: a fresh callback each render would defeat useFilteredData's memo. */
-const getAASearchFields = (model: ArtificialAnalysisModel) => [model.name, model.slug, model.model_creators?.name ?? ""];
+const getAASearchFields = (model: ArtificialAnalysisModel) => [
+  model.name,
+  model.slug,
+  model.model_creators?.name ?? "",
+];
 
 const getAARowId = (model: ArtificialAnalysisModel) => modelId(model);
 const getPricingRowId = (row: PricingRow) => modelId(row.model);
+const getPricingSearchFields = (row: PricingRow) => getAASearchFields(row.model);
 
 // Module-level renderers keep prop identity stable so the memoized table body
 // is not re-rendered on every parent render (search typing, cost input, ...).
@@ -41,11 +46,12 @@ function FilterToolbar({
   const { t } = useTranslation();
   return (
     <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-      <SegmentedGroup className="overflow-x-auto no-scrollbar">
-        <TabButton active={viewMode === "rankings"} onClick={() => onViewModeChange("rankings")}>
+      {/* View-mode switch, not tabs: radiogroup semantics (role="tab" requires a tablist). */}
+      <SegmentedGroup className="overflow-x-auto no-scrollbar" role="radiogroup" aria-label={t("viewMode")}>
+        <TabButton role="radio" active={viewMode === "rankings"} onClick={() => onViewModeChange("rankings")}>
           {t("modelRankings")}
         </TabButton>
-        <TabButton active={viewMode === "pricing"} onClick={() => onViewModeChange("pricing")}>
+        <TabButton role="radio" active={viewMode === "pricing"} onClick={() => onViewModeChange("pricing")}>
           {t("pricing")}
         </TabButton>
       </SegmentedGroup>
@@ -113,7 +119,7 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
           data={pricingRows}
           columns={pricingColumns}
           getRowId={getPricingRowId}
-          getSearchFields={(row) => getAASearchFields(row.model)}
+          getSearchFields={getPricingSearchFields}
           renderExpandedRow={renderPricingDetail}
         />
       ) : (
