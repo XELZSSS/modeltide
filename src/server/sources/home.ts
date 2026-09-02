@@ -1,5 +1,6 @@
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
+import { settled, formatSettleErrors } from "@/server/infra/utils";
 import { getTextToImageLeaderboard } from "@/server/sources/artificial-analysis";
 import { getModels } from "@/server/sources/huggingface";
 import { getOpenRouterRankings } from "@/server/sources/openrouter";
@@ -11,14 +12,11 @@ export async function getHomeDashboard(ctx: AppContext): Promise<HomeDashboardDa
     getTextToImageLeaderboard(ctx),
     getModels(ctx, { sort: "downloads", direction: "-1", limit: 50 }),
   ]);
-  const orRankings = orRankingsRes.status === "fulfilled" ? orRankingsRes.value : null;
-  const textToImage = textToImageRes.status === "fulfilled" ? textToImageRes.value : null;
-  const opensource = opensourceRes.status === "fulfilled" ? opensourceRes.value : null;
+  const orRankings = settled(orRankingsRes, null);
+  const textToImage = settled(textToImageRes, null);
+  const opensource = settled(opensourceRes, null);
   if (!orRankings && !textToImage && !opensource) {
-    const reasons = [orRankingsRes, textToImageRes, opensourceRes]
-      .filter((r) => r.status === "rejected")
-      .map((r) => String((r as PromiseRejectedResult).reason))
-      .join("; ");
+    const reasons = formatSettleErrors([orRankingsRes, textToImageRes, opensourceRes], ["openrouter", "textToImage", "opensource"]);
     throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`);
   }
   return { orRankings, textToImage, opensource };

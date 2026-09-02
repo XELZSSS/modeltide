@@ -1,4 +1,4 @@
-import { upstreamConfig, DEFAULT_TTL_MS, cacheKeys, ttlFor, ONE_MINUTE } from "@/shared/config";
+import { upstreamConfig, DEFAULT_TTL_MS, PARTIAL_FAIL_TTL_MS, cacheKeys, ttlFor, UPSTREAM_TIMEOUT_MS } from "@/shared/config";
 import type { ArtificialAnalysisModel, TextToImageModel, TextToImagePayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { findNextData, parseRscPayload } from "@/server/parsers/rsc";
@@ -13,6 +13,7 @@ import { mapEntry, type RawEntry } from "./text-to-image";
 const RSC_HEADERS = { RSC: "1", "Next-Router-State-Tree": "%5B%5D" } as const;
 
 const INDEX_PATH = "/evaluations/artificial-analysis-intelligence-index";
+export { INDEX_PATH };
 const MODELS_PATH = "/models";
 const OMNISCIENCE_PATH = "/evaluations/omniscience";
 
@@ -22,7 +23,7 @@ async function fetchAaRsc(ctx: AppContext, path: string): Promise<string> {
     retries: 0,
     // Two serial stages (index fetch, then parallel enrichment fetches) must fit
     // inside the 60s route timeout, so a single fetch is capped at 15s.
-    timeoutMs: 15 * ONE_MINUTE / 60, // 15s timeout
+    timeoutMs: UPSTREAM_TIMEOUT_MS,
   });
 }
 
@@ -122,18 +123,23 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
 
 const TEXT_TO_IMAGE_PATH = "/image/models";
 
+const EMPTY_T2I: TextToImagePayload = { models: [] };
+
+function emptyT2i(ctx: AppContext, reason: string): { data: TextToImagePayload; ttl: number } {
+  ctx.log("warn", `[text-to-image] ${reason}, returning empty`);
+  return { data: EMPTY_T2I, ttl: PARTIAL_FAIL_TTL_MS };
+}
+
 export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImagePayload> =>
   ctx.cache.withTtl(cacheKeys.textToImage, DEFAULT_TTL_MS, async () => {
     let body: string | null = null;
     try {
       body = await fetchAaRsc(ctx, TEXT_TO_IMAGE_PATH);
     } catch {
-      ctx.log("warn", "[text-to-image] fetch failed, returning empty");
-      return { data: { models: [] }, ttl: 60_000 };
+      return emptyT2i(ctx, "fetch failed");
     }
     if (!body) {
-      ctx.log("warn", "[text-to-image] empty body, returning empty");
-      return { data: { models: [] }, ttl: 60_000 };
+      return emptyT2i(ctx, "empty body");
     }
     let rawModels: Record<string, unknown>[] | null = null;
     try {
@@ -142,8 +148,7 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
       rawModels = null;
     }
     if (!rawModels || rawModels.length === 0) {
-      ctx.log("warn", "[text-to-image] no marker found, returning empty");
-      return { data: { models: [] }, ttl: 60_000 };
+      return emptyT2i(ctx, "no marker found");
     }
     const mapped = rawModels.map((m) => mapEntry(m as RawEntry)).filter((m): m is TextToImageModel => m !== null);
     const deduped = new Map<string, TextToImageModel>();
@@ -153,8 +158,7 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
     }
     const models = [...deduped.values()].sort((a, b) => a.rank - b.rank);
     if (models.length === 0) {
-      ctx.log("warn", `[text-to-image] mapped 0 models from raw=${rawModels.length}, returning empty`);
-      return { data: { models: [] }, ttl: 60_000 };
+      return emptyT2i(ctx, `mapped 0 models from raw=${rawModels.length}`);
     }
     return { data: { models } };
   });

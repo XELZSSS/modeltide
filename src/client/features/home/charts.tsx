@@ -7,7 +7,7 @@ import { PageSection } from "@/client/components/layout";
 import { shortModelId } from "@/client/utils";
 import "@/client/utils/charts";
 import { useChartTheme } from "@/client/hooks";
-import { defaultTooltipOptions } from "@/client/utils/charts";
+import { defaultTooltipOptions, chartBase, axisTickStyle, axisGridStyle, axisDashedBorderStyle, legendStyle, lineSeriesStyle, seriesColor } from "@/client/utils/charts";
 import { intelligenceChartTitle } from "./chartTitle";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
@@ -38,73 +38,51 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
   const data = useMemo(
     () => ({
       labels: top10.map((m) => m.short_name || shortModelId(m.name)),
-      datasets: [
-        {
-          label: t("intelligence"),
-          data: top10.map((m) => m.intelligence_index ?? null),
-          borderColor: theme.palette[0],
-          backgroundColor: theme.palette[0],
-          borderWidth: 2.5,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          cubicInterpolationMode: "monotone" as const,
-          spanGaps: false,
-        },
-        {
-          label: t("coding"),
-          data: top10.map((m) => m.coding_index ?? null),
-          borderColor: theme.palette[1],
-          backgroundColor: theme.palette[1],
-          borderWidth: 2.5,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          cubicInterpolationMode: "monotone" as const,
-          spanGaps: false,
-        },
-        {
-          label: t("agentic"),
-          data: top10.map((m) => m.agentic_index ?? null),
-          borderColor: theme.palette[2],
-          backgroundColor: theme.palette[2],
-          borderWidth: 2.5,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          cubicInterpolationMode: "monotone" as const,
-          spanGaps: false,
-        },
-      ],
+      datasets: (
+        [
+          { key: "intelligence_index", label: t("intelligence") },
+          { key: "coding_index", label: t("coding") },
+          { key: "agentic_index", label: t("agentic") },
+        ] as const
+      ).map((series, slot) => {
+        const color = seriesColor(theme, slot);
+        return {
+          label: series.label,
+          data: top10.map((m) => m[series.key] ?? null),
+          borderColor: color,
+          backgroundColor: color,
+          ...lineSeriesStyle,
+        };
+      }),
     }),
     [top10, t, theme],
   );
 
   const options = useMemo<ChartOptions<"line">>(
     () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+      ...chartBase,
       // Hovering anywhere on the chart shows both series values, like the old shared tooltip.
       interaction: { mode: "index", intersect: false },
       scales: {
         x: {
           ticks: { display: false },
-          grid: { color: theme.grid },
-          border: { color: theme.grid, dash: [3, 3] },
+          grid: axisGridStyle(theme),
+          border: axisDashedBorderStyle(theme),
         },
         y: {
           min: 0,
           max: 100,
           ticks: {
-            color: theme.tick,
-            font: { size: 10 },
+            ...axisTickStyle(theme),
             stepSize: 20,
             callback: (value) => Math.round(Number(value)).toString(),
           },
-          grid: { color: theme.grid },
-          border: { color: theme.grid, dash: [3, 3] },
+          grid: axisGridStyle(theme),
+          border: axisDashedBorderStyle(theme),
         },
       },
       plugins: {
-        legend: { labels: { color: theme.tickSecondary, font: { size: 12 } } },
+        legend: legendStyle(theme),
         tooltip: {
           ...defaultTooltipOptions(theme),
           callbacks: {

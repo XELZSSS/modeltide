@@ -2,6 +2,7 @@ import { upstreamConfig, rssConfig } from "@/shared/config";
 import type { SourceStatus } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import type { ProbeResult } from "@/server/infra/http";
+import { INDEX_PATH } from "@/server/sources/artificial-analysis";
 
 export interface ProbeTarget {
   id: SourceStatus["id"];
@@ -19,7 +20,7 @@ export function buildTargets(): ProbeTarget[] {
   return [
     {
       id: "artificialAnalysis",
-      url: `${upstreamConfig.artificialAnalysis}/evaluations/artificial-analysis-intelligence-index`,
+      url: `${upstreamConfig.artificialAnalysis}${INDEX_PATH}`,
     },
     { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
     { id: "openrouter", url: `${upstreamConfig.openrouter}/api/v1/models` },

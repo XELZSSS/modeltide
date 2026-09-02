@@ -31,12 +31,15 @@ export const queryKeys = {
   openSourceReleases: ["api", API_DOMAINS.openSourceReleases] as const,
   openRouterRankings: ["api", API_DOMAINS.openRouterRankings] as const,
   homeDashboard: ["api", API_DOMAINS.homeDashboard] as const,
-  openSourceModels: (
-    sort = OPEN_SOURCE_MODELS_DEFAULTS.sort,
-    direction = OPEN_SOURCE_MODELS_DEFAULTS.direction,
-    limit = OPEN_SOURCE_MODELS_DEFAULTS.limit,
-  ) =>
-    ["api", API_DOMAINS.openSourceModels, sort, direction, limit] as const,
+  // The client always requests the shared defaults; the key mirrors the URL builder
+  // in client.ts, which derives its query string from the same constants.
+  openSourceModels: [
+    "api",
+    API_DOMAINS.openSourceModels,
+    OPEN_SOURCE_MODELS_DEFAULTS.sort,
+    OPEN_SOURCE_MODELS_DEFAULTS.direction,
+    OPEN_SOURCE_MODELS_DEFAULTS.limit,
+  ] as const,
   statusHistory: ["api", API_DOMAINS.statusHistory] as const,
   news: (category: string) => ["api", API_DOMAINS.news, category] as const,
 };
@@ -46,6 +49,8 @@ export const queryKeys = {
 // ============================================================================
 
 export interface ApiQueryOptions<T> {
+  /** Refetch cadence; also used as staleTime so the two never drift apart. */
+  ttl?: number;
   staleTime?: number;
   refetchInterval?: number | false;
   queryFn?: (ctx: QueryCtx) => Promise<T>;
@@ -53,11 +58,12 @@ export interface ApiQueryOptions<T> {
 
 /** Creates a typed query for `path` with `key`, exposing `use` and `useSuspense`. */
 export function createApiQuery<T>(key: readonly (string | number)[], path: string, opts?: ApiQueryOptions<T>) {
-  const { queryFn: customFn, ...rest } = opts ?? {};
+  const { queryFn: customFn, ttl, ...rest } = opts ?? {};
   const queryFn = customFn ?? fetcher<T>(path);
+  const timing = { staleTime: ttl, refetchInterval: ttl, ...rest };
   return {
-    use: (enabled = true) => useQuery<T>({ queryKey: key, queryFn, ...rest, enabled }),
-    useSuspense: () => useSuspenseQuery<T>({ queryKey: key, queryFn, ...rest }),
+    use: (enabled = true) => useQuery<T>({ queryKey: key, queryFn, ...timing, enabled }),
+    useSuspense: () => useSuspenseQuery<T>({ queryKey: key, queryFn, ...timing }),
   };
 }
 
@@ -70,26 +76,25 @@ export const qArtificial = createApiQuery<ArtificialAnalysisModel[]>(
   apiPaths.artificialIndex,
   // Match the server's DEFAULT_TTL_MS (15 min): a longer staleTime would let a
   // long-lived tab show data well past the server's 4-min cron refresh.
-  { staleTime: FIFTEEN_MINUTES, refetchInterval: FIFTEEN_MINUTES },
+  { ttl: FIFTEEN_MINUTES },
 );
 export const qOpenSourceReleases = createApiQuery<OpenSourceModelEntry[]>(
   queryKeys.openSourceReleases,
   apiPaths.openSourceReleases,
-  { staleTime: FIFTEEN_MINUTES, refetchInterval: FIFTEEN_MINUTES },
+  { ttl: FIFTEEN_MINUTES },
 );
 export const qOpenRouter = createApiQuery<OpenRouterRankingsPayload>(
   queryKeys.openRouterRankings,
   apiPaths.openRouterRankings,
-  { staleTime: FIFTEEN_MINUTES, refetchInterval: FIFTEEN_MINUTES },
+  { ttl: FIFTEEN_MINUTES },
 );
 export const qHomeDashboard = createApiQuery<HomeDashboardData>(queryKeys.homeDashboard, apiPaths.homeDashboard, {
-  staleTime: FIFTEEN_MINUTES,
-  refetchInterval: FIFTEEN_MINUTES,
+  ttl: FIFTEEN_MINUTES,
 });
 export const qOpenSourceModels = createApiQuery<OpenSourceModelEntry[]>(
-  queryKeys.openSourceModels(),
-  apiPaths.openSourceModels(),
-  { staleTime: FIFTEEN_MINUTES, refetchInterval: FIFTEEN_MINUTES },
+  queryKeys.openSourceModels,
+  apiPaths.openSourceModels,
+  { ttl: FIFTEEN_MINUTES },
 );
 
 // One stable query per category (module-level cache) instead of rebuilding the
@@ -98,10 +103,7 @@ const newsQueries = new Map<NewsCategory, ReturnType<typeof createApiQuery<NewsI
 export const qNews = (c: NewsCategory) => {
   let q = newsQueries.get(c);
   if (!q) {
-    q = createApiQuery<NewsItem[]>(queryKeys.news(c), apiPaths.news(c), {
-      staleTime: THIRTY_MINUTES,
-      refetchInterval: THIRTY_MINUTES,
-    });
+    q = createApiQuery<NewsItem[]>(queryKeys.news(c), apiPaths.news(c), { ttl: THIRTY_MINUTES });
     newsQueries.set(c, q);
   }
   return q;
@@ -110,8 +112,7 @@ export const qNews = (c: NewsCategory) => {
 // The rolling store updates on the 4-minute cron; a 5-minute staleTime keeps one
 // sample of headroom before the client refetches.
 export const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHistory, apiPaths.statusHistory, {
-  staleTime: FIVE_MINUTES,
-  refetchInterval: FIVE_MINUTES,
+  ttl: FIVE_MINUTES,
 });
 // ============================================================================
 // Derived hooks — combine or transform the queries above

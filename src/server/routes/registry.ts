@@ -4,12 +4,8 @@ import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
 import { RateLimitError } from "@/server/infra/errors";
 import { validateQuery } from "@/server/infra/validate";
+import { BROWSER_CACHE_HEADER, BROWSER_NO_STORE_HEADER, CDN_CACHE_HEADER, CDN_NO_STORE_HEADER } from "@/shared/config";
 import type { RouteDef } from "./types";
-
-const BROWSER_CACHE_HEADER = "public, max-age=60";
-const BROWSER_NO_STORE_HEADER = "no-store, max-age=0";
-const CDN_CACHE_HEADER = "public, max-age=300, stale-while-revalidate=300, stale-if-error=86400";
-const CDN_NO_STORE_HEADER = "no-store";
 
 function applyCacheHeaders(c: Context, noStore: boolean): void {
   c.header("Cache-Control", noStore ? BROWSER_NO_STORE_HEADER : BROWSER_CACHE_HEADER);

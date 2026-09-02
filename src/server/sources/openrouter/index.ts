@@ -1,4 +1,4 @@
-import { upstreamConfig, DEFAULT_TTL_MS, THIRTY_MINUTES, PARTIAL_FAIL_TTL_MS, cacheKeys, ttlFor } from "@/shared/config";
+import { upstreamConfig, DEFAULT_TTL_MS, THIRTY_MINUTES, PARTIAL_FAIL_TTL_MS, cacheKeys, ttlFor, UPSTREAM_TIMEOUT_MS } from "@/shared/config";
 import type { OpenRouterRankingsPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
@@ -32,6 +32,7 @@ interface DirectoryCacheEntry {
 
 const PRICING_TTL_MS = THIRTY_MINUTES;
 const PER_MILLION = 1_000_000;
+const DIRECTORY_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
 
 function buildPricingEntry(prompt: number, completion: number, inputCacheRead: number): PricingEntry | null {
   if (!Number.isFinite(prompt) || prompt < 0 || !Number.isFinite(completion) || completion < 0) return null;
@@ -93,10 +94,7 @@ async function fetchModelDirectory(
 ): Promise<{ pricing: Map<string, PricingEntry>; meta: Record<string, ModelMetaEntry> }> {
   try {
     const record = await ctx.cache.withTtl<DirectoryCacheEntry>(cacheKeys.openRouterPricing, PRICING_TTL_MS, async () => {
-      const res = await ctx.http.json<{ data: PricingRow[] }>(`${OPENROUTER}/api/v1/models`, {
-        timeoutMs: 15_000,
-        retries: 1,
-      });
+      const res = await ctx.http.json<{ data: PricingRow[] }>(`${OPENROUTER}/api/v1/models`, DIRECTORY_FETCH_OPTS);
       return { data: parseDirectoryRows(res?.data ?? []) };
     });
     return { pricing: new Map(Object.entries(record.pricing)), meta: record.meta };
@@ -115,10 +113,7 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
   ctx.cache.withTtl(cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async () => {
     let rankings: { data?: ModelRow[] };
     try {
-      rankings = await ctx.http.json<{ data: ModelRow[] }>(`${OPENROUTER}/api/frontend/v1/rankings/models`, {
-        timeoutMs: 15_000,
-        retries: 1,
-      });
+      rankings = await ctx.http.json<{ data: ModelRow[] }>(`${OPENROUTER}/api/frontend/v1/rankings/models`, DIRECTORY_FETCH_OPTS);
     } catch (err) {
       throw new UpstreamError(`OpenRouter: all upstream requests failed (${errMsg(err)})`);
     }

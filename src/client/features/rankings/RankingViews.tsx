@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "@/client/providers";
-import { useFilteredData } from "@/client/hooks";
-import { DataTable, type DataTableColumn } from "@/client/components/data";
+import { SearchableDataTable, type DataTableColumn } from "@/client/components/data";
 import { formatIndex, formatShortNumber, formatPercent, shortModelId } from "@/client/utils";
 import type { OpenSourceModelEntry, HallucinationRankingEntry } from "@/shared/types";
 
@@ -14,19 +13,6 @@ export const RANKING_TABS = [
 ] as const;
 
 export type RankingTabId = (typeof RANKING_TABS)[number];
-
-interface RankingTableProps<T> {
-  data: T[];
-  columns: DataTableColumn<T>[];
-  getRowId: (row: T) => string;
-  getSearchFields: (row: T) => string[];
-}
-
-function RankingTable<T>({ data, columns, getRowId, getSearchFields }: RankingTableProps<T>) {
-  // DataTable renders its own empty state when the filtered list is empty.
-  const filtered = useFilteredData(data, getSearchFields);
-  return <DataTable data={filtered} columns={columns} getRowId={getRowId} />;
-}
 
 function buildOpenSourceColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColumn<OpenSourceModelEntry>[] {
   return [
@@ -66,7 +52,7 @@ export function OpenSourceRankingsView({ rankings }: { rankings: OpenSourceModel
   const { t } = useTranslation();
   const columns = useMemo(() => buildOpenSourceColumns(t), [t]);
   return (
-    <RankingTable
+    <SearchableDataTable
       data={rankings}
       columns={columns}
       getRowId={getOpenSourceRowId}
@@ -116,6 +102,11 @@ export function HallucinationRankingsView({ rankings }: { rankings: Hallucinatio
   const { t } = useTranslation();
   const columns = useMemo(() => buildHallColumns(t), [t]);
   return (
-    <RankingTable data={rankings} columns={columns} getRowId={getHallRowId} getSearchFields={getHallSearchFields} />
+    <SearchableDataTable
+      data={rankings}
+      columns={columns}
+      getRowId={getHallRowId}
+      getSearchFields={getHallSearchFields}
+    />
   );
 }

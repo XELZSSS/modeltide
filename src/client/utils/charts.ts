@@ -34,6 +34,39 @@ export const COOL_COLORS = [
   "var(--chart-10)",
 ];
 
+/** Shared sizing/animation baseline so every chart behaves identically. */
+export const chartBase = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: false,
+} as const;
+
+/** Standard value-axis tick style (small muted text). */
+export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tick, font: { size: 10 } });
+
+/** Standard axis grid color. */
+export const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
+
+/** Standard dashed axis border. */
+export const axisDashedBorderStyle = (theme: ChartTheme) => ({ color: theme.grid, dash: [3, 3] as [number, number] });
+
+/** Standard multi-series legend style. */
+export const legendStyle = (theme: ChartTheme) => ({ labels: { color: theme.tickSecondary, font: { size: 12 } } });
+
+/** Line-drawing extras shared by multi-series line charts (monotone curves, small points). */
+export const lineSeriesStyle = {
+  borderWidth: 2.5,
+  pointRadius: 3,
+  pointHoverRadius: 5,
+  cubicInterpolationMode: "monotone",
+  spanGaps: false,
+} as const;
+
+/** Concrete color for a series slot, cycling through the theme palette. */
+export function seriesColor(theme: ChartTheme, index: number): string {
+  return theme.palette[index % theme.palette.length]!;
+}
+
 /** Returns the chart color for a model, cycling through the palette. */
 export function getModelColor(index: number): string {
   return COOL_COLORS[index % COOL_COLORS.length]!;

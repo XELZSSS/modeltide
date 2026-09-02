@@ -1,9 +1,10 @@
-import { Fragment, memo, type ReactNode } from "react";
+import { Fragment, memo, useState, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import { useDevice } from "@/client/providers";
 import { usePagedData } from "@/client/hooks";
 import { cn } from "@/client/utils";
 import { Pagination } from "@/client/components/ui";
+import { EmptyState } from "@/client/components/shared";
 import type { DataTableColumn } from "./types";
 import { ExpandToggle, getRowExpandState, isFromInteractive } from "./expandable-row";
 import { MobileTableBody } from "./mobile-card-list";
@@ -11,11 +12,16 @@ import { MobileTableBody } from "./mobile-card-list";
 /** Default rows per page; callers rarely need to override it. */
 const DEFAULT_PAGE_SIZE = 8;
 
-interface DataTableProps<T> {
+export interface DataTableProps<T> {
   data: T[];
   columns: DataTableColumn<T>[];
   getRowId?: (row: T) => string;
   pageSize?: number;
+  /**
+   * Controlled expanded row. Omit both `expandedRowId` and `onToggleExpand` to let
+   * the table own the state: it then resets the expansion whenever the page turns
+   * or the data set is replaced, so a stale expansion never survives a refetch.
+   */
   expandedRowId?: string | null;
   onToggleExpand?: (rowId: string | null) => void;
   renderExpandedRow?: (row: T) => ReactNode;
@@ -142,11 +148,20 @@ function DataTableInner<T>({
 }: DataTableProps<T>) {
   const { isMobile } = useDevice();
   const { t } = useTranslation();
-  const isExpandable = !!(renderExpandedRow && onToggleExpand);
+  // Uncontrolled expand state: used when the caller does not pass expandedRowId/onToggleExpand.
+  // The expansion survives filtering and data refreshes (a stale id simply renders collapsed)
+  // and only resets when the page turns, matching the pagination-aware behavior callers had.
+  const [ownExpandedId, setOwnExpandedId] = useState<string | null>(null);
+  const uncontrolled = expandedRowId === undefined && onToggleExpand === undefined;
+
+  const activeExpandedRowId = uncontrolled ? ownExpandedId : expandedRowId;
+  const activeToggleExpand = uncontrolled ? setOwnExpandedId : onToggleExpand;
+  const isExpandable = !!renderExpandedRow;
   const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(data, getRowId, pageSize);
 
   const handlePageChange = (p: number) => {
     goToPage(p);
+    if (uncontrolled) setOwnExpandedId(null);
     onPageChange?.();
   };
 
@@ -158,9 +173,7 @@ function DataTableInner<T>({
   return (
     <div className="flex flex-col gap-2">
       {dedupedData.length === 0 ? (
-        <div className="py-12 text-center text-sm text-text-secondary" role="status" aria-live="polite">
-          {t("noResults")}
-        </div>
+        <EmptyState message={t("noResults")} />
       ) : isMobile ? (
         <>
           <MobileTableBody
@@ -168,8 +181,8 @@ function DataTableInner<T>({
             columns={columns}
             getRowId={getRowId}
             isExpandable={isExpandable}
-            expandedRowId={expandedRowId}
-            onToggleExpand={onToggleExpand}
+            expandedRowId={activeExpandedRowId}
+            onToggleExpand={activeToggleExpand}
             renderExpandedRow={renderExpandedRow}
           />
           {pagination}
@@ -184,8 +197,8 @@ function DataTableInner<T>({
                 columns={columns}
                 getRowId={getRowId}
                 isExpandable={isExpandable}
-                expandedRowId={expandedRowId}
-                onToggleExpand={onToggleExpand}
+                expandedRowId={activeExpandedRowId}
+                onToggleExpand={activeToggleExpand}
                 renderExpandedRow={renderExpandedRow}
               />
             </table>

@@ -1,5 +1,4 @@
-import { lazy, memo, Suspense, useMemo, useCallback, type ComponentType } from "react";
-import { useSearchParams } from "react-router";
+import { lazy, memo, Suspense, useMemo, type ComponentType } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import {
@@ -12,6 +11,7 @@ import { SuspenseQuery, Spinner } from "@/client/components/shared";
 import { SearchInput } from "@/client/search";
 import { Dot, type TabItem } from "@/client/components/ui";
 import { TabbedPage } from "@/client/components/layout";
+import { useUrlTab } from "@/client/hooks";
 import { DataTable, type DataTableColumn } from "@/client/components/data";
 import {
   formatScore,
@@ -129,36 +129,13 @@ const TAB_COMPONENTS: Record<RankingTabId, ComponentType> = {
   providerCompare: ProviderCompareTab,
 };
 
-function isRankingTabId(value: string | null): value is RankingTabId {
-  return value != null && (RANKING_TABS as readonly string[]).includes(value);
-}
-
 function RankingsContent() {
   const { t } = useTranslation();
   // The active tab lives in the URL (`?tab=`) so back navigation from detail pages,
   // deep links and refreshes all restore the tab the user was actually on.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const paramTab = searchParams.get("tab");
-  // The active tab is derived directly from the URL (no local state) so back/forward
-  // navigation and same-route `?tab=` changes can never drift from the URL.
-  const activeTabId: RankingTabId = isRankingTabId(paramTab) ? paramTab : RANKING_TABS[0]!;
+  const [activeTabId, handleTabChange] = useUrlTab(RANKING_TABS, RANKING_TABS[0]);
   const tabs: TabItem[] = useMemo(() => RANKING_TABS.map((id) => ({ id, label: t(id) })), [t]);
   const ActiveContent = TAB_COMPONENTS[activeTabId];
-
-  const handleTabChange = useCallback(
-    (tabId: string) => {
-      // replace: tab switches are UI state, not history entries — browser back
-      // should leave the page rather than step through every visited tab.
-      setSearchParams(
-        (prev) => {
-          prev.set("tab", tabId);
-          return prev;
-        },
-        { replace: true },
-      );
-    },
-    [setSearchParams],
-  );
 
   return (
     <TabbedPage

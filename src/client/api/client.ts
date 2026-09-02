@@ -50,13 +50,12 @@ export async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { c
 // to connect-src in public/_headers (the CSP restricts fetches to 'self').
 export const apiPaths = {
   artificialIndex: baseApiPaths.artificialIndex,
-  // The open-source list is paginated server-side; defaults come from the shared
-  // OPEN_SOURCE_MODELS_DEFAULTS so the query key and the URL never disagree.
-  openSourceModels: (
-    sort = OPEN_SOURCE_MODELS_DEFAULTS.sort,
-    direction = OPEN_SOURCE_MODELS_DEFAULTS.direction,
-    limit = OPEN_SOURCE_MODELS_DEFAULTS.limit,
-  ) => `${baseApiPaths.openSourceModels}?sort=${sort}&direction=${direction}&limit=${limit}`,
+  // The open-source list is paginated server-side; the query string derives from
+  // the shared OPEN_SOURCE_MODELS_DEFAULTS, the same constants the query key uses.
+  openSourceModels: (() => {
+    const d = OPEN_SOURCE_MODELS_DEFAULTS;
+    return `${baseApiPaths.openSourceModels}?sort=${d.sort}&direction=${d.direction}&limit=${d.limit}`;
+  })(),
   openSourceReleases: baseApiPaths.openSourceReleases,
   openRouterRankings: baseApiPaths.openRouterRankings,
   statusHistory: baseApiPaths.statusHistory,

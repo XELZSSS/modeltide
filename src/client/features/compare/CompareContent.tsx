@@ -7,7 +7,7 @@ import { CompareTable } from "./CompareTable";
 import type { CompareRow } from "./logic";
 import { useTranslation } from "@/client/providers";
 import { modelId, cn } from "@/client/utils";
-import { hexToRgba, getModelColor } from "@/client/utils/charts";
+import { hexToRgba, getModelColor, chartBase, axisTickStyle, legendStyle, seriesColor } from "@/client/utils/charts";
 import "@/client/utils/charts";
 import { useChartTheme } from "@/client/hooks";
 import { defaultTooltipOptions } from "@/client/utils/charts";
@@ -64,7 +64,7 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
     () => ({
       labels: radarData.map((row) => String(row.metric)),
       datasets: models.map((model, index) => {
-        const color = theme.palette[index % theme.palette.length]!;
+        const color = seriesColor(theme, index);
         return {
           label: model.short_name || model.name,
           // Polygons stay identifiable: series colors match the table column colors.
@@ -82,9 +82,7 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
 
   const options = useMemo<ChartOptions<"radar">>(
     () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+      ...chartBase,
       interaction: { mode: "index", intersect: false },
       layout: { padding: 8 },
       scales: {
@@ -92,8 +90,7 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
           min: 0,
           max: 100,
           ticks: {
-            color: theme.tick,
-            font: { size: 10 },
+            ...axisTickStyle(theme),
             stepSize: 25,
             backdropColor: "transparent",
           },
@@ -103,7 +100,7 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
         },
       },
       plugins: {
-        legend: { labels: { color: theme.tickSecondary, font: { size: 12 } } },
+        legend: legendStyle(theme),
         tooltip: defaultTooltipOptions(theme),
       },
     }),

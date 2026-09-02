@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ExternalLink, Clock, Search } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
@@ -7,6 +7,7 @@ import { useSuspenseNewsByCategory } from "@/client/api/queries";
 import { SuspenseQuery, EmptyState } from "@/client/components/shared";
 import { safeHref, formatRelativeTime } from "@/client/utils";
 import { TabbedPage } from "@/client/components/layout";
+import { useUrlTab } from "@/client/hooks";
 import { type TabItem } from "@/client/components/ui";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import { NEWS_CATEGORIES } from "@/shared/config";
@@ -75,7 +76,7 @@ function NewsCategoryContent({ categoryId }: { categoryId: NewsCategory }) {
 /** Tabbed AI news feed, one category at a time with per-category pagination. */
 export function NewsView() {
   const { t } = useTranslation();
-  const [activeCategory, setActiveCategory] = useState<NewsCategory>("industry");
+  const [activeCategory, setActiveCategory] = useUrlTab(NEWS_CATEGORIES, NEWS_CATEGORIES[0]!);
 
   const tabs: TabItem[] = useMemo(() => NEWS_CATEGORIES.map((id) => ({ id, label: t(CATEGORY_LABELS[id]) })), [t]);
 
@@ -84,7 +85,7 @@ export function NewsView() {
       title={t("aiNews")}
       tabs={tabs}
       activeTab={activeCategory}
-      onTabChange={(id) => setActiveCategory(id as NewsCategory)}
+      onTabChange={setActiveCategory}
     >
       {/* Keyed by category so tab switches get a fresh Suspense fallback and error boundary. */}
       <SuspenseQuery key={activeCategory}>

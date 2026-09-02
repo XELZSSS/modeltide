@@ -8,3 +8,4 @@ export { useListKeyboard } from "./useListKeyboard";
 export { useSearchResetOnNavigate } from "./useSearchResetOnNavigate";
 export { useIsMobile } from "./useIsMobile";
 export { useChartTheme } from "./useChartTheme";
+export { useUrlTab } from "./useUrlTab";

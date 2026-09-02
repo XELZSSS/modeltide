@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from "react";
 import { Languages, SunMoon, X, ExternalLink } from "lucide-react";
 import { useTranslation } from "@/client/providers";
-import { useThemeStore } from "@/client/stores";
+import { useSettingsStore } from "@/client/stores";
 import { Button, Sheet } from "@/client/components/ui";
 import { REPO_URL } from "@/shared/config";
 import { cn } from "@/client/utils";
@@ -76,8 +76,8 @@ const SettingRow = memo(function SettingRow({
 /** Settings dialog: language/theme segmented controls, GitHub link and upstream source status. */
 export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, lang, toggleLang } = useTranslation();
-  const themeMode = useThemeStore((s) => s.themeMode);
-  const toggleTheme = useThemeStore((s) => s.toggleTheme);
+  const themeMode = useSettingsStore((s) => s.themeMode);
+  const toggleTheme = useSettingsStore((s) => s.toggleTheme);
 
   return (
     <Sheet open={open} onClose={onClose} ariaLabel={t("settings")}>

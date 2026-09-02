@@ -6,10 +6,15 @@ import { useSuspenseStatusHistory } from "@/client/api/queries";
 import { SuspenseQuery } from "@/client/components/shared";
 import { PageContainer, PageHeader, PageSection } from "@/client/components/layout";
 import { Card, CardContent, Dot } from "@/client/components/ui";
-import { cn, formatRelativeTime, formatUptime } from "@/client/utils";
+import { cn, formatUptime, formatUptimePct } from "@/client/utils";
 import { SOURCE_LABELS } from "@/shared/config";
-import type { DayBucket, SourceHistorySummary, StatusEvent } from "@/shared/types";
+import type { DayBucket, SourceHistorySummary } from "@/shared/types";
 import { UptimeStrip } from "./UptimeStrip";
+import { StatusEventRow } from "./StatusEventRow";
+
+// Stable empty reference so source cards without daily data do not invalidate
+// the memoized UptimeStrip on every render.
+const EMPTY_BUCKETS: DayBucket[] = [];
 
 function statusTextClass(ok: boolean): string {
   return ok ? "text-success" : "text-destructive";
@@ -47,44 +52,15 @@ const SourceCard = memo(function SourceCard({
       <div className="flex items-center justify-between gap-2 mt-3 text-xs text-text-secondary">
         <span>
           {t("uptime24h")}
-          <span className="font-mono text-text-primary ml-1">
-            {summary.uptime24h == null ? t("uptimeNoData") : `${(summary.uptime24h * 100).toFixed(2)}%`}
-          </span>
+          <span className="font-mono text-text-primary ml-1">{formatUptimePct(t, summary.uptime24h)}</span>
         </span>
         <span>
           {t("uptime7d")}
-          <span className="font-mono text-text-primary ml-1">
-            {summary.uptime7d == null ? t("uptimeNoData") : `${(summary.uptime7d * 100).toFixed(2)}%`}
-          </span>
+          <span className="font-mono text-text-primary ml-1">{formatUptimePct(t, summary.uptime7d)}</span>
         </span>
         <ChevronRight size={14} className="shrink-0 text-text-tertiary" />
       </div>
     </Link>
-  );
-});
-
-const EventRow = memo(function EventRow({ event }: { event: StatusEvent }) {
-  const { t } = useTranslation();
-  const down = event.type === "down";
-  return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-      <div className="flex items-center gap-2 min-w-0">
-        <Dot size="sm" color={down ? "var(--destructive)" : "var(--success)"} />
-        <span className="text-sm">
-          <span className={cn("font-medium", statusTextClass(!down))}>{t(down ? "eventDown" : "eventUp")}</span>
-          <span className="text-text-secondary mx-1.5">·</span>
-          <span className="text-text-secondary">{t(SOURCE_LABELS[event.id])}</span>
-        </span>
-      </div>
-      <div className="flex items-center gap-2 shrink-0 text-xs text-text-secondary">
-        {event.type === "down" && (
-          <span className="font-mono">
-            {event.durationMin == null ? t("eventOngoing") : t("eventDurationMin", { value: event.durationMin })}
-          </span>
-        )}
-        <span>{formatRelativeTime(event.at, t)}</span>
-      </div>
-    </div>
   );
 });
 
@@ -125,7 +101,7 @@ function StatusContent() {
       <PageSection>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {data.sources.map((summary) => (
-            <SourceCard key={summary.id} summary={summary} buckets={data.daily[summary.id] ?? []} />
+            <SourceCard key={summary.id} summary={summary} buckets={data.daily[summary.id] ?? EMPTY_BUCKETS} />
           ))}
         </div>
       </PageSection>
@@ -137,7 +113,7 @@ function StatusContent() {
           ) : (
             <div className="divide-y divide-border rounded-xl border border-border bg-bg-card">
               {data.events.slice(0, 15).map((event, i) => (
-                <EventRow key={`${event.id}-${event.at}-${i}`} event={event} />
+                <StatusEventRow key={`${event.id}-${event.at}-${i}`} event={event} showSource showTime />
               ))}
             </div>
           )}

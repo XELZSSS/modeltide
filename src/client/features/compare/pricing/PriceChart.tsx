@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import { type ChartOptions } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { Card, CardContent } from "@/client/components/ui";
-import { hexToRgba } from "@/client/utils/charts";
+import { hexToRgba, chartBase, axisTickStyle, axisGridStyle, axisDashedBorderStyle, legendStyle, seriesColor } from "@/client/utils/charts";
 import "@/client/utils/charts";
 import { useChartTheme } from "@/client/hooks";
 import { defaultTooltipOptions } from "@/client/utils/charts";
@@ -24,7 +24,7 @@ export const PriceChart = memo(function PriceChart({
     () => ({
       labels: priceRows.map((row) => row.label),
       datasets: models.map((model, index) => {
-        const color = theme.palette[index % theme.palette.length]!;
+        const color = seriesColor(theme, index);
         return {
           label: model.short_name || model.name,
           data: priceRows.map((row) => {
@@ -42,27 +42,24 @@ export const PriceChart = memo(function PriceChart({
 
   const options = useMemo<ChartOptions<"bar">>(
     () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+      ...chartBase,
       scales: {
         x: {
-          ticks: { color: theme.tick, font: { size: 10 } },
+          ticks: axisTickStyle(theme),
           grid: { display: false },
-          border: { color: theme.grid },
+          border: axisGridStyle(theme),
         },
         y: {
           ticks: {
-            color: theme.tick,
-            font: { size: 10 },
+            ...axisTickStyle(theme),
             callback: (value) => `$${value}`,
           },
-          grid: { color: theme.grid },
-          border: { color: theme.grid, dash: [3, 3] },
+          grid: axisGridStyle(theme),
+          border: axisDashedBorderStyle(theme),
         },
       },
       plugins: {
-        legend: { labels: { color: theme.tickSecondary, font: { size: 12 } } },
+        legend: legendStyle(theme),
         tooltip: {
           ...defaultTooltipOptions(theme),
           callbacks: {

@@ -2,8 +2,11 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { SourceStatus } from "@/shared/types";
 
 export const STORAGE_KEYS = {
+  // Legacy single-purpose keys, superseded by the merged `settings` store; kept
+  // only so a rollback to an older deployed client still finds its data.
   lang: "lang",
   theme: "theme",
+  settings: "settings",
   compare: "compare-store",
 } as const satisfies Record<string, string>;
 

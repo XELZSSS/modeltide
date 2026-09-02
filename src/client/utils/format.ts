@@ -64,6 +64,11 @@ export function formatPercent(t: TFunction, v: number | null | undefined): strin
   return v == null ? t("notAvailable") : `${v.toFixed(1)}%`;
 }
 
+/** Uptime ratio in [0,1] rendered as a two-decimal percentage; null falls back to the localized "no data". */
+export function formatUptimePct(t: TFunction, v: number | null | undefined): string {
+  return v == null ? t("uptimeNoData") : `${(v * 100).toFixed(2)}%`;
+}
+
 /** Output speed in tokens/s at one decimal with digit grouping; null falls back to the localized "N/A". */
 export function formatSpeed(t: TFunction, v: number | null | undefined): string {
   return typeof v === "number" && Number.isFinite(v) ? formatIndex(v) : t("notAvailable");

@@ -27,7 +27,7 @@ export const routeDefs = [
       // so a request without params and the client's default query agree.
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
       direction: qEnum(SORT_DIRECTIONS, OPEN_SOURCE_MODELS_DEFAULTS.direction),
-      limit: qNum({ default: "500", min: 1, max: OPEN_SOURCE_MODELS_DEFAULTS.limit }),
+      limit: qNum({ default: String(OPEN_SOURCE_MODELS_DEFAULTS.limit), min: 1, max: OPEN_SOURCE_MODELS_DEFAULTS.limit }),
     },
     // validateQuery has already applied schema defaults and converted numbers; no fallbacks needed here.
     handler: (ctx, params) => getModels(ctx, params),

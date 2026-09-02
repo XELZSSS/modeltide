@@ -7,12 +7,14 @@ import { useSuspenseStatusHistory } from "@/client/api/queries";
 import { BackButton, NotFound, SuspenseQuery } from "@/client/components/shared";
 import { PageContainer, PageHeader, PageSection } from "@/client/components/layout";
 import { Card, CardContent, StatCard, StatGrid } from "@/client/components/ui";
+import { formatUptimePct } from "@/client/utils";
 import "@/client/utils/charts";
 import { useChartTheme } from "@/client/hooks";
-import { defaultTooltipOptions } from "@/client/utils/charts";
+import { defaultTooltipOptions, chartBase, axisTickStyle, axisGridStyle, axisDashedBorderStyle } from "@/client/utils/charts";
 import { SOURCE_LABELS, SOURCE_IDS, ONE_HOUR } from "@/shared/config";
 import type { SourceStatus } from "@/shared/types";
 import { UptimeStrip } from "./UptimeStrip";
+import { StatusEventRow } from "./StatusEventRow";
 
 function isSourceId(value: string | undefined): value is SourceStatus["id"] {
   return value != null && (SOURCE_IDS as readonly string[]).includes(value);
@@ -48,16 +50,14 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
 
   const options = useMemo<ChartOptions<"line">>(
     () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+      ...chartBase,
       interaction: { mode: "index", intersect: false },
       scales: {
-        x: { ticks: { display: false, maxTicksLimit: 8 }, grid: { display: false }, border: { color: theme.grid } },
+        x: { ticks: { display: false, maxTicksLimit: 8 }, grid: { display: false }, border: axisGridStyle(theme) },
         y: {
-          ticks: { color: theme.tick, font: { size: 10 }, callback: (value) => `${value}s` },
-          grid: { color: theme.grid },
-          border: { color: theme.grid, dash: [3, 3] },
+          ticks: { ...axisTickStyle(theme), callback: (value) => `${value}s` },
+          grid: axisGridStyle(theme),
+          border: axisDashedBorderStyle(theme),
         },
       },
       plugins: {
@@ -88,7 +88,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
   const recent = data.recent[id] ?? [];
   const buckets = data.daily[id] ?? [];
   const events = data.events.filter((e) => e.id === id).slice(0, 10);
-  const pct = (v: number | null) => (v == null ? t("uptimeNoData") : `${(v * 100).toFixed(2)}%`);
+  const pct = (v: number | null) => formatUptimePct(t, v);
 
   return (
     <PageContainer>
@@ -131,19 +131,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
         ) : (
           <div className="divide-y divide-border rounded-xl border border-border bg-bg-card">
             {events.map((event) => (
-              <div key={event.at} className="flex items-center justify-between gap-2 px-3 py-2.5">
-                <span className="text-sm">
-                  <span className={event.type === "down" ? "text-destructive font-medium" : "text-success font-medium"}>
-                    {t(event.type === "down" ? "eventDown" : "eventUp")}
-                  </span>
-                </span>
-                <span className="text-xs text-text-secondary">
-                  {event.type === "down" &&
-                    (event.durationMin == null
-                      ? t("eventOngoing")
-                      : t("eventDurationMin", { value: event.durationMin }))}
-                </span>
-              </div>
+              <StatusEventRow key={event.at} event={event} />
             ))}
           </div>
         )}

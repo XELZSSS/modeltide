@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { useTranslation } from "@/client/providers";
 import type { DayBucket } from "@/shared/types";
 import { cn } from "@/client/utils";
@@ -15,7 +15,7 @@ function barClass(ratio: number | null): string {
 /** GitHub-style availability strip: one micro-bar per UTC day, exactly 90 slots ending today. */
 export const UptimeStrip = memo(function UptimeStrip({ buckets }: { buckets: DayBucket[] }) {
   const { t } = useTranslation();
-  const byDay = new Map(buckets.map((b) => [b.day, b]));
+  const byDay = useMemo(() => new Map(buckets.map((b) => [b.day, b])), [buckets]);
   const days: string[] = [];
   const now = Date.now();
   for (let i = 89; i >= 0; i--) {

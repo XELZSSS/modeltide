@@ -1,38 +1,35 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 
-import { DataTable } from "@/client/components/data";
+import { SearchableDataTable } from "@/client/components/data";
 import { useTranslation } from "@/client/providers";
 import { useCompareStore } from "@/client/stores";
-import { useFilteredData } from "@/client/hooks";
+import { useMonthlyCosts } from "@/client/components/compare/useCostEstimator";
 import { modelId } from "@/client/utils";
 import { TabButton, SegmentedGroup } from "@/client/components/ui";
 import { CompareChipBar, useCompareModels } from "@/client/components/compare";
 import { CostEstimatorInputs } from "@/client/components/compare/CostEstimatorInputs";
-import { useMonthlyCosts } from "@/client/components/compare/useCostEstimator";
 
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { buildRankingColumns, buildPricingColumns, ModelExpandedDetail } from "@/client/features/rankings/aaColumns";
 
 type ViewMode = "rankings" | "pricing";
 
-function useAARankingFilters(rankings: ArtificialAnalysisModel[]) {
-  const location = useLocation();
-  // Restore the last-used view mode when navigating back (e.g. from the compare page).
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    (location.state as { viewMode?: ViewMode })?.viewMode ?? "rankings",
-  );
-
-  // Stable identity: a fresh callback each render would defeat useFilteredData's
-  // memo, changing `filtered`'s identity on every render and collapsing expanded rows.
-  const getSearchFields = useCallback(
-    (model: ArtificialAnalysisModel) => [model.name, model.slug, model.model_creators?.name ?? ""],
-    [],
-  );
-  const filtered = useFilteredData(rankings, getSearchFields);
-
-  return { filtered, viewMode, setViewMode };
+interface PricingRow {
+  model: ArtificialAnalysisModel;
+  monthlyCost: number | null;
 }
+
+/** Stable search-field selector: a fresh callback each render would defeat useFilteredData's memo. */
+const getAASearchFields = (model: ArtificialAnalysisModel) => [model.name, model.slug, model.model_creators?.name ?? ""];
+
+const getAARowId = (model: ArtificialAnalysisModel) => modelId(model);
+const getPricingRowId = (row: PricingRow) => modelId(row.model);
+
+// Module-level renderers keep prop identity stable so the memoized table body
+// is not re-rendered on every parent render (search typing, cost input, ...).
+const renderModelDetail = (model: ArtificialAnalysisModel) => <ModelExpandedDetail model={model} />;
+const renderPricingDetail = (row: PricingRow) => <ModelExpandedDetail model={row.model} />;
 
 function FilterToolbar({
   viewMode,
@@ -62,18 +59,17 @@ function FilterToolbar({
  */
 export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnalysisModel[] }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const toggleCompareModel = useCompareStore((s) => s.toggleCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  // Restore the last-used view mode when navigating back (e.g. from the compare page).
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    (location.state as { viewMode?: ViewMode })?.viewMode ?? "rankings",
+  );
 
-  const { filtered, viewMode, setViewMode } = useAARankingFilters(rankings);
-  const { monthlyCosts, ...costInputs } = useMonthlyCosts(filtered);
+  const { monthlyCosts, ...costInputs } = useMonthlyCosts(rankings);
   const comparedModels = useCompareModels(rankings);
-
-  useEffect(() => {
-    setExpandedRowId(null);
-  }, [viewMode, filtered]);
 
   const avgCost = useMemo(() => {
     const valid = monthlyCosts.filter((v): v is number => v != null);
@@ -92,16 +88,9 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   );
 
   const pricingRows = useMemo(
-    () => filtered.map((model, index) => ({ model, monthlyCost: monthlyCosts[index] ?? null })),
-    [filtered, monthlyCosts],
+    () => rankings.map((model, index) => ({ model, monthlyCost: monthlyCosts[index] ?? null })),
+    [rankings, monthlyCosts],
   );
-
-  // Expansion/pagination behavior is identical across the pricing and rankings tables.
-  const tableExpansion = {
-    expandedRowId,
-    onToggleExpand: setExpandedRowId,
-    onPageChange: () => setExpandedRowId(null),
-  } as const;
 
   return (
     <div className="flex flex-col gap-3">
@@ -120,20 +109,20 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
         onCompare={() => navigate(viewMode === "pricing" ? "/price-compare" : "/compare")}
       />
       {viewMode === "pricing" ? (
-        <DataTable
+        <SearchableDataTable
           data={pricingRows}
           columns={pricingColumns}
-          getRowId={(row) => modelId(row.model)}
-          renderExpandedRow={(row) => <ModelExpandedDetail model={row.model} />}
-          {...tableExpansion}
+          getRowId={getPricingRowId}
+          getSearchFields={(row) => getAASearchFields(row.model)}
+          renderExpandedRow={renderPricingDetail}
         />
       ) : (
-        <DataTable
-          data={filtered}
+        <SearchableDataTable
+          data={rankings}
           columns={rankingColumns}
-          getRowId={modelId}
-          renderExpandedRow={(model) => <ModelExpandedDetail model={model} />}
-          {...tableExpansion}
+          getRowId={getAARowId}
+          getSearchFields={getAASearchFields}
+          renderExpandedRow={renderModelDetail}
         />
       )}
     </div>

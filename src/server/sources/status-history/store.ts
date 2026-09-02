@@ -6,6 +6,7 @@ import { SOURCE_IDS } from "@/shared/config";
 import type { HistoryStore, SourceId } from "./types";
 import { HISTORY_KEY, SAMPLE_INTERVAL_MS, SAMPLE_LOCK_TTL_S } from "./types";
 import { mergeSample } from "./merge";
+import { buildHistoryPayload } from "./payload";
 
 const SAMPLE_LOCK_KEY = "status:history:lock";
 
@@ -71,7 +72,6 @@ export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore>
 export async function getStatusHistory(ctx: AppContext) {
   const store = await ensureFreshSamples(ctx);
   const uptime = await getUptime(ctx);
-  const { buildHistoryPayload } = await import("./payload");
   return buildHistoryPayload(store, uptime, Date.now());
 }
 

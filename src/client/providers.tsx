@@ -1,5 +1,5 @@
 import { createContext, use, useEffect, useMemo, type ReactNode } from "react";
-import { useLangStore } from "@/client/stores";
+import { useSettingsStore } from "@/client/stores";
 import { useIsMobile } from "@/client/hooks";
 import type { Lang, TFunction } from "@/shared/i18n";
 import { createT } from "@/shared/i18n";
@@ -33,8 +33,8 @@ function syncDocumentMeta(lang: Lang) {
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const lang = useLangStore((s) => s.lang);
-  const toggleLang = useLangStore((s) => s.toggleLang);
+  const lang = useSettingsStore((s) => s.lang);
+  const toggleLang = useSettingsStore((s) => s.toggleLang);
 
   useEffect(() => {
     syncDocumentMeta(lang);

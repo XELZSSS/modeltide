@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
-import { useThemeStore, useThemeStorageSync } from "@/client/stores";
+import { useSettingsStore, useThemeStorageSync } from "@/client/stores";
 import { useTranslation } from "@/client/providers";
 import { DesktopNav } from "./DesktopNav";
 import { MobileNav } from "./MobileNav";
@@ -27,7 +27,7 @@ function accentForPath(pathname: string): string {
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const themeMode = useThemeStore((s) => s.themeMode);
+  const themeMode = useSettingsStore((s) => s.themeMode);
   useThemeStorageSync();
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement>(null);

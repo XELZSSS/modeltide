@@ -1,4 +1,4 @@
-import { USER_AGENT } from "@/shared/config";
+import { USER_AGENT, PROBE_TIMEOUT_MS } from "@/shared/config";
 import { UpstreamError } from "@/server/infra/errors";
 
 interface FetchOptions extends RequestInit {
@@ -38,9 +38,13 @@ export class HttpClient {
       const signal = initSignal ? AbortSignal.any([initSignal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
       const res = await fetch(url, { headers, signal, ...rest });
       if (res.ok) return res;
+      // Release the unread body so the Workers runtime does not hold the subrequest open across retries
+      res.body?.cancel();
       const isClientError = res.status >= 400 && res.status < 500 && res.status !== 429;
       if (isClientError) throw new UpstreamError(`HTTP ${res.status} for ${url}`);
       if (attempt === retries) throw new UpstreamError(`HTTP ${res.status} for ${url}`);
+      // Short exponential backoff with jitter before the next attempt
+      await new Promise((r) => setTimeout(r, 100 * 2 ** attempt + Math.random() * 100));
     }
     throw new UpstreamError(`HTTP failed for ${url}`);
   }
@@ -60,7 +64,7 @@ export class HttpClient {
     return res.text();
   }
 
-  async probe(url: string, timeoutMs = 8_000): Promise<ProbeResult> {
+  async probe(url: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<ProbeResult> {
     const started = Date.now();
     const signal = AbortSignal.timeout(timeoutMs);
     try {

@@ -1,13 +1,13 @@
-import { useMemo, useState } from "react";
-import { DataTable, RightAlignedText, type DataTableColumn } from "@/client/components/data";
+import { useMemo } from "react";
+import { SearchableDataTable, DataTable, RightAlignedText, type DataTableColumn } from "@/client/components/data";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
-import { useFilteredData } from "@/client/hooks";
 import { formatDate, shortModelId } from "@/client/utils";
 import { useSuspenseOpenSourceReleases, useSuspenseArtificialRankings } from "@/client/api/queries";
 import { SuspenseQuery } from "@/client/components/shared";
 import { SearchInput } from "@/client/search";
 import { TabbedPage } from "@/client/components/layout";
+import { useUrlTab } from "@/client/hooks";
 import { type TabItem } from "@/client/components/ui";
 import type { OpenSourceModelEntry, ArtificialAnalysisModel } from "@/shared/types";
 
@@ -77,7 +77,6 @@ const getFeedRowId = (e: FeedEntry) => e.id;
 
 function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
   const { t, lang } = useTranslation();
-  const feedRows = useFilteredData(allEntries, getFeedSearchFields);
 
   const feedColumns = useMemo<DataTableColumn<FeedEntry>[]>(() => {
     const TYPE_LABEL: Record<FeedEntryType, TranslationKey> = {
@@ -117,7 +116,7 @@ function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
     ];
   }, [t, lang]);
 
-  return <DataTable data={feedRows} columns={feedColumns} getRowId={getFeedRowId} />;
+  return <SearchableDataTable data={allEntries} columns={feedColumns} getRowId={getFeedRowId} getSearchFields={getFeedSearchFields} />;
 }
 
 function ReleaseDatesTab({ releaseRows }: { releaseRows: DatedModel[] }) {
@@ -163,11 +162,10 @@ function ReleaseDatesTab({ releaseRows }: { releaseRows: DatedModel[] }) {
 }
 
 const TAB_IDS = ["feed", "release-dates"] as const;
-type TabId = (typeof TAB_IDS)[number];
 
 function ReleasesContent() {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<TabId>("feed");
+  const [mode, setMode] = useUrlTab(TAB_IDS, TAB_IDS[0]);
   const { data: openSourceReleases } = useSuspenseOpenSourceReleases();
   const { data: artificialRankings } = useSuspenseArtificialRankings();
 
@@ -194,7 +192,7 @@ function ReleasesContent() {
       countLabel={countLabel}
       tabs={tabs}
       activeTab={mode}
-      onTabChange={(id) => setMode(id as TabId)}
+      onTabChange={setMode}
     >
       {mode === "feed" ? <FeedTab allEntries={allEntries} /> : <ReleaseDatesTab releaseRows={releaseRows} />}
     </TabbedPage>
