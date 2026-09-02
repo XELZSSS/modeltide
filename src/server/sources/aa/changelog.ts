@@ -1,0 +1,120 @@
+import type { AppContext } from "@/server/context";
+import { MAX_FEED_BYTES, STATIC_TTL_MS, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig } from "@/shared/config";
+import { UpstreamError } from "@/server/infra/errors";
+import { MAX_SCAN_CHARS } from "@/server/parsers/rsc";
+import { isRecord, str } from "@/server/parsers/primitives";
+
+const CHANGELOG_PATH = "/changelog";
+
+export interface ChangelogModel {
+  slug: string;
+  name: string;
+  releaseSlug: string;
+  releaseName: string;
+  releaseDate: string;
+  creatorName: string;
+}
+
+const MODELS_NEEDLE_RE = /\\?"models\\?":\[/g;
+const MODELS_NEEDLE = '"models":[';
+const CANDIDATE_PREFIX_CHARS = 256;
+const CANDIDATE_SUFFIX_CHARS = MAX_SCAN_CHARS + CANDIDATE_PREFIX_CHARS;
+
+function unescapeWindow(window: string): string {
+  return window.replace(/\\(.)/g, (m, c: string) => (c === '"' ? '"' : c === "\\" ? "\\" : m));
+}
+
+function parseModelsArrayAt(unescaped: string, d: number, found: unknown[]): void {
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = d; i < unescaped.length; i++) {
+    if (i - d > MAX_SCAN_CHARS) break;
+    const c = unescaped[i]!;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') {
+      inStr = true;
+    } else if (c === "[") {
+      depth++;
+    } else if (c === "]") {
+      depth--;
+      if (depth === 0) {
+        try {
+          found.push(JSON.parse(unescaped.slice(d, i + 1)));
+        } catch {}
+        break;
+      }
+    }
+  }
+}
+
+function extractModelsArrays(html: string): unknown[] {
+  const found: unknown[] = [];
+  MODELS_NEEDLE_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = MODELS_NEEDLE_RE.exec(html)) !== null) {
+    const start = Math.max(0, match.index - CANDIDATE_PREFIX_CHARS);
+    const window = unescapeWindow(html.slice(start, match.index + CANDIDATE_SUFFIX_CHARS));
+    const at = window.indexOf(MODELS_NEEDLE);
+    if (at !== -1) parseModelsArrayAt(window, at + MODELS_NEEDLE.length - 1, found);
+    MODELS_NEEDLE_RE.lastIndex = match.index + match[0].length;
+  }
+  return found;
+}
+
+function isChangelogRaw(e: unknown): e is Record<string, unknown> {
+  if (!isRecord(e)) return false;
+  const r = e as Record<string, unknown>;
+  if (typeof r.slug !== "string" || typeof r.name !== "string" || typeof r.releaseDate !== "string") return false;
+  if (!isRecord(r.release) || !isRecord(r.creator)) return false;
+  return true;
+}
+
+function toChangelogModel(e: Record<string, unknown>): ChangelogModel | null {
+  const release = e.release as Record<string, unknown>;
+  const creator = e.creator as Record<string, unknown>;
+  const slug = str(e.slug).trim();
+  const name = str(e.name).trim();
+  const releaseSlug = str(release.slug).trim();
+  const releaseName = str(release.name).trim();
+  const releaseDate = str(e.releaseDate).trim();
+  const creatorName = str(creator.name).trim();
+  if (!slug || !name || !releaseSlug || !releaseName || !releaseDate || !creatorName) return null;
+  return { slug, name, releaseSlug, releaseName, releaseDate, creatorName };
+}
+
+export function parseChangelogModels(html: string): ChangelogModel[] {
+  let best: ChangelogModel[] = [];
+  for (const v of extractModelsArrays(html)) {
+    if (!Array.isArray(v)) continue;
+    const mapped = (v as unknown[])
+      .filter(isChangelogRaw)
+      .map(toChangelogModel)
+      .filter((m): m is ChangelogModel => m !== null);
+    if (mapped.length > best.length) best = mapped;
+  }
+  return best;
+}
+
+export async function getChangelogModels(ctx: AppContext): Promise<ChangelogModel[]> {
+  return ctx.cache.withTtl(cacheKeys.changelog, STATIC_TTL_MS, async () => {
+    const html = await ctx.http.text(
+      `${upstreamConfig.artificialAnalysis}${CHANGELOG_PATH}`,
+      {
+        headers: { accept: "text/html,application/xhtml+xml,*/*" },
+        ...UPSTREAM_FETCH_OPTS,
+      },
+      MAX_FEED_BYTES,
+    );
+    const models = parseChangelogModels(html);
+    if (models.length === 0) {
+      throw new UpstreamError(
+        `AA changelog yielded 0 models (raw=1 page, kept=0, markup changed?, body=${html.length}B)`,
+      );
+    }
+    return { data: models };
+  });
+}

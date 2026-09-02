@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "modeltide",
+  "main": "src/server/worker.ts",
+  "compatibility_date": "2026-08-22",
+  "keep_vars": false,
+  "workers_dev": true,
+
+  "vars": {},
+
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+  },
+
+  "triggers": {
+    "crons": ["*/30 * * * *"],
+  },
+
+  "observability": {
+    "enabled": true,
+  },
+
+  "kv_namespaces": [{ "binding": "CACHE", "id": "df8295997e6f42a7803a9d25b7e12f25" }],
+
+  "dev": {
+    "port": 8787,
+  },
+}
