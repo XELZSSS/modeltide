@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "aitiweta",
+  "main": "src/server/worker.ts",
+  "compatibility_date": "2026-07-14",
+  "keep_vars": false,
+  "workers_dev": false,
+
+  // wrangler.jsonc is the source of truth: vars here will overwrite Dashboard on every deploy, so you don't need to edit Dashboard manually.
+  // Put normal vars here. For secrets, don't write the real value here — add them in Dashboard or CI.
+  "vars": {
+    // "API_HOST": "example.com",
+    // "ENV": "production"
+  },
+
+  // Serve the built Vite client from the ASSETS binding; unknown routes fall back to index.html for the SPA.
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+
+  // Smart placement co-locates the Worker with the KV store for lower latency.
+  "placement": {
+    "mode": "smart"
+  },
+
+  // Cron job refreshes the upstream data cache every 4 minutes.
+  "triggers": {
+    "crons": ["*/4 * * * *"]
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  // KV cache (optional) — uncomment to enable persistent caching.
+  // - Enabled:  requests are cached in KV (15m TTL, refreshed every 4m by cron). Recommended.
+  // - Disabled (default): no KV, every request fetches upstream directly; status-history/uptime are in-memory only.
+  // Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/
+  // To enable: 1) npx wrangler kv namespace create CACHE  2) paste the returned id below  3) uncomment:
+  // "kv_namespaces": [{ "binding": "CACHE", "id": "PASTE_KV_ID_HERE" }],
+
+  "dev": {
+    "port": 3000
+  }
+}

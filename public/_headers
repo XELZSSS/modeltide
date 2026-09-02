@@ -1,0 +1,20 @@
+# Vite emits content-hashed filenames under /assets/, safe to cache forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Font files rarely change; cache them permanently like hashed assets.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Security headers for static responses (index.html, icons, manifest).
+# Note: Worker-generated responses (e.g. /api/*) set their own headers in code.
+# connect-src is 'self': pointing the client at a separate API origin via
+# VITE_API_BASE requires adding that origin to connect-src here.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  # The sha256 hash allowlists the inline theme pre-paint script in index.html.
+  # If that script changes, regenerate the hash: npm run hash:csp
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-9WIcVEt7UrE5boJZ9F0wlIgQvVepCfcQ5/a5gaDaYbU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests

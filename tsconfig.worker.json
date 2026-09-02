@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    // Runtime types come from the generated worker-configuration.d.ts (wrangler types);
+    // only the vitest-pool-workers helpers need to be added on top.
+    "types": ["@cloudflare/vitest-pool-workers/types"]
+  },
+  "include": ["src/server/**/*.ts", "src/shared/**/*.ts", "worker-configuration.d.ts"],
+  "exclude": ["dist", "node_modules"]
+}

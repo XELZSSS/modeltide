@@ -1,0 +1,13 @@
+// Barrel for UI primitives; consumers import from "@/client/components/ui".
+export { Button } from "./button";
+export { Card, CardContent } from "./card";
+export { Input } from "./input";
+export { Badge } from "./badge";
+export { Dot } from "./dot";
+export { Th, Td, Tr } from "./table";
+export { Pagination } from "./pagination";
+export { Sheet } from "./sheet";
+export { SegmentedGroup, CardGrid, DetailLayout, DetailSection, StatGrid, InfoGrid } from "./grids";
+export { TabButton, TabContainer, type TabItem } from "./tabs";
+export { StatCard } from "./stat-card";
+export { InfoCard, InfoRow } from "./info-card";

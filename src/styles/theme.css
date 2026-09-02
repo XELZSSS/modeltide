@@ -1,0 +1,102 @@
+:root {
+  color-scheme: light;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f4f5;
+  --bg-tertiary: #e4e4e7;
+  --bg-card: #ffffff;
+  --text-primary: #0b1220;
+  --text-secondary: #5b6472;
+  --text-tertiary: #8f97a5;
+  --border: rgba(15, 23, 42, 0.08);
+  --accent: #2563eb;
+  --accent-light: rgba(37, 99, 235, 0.1);
+  --accent-contrast: #ffffff;
+  --hover: rgba(37, 99, 235, 0.07);
+  --selected: rgba(37, 99, 235, 0.12);
+  --destructive: #dc2626;
+  --success: #15803d;
+  --warning: #ffb224;
+  --success-soft: rgba(21, 128, 61, 0.12);
+  --destructive-soft: rgba(220, 38, 38, 0.12);
+  --nav-bg: rgba(255, 255, 255, 0.82);
+  --chart-1: #2563eb;
+  --chart-2: #ea580c;
+  --chart-3: #0d9488;
+  --chart-4: #7c3aed;
+  --chart-5: #e11d48;
+  --chart-6: #d97706;
+  --chart-7: #0891b2;
+  --chart-8: #db2777;
+  --chart-9: #059669;
+  --chart-10: #c026d3;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg-primary: #090a0b;
+  --bg-secondary: #17171a;
+  --bg-tertiary: #232327;
+  --bg-card: #0e0e10;
+  --text-primary: #e8ecf3;
+  --text-secondary: #98a1b3;
+  --text-tertiary: #626b7e;
+  --border: rgba(148, 163, 184, 0.11);
+  --accent: #60a5fa;
+  --accent-light: rgba(96, 165, 250, 0.1);
+  --accent-contrast: #06121c;
+  --hover: rgba(96, 165, 250, 0.07);
+  --selected: rgba(96, 165, 250, 0.12);
+  --destructive: #f2555a;
+  --success: #4cc38a;
+  --warning: #ffc53d;
+  --success-soft: rgba(76, 195, 138, 0.16);
+  --destructive-soft: rgba(242, 85, 90, 0.16);
+  --nav-bg: rgba(9, 10, 11, 0.82);
+  --chart-1: #60a5fa;
+  --chart-2: #fb923c;
+  --chart-3: #2dd4bf;
+  --chart-4: #a78bfa;
+  --chart-5: #fb7185;
+  --chart-6: #fbbf24;
+  --chart-7: #22d3ee;
+  --chart-8: #f472b6;
+  --chart-9: #34d399;
+  --chart-10: #e879f9;
+}
+
+body[data-accent="home"] {
+  --section-accent: #2563eb;
+}
+body[data-accent="rankings"] {
+  --section-accent: #7c3aed;
+}
+body[data-accent="releases"] {
+  --section-accent: #047857;
+}
+body[data-accent="news"] {
+  --section-accent: #c2410c;
+}
+body[data-accent="status"] {
+  --section-accent: #0e7490;
+}
+.dark body[data-accent="home"] {
+  --section-accent: #60a5fa;
+}
+.dark body[data-accent="rankings"] {
+  --section-accent: #a78bfa;
+}
+.dark body[data-accent="releases"] {
+  --section-accent: #34d399;
+}
+.dark body[data-accent="news"] {
+  --section-accent: #fb923c;
+}
+.dark body[data-accent="status"] {
+  --section-accent: #22d3ee;
+}
+body[data-accent] {
+  --color-accent: var(--section-accent);
+  --color-accent-light: color-mix(in srgb, var(--section-accent) 10%, transparent);
+  --color-hover: color-mix(in srgb, var(--section-accent) 7%, transparent);
+  --color-selected: color-mix(in srgb, var(--section-accent) 12%, transparent);
+}
