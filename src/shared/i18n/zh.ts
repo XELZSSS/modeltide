@@ -22,7 +22,7 @@ export const zh = {
   attemptRate: "尝试回答率",
   omniscienceIndex: "Omniscience 指数",
   notAvailable: "无数据",
-  metaDescription: "AITIWETA - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析",
+  metaDescription: "ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析",
   modelsTotal: "{count} 个模型",
   yes: "是",
   no: "否",

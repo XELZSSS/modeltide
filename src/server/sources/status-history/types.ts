@@ -10,7 +10,7 @@ import { ONE_MINUTE, ONE_DAY } from "@/shared/config";
  *  - daily:  per-UTC-day rollups for the last 90 days (uptime percentages)
  */
 
-export const HISTORY_KEY = "status:history:v1";
+export const HISTORY_KEY = "status:history:v2";
 export const SAMPLE_INTERVAL_MS = 4 * ONE_MINUTE;
 export const RECENT_WINDOW_MS = ONE_DAY;
 export const RETAINED_DAYS = 90;

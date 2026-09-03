@@ -4,7 +4,7 @@ import { API_DOMAINS } from "./api";
 // Bump manually when a cached payload shape changes; old envelopes live until
 // their hard expiry (ttl + STALE_WINDOW), so list touched payloads in the bump
 // commit (StatusHistoryPayload, OpenRouterRankingsPayload, ...).
-export const CACHE_VERSION = "v1";
+export const CACHE_VERSION = "v2";
 
 /** Largest page the open-source endpoints will serve (also the top normalize bucket). */
 export const MAX_MODEL_LIMIT = 500;

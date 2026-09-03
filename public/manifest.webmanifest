@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "AITIWETA",
-  "short_name": "AITIWETA",
+  "name": "ModelTide",
+  "short_name": "Tide",
   "description": "AI model rankings, release dates, benchmarks, and provider comparisons.",
   "start_url": "/",
   "scope": "/",

@@ -1,6 +1,8 @@
 <div align="center">
 
-# AITIWETA
+<img src="./public/icons/app-icon.svg" width="120" alt="ModelTide" />
+
+# ModelTide
 
 <strong>AI 模型数据看板</strong> —— 聚合模型排名、评测基准、价格与发布动态
 
@@ -49,7 +51,7 @@
 ## 🧭 项目结构
 
 ```text
-aitiweta/
+modeltide/
 ├── src/            # 源码
 │   ├── client/     # 前端
 │   ├── server/     # Worker 后端

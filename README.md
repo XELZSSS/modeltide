@@ -1,6 +1,8 @@
 <div align="center">
 
-# AITIWETA
+<img src="./public/icons/app-icon.svg" width="120" alt="ModelTide" />
+
+# ModelTide
 
 <strong>AI model data dashboard</strong> — aggregating model rankings, benchmarks, pricing, and release tracking
 
@@ -49,7 +51,7 @@
 ## 🧭 Project Structure
 
 ```text
-aitiweta/
+modeltide/
 ├── src/            # Source
 │   ├── client/     # Frontend
 │   ├── server/     # Worker backend

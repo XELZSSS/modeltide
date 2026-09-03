@@ -22,7 +22,7 @@ export const en = {
   omniscienceIndex: "Omniscience Index",
   notAvailable: "N/A",
   metaDescription:
-    "AITIWETA - AI Model Dashboard aggregating rankings, benchmarks, pricing, releases, and provider analysis",
+    "ModelTide - AI Model Dashboard aggregating rankings, benchmarks, pricing, releases, and provider analysis",
   modelsTotal: "{count} models",
   yes: "Yes",
   no: "No",

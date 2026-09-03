@@ -54,5 +54,5 @@ export const SOURCE_LABELS: Record<SourceStatus["id"], TranslationKey> = {
   news: "sourceNameNews",
 };
 
-export const REPO_URL = "https://github.com/XELZSSS/aitiweta";
+export const REPO_URL = "https://github.com/XELZSSS/modeltide";
 export const SOURCE_IDS = ["artificialAnalysis", "huggingface", "openrouter", "news"] as const;

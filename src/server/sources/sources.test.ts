@@ -698,14 +698,14 @@ describe("getStatusHistory sample-on-read", () => {
     const kvStore = new Map<string, string>([["status:history:lock", "1"]]);
     const payload = await getStatusHistory(buildHistoryCtx(kvStore));
     // No store written and every source reports as down (placeholders, not real probes).
-    expect(kvStore.has("status:history:v1")).toBe(false);
+    expect(kvStore.has("status:history:v2")).toBe(false);
     expect(payload.sources.every((s) => s.ok === false)).toBe(true);
   });
 
   it("samples on first read when the store is empty, so the page is never falsely 'down'", async () => {
     const kvStore = new Map<string, string>();
     const payload = await getStatusHistory(buildHistoryCtx(kvStore));
-    expect(kvStore.has("status:history:v1")).toBe(true);
+    expect(kvStore.has("status:history:v2")).toBe(true);
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(true);
     expect(or.checkedAt).not.toBeNull();
@@ -716,10 +716,10 @@ describe("getStatusHistory sample-on-read", () => {
     const kvStore = new Map<string, string>();
     const ctx = buildHistoryCtx(kvStore);
     await getStatusHistory(ctx);
-    const snapshot = kvStore.get("status:history:v1")!;
+    const snapshot = kvStore.get("status:history:v2")!;
     // An immediate second read is fresh enough — the stored payload must not grow.
     await getStatusHistory(ctx);
-    expect(kvStore.get("status:history:v1")).toBe(snapshot);
+    expect(kvStore.get("status:history:v2")).toBe(snapshot);
   });
 
   it("records a failed probe as a down sample when probes fail", async () => {
@@ -766,7 +766,7 @@ describe("readStore", () => {
       },
     } as unknown as AppContext;
     await expect(readStore(ctx)).resolves.toEqual({ sources: {} });
-    expect(deleted).toContain("status:history:v1");
+    expect(deleted).toContain("status:history:v2");
   });
 });
 

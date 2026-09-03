@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "aitiweta",
+  "name": "modeltide",
   "main": "src/server/worker.ts",
   "compatibility_date": "2026-07-14",
   "keep_vars": false,
