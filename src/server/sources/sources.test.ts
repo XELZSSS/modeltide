@@ -4,9 +4,8 @@ import {
   compact,
   compactOmniscienceEnrich,
   computeBlendPrice,
-} from "@/server/sources/artificial-analysis/mapping";
-import { mergeBySlug } from "@/server/sources/artificial-analysis/merge";
-import { mapEntry, type RawEntry } from "@/server/sources/artificial-analysis/text-to-image";
+} from "@/server/sources/artificial-analysis";
+import { mergeBySlug, mapEntry, type RawEntry } from "@/server/sources/artificial-analysis";
 import {
   categoryFrom,
   creatorFromSlug,
@@ -16,26 +15,41 @@ import {
   titleFromSlug,
   type ModelRow,
   type PricingEntry,
-} from "@/server/sources/openrouter/mapping";
-import { getUptime } from "@/server/sources/uptime";
+} from "@/server/sources/openrouter";
 import { getModels } from "@/server/sources/huggingface";
-import { CacheService } from "@/server/infra/cache";
-import { mergeSample } from "./status-history/merge";
-import { deriveEvents } from "./status-history/events";
-import { buildHistoryPayload } from "./status-history/payload";
-import { uptimeRatio, avgLatency } from "./status-history/utils";
-import { getStatusHistory, statusFromStore } from "./status-history/store";
-import type { HistoryStore } from "./status-history/types";
-import { aggregateProbes, buildTargets, type ProbeTarget } from "@/server/sources/probe";
-import { normalizeModelLimit, PARTIAL_FAIL_TTL_MS, DEFAULT_TTL_MS } from "@/shared/config";
-import { readStore } from "./status-history/store";
+import { CacheService } from "@/server/infra";
+import {
+  mergeSample,
+  deriveEvents,
+  buildHistoryPayload,
+  uptimeRatio,
+  avgLatency,
+  getStatusHistory,
+  statusFromStore,
+  readStore,
+  getUptime,
+  aggregateProbes,
+  buildTargets,
+  type HistoryStore,
+  type ProbeTarget,
+} from "./status-history";
+import { BENCHMARK_KEYS, DEFAULT_TTL_MS, normalizeModelLimit, PARTIAL_FAIL_TTL_MS, SOURCE_IDS } from "@/shared/config";
 import type { AppContext } from "@/server/context";
-import { BENCHMARK_KEYS } from "@/shared/config";
-import type { DayBucket, UptimeSample } from "@/shared/types";
-import type { SourceStatus } from "@/shared/types";
+import type { ArtificialAnalysisModel, DayBucket, SourceStatus, UptimeSample } from "@/shared/types";
+import {
+  parseAnthropicPricing,
+  parseDeepSeekPricing,
+  parseGooglePricing,
+  parseKimiPricing,
+  parseMistralPricing,
+  parseOpenAiPricing,
+} from "@/server/sources/official-pricing";
+import { parseArenaPage, parseArenaRow } from "@/server/sources/arena";
+import { extractInitialData, parseChangelogEntries } from "@/server/sources/closed-releases";
 
-// Consolidated tests for the upstream data sources: Artificial Analysis mapping,
-// OpenRouter mapping, the uptime KV helper and the status-history store.
+// Consolidated tests for the upstream data sources: Artificial Analysis
+// mapping, OpenRouter mapping, official-pricing parsers, Arena/changelog feeds,
+// Hugging Face TTL behavior and the status-history store.
 function rawModel(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: "m1",
@@ -177,12 +191,15 @@ describe("normalizeModelKey", () => {
 });
 
 describe("backfillFromMeta", () => {
+  const aaModel = (over: Record<string, unknown> = {}): ArtificialAnalysisModel =>
+    ({ slug: "a", name: "Model A", ...over }) as ArtificialAnalysisModel;
+
   it("fills only null values via loose key matching and reports the filled count", () => {
     const models = [
-      { slug: "a", name: "Model A", agentic_index: null, context_window_tokens: null },
-      { slug: "b", name: "Model B", agentic_index: 40, context_window_tokens: 1000 },
-      { slug: "c", name: "Model C", agentic_index: null, context_window_tokens: null },
-    ] as import("@/shared/types").ArtificialAnalysisModel[];
+      aaModel({ agentic_index: null, context_window_tokens: null }),
+      aaModel({ slug: "b", name: "Model B", agentic_index: 40, context_window_tokens: 1000 }),
+      aaModel({ slug: "c", name: "Model C", agentic_index: null, context_window_tokens: null }),
+    ];
     const meta = {
       [normalizeModelKey("Model A")]: { agenticIndex: 55.4, contextLength: 262144 },
       [normalizeModelKey("Model B")]: { agenticIndex: 99, contextLength: 1 },
@@ -198,11 +215,32 @@ describe("backfillFromMeta", () => {
   });
 
   it("scales sub-1 fraction agentic values to the 0-100 scale", () => {
-    const models = [
-      { slug: "a", name: "Model A", agentic_index: null, context_window_tokens: null },
-    ] as import("@/shared/types").ArtificialAnalysisModel[];
+    const models = [aaModel({ agentic_index: null, context_window_tokens: null })];
     backfillFromMeta(models, { [normalizeModelKey("Model A")]: { agenticIndex: 0.5 } });
     expect(models[0]!.agentic_index).toBe(50);
+  });
+
+  it("backfills the blend from the model's own AA pricing even without an OpenRouter match", () => {
+    const models = [
+      aaModel({ name: "Motif 3", blended_price: null, pricing: { input: 3, output: 15, cache_hit: 0.3 } }),
+    ];
+    const filled = backfillFromMeta(models, {});
+    expect(filled).toBe(1);
+    expect(models[0]!.blended_price).toBeCloseTo(2.31, 5);
+  });
+
+  it("prefers first-party AA pricing over the OpenRouter directory for the blend", () => {
+    const models = [aaModel({ blended_price: null, pricing: { input: 5, output: 25, cache_hit: 0.5 } })];
+    const meta = { [normalizeModelKey("Model A")]: { pricing: { input: 1, output: 1, cacheHit: 0.1 } } };
+    backfillFromMeta(models, meta);
+    expect(models[0]!.blended_price).toBeCloseTo(3.85, 5);
+  });
+
+  it("derives the blend from OpenRouter directory pricing converted to $/1M", () => {
+    const models = [aaModel({ blended_price: null })];
+    const meta = { [normalizeModelKey("Model A")]: { pricing: { input: 2, output: 6, cacheHit: 0.5 } } };
+    backfillFromMeta(models, meta);
+    expect(models[0]!.blended_price).toBeCloseTo(1.35, 5);
   });
 });
 
@@ -222,35 +260,6 @@ describe("computeBlendPrice", () => {
     expect(computeBlendPrice({})).toBeNull();
     expect(computeBlendPrice({ input: 1 })).toBeNull();
     expect(computeBlendPrice({ input: null, output: 2 })).toBeNull();
-  });
-});
-
-describe("backfillFromMeta blended price", () => {
-  it("backfills the blend from the model's own AA pricing even without an OpenRouter match", () => {
-    const models = [
-      { slug: "a", name: "Motif 3", blended_price: null, pricing: { input: 3, output: 15, cache_hit: 0.3 } },
-    ] as import("@/shared/types").ArtificialAnalysisModel[];
-    const filled = backfillFromMeta(models, {});
-    expect(filled).toBe(1);
-    expect(models[0]!.blended_price).toBeCloseTo(2.31, 5);
-  });
-
-  it("prefers first-party AA pricing over the OpenRouter directory for the blend", () => {
-    const models = [
-      { slug: "a", name: "Model A", blended_price: null, pricing: { input: 5, output: 25, cache_hit: 0.5 } },
-    ] as import("@/shared/types").ArtificialAnalysisModel[];
-    const meta = { [normalizeModelKey("Model A")]: { pricing: { input: 1, output: 1, cacheHit: 0.1 } } };
-    backfillFromMeta(models, meta);
-    expect(models[0]!.blended_price).toBeCloseTo(3.85, 5);
-  });
-
-  it("derives the blend from OpenRouter directory pricing converted to $/1M", () => {
-    const models = [
-      { slug: "a", name: "Model A", blended_price: null },
-    ] as import("@/shared/types").ArtificialAnalysisModel[];
-    const meta = { [normalizeModelKey("Model A")]: { pricing: { input: 2, output: 6, cacheHit: 0.5 } } };
-    backfillFromMeta(models, meta);
-    expect(models[0]!.blended_price).toBeCloseTo(1.35, 5);
   });
 });
 
@@ -602,7 +611,7 @@ describe("statusFromStore", () => {
 
   it("reports an empty store as all-down with placeholder timestamps", () => {
     const { sources, checkedAt } = statusFromStore({ sources: {} }, NOW);
-    expect(sources).toHaveLength(4);
+    expect(sources).toHaveLength(SOURCE_IDS.length);
     expect(sources.every((s) => s.ok === false && s.error === "no samples yet")).toBe(true);
     expect(checkedAt).toBe(new Date(NOW).toISOString());
   });
@@ -638,7 +647,7 @@ describe("buildHistoryPayload", () => {
   it("reports null uptimes for an empty store and marks the source down", () => {
     const store: HistoryStore = { sources: {} };
     const payload = buildHistoryPayload(store, { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 }, NOW);
-    expect(payload.sources).toHaveLength(4);
+    expect(payload.sources).toHaveLength(SOURCE_IDS.length);
     const or = payload.sources.find((s) => s.id === historyId)!;
     expect(or).toMatchObject({ uptime24h: null, uptime7d: null, uptime90d: null, avgLatency24h: null, ok: false });
     expect(payload.events).toHaveLength(0);
@@ -749,7 +758,9 @@ describe("buildTargets", () => {
     const targets = buildTargets();
     const news = targets.filter((t) => t.id === "news");
     expect(news).toHaveLength(NEWS_CATEGORIES.length);
-    expect(targets).toHaveLength(3 + NEWS_CATEGORIES.length);
+    expect(targets).toHaveLength(10 + NEWS_CATEGORIES.length);
+    expect(targets.some((t) => t.id === "arena")).toBe(true);
+    expect(targets.filter((t) => t.id === "officialPricing")).toHaveLength(6);
   });
 });
 
@@ -820,5 +831,381 @@ describe("getModels empty-result TTL", () => {
     };
     await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 7 });
     expect(new URL(fetchedUrl).searchParams.get("limit")).toBe("50");
+  });
+});
+describe("extractInitialData", () => {
+  // Builds page HTML with single-escaped flight JSON, mirroring the live markup.
+  const flightHtml = (dataJson: string) => {
+    const payload = `d:["$","$L19",null,{"initialData":{"data":[${dataJson}]}}]`;
+    return `<div>noise</div><script>self.__next_f.push([1,${JSON.stringify(payload)}])</script><div>tail</div>`;
+  };
+  const ROW_A = `{"id":"aaa","dateLa":"2026-09-03","type":"modelAdded","model":{"name":"GPT-6 Astra","slug":"gpt-6-astra","intelligenceIndex":55,"creator":{"name":"OpenAI"}}}`;
+
+  it("parses single-escaped flight JSON amid page noise", () => {
+    const data = extractInitialData(flightHtml(`${ROW_A},${ROW_A.replace("aaa", "zzz")}`));
+    expect(data).toHaveLength(2);
+    expect((data[0] as { id?: unknown }).id).toBe("aaa");
+  });
+
+  it("skips unparseable chunks and uses later good ones", () => {
+    const bad = `<div><script>self.__next_f.push([1,"d:{\\"initialData\\":{\\"data\\":[{bad]</script></div>`;
+    expect(extractInitialData(`${bad}<div>mid</div>${flightHtml(ROW_A)}`)).toHaveLength(1);
+  });
+
+  it("returns [] without the marker or on truncated input", () => {
+    expect(extractInitialData("<div>no flight data here</div>")).toEqual([]);
+    expect(extractInitialData(String.raw`prefix "initialData\":{\"data\":[{oops`)).toEqual([]);
+  });
+});
+
+describe("parseChangelogEntries", () => {
+  const openKeys = new Set(["qwen3-8-flash-next", "llama4scout"]);
+  const gptRow = (over: Record<string, unknown> = {}) => ({
+    id: "aaa",
+    dateLa: "2026-09-03",
+    type: "modelAdded",
+    model: { name: "GPT-6 Astra", slug: "gpt-6-astra", creator: { name: "OpenAI" } },
+    ...over,
+  });
+  const gptExpected = (notes = "") => ({
+    id: "aaa",
+    model: "GPT-6 Astra",
+    provider: "OpenAI",
+    releaseDate: "2026-09-03",
+    notes,
+    link: "https://artificialanalysis.ai/models/gpt-6-astra",
+  });
+
+  it("keeps closed modelAdded rows newest-first with AA links", () => {
+    expect(
+      parseChangelogEntries(
+        [
+          {
+            id: "bbb",
+            dateLa: "2026-08-27",
+            type: "modelAdded",
+            model: { name: "Qwen3.8-Flash-Next", slug: "qwen3-8-flash-next", creator: { name: "Alibaba" } },
+          },
+          gptRow({
+            title: "GPT-6 arrives",
+            subtitle: "Should not win",
+            model: { name: "GPT-6 Astra", slug: "gpt-6-astra", intelligenceIndex: 55, creator: { name: "OpenAI" } },
+          }),
+          {
+            id: "hhh",
+            dateLa: "2026-08-01",
+            type: "modelAdded",
+            model: { name: "Claude-X", slug: "claude-x", creator: { name: "Anthropic" } },
+          },
+        ],
+        openKeys,
+      ),
+    ).toEqual([
+      gptExpected("GPT-6 arrives"),
+      {
+        id: "hhh",
+        model: "Claude-X",
+        provider: "Anthropic",
+        releaseDate: "2026-08-01",
+        notes: "",
+        link: "https://artificialanalysis.ai/models/claude-x",
+      },
+    ]);
+  });
+
+  it("drops articles, open-weight, duplicate, unsafe and malformed rows", () => {
+    expect(
+      parseChangelogEntries(
+        [
+          { id: "ccc", dateLa: "2026-09-02", type: "articlePublished", title: "Benchmarking", slug: "x" },
+          {
+            id: "ddd",
+            dateLa: "2026-08-20",
+            type: "modelAdded",
+            model: { name: "Llama 4 Scout", slug: "odd-one", creator: { name: "Meta" } },
+          },
+          { id: "eee", type: "modelAdded" },
+          {
+            id: "fff",
+            dateLa: "not-a-date",
+            type: "modelAdded",
+            model: { name: "X", slug: "x", creator: { name: "Y" } },
+          },
+          {
+            id: "ggg",
+            dateLa: "2026-08-01",
+            type: "modelAdded",
+            model: { name: "Evil", slug: 'x" onmouseover="y', creator: { name: "Z" } },
+          },
+          gptRow(),
+          gptRow(),
+        ],
+        openKeys,
+      ),
+    ).toEqual([gptExpected()]);
+  });
+
+  it("returns [] for non-array payloads", () => {
+    expect(parseChangelogEntries(null, openKeys)).toEqual([]);
+    expect(parseChangelogEntries({}, openKeys)).toEqual([]);
+  });
+
+  it("end-to-end: extract then parse", () => {
+    const row =
+      '{"id":"aaa","dateLa":"2026-09-03","type":"modelAdded","model":{"name":"GPT-6 Astra","slug":"gpt-6-astra","creator":{"name":"OpenAI"}}}';
+    const payload = `d:["$","$L19",null,{"initialData":{"data":[${row}]}}]`;
+    const html = `<div>noise</div><script>self.__next_f.push([1,${JSON.stringify(payload)}])</script>`;
+    expect(parseChangelogEntries(extractInitialData(html), new Set())).toHaveLength(1);
+  });
+});
+
+describe("parseOpenAiPricing", () => {
+  it("takes the first (Standard) table and strips parenthetical qualifiers", () => {
+    const md = [
+      "### Standard pricing data",
+      "| Model | Short context input | Short context cached input | Short context cache writes | Short context output |",
+      "| --- | --- | --- | --- | --- |",
+      "| gpt-5.6-luna | $0.20 | $0.02 | $0.25 | $1.20 |",
+      "| gpt-5.5 (<272K context length) | $5.00 | $0.50 | - | $30.00 |",
+      "| gpt-5.4-cyber | - | - | - | - |",
+      "### Batch pricing data",
+      "| gpt-5.6-luna | $0.10 | $0.01 | $0.125 | $0.60 |",
+      "",
+    ].join("\n");
+    expect(parseOpenAiPricing(md)).toEqual([
+      {
+        id: "gpt-5.6-luna",
+        name: "gpt-5.6-luna",
+        provider: "OpenAI",
+        input: 0.2,
+        cachedInput: 0.02,
+        output: 1.2,
+        contextWindow: null,
+      },
+      {
+        id: "gpt-5.5",
+        name: "gpt-5.5",
+        provider: "OpenAI",
+        input: 5,
+        cachedInput: 0.5,
+        output: 30,
+        contextWindow: null,
+      },
+    ]);
+  });
+});
+
+describe("parseAnthropicPricing", () => {
+  it("parses the model table and skips retired rows", () => {
+    const html = [
+      "<h2>Model pricing</h2><table>",
+      "<tr><th>Model</th><th>Base input tokens</th><th>5m</th><th>1h</th><th>Cache hits</th><th>Output tokens</th></tr>",
+      "<tr><td>Claude Opus 5</td><td>$5 / MTok</td><td>$6.25 / MTok</td><td>$10 / MTok</td><td>$0.50 / MTok</td><td>$25 / MTok</td></tr>",
+      "<tr><td>Claude Opus 4.1 (<a>retired</a>)</td><td>$15 / MTok</td><td>-</td><td>-</td><td>-</td><td>$75 / MTok</td></tr>",
+      "</table><h2>Cloud platform pricing</h2>",
+    ].join("");
+    expect(parseAnthropicPricing(html)).toEqual([
+      {
+        id: "claude-opus-5",
+        name: "Claude Opus 5",
+        provider: "Anthropic",
+        input: 5,
+        cachedInput: 0.5,
+        output: 25,
+        contextWindow: null,
+      },
+    ]);
+  });
+});
+
+describe("parseGooglePricing", () => {
+  it("takes the first Global pair per model without Lite cross-talk", () => {
+    const html = [
+      "<h3>Gemini 3.5 Flash-Lite</h3><p>Input (text) Global$0.30$0.30 Text output content Global$2.50$2.50</p>",
+      "<h3>Gemini 3.5 Flash</h3><p>Input (text,image,video,audio) Global$1.50$3.00 Text output response Global$9.00$18.00</p>",
+    ].join("");
+    expect(parseGooglePricing(html)).toEqual([
+      {
+        id: "gemini-3.5-flash",
+        name: "Gemini 3.5 Flash",
+        provider: "Google",
+        input: 1.5,
+        cachedInput: null,
+        output: 9,
+        contextWindow: null,
+      },
+      {
+        id: "gemini-3.5-flash-lite",
+        name: "Gemini 3.5 Flash-Lite",
+        provider: "Google",
+        input: 0.3,
+        cachedInput: null,
+        output: 2.5,
+        contextWindow: null,
+      },
+    ]);
+  });
+});
+
+describe("parseDeepSeekPricing", () => {
+  it("takes the PEAK triple per model in column order", () => {
+    const html = [
+      "<table><tr><td>MODEL</td><td>deepseek-v4-flash</td><td>deepseek-v4-pro</td></tr>",
+      "<tr><td>CONTEXT LENGTH</td><td colspan='3'>1M</td></tr>",
+      "<tr><td>PRICING</td><td>1M INPUT TOKENS(CACHE HIT)</td><td>OFF-PEAK</td>",
+      "<td>$0.007</td><td>$0.022</td><td>PEAK</td><td>$0.014</td><td>$0.044</td></tr>",
+      "<tr><td>1M INPUT TOKENS(CACHE MISS)</td><td>OFF-PEAK</td>",
+      "<td>$0.22</td><td>$0.66</td><td>PEAK</td><td>$0.44</td><td>$1.32</td></tr>",
+      "<tr><td>1M OUTPUT TOKENS</td><td>OFF-PEAK</td>",
+      "<td>$0.66</td><td>$1.98</td><td>PEAK</td><td>$1.32</td><td>$3.96</td></tr></table>",
+    ].join("");
+    expect(parseDeepSeekPricing(html)).toEqual([
+      {
+        id: "deepseek-v4-flash",
+        name: "DeepSeek V4 Flash",
+        provider: "DeepSeek",
+        input: 0.44,
+        cachedInput: 0.014,
+        output: 1.32,
+        contextWindow: 1000000,
+      },
+      {
+        id: "deepseek-v4-pro",
+        name: "DeepSeek V4 Pro",
+        provider: "DeepSeek",
+        input: 1.32,
+        cachedInput: 0.044,
+        output: 3.96,
+        contextWindow: 1000000,
+      },
+    ]);
+  });
+});
+
+describe("parseMistralPricing", () => {
+  it("anchors prices at known slugs and skips unknown cards", () => {
+    const html = [
+      "<div>GLM 5.2NewThird-party stuffInput (/M tokens) $1.4Output (/M tokens) $4.4zai-glm-5-2</div>",
+      "<div>Mistral Medium 3.5OpenPerformant model.Text-to-textInput (/M tokens) $1.5Output (/M tokens) $7.5mistral-medium-latest</div>",
+      "<div>CodestralPremierLow-latency coding.Text-to-textInput (/M tokens) $0.3Cached input (/M tokens) $0.03Output (/M tokens) $0.9codestral-latest</div>",
+    ].join("");
+    expect(parseMistralPricing(html)).toEqual([
+      {
+        id: "mistral-medium-latest",
+        name: "Mistral Medium 3.5",
+        provider: "Mistral",
+        input: 1.5,
+        cachedInput: null,
+        output: 7.5,
+        contextWindow: null,
+      },
+      {
+        id: "codestral-latest",
+        name: "Codestral",
+        provider: "Mistral",
+        input: 0.3,
+        cachedInput: 0.03,
+        output: 0.9,
+        contextWindow: null,
+      },
+    ]);
+  });
+});
+
+describe("parseKimiPricing", () => {
+  it("parses rendered rows and skips highspeed variants", () => {
+    const html = [
+      "<table><tr><th>Model</th><th>Unit</th><th>Hit</th><th>Miss</th><th>Out</th><th>Ctx</th></tr>",
+      "<tr><td>kimi-k3</td><td>1M tokens</td><td>$0.30</td><td>$3.00</td><td>$15.00</td><td>1,048,576 tokens</td></tr>",
+      "<tr><td>kimi-k2.7-code-highspeed</td><td>1M tokens</td><td>$0.38</td><td>$1.90</td><td>$8.00</td><td>262,144 tokens</td></tr>",
+      "</table>",
+    ].join("");
+    expect(parseKimiPricing(html)).toEqual([
+      {
+        id: "kimi-k3",
+        name: "Kimi K3",
+        provider: "Kimi",
+        input: 3,
+        cachedInput: 0.3,
+        output: 15,
+        contextWindow: 1048576,
+      },
+    ]);
+  });
+});
+
+const ARENA_ROW = `<tr><td>1</td><td>16</td><td><span title=claude-fable-5>Anthropic claude-fable-5</span></td><td><span>1507</span></td><td><span>27,189</span></td><td>$10 / $50</td><td>1M</td></tr>`;
+const ARENA_HEADER = `<tr><th>Rank</th><th>Spread</th><th>Model</th><th>Score</th><th>Votes</th><th>Price</th><th>Context</th></tr>`;
+
+describe("parseArenaRow", () => {
+  it("parses a full leaderboard row", () => {
+    expect(parseArenaRow(ARENA_ROW.replace(/^<tr>|<\/tr>$/g, ""))).toEqual({
+      rank: 1,
+      id: "claude-fable-5",
+      name: "Anthropic claude-fable-5",
+      creator: "Anthropic",
+      score: 1507,
+      votes: 27189,
+      preliminary: false,
+      priceInput: 10,
+      priceOutput: 50,
+      contextTokens: 1000000,
+    });
+  });
+
+  it("handles live row shapes (locale vote suffix, ± score, N/A price)", () => {
+    const inner =
+      "<td>19</td><td>19</td><td><span>claude-opus-4-7-highAnthropic · Proprietary</span></td>" +
+      "<td><span>1552±6</span></td><td><span>17,176票</span></td><td>N/A</td><td>N/A</td>";
+    expect(parseArenaRow(inner)).toEqual({
+      rank: 19,
+      id: "claude-opus-4-7-highAnthropic",
+      name: "claude-opus-4-7-highAnthropic · Proprietary",
+      creator: "Anthropic",
+      score: 1552,
+      votes: 17176,
+      preliminary: false,
+      priceInput: null,
+      priceOutput: null,
+      contextTokens: null,
+    });
+  });
+
+  it("flags low-vote rows carrying the Preliminary badge", () => {
+    const inner =
+      "<td>7</td><td>139</td><td><span title=gemini-3.8-flash-high>Gemini gemini-3.8-flash-high</span></td>" +
+      '<td><span>1537±16</span><span class="badge">Preliminary</span></td><td><span>1,456</span></td>' +
+      "<td>$0.75 / $3.75</td><td>1M</td>";
+    expect(parseArenaRow(inner)).toEqual({
+      rank: 7,
+      id: "gemini-3.8-flash-high",
+      name: "Gemini gemini-3.8-flash-high",
+      creator: "Google",
+      score: 1537,
+      votes: 1456,
+      preliminary: true,
+      priceInput: 0.75,
+      priceOutput: 3.75,
+      contextTokens: 1000000,
+    });
+  });
+
+  it("rejects header rows and rows without rank", () => {
+    expect(parseArenaRow(ARENA_HEADER.replace(/^<tr>|<\/tr>$/g, ""))).toBeNull();
+    expect(parseArenaRow("<td>no rank here</td><td>x</td>")).toBeNull();
+  });
+});
+
+describe("parseArenaPage", () => {
+  it("collects data rows, dedupes by id and sorts by rank", () => {
+    const html = `<table><tbody>${ARENA_HEADER}${ARENA_ROW}${ARENA_ROW.replace(">1<", ">2<")}</tbody></table>`;
+    const entries = parseArenaPage(html);
+    // Same id twice → deduped to one row.
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ rank: 1, id: "claude-fable-5" });
+  });
+
+  it("returns an empty list when no data rows exist", () => {
+    expect(parseArenaPage(`<table><tbody>${ARENA_HEADER}</tbody></table>`)).toEqual([]);
   });
 });

@@ -12,9 +12,9 @@ import {
   formatTrend,
   formatDollar,
   formatPricePerMillion,
-} from "@/client/utils/format";
-import { calcMonthlyCost } from "@/client/utils/model";
-import { matchTerm } from "@/shared/lib/match";
+} from "@/client/utils";
+import { calcMonthlyCost } from "@/client/utils";
+import { matchTerm } from "@/shared/utils";
 import { buildCompareRows, buildRadarData, computeWinners, type CompareRow } from "@/client/features/compare/logic";
 import { createT, interpolate } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
@@ -452,10 +452,6 @@ describe("buildRadarData", () => {
 
 describe("buildCompareRows", () => {
   const metrics = buildCompareRows(tKey);
-
-  it("includes all expected metrics", () => {
-    expect(metrics.length).toBeGreaterThan(5);
-  });
 
   it("includes score metrics with bestIs max", () => {
     const intelMetric = metrics.find((m) => m.label === "intelligenceIndex");

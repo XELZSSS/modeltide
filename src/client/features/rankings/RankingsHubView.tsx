@@ -12,7 +12,7 @@ import { SearchInput } from "@/client/search";
 import { Dot, type TabItem } from "@/client/components/ui";
 import { TabbedPage } from "@/client/components/layout";
 import { useUrlTab } from "@/client/hooks";
-import { SearchableDataTable, type DataTableColumn } from "@/client/components/data";
+import { SearchableDataTable, indexRankMap, rankCol, type DataTableColumn } from "@/client/components/data";
 import {
   formatScore,
   formatPricePerMillion,
@@ -22,6 +22,8 @@ import {
 } from "@/client/utils";
 import {
   RANKING_TABS,
+  ArenaRankingsView,
+  BenchmarkBoardView,
   OpenSourceRankingsView,
   HallucinationRankingsView,
   type RankingTabId,
@@ -40,6 +42,8 @@ const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   openRouterRankings: MODEL_SOURCES.or.sourceLabelKey,
   openSourceRankings: MODEL_SOURCES.os.sourceLabelKey,
   hallucinationRankings: MODEL_SOURCES.hall.sourceLabelKey,
+  benchmarkRankings: "arenaSource",
+  arenaRankings: "arenaSource",
   providerCompare: MODEL_SOURCES.aa.sourceLabelKey,
 };
 
@@ -65,14 +69,24 @@ const HallucinationRankingsTab = memo(function HallucinationRankingsTab() {
   return <HallucinationRankingsView rankings={hallucinationRankings} />;
 });
 
+const BenchmarkRankingsTab = memo(function BenchmarkRankingsTab() {
+  return <BenchmarkBoardView />;
+});
+
+const ArenaRankingsTab = memo(function ArenaRankingsTab() {
+  return <ArenaRankingsView />;
+});
+
 const getProviderRowId = (p: ProviderStats) => p.name;
 
 const ProviderCompareTab = memo(function ProviderCompareTab() {
   const { data } = useSuspenseArtificialRankings();
   const { t } = useTranslation();
   const providerStats = useMemo(() => computeProviderStats(data, t("unknown")), [data, t]);
+  const rankMap = useMemo(() => indexRankMap(providerStats, getProviderRowId), [providerStats]);
   const columns = useMemo<DataTableColumn<ProviderStats>[]>(
     () => [
+      rankCol((p: ProviderStats) => rankMap.get(getProviderRowId(p)) ?? null),
       {
         id: "name",
         header: t("provider"),
@@ -110,7 +124,7 @@ const ProviderCompareTab = memo(function ProviderCompareTab() {
         cell: (p) => (p.avgSpeed != null ? `${formatSpeed(t, p.avgSpeed)} ${t("tokensPerSecond")}` : t("notAvailable")),
       },
     ],
-    [t],
+    [t, rankMap],
   );
   return (
     <SearchableDataTable
@@ -127,6 +141,8 @@ const TAB_COMPONENTS: Record<RankingTabId, ComponentType> = {
   openRouterRankings: OpenRouterTab,
   openSourceRankings: OpenSourceTab,
   hallucinationRankings: HallucinationRankingsTab,
+  benchmarkRankings: BenchmarkRankingsTab,
+  arenaRankings: ArenaRankingsTab,
   providerCompare: ProviderCompareTab,
 };
 

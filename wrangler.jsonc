@@ -25,8 +25,11 @@
 
   // Cron every 30min (not more often): the free KV tier caps at 1,000 writes/day
   // and each tick costs status-history sampling + cache warmup writes.
-  // Tightening this to */4 or similar multiplies write amplification and will
-  // hit the cap; Workers Paid (1M writes/day) removes the limit.
+  // Cache TTLs are tiered by volatility (live 30m / slow 2h / static 6h, see
+  // shared/config): only soft-expired keys re-put, so steady state stays far
+  // under the cap. Tightening this to */4 or similar multiplies write
+  // amplification and will hit the cap; Workers Paid (1M writes/day) removes
+  // the limit.
   "triggers": {
     "crons": ["*/30 * * * *"],
   },
@@ -41,7 +44,7 @@
   },
 
   // KV cache (optional) — uncomment to enable persistent caching.
-  // - Enabled:  requests are cached in KV (30m TTL, refreshed every 30m by cron). Recommended.
+  // - Enabled:  requests are cached in KV (tiered 30m/2h/6h TTLs, refreshed by cron). Recommended.
   // - Disabled (default): no KV, every request fetches upstream directly; status-history/uptime are in-memory only.
   // Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/
   // To enable: 1) npx wrangler kv namespace create CACHE  2) paste the returned id below  3) uncomment the kv_namespaces block.

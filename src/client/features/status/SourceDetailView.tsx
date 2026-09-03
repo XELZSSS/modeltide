@@ -19,8 +19,8 @@ import {
 } from "@/client/utils/charts";
 import { SOURCE_LABELS, SOURCE_IDS, ONE_HOUR } from "@/shared/config";
 import type { SourceStatus } from "@/shared/types";
-import { UptimeStrip } from "./UptimeStrip";
-import { StatusEventRow } from "./StatusEventRow";
+import { UptimeStrip } from "./StatusParts";
+import { StatusEventList } from "./StatusParts";
 
 function isSourceId(value: string | undefined): value is SourceStatus["id"] {
   return value != null && (SOURCE_IDS as readonly string[]).includes(value);
@@ -148,15 +148,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
       </PageSection>
 
       <PageSection title={t("recentEvents")}>
-        {events.length === 0 ? (
-          <p className="text-sm text-text-secondary">{t("noRecentEvents")}</p>
-        ) : (
-          <div className="divide-y divide-border rounded-xl border border-border bg-bg-card">
-            {events.map((event) => (
-              <StatusEventRow key={`${event.id}-${event.at}-${event.type}`} event={event} />
-            ))}
-          </div>
-        )}
+        <StatusEventList events={events} emptyMessage={t("noRecentEvents")} />
       </PageSection>
     </PageContainer>
   );

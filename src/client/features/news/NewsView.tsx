@@ -12,7 +12,7 @@ import { type TabItem } from "@/client/components/ui";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import { NEWS_CATEGORIES } from "@/shared/config";
 import { useDevice } from "@/client/providers";
-import { usePagedData } from "@/client/hooks";
+import { usePagedData } from "@/client/components/data";
 
 // Single source for category ids is the shared NEWS_CATEGORIES (mirrors the server's RSS config).
 const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {

@@ -7,7 +7,7 @@ import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { registerRoutes } from "@/server/routes";
 import type { RouteDef } from "@/server/routes";
-import { ApiError } from "@/server/infra/errors";
+import { ApiError } from "@/server/infra";
 import { ONE_DAY, WARM_ORIGIN } from "@/shared/config";
 
 // Workers kills requests at ~30s wall-clock, so fail fast with 504 before that.

@@ -1,18 +1,212 @@
+import { Lightbulb, Plus, Check } from "lucide-react";
+import {
+  RightAlignedText,
+  RankingNameCell,
+  textCol,
+  rightCol,
+  rightColNA,
+  mobilePrimaryCol,
+  type DataTableColumn,
+  SearchableDataTable,
+  indexRankMap,
+  rankCol,
+} from "@/client/components/data";
+import { Button, TabButton, SegmentedGroup } from "@/client/components/ui";
+import { ModelDetailContent } from "@/client/features/models/ModelDetailView";
+import { formatScore, formatDollar, formatTokens, modelId } from "@/client/utils";
+import type { ArtificialAnalysisModel } from "@/shared/types";
+import type { TFunction } from "@/shared/i18n";
+import { useTranslation } from "@/client/providers";
 import { useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
+import { useCompareStore, useCompareModels } from "@/client/stores";
+import { useMonthlyCosts } from "@/client/features/compare/pricing";
+import { CompareChipBar } from "@/client/features/compare/CompareChipBar";
+import { CostEstimatorInputs } from "@/client/features/compare/pricing";
 
-import { SearchableDataTable } from "@/client/components/data";
-import { useTranslation } from "@/client/providers";
-import { useCompareStore } from "@/client/stores";
-import { useMonthlyCosts } from "@/client/components/compare/useCostEstimator";
-import { modelId } from "@/client/utils";
-import { TabButton, SegmentedGroup } from "@/client/components/ui";
-import { CompareChipBar, useCompareModels } from "@/client/components/compare";
-import { CostEstimatorInputs } from "@/client/components/compare/CostEstimatorInputs";
+// ---- client/features/rankings/aaColumns.tsx ----
+function ReasoningBadge({ label }: { label: string }) {
+  return <Lightbulb className="size-3.5 shrink-0 text-text-tertiary" aria-label={label} />;
+}
 
-import type { ArtificialAnalysisModel } from "@/shared/types";
-import { buildRankingColumns, buildPricingColumns, ModelExpandedDetail } from "@/client/features/rankings/aaColumns";
+function CompareButton({
+  model,
+  isCompared,
+  onToggle,
+}: {
+  model: ArtificialAnalysisModel;
+  isCompared: boolean;
+  onToggle: (m: ArtificialAnalysisModel) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={isCompared ? t("removeFromCompare") : t("addToCompare")}
+      aria-pressed={isCompared}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(model);
+      }}
+      className="shrink-0 -my-2"
+    >
+      {isCompared ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
+    </Button>
+  );
+}
 
+/** Expanded row body showing the full model detail card. */
+export function ModelExpandedDetail({ model }: { model: ArtificialAnalysisModel }) {
+  return (
+    <div className="p-4 sm:p-5">
+      <ModelDetailContent model={model} showBenchmarks={false} />
+    </div>
+  );
+}
+
+function ReasoningPrefix({ model }: { model: ArtificialAnalysisModel }) {
+  const { t } = useTranslation();
+  return model.is_reasoning === true ? <ReasoningBadge label={t("reasoning")} /> : null;
+}
+
+function RankingModelCell({
+  model,
+  compareSet,
+  onToggleCompare,
+}: {
+  model: ArtificialAnalysisModel;
+  compareSet: Set<string>;
+  onToggleCompare: (m: ArtificialAnalysisModel) => void;
+}) {
+  return (
+    <RankingNameCell
+      name={model.name}
+      prefix={<ReasoningPrefix model={model} />}
+      suffix={<CompareButton model={model} isCompared={compareSet.has(modelId(model))} onToggle={onToggleCompare} />}
+    />
+  );
+}
+
+interface PricedModel {
+  model: ArtificialAnalysisModel;
+  monthlyCost: number | null;
+}
+
+function PricedModelCell({
+  row,
+  compareSet,
+  onToggleCompare,
+}: {
+  row: PricedModel;
+  compareSet: Set<string>;
+  onToggleCompare: (m: ArtificialAnalysisModel) => void;
+}) {
+  return (
+    <RankingNameCell
+      name={row.model.name || row.model.slug}
+      nameClassName="text-sm"
+      gapClassName="gap-1"
+      prefix={<ReasoningPrefix model={row.model} />}
+      suffix={
+        <CompareButton model={row.model} isCompared={compareSet.has(modelId(row.model))} onToggle={onToggleCompare} />
+      }
+    />
+  );
+}
+
+function priceCell(get: (m: PricedModel) => number | null | undefined, t: TFunction) {
+  return (m: PricedModel) => formatDollar(get(m), t);
+}
+
+function scoreColumn(
+  id: string,
+  header: string,
+  accessor: (m: ArtificialAnalysisModel) => number | null | undefined,
+  t: TFunction,
+  opts?: { mobilePrimary?: boolean },
+): DataTableColumn<ArtificialAnalysisModel> {
+  return rightColNA(
+    id,
+    header,
+    (model) => {
+      const value = accessor(model);
+      return value == null ? null : formatScore(t, value);
+    },
+    t("notAvailable"),
+    opts,
+  );
+}
+
+/** Ranking table columns – compareSet is computed once by the caller and passed to avoid per-cell store subscriptions. */
+export function buildRankingColumns(
+  t: TFunction,
+  compareSet: Set<string>,
+  onToggleCompare: (m: ArtificialAnalysisModel) => void,
+): DataTableColumn<ArtificialAnalysisModel>[] {
+  return [
+    textCol(
+      "model",
+      t("model"),
+      (model) => <RankingModelCell model={model} compareSet={compareSet} onToggleCompare={onToggleCompare} />,
+      { width: "40%" },
+    ),
+    rightCol("creator", t("creator"), (model) => (
+      <RightAlignedText>{model.model_creators?.name || t("notAvailable")}</RightAlignedText>
+    )),
+    { ...scoreColumn("intelligence", t("intelligenceIndex"), (m) => m.intelligence_index, t), mobilePrimary: true },
+    scoreColumn("coding", t("coding"), (m) => m.coding_index, t),
+    scoreColumn("agentic", t("agentic"), (m) => m.agentic_index, t),
+    rightColNA(
+      "context",
+      t("contextWindow"),
+      (model) => (model.context_window_tokens != null ? formatTokens(model.context_window_tokens, t) : null),
+      t("notAvailable"),
+    ),
+  ];
+}
+
+/** Pricing table columns: cache/prompt/completion prices and estimated monthly cost. */
+export function buildPricingColumns(
+  t: TFunction,
+  compareSet: Set<string>,
+  onToggleCompare: (m: ArtificialAnalysisModel) => void,
+): DataTableColumn<PricedModel>[] {
+  return [
+    textCol(
+      "model",
+      t("model"),
+      (row) => <PricedModelCell row={row} compareSet={compareSet} onToggleCompare={onToggleCompare} />,
+      { width: "35%" },
+    ),
+    rightCol("provider", t("provider"), (row) => (
+      <RightAlignedText>{row.model.model_creators?.name || t("notAvailable")}</RightAlignedText>
+    )),
+    rightCol(
+      "cacheHitPrice",
+      t("cacheHitPrice"),
+      priceCell((m) => m.model.pricing?.cache_hit, t),
+    ),
+    rightCol(
+      "blendedPrice",
+      t("blendedPrice"),
+      priceCell((m) => m.model.blended_price, t),
+    ),
+    rightCol(
+      "promptPrice",
+      t("promptPrice"),
+      priceCell((m) => m.model.pricing?.input, t),
+    ),
+    rightCol(
+      "completionPrice",
+      t("completionPrice"),
+      priceCell((m) => m.model.pricing?.output, t),
+    ),
+    { ...mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.monthlyCost, t)), hiddenMd: true },
+  ];
+}
+
+// ---- client/features/rankings/ArtificialAnalysisView.tsx ----
 type ViewMode = "rankings" | "pricing";
 
 interface PricingRow {
@@ -84,13 +278,22 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
 
   const compareIds = useCompareStore((s) => s.compareIds);
   const compareSet = useMemo(() => new Set(compareIds), [compareIds]);
+  // Server returns rankings pre-sorted by intelligence index, so the display
+  // order is the global rank; the map keeps ranks stable after search filtering.
+  const rankMap = useMemo(() => indexRankMap(rankings, (m) => modelId(m)), [rankings]);
   const rankingColumns = useMemo(
-    () => buildRankingColumns(t, compareSet, toggleCompareModel),
-    [t, compareSet, toggleCompareModel],
+    () => [
+      rankCol((m: ArtificialAnalysisModel) => rankMap.get(modelId(m)) ?? null),
+      ...buildRankingColumns(t, compareSet, toggleCompareModel),
+    ],
+    [t, compareSet, toggleCompareModel, rankMap],
   );
   const pricingColumns = useMemo(
-    () => buildPricingColumns(t, compareSet, toggleCompareModel),
-    [t, compareSet, toggleCompareModel],
+    () => [
+      rankCol((row: PricingRow) => rankMap.get(modelId(row.model)) ?? null),
+      ...buildPricingColumns(t, compareSet, toggleCompareModel),
+    ],
+    [t, compareSet, toggleCompareModel, rankMap],
   );
 
   const pricingRows = useMemo(

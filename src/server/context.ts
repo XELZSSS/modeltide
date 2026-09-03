@@ -1,5 +1,4 @@
-import { CacheService } from "@/server/infra/cache";
-import { HttpClient } from "@/server/infra/http";
+import { CacheService, HttpClient } from "@/server/infra";
 import { CACHE_VERSION } from "@/shared/config";
 
 export interface Env {

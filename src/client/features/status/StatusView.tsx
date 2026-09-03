@@ -9,8 +9,8 @@ import { Card, CardContent, Dot } from "@/client/components/ui";
 import { cn, formatUptime, formatUptimePct } from "@/client/utils";
 import { SOURCE_LABELS } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary } from "@/shared/types";
-import { UptimeStrip } from "./UptimeStrip";
-import { StatusEventRow } from "./StatusEventRow";
+import { UptimeStrip } from "./StatusParts";
+import { StatusEventList } from "./StatusParts";
 
 // Stable empty reference so source cards without daily data do not invalidate
 // the memoized UptimeStrip on every render.
@@ -108,15 +108,7 @@ function StatusContent() {
 
       {hasData && (
         <PageSection title={t("recentEvents")}>
-          {data.events.length === 0 ? (
-            <p className="text-sm text-text-secondary">{t("noRecentEvents")}</p>
-          ) : (
-            <div className="divide-y divide-border rounded-xl border border-border bg-bg-card">
-              {data.events.slice(0, 15).map((event) => (
-                <StatusEventRow key={`${event.id}-${event.at}-${event.type}`} event={event} showSource showTime />
-              ))}
-            </div>
-          )}
+          <StatusEventList events={data.events.slice(0, 15)} emptyMessage={t("noRecentEvents")} showSource showTime />
         </PageSection>
       )}
     </PageContainer>

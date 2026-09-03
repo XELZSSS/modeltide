@@ -2,9 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { useLocation } from "react-router";
 import { useSettingsStore, useThemeStorageSync } from "@/client/stores";
 import { useTranslation } from "@/client/providers";
-import { DesktopNav } from "./DesktopNav";
-import { MobileNav } from "./MobileNav";
-import { MobileMoreSheet } from "./MobileMoreSheet";
+import { DesktopNav } from "./navigation";
+import { MobileNav } from "./navigation";
+import { MobileMoreSheet } from "./navigation";
 import { SettingsSheet } from "./SettingsSheet";
 
 // Per-section accent themes (see globals.css): each content area carries its own

@@ -17,7 +17,6 @@ import {
   lineSeriesStyle,
   seriesColor,
 } from "@/client/utils/charts";
-import { intelligenceChartTitle } from "./chartTitle";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 /**
@@ -118,7 +117,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
     return (
       <Card>
         <CardContent padding="md">
-          <p className="text-sm font-semibold mb-3">{intelligenceChartTitle(t)}</p>
+          <p className="text-sm font-semibold mb-3">{t("intelligenceIndex")}</p>
           <EmptyState message={t("noRankingsData")} />
         </CardContent>
       </Card>
@@ -128,10 +127,10 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
   return (
     <Card>
       <CardContent padding="md">
-        <p className="text-sm font-semibold mb-3">{intelligenceChartTitle(t)}</p>
+        <p className="text-sm font-semibold mb-3">{t("intelligenceIndex")}</p>
         <div className="w-full h-[210px] sm:h-[260px]">
           <figure className="h-full">
-            <Line data={data} options={options} aria-label={intelligenceChartTitle(t)} role="img" />
+            <Line data={data} options={options} aria-label={t("intelligenceIndex")} role="img" />
           </figure>
         </div>
       </CardContent>

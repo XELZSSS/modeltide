@@ -1,6 +1,6 @@
-import { lazy } from "react";
-import { Route, Routes } from "react-router";
-import { useSearchResetOnNavigate } from "@/client/hooks";
+import { lazy, useEffect } from "react";
+import { Route, Routes, useLocation } from "react-router";
+import { useSearchStore } from "@/client/stores";
 import { NotFound } from "@/client/components/shared";
 
 // Route-level lazy() imports split each view into its own chunk, loaded on first navigation.
@@ -24,6 +24,16 @@ const StatusView = lazy(() => import("./features/status/StatusView").then((m) =>
 const SourceDetailView = lazy(() =>
   import("./features/status/SourceDetailView").then((m) => ({ default: m.SourceDetailView })),
 );
+
+/** Clears the global search term whenever the URL path changes. */
+function useSearchResetOnNavigate() {
+  const location = useLocation();
+  const resetSearch = useSearchStore((s) => s.resetSearch);
+
+  useEffect(() => {
+    resetSearch();
+  }, [location.pathname, resetSearch]);
+}
 
 export function AppRoutes() {
   // Clear the global search term whenever the user navigates between routes.

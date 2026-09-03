@@ -1,7 +1,7 @@
 import { WARM_ORIGIN } from "@/shared/config";
 import { createApp } from "@/server/api";
 import { buildWarmUrls, routeDefs } from "@/server/routes";
-import { recordStatusSamples } from "@/server/sources/status-history/store";
+import { recordStatusSamples } from "@/server/sources/status-history";
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
 

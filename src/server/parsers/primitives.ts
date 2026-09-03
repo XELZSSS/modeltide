@@ -78,7 +78,6 @@ export const bool = (v: unknown): boolean | undefined => (typeof v === "boolean"
 export const obj = (v: unknown): Record<string, unknown> | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 
-export { isFiniteNumber, toStringOrNull } from "@/shared/utils";
 function numWhere(v: unknown, predicate: (n: number) => boolean): number | null {
   const n = num(v);
   return n != null && predicate(n) ? n : null;
@@ -90,4 +89,72 @@ export const numNonNegative = (v: unknown): number | null => numWhere(v, (n) => 
 export const numIntNonNegative = (v: unknown): number | null => {
   const n = numNonNegative(v);
   return n == null ? null : Math.trunc(n);
+};
+/* Shared parsing helpers: single home for the number/money/title patterns
+ * duplicated across arena + official-pricing + openrouter. */
+
+/** Leading decimal with optional commas ("1537±16" -> 1537, "27,189票" -> 27189). */
+export const leadingNumber = (v: string): number | null => {
+  const m = /^([\d.]+)/.exec(v.replace(/,/g, ""));
+  if (!m?.[1]) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Leading integer with optional commas, rounded ("27,189票" -> 27189). */
+export const leadingInt = (v: string): number | null => {
+  const m = /^([\d,]+)/.exec(v.trim());
+  if (!m?.[1]) return null;
+  const n = Number(m[1].replace(/,/g, ""));
+  return Number.isFinite(n) ? Math.round(n) : null;
+};
+
+/** First dollar amount in a string ("$4.00 / $12" -> 4); null when absent. */
+export const moneyAmount = (v: string): number | null => {
+  const m = /\$([\d.]+)/.exec(v.replace(/,/g, ""));
+  if (!m?.[1]) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Official pricing cell: "$4.00" -> 4, "-" / empty -> null, "Free" -> 0 (USD per 1M tokens). */
+export const priceCell = (v: string): number | null => {
+  const t = v.replace(/,/g, "").trim();
+  if (!t || t === "-") return null;
+  if (/^free$/i.test(t)) return 0;
+  return moneyAmount(t);
+};
+
+/** Count with optional K/M suffix ("256K" -> 256000, "1.5M" -> 1500000). */
+export const suffixedCount = (v: string): number | null => {
+  const m = /^([\d.]+)\s*([KM])?/i.exec(v.replace(/,/g, ""));
+  if (!m?.[1]) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n)) return null;
+  const suffix = (m[2] ?? "").toUpperCase();
+  if (suffix === "M") return Math.round(n * 1_000_000);
+  if (suffix === "K") return Math.round(n * 1_000);
+  return Math.round(n);
+};
+
+/** "deepseek" -> "Deepseek"; empty stays empty. */
+export const titleCase = (s: string): string => (s ? s[0]!.toUpperCase() + s.slice(1).toLowerCase() : s);
+
+/** "Claude Opus 4.5" -> "claude-opus-4-5". */
+export const slugifyName = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+/** "gpt-5 (2026-01)" -> "gpt-5". */
+export const stripParen = (name: string): string => name.replace(/\s*\(.*\)\s*$/, "").trim();
+
+/** "kimi-k2-thinking" -> "Kimi K2 Thinking" (keeps each token's inner casing). */
+export const humanizeId = (id: string, prefix = ""): string => {
+  const pretty = id
+    .split("-")
+    .map((part) => (part ? part[0]!.toUpperCase() + part.slice(1) : part))
+    .join(" ");
+  return prefix ? prefix + " " + pretty : pretty;
 };

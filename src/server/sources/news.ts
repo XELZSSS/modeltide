@@ -1,8 +1,8 @@
 import { rssConfig, NEWS_TTL_MS, UPSTREAM_TIMEOUT_MS, cacheKeys, ttlForCount } from "@/shared/config";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError } from "@/server/infra/errors";
-import { FEED_ACCEPT, parseFeed } from "@/server/parsers/rss";
+import { UpstreamError } from "@/server/infra";
+import { FEED_ACCEPT, parseFeed } from "@/server/parsers/feed";
 import { dedupeBy } from "@/shared/utils";
 
 const MAX_TOTAL = 50;
@@ -26,13 +26,17 @@ export const getNews = (ctx: AppContext, category: NewsCategory): Promise<NewsIt
       if (r.status === "fulfilled") allItems.push(...r.value);
       else failCount++;
     }
-    if (failCount === results.length && results.length > 0)
+    if (failCount === results.length)
       throw new UpstreamError(`All ${results.length} RSS feed(s) for "${category}" failed`);
-    const ts = (d: string): number => {
-      const t = Date.parse(d);
-      return Number.isFinite(t) ? t : 0;
-    };
-    allItems.sort((a, b) => ts(b.pubDate) - ts(a.pubDate));
-    const unique = dedupeBy(allItems, (i) => i.link);
+    // Parse each timestamp once: sort comparisons must not re-parse dates.
+    const dated = allItems.map((item) => {
+      const t = Date.parse(item.pubDate);
+      return { item, ts: Number.isFinite(t) ? t : 0 };
+    });
+    dated.sort((a, b) => b.ts - a.ts);
+    const unique = dedupeBy(
+      dated.map((d) => d.item),
+      (i) => i.link,
+    );
     return { data: unique.slice(0, MAX_TOTAL), ttl: ttlForCount(failCount, NEWS_TTL_MS) };
   });

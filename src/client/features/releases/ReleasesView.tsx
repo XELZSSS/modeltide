@@ -1,15 +1,16 @@
 import { useMemo } from "react";
-import { SearchableDataTable, DataTable, RightAlignedText, type DataTableColumn } from "@/client/components/data";
+import { ExternalLink } from "lucide-react";
+import { SearchableDataTable, RightAlignedText, type DataTableColumn } from "@/client/components/data";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
-import { formatDate, shortModelId } from "@/client/utils";
-import { useSuspenseOpenSourceReleases, useSuspenseArtificialRankings } from "@/client/api/queries";
+import { formatDate, safeHref, shortModelId } from "@/client/utils";
+import { useSuspenseClosedReleases, useSuspenseOpenSourceReleases } from "@/client/api/queries";
 import { SuspenseQuery } from "@/client/components/shared";
 import { SearchInput } from "@/client/search";
 import { TabbedPage } from "@/client/components/layout";
 import { useUrlTab } from "@/client/hooks";
 import { type TabItem } from "@/client/components/ui";
-import type { OpenSourceModelEntry, ArtificialAnalysisModel } from "@/shared/types";
+import type { ClosedReleaseEntry, OpenSourceModelEntry } from "@/shared/types";
 
 type FeedEntryType = "update" | "opensource";
 
@@ -19,12 +20,6 @@ interface FeedEntry {
   date: string;
   ts: number;
   type: FeedEntryType;
-  source: "huggingface" | "artificial";
-}
-
-interface DatedModel {
-  model: ArtificialAnalysisModel;
-  ts: number;
 }
 
 function parseTs(value: string): number | null {
@@ -47,7 +42,7 @@ function useReleaseFeedEntries(openSourceReleases: OpenSourceModelEntry[]): Feed
     const seen = new Map<string, FeedEntry>();
     const add = (id: string, name: string, ts: number, type: FeedEntry["type"]) => {
       const key = `${id}|${type}|${ts}`;
-      if (!seen.has(key)) seen.set(key, { id, name, date: toDateStr(ts), ts, type, source: "huggingface" });
+      if (!seen.has(key)) seen.set(key, { id, name, date: toDateStr(ts), ts, type });
     };
     for (const m of openSourceReleases) {
       const name = shortModelId(m.id);
@@ -62,20 +57,6 @@ function useReleaseFeedEntries(openSourceReleases: OpenSourceModelEntry[]): Feed
     }
     return Array.from(seen.values()).sort((a, b) => b.ts - a.ts);
   }, [openSourceReleases]);
-}
-
-function useReleaseDateRows(artificialRankings: ArtificialAnalysisModel[]): DatedModel[] {
-  return useMemo(
-    () =>
-      artificialRankings
-        .map((model) => {
-          const ts = model.release_date ? parseTs(`${model.release_date}T00:00:00Z`) : null;
-          return ts == null ? null : { model, ts };
-        })
-        .filter((x): x is DatedModel => x != null)
-        .sort((a, b) => b.ts - a.ts),
-    [artificialRankings],
-  );
 }
 
 const getFeedSearchFields = (e: FeedEntry) => [e.name, e.id];
@@ -132,32 +113,51 @@ function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
   );
 }
 
-function ReleaseDatesTab({ releaseRows }: { releaseRows: DatedModel[] }) {
+interface ClosedRow {
+  entry: ClosedReleaseEntry;
+  ts: number;
+}
+
+const getClosedRowId = (row: ClosedRow) => row.entry.id;
+const getClosedSearchFields = (row: ClosedRow) => [row.entry.model, row.entry.provider];
+
+function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
   const { t, lang } = useTranslation();
-  const releaseColumns = useMemo<DataTableColumn<DatedModel>[]>(
+
+  const rows = useMemo<ClosedRow[]>(
+    () =>
+      releases
+        .map((entry) => {
+          const ts = parseTs(entry.releaseDate);
+          return ts == null ? null : { entry, ts };
+        })
+        .filter((x): x is ClosedRow => x != null)
+        .sort((a, b) => b.ts - a.ts),
+    [releases],
+  );
+
+  const columns = useMemo<DataTableColumn<ClosedRow>[]>(
     () => [
       {
         id: "model",
         header: t("model"),
         cell: (row) => (
           <div className="min-w-0">
-            <p className="text-sm font-semibold truncate">{row.model.name}</p>
+            <p className="text-sm font-semibold truncate">{row.entry.model}</p>
             <div className="flex md:hidden mt-1 items-center gap-1.5">
-              {row.model.model_creators?.name && (
-                <span className="text-xs text-text-secondary">{row.model.model_creators.name}</span>
-              )}
+              <span className="text-xs text-text-secondary">{row.entry.provider}</span>
               <span className="text-xs text-text-tertiary">{formatDate(row.ts, lang)}</span>
             </div>
           </div>
         ),
       },
       {
-        id: "creator",
-        header: t("creator"),
+        id: "provider",
+        header: t("provider"),
         align: "right",
         width: "24%",
         hiddenMd: true,
-        cell: (row) => <RightAlignedText>{row.model.model_creators?.name || t("notAvailable")}</RightAlignedText>,
+        cell: (row) => <RightAlignedText>{row.entry.provider}</RightAlignedText>,
       },
       {
         id: "releaseDate",
@@ -171,31 +171,58 @@ function ReleaseDatesTab({ releaseRows }: { releaseRows: DatedModel[] }) {
     [t, lang],
   );
 
-  return <DataTable data={releaseRows} columns={releaseColumns} getRowId={(row) => `${row.model.id}|${row.ts}`} />;
+  const renderExpanded = (row: ClosedRow) => {
+    const href = safeHref(row.entry.link);
+    return (
+      <div className="flex flex-col gap-2 p-4 sm:p-5">
+        {row.entry.notes && <p className="text-sm text-text-secondary leading-relaxed">{row.entry.notes}</p>}
+        {href && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex items-center gap-1.5 text-sm text-accent w-fit"
+          >
+            {t("aaModelPage")}
+            <ExternalLink size={14} className="md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
+          </a>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <SearchableDataTable
+      data={rows}
+      columns={columns}
+      getRowId={getClosedRowId}
+      getSearchFields={getClosedSearchFields}
+      renderExpandedRow={renderExpanded}
+    />
+  );
 }
 
-const TAB_IDS = ["feed", "release-dates"] as const;
+const TAB_IDS = ["feed", "closed"] as const;
 
 function ReleasesContent() {
   const { t } = useTranslation();
   const [mode, setMode] = useUrlTab(TAB_IDS, TAB_IDS[0]);
   const { data: openSourceReleases } = useSuspenseOpenSourceReleases();
-  const { data: artificialRankings } = useSuspenseArtificialRankings();
+  const { data: closedReleases } = useSuspenseClosedReleases();
 
   const allEntries = useReleaseFeedEntries(openSourceReleases);
-  const releaseRows = useReleaseDateRows(artificialRankings);
 
   const tabs: TabItem[] = useMemo(
     () => [
       { id: "feed", label: t("releaseOpenSource") },
-      { id: "release-dates", label: t("releaseModel") },
+      { id: "closed", label: t("releaseClosedSource") },
     ],
     [t],
   );
 
   const countLabel =
-    mode === "feed" ? t("events", { count: allEntries.length }) : t("modelsTotal", { count: releaseRows.length });
-  const description = mode === "feed" ? t("releaseDataSource") : t("artificialSource");
+    mode === "feed" ? t("events", { count: allEntries.length }) : t("modelsTotal", { count: closedReleases.length });
+  const description = mode === "feed" ? t("releaseDataSource") : t("closedReleasesSource");
 
   return (
     <TabbedPage
@@ -207,12 +234,12 @@ function ReleasesContent() {
       activeTab={mode}
       onTabChange={setMode}
     >
-      {mode === "feed" ? <FeedTab allEntries={allEntries} /> : <ReleaseDatesTab releaseRows={releaseRows} />}
+      {mode === "feed" ? <FeedTab allEntries={allEntries} /> : <ClosedReleasesTab releases={closedReleases} />}
     </TabbedPage>
   );
 }
 
-/** Release activity view: an open-source event feed and a release-date table. */
+/** Release activity view: an open-source event feed and a closed-source frontier board. */
 export function ReleasesView() {
   return (
     <SuspenseQuery>

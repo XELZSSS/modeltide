@@ -1,6 +1,5 @@
-import { createContext, use, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, use, useCallback, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { useSettingsStore } from "@/client/stores";
-import { useIsMobile } from "@/client/hooks";
 import type { Lang, TFunction } from "@/shared/i18n";
 import { createT } from "@/shared/i18n";
 
@@ -60,6 +59,24 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 }
 
 const MOBILE_BREAKPOINT = 768;
+
+/** True while the viewport is narrower than `breakpoint`; tracks changes via matchMedia. */
+function useIsMobile(breakpoint = 768): boolean {
+  const query = `(max-width: ${breakpoint - 1}px)`;
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const mq = window.matchMedia(query);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    [query],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
+}
 
 interface DeviceContextValue {
   isMobile: boolean;

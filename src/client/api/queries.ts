@@ -1,12 +1,23 @@
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { API_DOMAINS, FIVE_MINUTES, OPEN_SOURCE_MODELS_DEFAULTS, THIRTY_MINUTES } from "@/shared/config";
+import {
+  API_DOMAINS,
+  FIVE_MINUTES,
+  OPEN_SOURCE_MODELS_DEFAULTS,
+  SLOW_TTL_MS,
+  STATIC_TTL_MS,
+  THIRTY_MINUTES,
+} from "@/shared/config";
 import type {
+  ArenaBoardPayload,
+  ArenaRankingsPayload,
   ArtificialAnalysisModel,
+  ClosedReleaseEntry,
   HallucinationRankingEntry,
   HomeDashboardData,
   NewsCategory,
   NewsItem,
+  OfficialPricingPayload,
   OpenSourceModelEntry,
   OpenRouterRankingsPayload,
   StatusHistoryPayload,
@@ -33,6 +44,10 @@ export const queryKeys = {
   ] as const,
   statusHistory: ["api", API_DOMAINS.statusHistory] as const,
   news: (category: string) => ["api", API_DOMAINS.news, category] as const,
+  arenaBoard: (category: string) => ["api", API_DOMAINS.arenaBoard, category] as const,
+  arenaRankings: ["api", API_DOMAINS.arenaRankings] as const,
+  officialPricing: ["api", API_DOMAINS.officialPricing] as const,
+  closedReleases: ["api", API_DOMAINS.closedReleases] as const,
 };
 
 interface ApiQueryOptions<T> {
@@ -66,7 +81,7 @@ export const qArtificial = createApiQuery<ArtificialAnalysisModel[]>(
 export const qOpenSourceReleases = createApiQuery<OpenSourceModelEntry[]>(
   queryKeys.openSourceReleases,
   apiPaths.openSourceReleases,
-  { ttl: THIRTY_MINUTES },
+  { ttl: SLOW_TTL_MS },
 );
 export const qOpenRouter = createApiQuery<OpenRouterRankingsPayload>(
   queryKeys.openRouterRankings,
@@ -79,7 +94,7 @@ export const qHomeDashboard = createApiQuery<HomeDashboardData>(queryKeys.homeDa
 export const qOpenSourceModels = createApiQuery<OpenSourceModelEntry[]>(
   queryKeys.openSourceModels,
   apiPaths.openSourceModels,
-  { ttl: THIRTY_MINUTES },
+  { ttl: SLOW_TTL_MS },
 );
 
 // One stable query per category (module-level cache) instead of rebuilding the
@@ -100,6 +115,31 @@ export const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.sta
   ttl: FIVE_MINUTES,
   refetchInterval: FIVE_MINUTES,
 });
+export const qArena = createApiQuery<ArenaRankingsPayload>(queryKeys.arenaRankings, apiPaths.arenaRankings, {
+  ttl: SLOW_TTL_MS,
+});
+export const qOfficialPricing = createApiQuery<OfficialPricingPayload>(
+  queryKeys.officialPricing,
+  apiPaths.officialPricing,
+  { ttl: STATIC_TTL_MS },
+);
+export const qClosedReleases = createApiQuery<ClosedReleaseEntry[]>(queryKeys.closedReleases, apiPaths.closedReleases, {
+  ttl: STATIC_TTL_MS,
+});
+
+// One stable query per board (module-level cache) instead of rebuilding the
+// query — and its closures — on every render.
+const boardQueries = new Map<string, ReturnType<typeof createApiQuery<ArenaBoardPayload>>>();
+export const qArenaBoard = (category: string) => {
+  let q = boardQueries.get(category);
+  if (!q) {
+    q = createApiQuery<ArenaBoardPayload>(queryKeys.arenaBoard(category), apiPaths.arenaBoard(category), {
+      ttl: SLOW_TTL_MS,
+    });
+    boardQueries.set(category, q);
+  }
+  return q;
+};
 export const useArtificialRankings = qArtificial.use;
 export const useSuspenseArtificialRankings = qArtificial.useSuspense;
 export const useSuspenseHomeDashboard = qHomeDashboard.useSuspense;
@@ -109,6 +149,10 @@ export const useSuspenseOpenSourceModels = qOpenSourceModels.useSuspense;
 export const useSuspenseOpenSourceReleases = qOpenSourceReleases.useSuspense;
 export const useSuspenseStatusHistory = qStatusHistory.useSuspense;
 export const useSuspenseNewsByCategory = (c: NewsCategory) => qNews(c).useSuspense();
+export const useSuspenseArenaRankings = qArena.useSuspense;
+export const useSuspenseOfficialPricing = qOfficialPricing.useSuspense;
+export const useSuspenseClosedReleases = qClosedReleases.useSuspense;
+export const useSuspenseArenaBoard = (category: string) => qArenaBoard(category).useSuspense();
 
 interface OpenSourceModelsQuery {
   data: OpenSourceModelEntry[];

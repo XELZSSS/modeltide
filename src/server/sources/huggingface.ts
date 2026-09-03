@@ -1,6 +1,6 @@
 import {
   upstreamConfig,
-  DEFAULT_TTL_MS,
+  SLOW_TTL_MS,
   PARTIAL_FAIL_TTL_MS,
   UPSTREAM_TIMEOUT_MS,
   cacheKeys,
@@ -9,10 +9,10 @@ import {
 } from "@/shared/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError } from "@/server/infra/errors";
+import { UpstreamError } from "@/server/infra";
 import { getOpenLicense } from "@/server/parsers/licenses";
-import { isoDate, numIntNonNegative, toStringOrNull } from "@/server/parsers/primitives";
-import { dedupeBy } from "@/shared/utils";
+import { isoDate, numIntNonNegative } from "@/server/parsers/primitives";
+import { dedupeBy, toStringOrNull } from "@/shared/utils";
 
 interface HFModel {
   id?: string;
@@ -85,7 +85,7 @@ function normalizeHfModels(items: HFModel[], filterFn?: (m: HFModel) => boolean)
 }
 
 export const getModels = (ctx: AppContext, p: ModelQuery): Promise<OpenSourceModelEntry[]> =>
-  ctx.cache.withTtl(cacheKeys.openSourceModels(p.sort, p.direction, p.limit), DEFAULT_TTL_MS, async () => {
+  ctx.cache.withTtl(cacheKeys.openSourceModels(p.sort, p.direction, p.limit), SLOW_TTL_MS, async () => {
     // Snap to the normalized bucket so the fetched payload matches the cache key,
     // then slice back to the requested limit so ?limit=101 doesn't return 500 rows.
     const limit = normalizeModelLimit(p.limit);
@@ -96,16 +96,19 @@ export const getModels = (ctx: AppContext, p: ModelQuery): Promise<OpenSourceMod
     );
     // Empty result means transient upstream failure — cache briefly to avoid
     // poisoning the key for 30m (mirrors news/openrouter partial-TTL policy).
-    return { data: mapped, ttl: mapped.length === 0 ? PARTIAL_FAIL_TTL_MS : DEFAULT_TTL_MS };
+    return { data: mapped, ttl: mapped.length === 0 ? PARTIAL_FAIL_TTL_MS : SLOW_TTL_MS };
   });
 
-// mapModel only keeps entries whose createdAt parses (isoDate), so Date.parse below is always finite.
+// Filter on the mapped rows (HF ids are unique per response, so map-then-filter
+// matches filter-then-map) to pay one getOpenLicense + isoDate pass per item.
 export const getReleases = (ctx: AppContext): Promise<OpenSourceModelEntry[]> =>
-  ctx.cache.withTtl(cacheKeys.openSourceReleases, DEFAULT_TTL_MS, async () => {
+  ctx.cache.withTtl(cacheKeys.openSourceReleases, SLOW_TTL_MS, async () => {
     const items = await fetchHFModels(ctx, "createdAt", "-1", 500);
-    const mapped = normalizeHfModels(
-      items,
-      (m) => Array.isArray(m.tags) && getOpenLicense(m.tags) !== null && isoDate(m.createdAt) !== null,
+    const mapped = dedupeBy(
+      items
+        .map(mapModel)
+        .filter((m): m is OpenSourceModelEntry => m !== null && m.license !== null && m.createdAt !== null),
+      (m) => m.id,
     );
     return { data: mapped.sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? "")) };
   });

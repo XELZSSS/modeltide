@@ -1,4 +1,4 @@
-import { UpstreamError } from "@/server/infra/errors";
+import { UpstreamError } from "@/server/infra";
 
 export const MAX_RSC_BYTES = 5 * 1024 * 1024;
 /** Cap traversed JSON nodes so a malicious 5MB payload cannot burn Worker CPU. */
@@ -11,8 +11,9 @@ function* traverse(root: unknown): Generator<unknown> {
   const seen = new Set<object>();
   const queue: unknown[] = [root];
   let visited = 0;
-  while (queue.length) {
-    const cur = queue.shift()!;
+  let head = 0;
+  while (head < queue.length) {
+    const cur = queue[head++]!;
     if (!cur || typeof cur !== "object") continue;
     if (seen.has(cur as object)) continue;
     seen.add(cur as object);

@@ -1,8 +1,8 @@
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq, normalizePercent } from "@/shared/utils";
-import { formatBoolean, formatScore, formatPercent, formatSpeed } from "@/client/utils/format";
-import { getOutputSpeed } from "@/client/utils/model";
+import { formatBoolean, formatScore, formatPercent, formatSpeed } from "@/client/utils";
+import { getOutputSpeed } from "@/client/utils";
 
 /** A single comparable metric row: label plus optional numeric accessors and best/worst direction. */
 export interface CompareRow<T> {
@@ -104,6 +104,15 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]) 
     });
     return row;
   });
+}
+
+/** Price comparison rows for prompt/completion/cache-hit rates; lower is always better. */
+export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
+  return [
+    { label: t("promptPrice"), getNumeric: (m) => m.pricing?.input, bestIs: "min" },
+    { label: t("completionPrice"), getNumeric: (m) => m.pricing?.output, bestIs: "min" },
+    { label: t("cacheHitPrice"), getNumeric: (m) => m.pricing?.cache_hit, bestIs: "min" },
+  ];
 }
 
 export function buildCompareRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
