@@ -26,8 +26,8 @@ export async function getHomeDashboard(ctx: AppContext): Promise<HomeDashboardDa
       );
       throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`);
     }
-    // Partial degradation shortens TTL so the next tick retries sooner.
-    // NOTE: text-to-image resolves (never rejects) to an empty payload on failure, so test emptiness and not just null. Otherwise one transient blip poisons the combined payload for the full TTL.
+    // Partial degradation shortens TTL. Text-to-image resolves (never rejects)
+    // to empty on failure, so test emptiness, not just null.
     const partial = !orRankings || !opensource || isEmptyT2i(textToImage) || textToImage?.partial === true;
     return { data: { orRankings, textToImage, opensource }, ttl: partial ? PARTIAL_FAIL_TTL_MS : DEFAULT_TTL_MS };
   });

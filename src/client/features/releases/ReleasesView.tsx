@@ -28,8 +28,7 @@ function parseTs(value: string): number | null {
 }
 
 function toDateStr(ts: number): string {
-  // Local calendar day, consistent with formatDate() below (which renders local).
-  // Column headers say "date" without a zone; UTC slicing shifted UTC+8 mornings back a day.
+  // Local calendar day, consistent with formatDate().
   const d = new Date(ts);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -79,9 +78,9 @@ function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
             <p className="text-sm font-medium truncate" title={row.name}>
               {row.name}
             </p>
-            <div className="flex md:hidden mt-1 items-center gap-1.5">
-              <span className="text-xs font-semibold text-text-secondary">{t(TYPE_LABEL[row.type])}</span>
-              <span className="text-xs text-text-tertiary">{formatDate(row.ts, lang)}</span>
+            <div className="flex md:hidden mt-1.5 items-center gap-2">
+              <span className="text-xs font-medium text-text-secondary">{t(TYPE_LABEL[row.type])}</span>
+              <span className="ui-meta">{formatDate(row.ts, lang)}</span>
             </div>
           </div>
         ),
@@ -90,9 +89,9 @@ function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
         id: "date",
         header: t("releaseDate"),
         align: "right",
-        width: 100,
+        width: 120,
         hiddenMd: true,
-        cell: (row) => <span className="text-xs">{formatDate(row.ts, lang)}</span>,
+        cell: (row) => <span className="ui-mono-value font-normal">{formatDate(row.ts, lang)}</span>,
       },
       {
         id: "type",
@@ -100,7 +99,7 @@ function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
         align: "right",
         width: 140,
         hiddenMd: true,
-        cell: (row) => <span className="text-xs font-semibold text-text-secondary">{t(TYPE_LABEL[row.type])}</span>,
+        cell: (row) => <span className="text-xs font-medium text-text-secondary">{t(TYPE_LABEL[row.type])}</span>,
       },
     ];
   }, [t, lang]);
@@ -148,9 +147,9 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
             <p className="text-sm font-semibold truncate" title={row.entry.model}>
               {row.entry.model}
             </p>
-            <div className="flex md:hidden mt-1 items-center gap-1.5">
+            <div className="flex md:hidden mt-1.5 items-center gap-2">
               <span className="text-xs text-text-secondary">{row.entry.provider}</span>
-              <span className="text-xs text-text-tertiary">{formatDate(row.ts, lang)}</span>
+              <span className="ui-meta">{formatDate(row.ts, lang)}</span>
             </div>
           </div>
         ),
@@ -161,7 +160,7 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
         align: "right",
         width: "24%",
         hiddenMd: true,
-        cell: (row) => <RightAlignedText>{row.entry.provider}</RightAlignedText>,
+        cell: (row) => <RightAlignedText className="text-sm">{row.entry.provider}</RightAlignedText>,
       },
       {
         id: "releaseDate",
@@ -169,7 +168,7 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
         align: "right",
         width: "18%",
         hiddenMd: true,
-        cell: (row) => <span className="text-sm">{formatDate(row.ts, lang)}</span>,
+        cell: (row) => <span className="ui-mono-value font-normal">{formatDate(row.ts, lang)}</span>,
       },
     ],
     [t, lang],
@@ -178,8 +177,8 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
   const renderExpanded = (row: ClosedRow) => {
     const href = safeHref(row.entry.link);
     return (
-      <div className="flex flex-col gap-2 p-4 sm:p-5">
-        {row.entry.notes && <p className="text-sm text-text-secondary leading-relaxed">{row.entry.notes}</p>}
+      <div className="flex flex-col gap-3 p-4 sm:p-5">
+        {row.entry.notes && <p className="ui-body-secondary leading-relaxed">{row.entry.notes}</p>}
         {href && (
           <a
             href={href}
@@ -187,7 +186,7 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
             rel="noopener noreferrer"
             className="group inline-flex items-center gap-1.5 text-sm text-accent w-fit"
           >
-            {t("aaModelPage")}
+            {t("benchmarkListModelPage")}
             <ExternalLink size={14} className="md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
           </a>
         )}
@@ -243,7 +242,7 @@ function ReleasesContent() {
   );
 }
 
-/** Release activity view: an open-source event feed and a closed-source frontier board. */
+/** Open-source event feed + closed-source frontier board. */
 export function ReleasesView() {
   return (
     <SuspenseQuery>

@@ -1,11 +1,6 @@
-// Isomorphic utilities shared between the React app and the Cloudflare Worker.
-// App-only helpers (charts, cn, format, model) live in `src/client/utils`.
+// Shared by the React app and the Cloudflare Worker.
 
-/**
- * Keeps the first occurrence of each key ("first wins"); items with an empty key
- * are always kept. Callers relying on priority (e.g. highest-elo) must pre-sort
- * so the winner comes first.
- */
+/** Keeps the first occurrence of each key; empty keys are always kept. */
 export function dedupeBy<T>(items: T[], keyFn: (item: T) => string | null | undefined): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -26,13 +21,8 @@ export function toStringOrNull(v: unknown): string | null {
 }
 
 /**
- * Percent-like benchmark values arrive in mixed scales (0-1 fractions from some
- * benchmarks, 0-100 percentage points from others); fractions are scaled up so
- * everything renders on one 0-100 scale, then clamped into the valid range.
- *
- * Scale ambiguity: a literal `1` always becomes `100` (it reads as "100%"), so a
- * source whose unit is "1%" must pre-scale. Non-finite input (NaN/Infinity)
- * returns null instead of leaking into formatPercent ("NaN%").
+ * Benchmark values arrive in mixed scales (0-1 fractions vs 0-100 points);
+ * fractions are scaled up, then clamped. Non-finite input returns null.
  */
 export function normalizePercent(value: number | null | undefined): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
@@ -40,16 +30,13 @@ export function normalizePercent(value: number | null | undefined): number | nul
   return Math.max(0, Math.min(100, percent));
 }
 
-/** Approximate equality using a relative epsilon, so scale doesn't matter. */
+/** Approximate equality with a relative epsilon. */
 export function approxEq(a: number, b: number, eps = 1e-9): boolean {
   if (a === b) return true;
   return Math.abs(a - b) < eps * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
-/** Effort/variant qualifier tokens stripped when building loose cross-source match keys.
- * NOTE: bare "max" is intentionally NOT stripped — it collides real model names
- * ("Model Max" vs "Model"). Parenthesized "(Max Effort)" labels are already removed
- * by the paren regex in normalizeModelKey, so effort matching still works. */
+/** Qualifier tokens stripped when building loose cross-source match keys. */
 const QUALIFIER_TOKENS = new Set([
   "adaptive",
   "reasoning",
@@ -64,10 +51,9 @@ const QUALIFIER_TOKENS = new Set([
 ]);
 
 /**
- * Loose match key for cross-source model matching: drops creator prefixes ("Org:" /
- * "org/"), parenthesized variant labels, effort qualifier tokens and all separators,
- * so "DeepSeek V4 Pro 0813 (Reasoning, Max Effort)" and "deepseek/deepseek-v4-pro-0813"
- * collapse to the same key. Both sides must normalize identically for a match.
+ * Loose match key for cross-source model matching: drops creator prefixes,
+ * parenthesized labels, qualifier tokens and separators. Both sides must
+ * normalize identically for a match.
  */
 export function normalizeModelKey(raw: string): string {
   const lowered = raw.toLowerCase().replace(/\([^)]*\)/g, " ");
@@ -78,12 +64,7 @@ export function normalizeModelKey(raw: string): string {
     .join("");
 }
 
-/**
- * Term match over pre-lowercased field values. Scores: 4 = exact, 3 = prefix,
- * 2 = substring, 0 = no match. Normalizes the term (lower + trim) internally;
- * callers pass fields through the same normalization. An empty term never
- * matches ("" is a prefix of everything, so guard explicitly).
- */
+/** Term match over pre-lowercased fields: 4 = exact, 3 = prefix, 2 = substring. */
 export function matchTerm(fields: string[], term: string): { matched: boolean; score: number } {
   const needle = term.toLowerCase().trim();
   if (!needle) return { matched: false, score: 0 };
@@ -91,4 +72,16 @@ export function matchTerm(fields: string[], term: string): { matched: boolean; s
   let best = 0;
   for (const f of fields) best = Math.max(best, f.startsWith(needle) ? 3 : f.includes(needle) ? 2 : 0);
   return { matched: best > 0, score: best };
+}
+
+/** Blended price: 7:2:1 weighted mix of cached-input / input / output ($/1M). */
+export function computeBlendPrice(
+  p?: { input?: number | null; output?: number | null; cache_hit?: number | null; cacheHit?: number | null } | null,
+): number | null {
+  if (!p) return null;
+  const input = isFiniteNumber(p.input) ? p.input : null;
+  const output = isFiniteNumber(p.output) ? p.output : null;
+  if (input == null || output == null) return null;
+  const cache = isFiniteNumber(p.cacheHit) ? p.cacheHit : isFiniteNumber(p.cache_hit) ? p.cache_hit : input;
+  return (7 * cache + 2 * input + output) / 10;
 }

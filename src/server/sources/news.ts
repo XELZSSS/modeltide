@@ -4,12 +4,12 @@ import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra";
 import { FEED_ACCEPT, parseFeed } from "@/server/parsers/feed";
 import { dedupeBy } from "@/shared/utils";
+import { isSuitableNewsItem } from "@/server/sources/data-filter";
 
 const MAX_TOTAL = 50;
 
 export const getNews = (ctx: AppContext, category: NewsCategory): Promise<NewsItem[]> =>
   ctx.cache.withTtl(cacheKeys.news(category), NEWS_TTL_MS, async () => {
-    // Route schemas already restrict `category` to NEWS_CATEGORIES; no re-validation here.
     const urls = rssConfig[category];
     if (!urls || urls.length === 0) throw new UpstreamError(`No RSS feeds configured for "${category}"`);
     const results = await Promise.allSettled(
@@ -28,14 +28,15 @@ export const getNews = (ctx: AppContext, category: NewsCategory): Promise<NewsIt
     }
     if (failCount === results.length)
       throw new UpstreamError(`All ${results.length} RSS feed(s) for "${category}" failed`);
-    // Parse each timestamp once: sort comparisons must not re-parse dates.
     const dated = allItems.map((item) => {
       const t = Date.parse(item.pubDate);
       return { item, ts: Number.isFinite(t) ? t : 0 };
     });
     dated.sort((a, b) => b.ts - a.ts);
+    // Defense-in-depth: re-apply the unified news gate (feed already filters).
+    const suitable = dated.map((d) => d.item).filter((i) => isSuitableNewsItem(i.title, i.link));
     const unique = dedupeBy(
-      dated.map((d) => d.item),
+      suitable,
       (i) => i.link,
     );
     return { data: unique.slice(0, MAX_TOTAL), ttl: ttlForCount(failCount, NEWS_TTL_MS) };

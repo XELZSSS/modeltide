@@ -1,6 +1,6 @@
 import { USER_AGENT, PROBE_TIMEOUT_MS, ONE_DAY } from "@/shared/config";
 
-/** Base class for errors that map to a specific HTTP status in the API error handler. */
+/** Base class for errors mapped to an HTTP status by the API error handler. */
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -17,7 +17,7 @@ export class ValidationError extends ApiError {
   }
 }
 
-/** A third-party data source failed (network, bad status, or unparseable payload) — surfaced as 502 instead of a generic 500. */
+/** A third-party source failed — surfaced as 502. */
 export class UpstreamError extends ApiError {
   constructor(msg: string) {
     super(msg, 502);
@@ -25,7 +25,7 @@ export class UpstreamError extends ApiError {
   }
 }
 
-/** The client exceeded a route's rate limit — surfaced as 429. */
+/** Rate limit exceeded — surfaced as 429. */
 export class RateLimitError extends ApiError {
   constructor(msg: string = "Too many requests, please retry later") {
     super(msg, 429);
@@ -75,13 +75,10 @@ export function validateQuery<S extends QuerySchema>(
 ): ValidatedQuery<S> {
   const out: Record<string, unknown> = {};
   for (const [name, spec] of Object.entries(schema)) {
-    // Trim before the empty check so whitespace-only params ("%20") fall back to
-    // the default instead of reaching Number("") === 0 below.
     const rawVal = raw[name];
     const rawStr = Array.isArray(rawVal) ? (rawVal[0] ?? "") : (rawVal ?? "");
     let v: string | undefined = rawStr.trim();
     if (!v) v = spec.default;
-    // Params without a default are optional: omit them so callers see an absent key.
     if (v === undefined) continue;
     // Guard against oversized values (potential DoS).
     if (v.length > 500) throw new ValidationError(`Query param "${name}" is too long`);
@@ -111,7 +108,7 @@ export interface ProbeResult {
   error: string | null;
 }
 
-/** Guard against OOM from unexpectedly large upstream payloads (RSS/RSC already cap at 2M/5M). */
+/** Cap against unexpectedly large upstream payloads. */
 const MAX_JSON_BYTES = 5 * 1024 * 1024;
 
 function parseRetryAfterMs(res: Response): number | null {
@@ -153,10 +150,8 @@ function assertBodySize(url: string, body: string, maxBytes: number): void {
 }
 
 /**
- * Read a response body as text, converting transport-level failures
- * ("Network connection lost" mid-body on large RSC payloads, etc.) into
- * UpstreamError so the API maps them to 502 + stale-cache fallback
- * instead of the generic 500 unhandled path.
+ * Read a response body as text, converting transport failures into
+ * UpstreamError (502 + stale-cache fallback instead of generic 500).
  */
 async function readBodyText(res: Response, url: string): Promise<string> {
   try {
@@ -202,13 +197,11 @@ export class HttpClient {
         continue;
       }
       if (res.ok) return res;
-      // Release the unread body so the Workers runtime does not hold the subrequest open across retries
       void res.body?.cancel()?.catch(() => {});
       const isClientError = res.status >= 400 && res.status < 500 && res.status !== 429;
       if (isClientError) throw new UpstreamError(`HTTP ${res.status} for ${url}`);
       if (attempt === retries) throw new UpstreamError(`HTTP ${res.status} for ${url}`);
-      // Gentler exponential backoff with jitter; honor Retry-After on 429 so we
-      // don't hammer rate-limited upstreams with 100ms retries.
+      // Exponential backoff with jitter; honor Retry-After on 429.
       const retryAfter = res.status === 429 ? parseRetryAfterMs(res) : null;
       const delay = retryAfter ?? 500 * 2 ** attempt + Math.random() * 250;
       await new Promise((r) => setTimeout(r, delay));
@@ -218,7 +211,6 @@ export class HttpClient {
 
   async json<T>(url: string, init?: FetchOptions): Promise<T> {
     const res = await this.doFetch(url, init ?? {}, "application/json");
-    // Header pre-check first: refuse oversized bodies without reading them into memory.
     assertContentLength(url, res.headers.get("content-length"), MAX_JSON_BYTES);
     const body = await readBodyText(res, url);
     assertBodySize(url, body, MAX_JSON_BYTES);
@@ -231,7 +223,6 @@ export class HttpClient {
 
   async text(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
     const res = await this.doFetch(url, init ?? {}, "text/html,application/xhtml+xml,*/*");
-    // Header pre-check first: refuse oversized bodies without reading them into memory.
     assertContentLength(url, res.headers.get("content-length"), maxBytes);
     const body = await readBodyText(res, url);
     assertBodySize(url, body, maxBytes);
@@ -259,10 +250,9 @@ export class HttpClient {
 }
 
 /**
- * KV entries get a hard expirationTtl of ttl + STALE_WINDOW_MS and carry a soft
- * expiry timestamp inside the payload. A soft-expired entry is refreshed on read;
- * if the upstream refresh fails, the stale payload is served instead of failing
- * (mirrors the CDN stale-if-error=ONE_DAY policy in routes/registry.ts).
+ * KV entries carry a soft expiry inside the payload and a hard expirationTtl
+ * of ttl + stale window. Soft-expired entries refresh on read; if the refresh
+ * fails, the stale payload is served instead of failing.
  */
 const STALE_WINDOW_MS = ONE_DAY;
 
@@ -275,17 +265,12 @@ function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
   return typeof v === "object" && v !== null && "d" in v && "e" in v && typeof (v as StaleEnvelope<T>).e === "number";
 }
 
-// Module-level inflight map: CacheService is constructed per-request
-// (see buildContext), so an instance field cannot dedupe concurrent
-// requests. A shared map merges thundering-herd refreshes within one isolate.
+// Module-level inflight map: CacheService is per-request, so a shared map
+// dedupes concurrent refreshes within one isolate.
 const globalInflight = new Map<string, Promise<unknown>>();
 
-// In-isolate L1 cache: without KV every request would fan out to upstreams
-// (AA = 4 fetches, news = 6, official-pricing = 8…), so any traffic spike turns
-// into upstream timeouts and 504s. The L1 honors the same soft TTLs, costs no
-// KV writes, and absorbs repeated KV reads when KV is configured.
-// Bounded by construction: keys are the fixed route key set (~50 with the
-// sort/limit buckets); values are shared references to already-built payloads.
+// In-isolate L1 cache: absorbs repeated reads and keeps the no-KV deploy from
+// fanning out to upstreams on every request. Bounded by construction (~50 keys).
 const memoryCache = new Map<string, StaleEnvelope<unknown>>();
 const MEMORY_MAX_KEYS = 200;
 
@@ -315,11 +300,8 @@ function memorySet(vk: string, data: unknown, ttl: number): void {
 }
 
 /**
- * Deterministic -10%..0 TTL jitter by key: without it every key born in the same
- * warmup tick expires in the same tick, so the slow/static tiers would re-burst
- * together and risk overrunning the cron invocation. Hash-based (not random)
- * so every isolate agrees on each key's schedule. Shorten-only so a jittered
- * TTL never outlives its tier's retry bound (e.g. partial-fail stays ≤ 5m).
+ * Deterministic -10%..0 TTL jitter by key, so keys born in the same tick don't
+ * all expire in the same tick. Hash-based so every isolate agrees.
  */
 function jitteredTtl(vk: string, ttl: number): number {
   let h = 2166136261;
@@ -331,10 +313,7 @@ function jitteredTtl(vk: string, ttl: number): number {
   return Math.max(60_000, Math.round(ttl * factor));
 }
 
-/**
- * Test-only reset: the module-level L1 + inflight maps outlive the per-test KV
- * reset in workerd, so suites that assert refetch counts must clear them.
- */
+/** Test-only reset for the module-level L1 + inflight maps. */
 export function resetModuleCachesForTests(): void {
   memoryCache.clear();
   globalInflight.clear();
@@ -352,16 +331,11 @@ export class CacheService {
 
   private async get<T>(k: string): Promise<T | undefined> {
     if (!this.kv) return undefined;
-    // NOTE: edge cacheTtl=30s may serve a pre-refresh envelope for up to 30s
-    // after a refresh, effectively extending the soft TTL by 30s. Acceptable
-    // for dashboard data; keeps KV reads cheap.
     const raw = await this.kv.get(k, { type: "text", cacheTtl: 30 });
     if (!raw) return undefined;
     try {
       return JSON.parse(raw) as T;
     } catch {
-      // Corrupted entry (truncated write, version residue): treat as miss so the
-      // key can self-heal on the next refresh instead of failing every request.
       return undefined;
     }
   }
@@ -381,11 +355,9 @@ export class CacheService {
 
   async withTtl<T>(k: string, ttl: number, fn: () => Promise<{ data: T; ttl?: number }>): Promise<T> {
     const vk = this.vk(k);
-    // L1 first: fresh memory hits skip KV and upstream entirely.
     const mem = memoryGet<T>(vk);
     if (mem && mem.e > Date.now()) return mem.d;
-    // No KV: same stale-fallback semantics against the L1 instead of refetching
-    // upstream on every request (the default deploy has no KV binding).
+    // No KV: same stale-fallback semantics against the L1.
     if (!this.kv) {
       if (!mem) return this.refresh(vk, ttl, fn);
       try {
@@ -396,7 +368,6 @@ export class CacheService {
     }
     const hit = await this.get<StaleEnvelope<T>>(vk);
     if (hit !== undefined) {
-      if (!isEnvelope<T>(hit)) return hit; // legacy unwrapped entry, still within its hard TTL
       if (hit.e > Date.now()) return hit.d;
       try {
         return await this.refresh(vk, ttl, fn);
@@ -408,8 +379,7 @@ export class CacheService {
   }
 
   private async refresh<T>(vk: string, ttl: number, fn: () => Promise<{ data: T; ttl?: number }>): Promise<T> {
-    // Dedupes concurrent refreshes of the same key within this isolate
-    // (shared map — see globalInflight above, not per-request state).
+    // Dedupes concurrent refreshes of the same key within this isolate.
     const existing = globalInflight.get(vk) as Promise<T> | undefined;
     if (existing) return existing;
     const p = (async () => {

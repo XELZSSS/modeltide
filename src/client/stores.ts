@@ -6,13 +6,12 @@ import type { Lang } from "@/shared/i18n";
 import { STORAGE_KEYS } from "@/shared/config";
 import { modelId } from "@/client/utils";
 
-// ---- client/stores/storage.ts ----
+// ---- storage ----
 function guarded(storage: () => Storage): StateStorage {
   const get = (): Storage | null => {
     try {
       return typeof window === "undefined" ? null : storage();
     } catch {
-      // Private mode / disabled storage: accessing the property itself throws.
       return null;
     }
   };
@@ -28,7 +27,7 @@ function guarded(storage: () => Storage): StateStorage {
       try {
         get()?.setItem(name, value);
       } catch {
-        // Quota exceeded or writes blocked: fail silently so the store still works in memory.
+        // Quota exceeded or writes blocked: keep working in memory.
       }
     },
     removeItem: (name) => {
@@ -49,9 +48,8 @@ export function safeSessionStorage(): StateStorage {
   return guarded(() => sessionStorage);
 }
 
-// ---- client/stores/search.ts ----
-// Holds the global search term used to filter list views; resetSearch is a convenience
-// wrapper that returns the term to its initial empty state.
+// ---- search ----
+// Global search term used to filter list views.
 interface SearchState {
   searchTerm: string;
   setSearchTerm: (term: string) => void;
@@ -64,7 +62,7 @@ export const useSearchStore = create<SearchState>((set) => ({
   resetSearch: () => set({ searchTerm: "" }),
 }));
 
-// ---- client/stores/settings.ts ----
+// ---- settings ----
 type LangToggle = (s: Lang) => Lang;
 const toggleLang: LangToggle = (lang) => (lang === "en" ? "zh" : "en");
 type ThemeToggle = (s: ThemeMode) => ThemeMode;
@@ -80,17 +78,15 @@ interface SettingsState {
 }
 
 /**
- * Single persisted settings store (theme + language). Zustand selectors keep
- * consumers render-isolated: a lang change does not re-render theme-only
- * subscribers.
+ * Persisted settings (theme + language). Selectors keep consumers isolated:
+ * a lang change does not re-render theme-only subscribers.
  */
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      // Default follows the OS color scheme; the persisted user choice overrides it later.
+      // Defaults follow the OS color scheme and Chinese; persisted choices win later.
       themeMode:
         typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
-      // Default to Chinese; the persisted choice wins on next load.
       lang: "zh",
       toggleTheme: () => set((s) => ({ themeMode: toggleThemeMode(s.themeMode) })),
       toggleLang: () => set((s) => ({ lang: toggleLang(s.lang) })),
@@ -103,8 +99,7 @@ export const useSettingsStore = create<SettingsState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn("[settings] rehydrate failed", error);
       },
-      // Merge strategy keeps defaults for keys absent from older persisted blobs,
-      // and drops unknown/corrupt values (e.g. {themeMode:"blue", lang:"fr"}).
+      // Keeps defaults for absent keys; drops unknown/corrupt values.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SettingsState>;
         return {
@@ -118,9 +113,7 @@ export const useSettingsStore = create<SettingsState>()(
 );
 
 /**
- * Cross-tab settings sync: when another tab persists new settings, the
- * `storage` event fires here and we adopt the foreign state. Listener is
- * mounted once (AppShell); current values are read via getState() inside.
+ * Cross-tab settings sync via the `storage` event. Mounted once (AppShell).
  */
 export function useThemeStorageSync(): void {
   useEffect(() => {
@@ -149,7 +142,7 @@ export function useThemeStorageSync(): void {
   }, []);
 }
 
-// ---- client/stores/compare.ts ----
+// ---- compare ----
 // The compare view is limited to two models side by side.
 const MAX_COMPARE = 2;
 
@@ -193,7 +186,7 @@ export const useCompareStore = create<CompareState>()(
     }),
     {
       name: STORAGE_KEYS.compare,
-      // sessionStorage keeps the selection per-tab instead of persisting it across sessions.
+      // sessionStorage keeps the selection per-tab.
       storage: createJSONStorage(safeSessionStorage),
       partialize: (state) => ({ compareIds: state.compareIds }),
       onRehydrateStorage: () => (_state, error) => {
@@ -203,10 +196,7 @@ export const useCompareStore = create<CompareState>()(
   ),
 );
 
-/**
- * Resolves the compared model ids from the compare store into full model objects
- * from the given Artificial Analysis rankings, preserving the store's order.
- */
+/** Resolve compared ids to full models, preserving store order. */
 export function useCompareModels(rankings: ArtificialAnalysisModel[]): ArtificialAnalysisModel[] {
   const compareIds = useCompareStore((s) => s.compareIds);
   const rankingMap = useMemo(() => {

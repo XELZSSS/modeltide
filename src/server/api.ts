@@ -11,7 +11,6 @@ import { ApiError } from "@/server/infra";
 import { ONE_DAY, WARM_ORIGIN } from "@/shared/config";
 
 // Workers kills requests at ~30s wall-clock, so fail fast with 504 before that.
-// (AA chains index + parallel enrichment fetches; upstream timeouts keep it under this.)
 const ROUTE_TIMEOUT_MS = 25_000;
 const WARM_HOST = new URL(WARM_ORIGIN).host;
 
@@ -20,21 +19,18 @@ function clampStatus(status: number): ContentfulStatusCode {
   return (status >= 100 && status < 600 ? status : 500) as ContentfulStatusCode;
 }
 
-/** Build the Hono API app: logging/timing/timeout/CORS middleware plus the declarative route table. */
+/** Build the Hono API app with logging/timing/timeout/CORS plus the route table. */
 export function createApp(routeDefs: readonly RouteDef[]): Hono {
   const app = new Hono();
 
-  // Cron warmup traffic (internal x-warmup header) is pure noise at a 30-minute
-  // cadence and would eat the observability log quota — only real client requests
-  // are logged. The host check keeps external clients from forging the header
-  // to go unlogged: internal warmup calls always target WARM_ORIGIN.
+  // Skip logging for internal cron warmup (noise); the host check keeps
+  // external clients from forging the header to go unlogged.
   const httpLogger = logger();
   app.use("/api/*", async (c, next) => {
     if (c.req.header("x-warmup") === "1" && new URL(c.req.url).host === WARM_HOST) return next();
     return httpLogger(c, next);
   });
-  // CORS first so OPTIONS preflights skip timeout/logging guards. Same-Worker
-  // static hosting doesn't need CORS; kept permissive for GET-only public API.
+  // Same-Worker hosting needs no CORS; kept permissive for the GET-only public API.
   app.use(
     "/api/*",
     cors({
@@ -45,8 +41,7 @@ export function createApp(routeDefs: readonly RouteDef[]): Hono {
     }),
   );
   app.use("*", timing());
-  // Cheap global DoS guard: route schemas only validate known params, so cap
-  // total URL length and unknown-param count before Hono parses them.
+  // Cheap DoS guard: cap URL length and param count before Hono parses them.
   app.use("/api/*", async (c, next) => {
     const url = new URL(c.req.url);
     if (url.toString().length > 2048 || url.pathname.length > 512 || [...url.searchParams.keys()].length > 20) {
@@ -55,7 +50,6 @@ export function createApp(routeDefs: readonly RouteDef[]): Hono {
     await next();
   });
   app.use("/api/*", timeout(ROUTE_TIMEOUT_MS));
-  // Security headers for API responses (static assets get theirs from _headers).
   app.use("/api/*", async (c, next) => {
     await next();
     c.header("X-Content-Type-Options", "nosniff");
@@ -66,10 +60,7 @@ export function createApp(routeDefs: readonly RouteDef[]): Hono {
   registerRoutes(app, routeDefs);
 
   app.onError((err, c) => {
-    // Map known API errors to their HTTP status (400 validation, 502 upstream);
-    // anything else is treated as an unexpected 500.
-    // Upstream details (URLs, payload shapes) stay server-side in logs — clients
-    // get a generic message to avoid leaking internal topology.
+    // Known API errors map to their status; upstream details stay server-side.
     if (err instanceof ApiError) {
       const status = clampStatus(err.status);
       if (status === 502) {

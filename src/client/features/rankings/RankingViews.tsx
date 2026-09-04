@@ -35,14 +35,14 @@ function buildOpenSourceColumns(t: ReturnType<typeof useTranslation>["t"]): Data
       id: "downloads",
       header: t("downloads"),
       align: "right",
-      cell: (item) => <span className="text-sm font-semibold">{formatShortNumber(item.downloads)}</span>,
+      cell: (item) => <span className="ui-mono-value font-semibold">{formatShortNumber(item.downloads)}</span>,
     },
     {
       id: "likes",
       header: t("likes"),
       align: "right",
       hiddenMd: true,
-      cell: (item) => <span className="text-sm">{formatShortNumber(item.likes)}</span>,
+      cell: (item) => <span className="ui-mono-value font-normal">{formatShortNumber(item.likes)}</span>,
     },
     {
       id: "license",
@@ -94,28 +94,28 @@ function buildHallColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableC
       id: "hallucinationRate",
       header: t("hallucinationRate"),
       align: "right",
-      cell: (item) => <span className="text-sm font-semibold">{formatPercent(t, item.hallucinationRate)}</span>,
+      cell: (item) => <span className="ui-mono-value font-semibold">{formatPercent(t, item.hallucinationRate)}</span>,
     },
     {
       id: "accuracy",
       header: t("accuracy"),
       align: "right",
       hiddenMd: true,
-      cell: (item) => <span className="text-sm">{formatPercent(t, item.accuracy)}</span>,
+      cell: (item) => <span className="ui-mono-value font-normal">{formatPercent(t, item.accuracy)}</span>,
     },
     {
       id: "attemptRate",
       header: t("attemptRate"),
       align: "right",
       hiddenMd: true,
-      cell: (item) => <span className="text-sm">{formatPercent(t, item.attemptRate)}</span>,
+      cell: (item) => <span className="ui-mono-value font-normal">{formatPercent(t, item.attemptRate)}</span>,
     },
     {
       id: "omniscienceIndex",
       header: t("omniscienceIndex"),
       align: "right",
       hiddenMd: true,
-      cell: (item) => <span className="text-sm">{formatIndex(item.omniscienceIndex)}</span>,
+      cell: (item) => <span className="ui-mono-value font-normal">{formatIndex(item.omniscienceIndex)}</span>,
     },
   ];
 }
@@ -141,15 +141,15 @@ export function HallucinationRankingsView({ rankings }: { rankings: Hallucinatio
   );
 }
 
-/** Arena capability slice (coding / math / ...) — same table as the overall Arena tab. */
+/** Arena capability slice; same table as the overall Arena tab. */
 export function BenchmarkBoardView() {
   const { t } = useTranslation();
   const [category, setCategory] = useState<ArenaBoardKey>(ARENA_BOARD_IDS[0] ?? "coding");
   const { data } = useSuspenseArenaBoard(category);
   const columns = useMemo(() => buildArenaColumns(t), [t]);
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2 min-w-0">
         <SegmentedGroup className="overflow-x-auto no-scrollbar" role="radiogroup" aria-label={t("benchmarkRankings")}>
           {ARENA_BOARD_IDS.map((id) => (
             <TabButton key={id} role="radio" active={category === id} onClick={() => setCategory(id)}>
@@ -189,7 +189,7 @@ function buildArenaColumns(t: ReturnType<typeof useTranslation>["t"]): DataTable
       header: t("score"),
       align: "right",
       cell: (item) => (
-        <span className="text-sm font-semibold font-mono">
+        <span className="ui-mono-value font-semibold">
           {item.score != null ? Math.round(item.score).toLocaleString("en-US") : t("notAvailable")}
         </span>
       ),
@@ -200,7 +200,9 @@ function buildArenaColumns(t: ReturnType<typeof useTranslation>["t"]): DataTable
       align: "right",
       hiddenMd: true,
       cell: (item) => (
-        <span className="text-sm">{item.votes != null ? formatShortNumber(item.votes) : t("notAvailable")}</span>
+        <span className="ui-mono-value font-normal">
+          {item.votes != null ? formatShortNumber(item.votes) : t("notAvailable")}
+        </span>
       ),
     },
     {

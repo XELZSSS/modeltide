@@ -4,15 +4,12 @@ import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError } from "@/server/infra";
 import { decodeEntities, stripHtml, tableRowInners } from "@/server/parsers/feed";
 import { leadingInt, leadingNumber, moneyAmount, suffixedCount } from "@/server/parsers/primitives";
+import { isValidArenaRow } from "@/server/sources/data-filter";
 
 const LEADERBOARD_PATH = "/leaderboard/text";
-/** The text board renders hundreds of rows; cap the served payload. */
 const MAX_ROWS = 300;
 
-/**
- * Capability slices served as separate board pages (verified path segments).
- * `overall` backs the Arena tab; the rest back the benchmark tab.
- */
+/** Capability slices served as separate board pages. */
 export const ARENA_CATEGORIES = [
   "coding",
   "math",
@@ -21,10 +18,8 @@ export const ARENA_CATEGORIES = [
   "hard-prompts",
 ] as const;
 
-export type ArenaCategory = (typeof ARENA_CATEGORIES)[number];
-
 function cellTexts(trInner: string): string[] {
-  // Split on closing cell tags so nested spans don't collapse cell boundaries.
+  // Split on closing tags so nested spans don't collapse cell boundaries.
   return trInner
     .split(/<\/(?:td|th)[^>]*>/gi)
     .map((cell) => decodeEntities(stripHtml(cell)).trim())
@@ -56,7 +51,6 @@ function parseContextTokens(v: string): number | null {
 }
 
 function parseVotes(v: string): number | null {
-  // Live rows carry a locale suffix ("27,189票"); take the leading digits.
   return leadingInt(v);
 }
 
@@ -86,9 +80,8 @@ function creatorFor(id: string, name: string): string {
 }
 
 /**
- * Parse one leaderboard `<tr>` into an entry; null when the row isn't a data row
- * (header rows, skeleton placeholders) or lacks rank/identity.
- * Expected cell order: rank | spread | model | score | votes | price | context.
+ * Parse one leaderboard `<tr>`; null for non-data rows.
+ * Cell order: rank | spread | model | score | votes | price | context.
  */
 function parseRank(v: string | undefined): number | null {
   if (v == null) return null;
@@ -98,28 +91,24 @@ function parseRank(v: string | undefined): number | null {
 
 export function parseArenaRow(trInner: string): ArenaRankEntry | null {
   const cells = cellTexts(trInner);
-  if (cells.length < 4) return null;
   const rank = parseRank(cells[0]);
-  if (rank == null) return null;
-  // Model cell is index 2 when the spread column exists, else index 1.
   const modelCell = cells.length >= 7 ? (cells[2] ?? "") : (cells[1] ?? "");
-  // Prefer the title attr; fall back to the most slug-like token (stripped text
-  // glues spans together, so the last token is often a license like "Proprietary").
+  // Prefer the title attr; else the most slug-like token.
   const tokens = modelCell.split(/\s+/).filter(Boolean);
   const slugLike = tokens.find((tok) => tok.includes("-") || tok.includes("/"));
   const id = titleOf(trInner) ?? slugLike ?? tokens[tokens.length - 1] ?? "";
-  if (!id) return null;
+  // Unified dirty/invalid/unsuitable gate (cell count + rank + id).
+  if (!isValidArenaRow(cells, rank, id)) return null;
+  const validRank = rank as number;
   const name = modelCell || id;
   const scoreCell = cells.length >= 7 ? (cells[3] ?? "") : (cells[2] ?? "");
   const votesCell = cells.length >= 7 ? (cells[4] ?? "") : (cells[3] ?? "");
   const priceCell = cells.length >= 7 ? (cells[5] ?? "") : "";
   const contextCell = cells.length >= 7 ? (cells[6] ?? "") : "";
   const [priceInput, priceOutput] = parseMoneyPair(priceCell);
-  // Low-vote rows carry a "Preliminary" badge between score and votes
-  // (e.g. "1537±16Preliminary1,456"); match the raw row so glued text still hits.
   const preliminary = /preliminary/i.test(trInner);
   return {
-    rank,
+    rank: validRank,
     id,
     name,
     creator: creatorFor(id, name),
@@ -132,7 +121,7 @@ export function parseArenaRow(trInner: string): ArenaRankEntry | null {
   };
 }
 
-/** Parse the full leaderboard page; pure (unit-tested with a saved row fixture). */
+/** Parse the full leaderboard page; pure. */
 export function parseArenaPage(html: string): ArenaRankEntry[] {
   const rows: ArenaRankEntry[] = [];
   const seen = new Set<string>();
@@ -158,17 +147,14 @@ async function fetchArenaBoard(ctx: AppContext, category: string): Promise<Arena
   return entries;
 }
 
-/**
- * Arena human-preference leaderboard (server-rendered table rows).
- * Failures degrade to short TTL so the next tick retries soon.
- */
+/** Arena human-preference leaderboard. Failures degrade to short TTL. */
 export const getArenaRankings = (ctx: AppContext): Promise<ArenaRankingsPayload> =>
   ctx.cache.withTtl(cacheKeys.arenaRankings, SLOW_TTL_MS, async () => {
     const entries = await fetchArenaBoard(ctx, "overall");
     return { data: { entries, fetchedAt: new Date().toISOString() } };
   });
 
-/** One Arena capability slice (coding / math / ...) for the benchmark tab. */
+/** One Arena capability slice for the benchmark tab. */
 export const getArenaBoard = (
   ctx: AppContext,
   category: string,

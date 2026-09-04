@@ -49,8 +49,6 @@ const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
 
 const ModelRankingsTab = memo(function ModelRankingsTab() {
   const { data } = useSuspenseArtificialRankings();
-  // No inner Suspense: the lazy chunk suspends to the outer SuspenseQuery
-  // boundary, so there is exactly one loading state instead of two flashes.
   return <ArtificialAnalysisView rankings={data} />;
 });
 
@@ -101,27 +99,31 @@ const ProviderCompareTab = memo(function ProviderCompareTab() {
         id: "count",
         header: t("modelCount"),
         align: "right",
-        cell: (p) => <span className="font-medium">{p.count}</span>,
+        cell: (p) => <span className="ui-mono-value">{p.count}</span>,
       },
       {
         id: "avgIntelligence",
         header: t("avgIntelligence"),
         align: "right",
-        cell: (p) => formatScore(t, p.avgIntelligence),
+        cell: (p) => <span className="ui-mono-value">{formatScore(t, p.avgIntelligence)}</span>,
       },
       {
         id: "avgPrice",
         header: t("avgPrice"),
         align: "right",
         hiddenMd: true,
-        cell: (p) => formatPricePerMillion(p.avgPrice, t),
+        cell: (p) => <span className="ui-mono-value font-normal">{formatPricePerMillion(p.avgPrice, t)}</span>,
       },
       {
         id: "avgSpeed",
         header: t("avgSpeed"),
         align: "right",
         hiddenMd: true,
-        cell: (p) => (p.avgSpeed != null ? `${formatSpeed(t, p.avgSpeed)} ${t("tokensPerSecond")}` : t("notAvailable")),
+        cell: (p) => (
+          <span className="text-sm text-text-primary">
+            {p.avgSpeed != null ? `${formatSpeed(t, p.avgSpeed)} ${t("tokensPerSecond")}` : t("notAvailable")}
+          </span>
+        ),
       },
     ],
     [t, rankMap],
@@ -148,15 +150,13 @@ const TAB_COMPONENTS: Record<RankingTabId, ComponentType> = {
 
 function RankingsContent() {
   const { t } = useTranslation();
-  // The active tab lives in the URL (`?tab=`) so back navigation from detail pages,
-  // deep links and refreshes all restore the tab the user was actually on.
+  // Tab lives in ?tab= so back-nav, deep links and refreshes restore it.
   const [activeTabId, handleTabChange] = useUrlTab(RANKING_TABS, RANKING_TABS[0]);
   const tabs: TabItem[] = useMemo(() => RANKING_TABS.map((id) => ({ id, label: t(id) })), [t]);
   const ActiveContent = TAB_COMPONENTS[activeTabId];
 
   return (
     <TabbedPage
-      containerClassName="pt-3 sm:pt-4"
       compact
       title={t(activeTabId)}
       description={t(TAB_SOURCE_LABEL[activeTabId])}
@@ -164,7 +164,6 @@ function RankingsContent() {
       tabs={tabs}
       activeTab={activeTabId}
       tabSize="md"
-      tabClassName="gap-3 sm:gap-4"
       tabFill
       onTabChange={handleTabChange}
     >
@@ -173,7 +172,7 @@ function RankingsContent() {
   );
 }
 
-/** Rankings hub with tabs for model rankings, OpenRouter usage, open-source models, hallucination benchmarks and provider comparison. */
+/** Rankings hub: model / usage / open-source / hallucination / benchmark / arena / provider tabs. */
 export function RankingsHubView() {
   return (
     <SuspenseQuery>

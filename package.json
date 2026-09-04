@@ -11,6 +11,8 @@
     "preview": "npm run build && vite preview",
     "lint": "oxlint",
     "test": "vitest run",
+    "test:client": "vitest run --project client",
+    "test:server": "vitest run --project server",
     "hash:csp": "node scripts/csp-hash.cjs --write",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
@@ -36,7 +38,6 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.54.3",
-    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.18",
@@ -47,11 +48,11 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.0",
     "wrangler": "^4.128.0"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,
-    "workerd@1.20260831.1": true
+    "workerd@1.20260903.1": true
   }
 }

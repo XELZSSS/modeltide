@@ -4,7 +4,7 @@ import { approxEq, normalizePercent } from "@/shared/utils";
 import { formatBoolean, formatScore, formatPercent, formatSpeed } from "@/client/utils";
 import { getOutputSpeed } from "@/client/utils";
 
-/** A single comparable metric row: label plus optional numeric accessors and best/worst direction. */
+/** A single comparable metric row. */
 export interface CompareRow<T> {
   /** Stable row identity for winner maps; defaults to `label` when omitted. */
   id?: string;
@@ -18,9 +18,8 @@ export interface CompareRow<T> {
 export type Winner = "win" | "loss";
 
 /**
- * Per-metric winner map: for every row with a `bestIs` direction, marks models whose
- * value equals the best (and optionally the worst) value as "win"/"loss" by model key.
- * Rows with fewer than two numeric values are skipped.
+ * Per-metric winners: models equal to the best value (at display precision)
+ * are "win", the worst "loss". Skips rows with < 2 values and full ties.
  */
 export function computeWinners<T>(
   rows: CompareRow<T>[],
@@ -28,14 +27,11 @@ export function computeWinners<T>(
   getKey: (m: T, index: number) => string,
 ): Map<string, Map<string, Winner>> {
   const winners = new Map<string, Map<string, Winner>>();
-  // Winner detection runs at one-decimal display precision, so values that render
-  // identically (e.g. both "0.9%") don't get painted as winner vs loser.
+  // Display precision: values rendering identically must not split win/loss.
   const atDisplayPrecision = (v: number) => Math.round(v * 10) / 10;
   for (const row of rows) {
     const accessor = row.getNumeric;
     if (!accessor || !row.bestIs) continue;
-    // Key winners by stable row id, not the translated label: two rows can share
-    // a label after translation and would otherwise overwrite each other.
     const rowKey = row.id ?? row.label;
     const values = models
       .map((model, index) => ({ key: getKey(model, index), val: accessor(model) }))
@@ -43,7 +39,6 @@ export function computeWinners<T>(
       .map((v) => ({ ...v, val: atDisplayPrecision(v.val) }));
     if (values.length < 2) continue;
     const best = row.bestIs === "min" ? Math.min(...values.map((v) => v.val)) : Math.max(...values.map((v) => v.val));
-    // A metric nobody differs on has no winner — don't paint a tie as win/loss.
     if (values.every((v) => approxEq(v.val, best))) continue;
     const perModel = new Map<string, Winner>();
     for (const v of values) if (approxEq(v.val, best)) perModel.set(v.key, "win");
@@ -106,7 +101,7 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]) 
   });
 }
 
-/** Price comparison rows for prompt/completion/cache-hit rates; lower is always better. */
+/** Price rows (prompt/completion/cache-hit); lower is better. */
 export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
   return [
     { label: t("promptPrice"), getNumeric: (m) => m.pricing?.input, bestIs: "min" },

@@ -1,5 +1,4 @@
 import { defineConfig } from "vitest/config";
-import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -11,21 +10,27 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
-  plugins: [
-    cloudflareTest({
-      wrangler: { configPath: "./wrangler.jsonc" },
-      // Provide KV for tests even when wrangler.jsonc has no kv_namespaces (optional KV mode)
-      // Docs: https://developers.cloudflare.com/workers/testing/vitest-integration/configuration/
-      // miniflare.kvNamespaces overrides wrangler config and ensures env.CACHE is available in tests
-      miniflare: {
-        kvNamespaces: ["CACHE"],
-      },
-    }),
-  ],
   test: {
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
-    // Coverage is intentionally unthresholded: `vitest run` stays green without
-    // @vitest/coverage-v8 installed. To enforce, add the provider dep and e.g.
-    // coverage: { provider: "v8", thresholds: { lines: 50, branches: 40 } }.
+    environment: "node",
+    // Vitest 5 stable (was experimental.fsModuleCache): transformed modules
+    // persist under node_modules across reruns/processes. No custom transform
+    // plugins here (alias only), so no stale-cache risk. Clear with --clearCache.
+    fsModuleCache: true,
+    // Vitest 5: inline projects inherit root options (alias, environment) by
+    // default and share one Vite server. Filter with `vitest -p <name>`.
+    projects: [
+      {
+        test: {
+          name: "client",
+          include: ["src/client/**/*.{test,spec}.{ts,tsx}"],
+        },
+      },
+      {
+        test: {
+          name: "server",
+          include: ["src/server/**/*.{test,spec}.{ts,tsx}"],
+        },
+      },
+    ],
   },
 });

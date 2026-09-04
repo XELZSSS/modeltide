@@ -3,8 +3,13 @@ import type { OpenRouterRankEntry, OpenRouterRankingsPayload } from "@/shared/ty
 import type { AppContext } from "@/server/context";
 import { UpstreamError, errMsg } from "@/server/infra";
 import { num, numCoerce, numOr, numPositive, titleCase } from "@/server/parsers/primitives";
+import {
+  isUsableOpenRouterPricing,
+  isValidOpenRouterDirectoryRow,
+  isValidOpenRouterRowId,
+} from "@/server/sources/data-filter";
 
-// ---- ranking mapping (pure): variant aggregation, titles, categories ----
+// Ranking mapping (pure): variant aggregation, titles, categories.
 export interface ModelRow {
   date: string;
   model_permaslug: string;
@@ -27,7 +32,7 @@ export interface PricingEntry {
 
 export type PricingRecord = Record<string, PricingEntry>;
 
-/** AA agentic index (0-100), context window length and $/1M pricing, for cross-source backfill. */
+/** AA agentic index, context length and $/1M pricing, for cross-source backfill. */
 export interface ModelMetaEntry {
   contextLength?: number;
   agenticIndex?: number;
@@ -35,9 +40,7 @@ export interface ModelMetaEntry {
   pricing?: { input: number; output: number; cacheHit: number };
 }
 
-/** Re-exported from shared/utils: the loose cross-source match key (kept here for backward compat). */
 import { normalizeModelKey } from "@/shared/utils";
-export { normalizeModelKey };
 
 const CREATORS: Record<string, string> = {
   anthropic: "Anthropic",
@@ -76,15 +79,11 @@ export function titleFromSlug(permaslug: string): string {
     .replace(/[:/_.]/g, " ")
     .split(/[-\s]+/)
     .filter(Boolean)
-    .map((p) =>
-      // Version/size tokens ("4o", "3.5", "405b") keep their authored casing, short
-      // acronyms ("gpt", "glm", "o1") uppercase, everything else title-cases.
-      /^\d/.test(p) ? p.toLowerCase() : p.length <= 3 ? p.toUpperCase() : titleCase(p),
-    )
+    .map((p) => (/^\d/.test(p) ? p.toLowerCase() : p.length <= 3 ? p.toUpperCase() : titleCase(p)))
     .join(" ");
 }
 
-/** Upstream `change` may arrive as a number or a numeric string; normalize to number|null. */
+/** Upstream `change` may be a number or numeric string; normalize to number|null. */
 export function parseChange(v: unknown): number | null {
   return numCoerce(v);
 }
@@ -99,10 +98,8 @@ const SUM_KEYS = [
 ] as const;
 
 export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry>): OpenRouterRankEntry[] {
-  // Aggregate by model id: upstream emits one row per variant (standard/free/…),
-  // but `id` is the app-wide row identity, so variants must merge into a single
-  // entry. Usage fields are summed; the dominant variant (largest token total)
-  // lends its variant label and pricing to the merged entry.
+  // Upstream emits one row per variant; merge into one entry per model id.
+  // Usage fields sum; the dominant variant lends its label and pricing.
   interface Group {
     agg: ModelRow;
     dominant: ModelRow;
@@ -111,8 +108,8 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
   }
   const grouped = new Map<string, Group>();
   for (const row of rows) {
+    if (!isValidOpenRouterRowId(row.model_permaslug)) continue;
     const id = row.model_permaslug.trim();
-    if (!id) continue;
     const tokens = numOr(row.total_prompt_tokens, 0) + numOr(row.total_completion_tokens, 0);
     const group = grouped.get(id);
     if (!group) {
@@ -125,7 +122,7 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
       continue;
     }
     for (const k of SUM_KEYS) group.agg[k] = numOr(group.agg[k], 0) + numOr(row[k], 0);
-    // `change` belongs to the latest-dated row; only overwrite when this row is newer.
+    // `change` belongs to the latest-dated row.
     if (row.date && (!group.latestDate || row.date > group.latestDate)) {
       group.latestDate = row.date;
       group.agg.date = row.date;
@@ -177,7 +174,7 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
   return out;
 }
 
-// ---- rankings source (fetch + cache) ----
+// Rankings source (fetch + cache).
 const OPENROUTER = upstreamConfig.openrouter;
 
 interface PricingRow {
@@ -199,13 +196,13 @@ const PRICING_TTL_MS = SLOW_TTL_MS;
 const PER_MILLION = 1_000_000;
 const DIRECTORY_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
 
-// Pricing figures arrive as numbers or numeric strings; anything else is NaN (rejected downstream).
+// Pricing figures arrive as numbers or numeric strings.
 function parsePrice(v: unknown): number {
   return numOr(v, NaN);
 }
 
 function buildPricingEntry(prompt: number, completion: number, inputCacheRead: number): PricingEntry | null {
-  if (!Number.isFinite(prompt) || prompt < 0 || !Number.isFinite(completion) || completion < 0) return null;
+  if (!isUsableOpenRouterPricing(prompt, completion)) return null;
   return { prompt, completion, input_cache_read: Number.isFinite(inputCacheRead) ? inputCacheRead : 0 };
 }
 
@@ -221,11 +218,11 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
   const pricingRecord: PricingRecord = {};
   const metaRecord: Record<string, ModelMetaEntry> = {};
   for (const m of rows) {
-    if (typeof m?.id !== "string" || !m.id.trim()) continue;
-    if (!m.pricing) continue;
-    const prompt = parsePrice(m.pricing.prompt);
-    const completion = parsePrice(m.pricing.completion);
-    const rawCache = parsePrice(m.pricing.input_cache_read);
+    if (!isValidOpenRouterDirectoryRow(m)) continue;
+    const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
+    const prompt = parsePrice(pricing.prompt);
+    const completion = parsePrice(pricing.completion);
+    const rawCache = parsePrice(pricing.input_cache_read);
     const inputCacheRead = Number.isFinite(rawCache) ? rawCache : 0;
     const pricingEntry = buildPricingEntry(prompt, completion, inputCacheRead);
     if (pricingEntry) {
@@ -256,9 +253,8 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
 }
 
 /**
- * Best-effort /api/v1/models directory: per-model pricing (raw id/slug keys, consumed
- * by the rankings source) plus normalized-key AA meta (context length, agentic index)
- * consumed by the Artificial Analysis source to backfill missing fields.
+ * /api/v1/models directory: pricing plus normalized AA meta for backfill.
+ * Never throws — callers degrade to partial data.
  */
 async function fetchModelDirectory(ctx: AppContext): Promise<{
   pricing: Map<string, PricingEntry>;
@@ -276,13 +272,11 @@ async function fetchModelDirectory(ctx: AppContext): Promise<{
     return { pricing: new Map(Object.entries(record.pricing)), meta: record.meta };
   } catch (err) {
     ctx.log("warn", `[openrouter] directory fetch failed: ${errMsg(err)}`);
-    // Do not overwrite good cached directory with empty object; withTtl already
-    // serves stale on failure. Return empty so callers degrade to partial data.
     return { pricing: new Map<string, PricingEntry>(), meta: {} };
   }
 }
 
-/** Normalized-key AA meta for cross-source backfill; empty when the directory is unavailable (never throws). */
+/** Normalized-key AA meta for backfill; empty when unavailable (never throws). */
 export const getOpenRouterModelMeta = async (ctx: AppContext): Promise<Record<string, ModelMetaEntry>> =>
   (await fetchModelDirectory(ctx)).meta;
 
@@ -303,10 +297,8 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
     if (rankings.data.length === 0) {
       throw new UpstreamError("OpenRouter: rankings upstream returned empty array");
     }
-    const validRows = rankings.data.filter((r) => typeof r.model_permaslug === "string" && r.model_permaslug.trim());
+    const validRows = rankings.data.filter((r) => isValidOpenRouterRowId(r.model_permaslug));
     if (validRows.length === 0 && rankings.data.length > 0) {
-      // All rows invalid means the upstream schema changed; fail loudly (and skip
-      // the default TTL cache) instead of silently serving an empty table.
       throw new UpstreamError(`OpenRouter: all ${rankings.data.length} ranking rows had invalid model_permaslug`);
     }
     const pricingMap = (await fetchModelDirectory(ctx)).pricing;
@@ -320,7 +312,6 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
         tokenUsageRankings: models,
         fetchedAt: new Date().toISOString(),
       },
-      // Refresh sooner when pricing was unavailable so partial data is retried quickly.
       ttl: ttlFor(partialFailure),
     };
   });

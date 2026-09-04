@@ -12,14 +12,13 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-/** Reads the i18n context; must be used inside an I18nProvider. */
 export function useTranslation() {
   const ctx = use(I18nContext);
   if (!ctx) throw new Error("useTranslation must be used within I18nProvider");
   return ctx;
 }
 
-// Mirror the active language into <html lang> and the meta description for SEO and a11y.
+// Mirror the language into <html lang> and the meta description.
 function syncDocumentMeta(lang: Lang) {
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
   const desc = document.querySelector('meta[name="description"]');
@@ -37,8 +36,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     syncDocumentMeta(lang);
   }, [lang]);
 
-  // Rebuild the translator bound to the current language only when the language changes.
-  // In dev, warn when a key renders with an uninterpolated "{param}" placeholder.
+  // In dev, warn when a key renders with an uninterpolated "{param}".
   const t = useMemo(
     () =>
       createT(
@@ -60,7 +58,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
 const MOBILE_BREAKPOINT = 768;
 
-/** True while the viewport is narrower than `breakpoint`; tracks changes via matchMedia. */
+/** True while the viewport is narrower than `breakpoint`. */
 function useIsMobile(breakpoint = 768): boolean {
   const query = `(max-width: ${breakpoint - 1}px)`;
   const subscribe = useCallback(
@@ -90,7 +88,6 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   return <DeviceContext.Provider value={value}>{children}</DeviceContext.Provider>;
 }
 
-/** Device info; must be used inside a DeviceProvider. */
 export function useDevice(): DeviceContextValue {
   const ctx = use(DeviceContext);
   if (!ctx) throw new Error("useDevice must be used within a DeviceProvider");

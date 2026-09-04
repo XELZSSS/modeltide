@@ -1,14 +1,11 @@
-/* Thin themed scrollbars. Scoped to .scrollable (and the main pane) instead of
-   every element: global * selectors cost style recalc on each DOM mutation. */
+/* Thin themed scrollbars on the main pane (global * selectors cost style
+   recalc on each DOM mutation, so keep this scoped). */
 @media (hover: hover) {
-  .scrollable::-webkit-scrollbar-track,
-  .scrollable::-webkit-scrollbar-corner,
   main::-webkit-scrollbar-track,
   main::-webkit-scrollbar-corner {
     background: transparent;
   }
 
-  .scrollable::-webkit-scrollbar-thumb,
   main::-webkit-scrollbar-thumb {
     background-color: var(--text-secondary);
     border-radius: 8px;
@@ -17,25 +14,21 @@
   }
 
   @supports (background-color: color-mix(in srgb, red 20%, transparent)) {
-    .scrollable::-webkit-scrollbar-thumb,
     main::-webkit-scrollbar-thumb {
       background-color: color-mix(in srgb, var(--text-secondary) 20%, transparent);
     }
   }
 
-  .scrollable::-webkit-scrollbar,
   main::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
 
-  .scrollable::-webkit-scrollbar-thumb:hover,
   main::-webkit-scrollbar-thumb:hover {
     background-color: var(--text-secondary);
   }
 
   @supports (background-color: color-mix(in srgb, red 40%, transparent)) {
-    .scrollable::-webkit-scrollbar-thumb:hover,
     main::-webkit-scrollbar-thumb:hover {
       background-color: color-mix(in srgb, var(--text-secondary) 40%, transparent);
     }
@@ -43,7 +36,6 @@
 }
 
 /* Firefox: thin scrollbars on the same scope (webkit rules above don't apply). */
-.scrollable,
 main {
   scrollbar-width: thin;
   scrollbar-color: var(--text-secondary) transparent;
@@ -52,7 +44,6 @@ main {
 @media (max-width: 767px) {
   /* Keep a slim scrollbar on touch devices instead of hiding it: keyboard and
      switch users need the position affordance that display:none removes. */
-  .scrollable::-webkit-scrollbar,
   main::-webkit-scrollbar {
     width: 4px;
     height: 4px;
@@ -63,6 +54,83 @@ main {
   scrollbar-width: none;
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* ---- Semantic type scale: one class per level, no ad-hoc text-[11px] ---- */
+@utility ui-page-title {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+@utility ui-section-title {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+@utility ui-card-title {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+@utility ui-body {
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: var(--text-primary);
+}
+
+@utility ui-body-secondary {
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: var(--text-secondary);
+}
+
+@utility ui-caption {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--text-secondary);
+}
+
+@utility ui-meta {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--text-tertiary);
+}
+
+@utility ui-mono-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--text-primary);
+}
+
+@utility ui-table-header {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .ui-page-title {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+  .ui-section-title {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
   }
 }
 

@@ -10,6 +10,7 @@ import {
   BROWSER_NO_STORE_HEADER,
   CDN_CACHE_HEADER,
   CDN_NO_STORE_HEADER,
+  THIRTY_MINUTES,
   apiPaths,
   NEWS_CATEGORIES,
   OPEN_SOURCE_MODELS_DEFAULTS,
@@ -25,7 +26,7 @@ import { getOpenRouterRankings } from "@/server/sources/openrouter";
 import { getClosedReleases } from "@/server/sources/closed-releases";
 import { getStatusHistory } from "@/server/sources/status-history";
 
-/** Declarative route descriptor: path, optional query schema (validated per request), cache policy, and the handler. */
+/** Route descriptor: path, query schema, cache policy, handler. */
 export interface RouteDef<S extends QuerySchema = QuerySchema> {
   path: string;
   query?: S;
@@ -34,21 +35,23 @@ export interface RouteDef<S extends QuerySchema = QuerySchema> {
    * "window" (long-TTL routes like news) warms only inside the TTL-aligned window.
    */
   warm?: "all" | "window";
-  /** Skip browser/CDN caching for responses that must reflect live state (e.g. probe results). */
-  noStore?: boolean;
   /**
-   * Best-effort per-IP KV rate limit, applied only to clients presenting a
-   * CF-Connecting-IP (Cloudflare always sets one in production). Keyed per path,
-   * so two fields on different routes get independent budgets.
+   * Warmup priority for the free-tier rotation (see bucketWarmUrls):
+   * - "live" (30m-TTL routes) warms every tick so user-facing data stays fresh;
+   * - "bulk" (slow/static routes) warms a few per tick on rotation, bounding
+   *   per-tick CPU and subrequests within the free plan (10ms CPU, 50 subrequests).
+   * Defaults to "bulk" so a newly added route can never silently blow the
+   * per-tick budget — tag genuinely hot routes "live" explicitly.
    */
+  warmPriority?: "live" | "bulk";
+  /** Skip browser/CDN caching for live-state responses. */
+  noStore?: boolean;
+  /** Best-effort per-IP KV rate limit, keyed per path. */
   rateLimit?: { windowSec: number; max: number };
   handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<unknown>;
 }
 
-/**
- * Give a single route definition its precise type: the query schema is inferred
- * from the literal so handler params are fully typed without casts.
- */
+/** Infers the query schema from the literal so handler params are fully typed. */
 export function defineRoute<S extends QuerySchema>(def: RouteDef<S>): RouteDef<S> {
   return def;
 }
@@ -56,20 +59,18 @@ export function defineRoute<S extends QuerySchema>(def: RouteDef<S>): RouteDef<S
 const OPEN_SOURCE_SORTS = ["trendingScore", "downloads", "likes", "createdAt", "lastModified"] as const;
 const SORT_DIRECTIONS = ["-1", "1"] as const;
 
-// Route table: paths come from the shared `apiPaths` map; every entry is registered
-// on the app and (when warm) hit by the scheduled trigger.
+// Route table: paths come from the shared `apiPaths` map.
 export const routeDefs = [
   defineRoute({
     path: apiPaths.artificialIndex,
-    // Heaviest handler (index + parallel enrichment + OpenRouter meta); cap scraping.
+    warmPriority: "live",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getIntelligenceIndex(ctx),
   }),
   defineRoute({
     path: apiPaths.openSourceModels,
+    warmPriority: "bulk",
     query: {
-      // Schema defaults derive from the same shared constant the client uses,
-      // so a request without params and the client's default query agree.
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
       direction: qEnum(SORT_DIRECTIONS, OPEN_SOURCE_MODELS_DEFAULTS.direction),
       limit: qNum({
@@ -79,15 +80,14 @@ export const routeDefs = [
         integer: true,
       }),
     },
-    // Large JSON payload (500 full HF records); generous budget blocks
-    // limit-traversal scraping while leaving normal UI polling untouched.
+    // Large payload (500 full HF records); cap limit-traversal scraping.
     rateLimit: { windowSec: 60, max: 120 },
-    // validateQuery has already applied schema defaults and converted numbers; no fallbacks needed here.
+    // validateQuery already applied schema defaults; no fallbacks needed here.
     handler: (ctx, params) => getModels(ctx, params),
   }),
   defineRoute({
     path: apiPaths.openSourceReleases,
-    // Full HF scan; cap scraping like the models table.
+    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 120 },
     handler: (ctx) => getReleases(ctx),
   }),
@@ -95,20 +95,19 @@ export const routeDefs = [
     path: apiPaths.news,
     query: { category: qEnum(NEWS_CATEGORIES, NEWS_CATEGORIES[0]) },
     warm: "window",
-    // 1 request fans out to 6 RSS fetches; budget stops scripted amplification.
+    warmPriority: "live",
     rateLimit: { windowSec: 60, max: 60 },
-    // News feeds have a long TTL; only refresh them within the TTL-aligned warm window.
     handler: (ctx, params) => getNews(ctx, params.category),
   }),
   defineRoute({
     path: apiPaths.openRouterRankings,
-    // Fans out to rankings + pricing directory; cap scraping.
+    warmPriority: "live",
     rateLimit: { windowSec: 60, max: 120 },
     handler: (ctx) => getOpenRouterRankings(ctx),
   }),
   defineRoute({
     path: apiPaths.closedReleases,
-    // Single changelog page fetch (+ cached index cross-check, no extra upstream fetch); cap scraping.
+    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 120 },
     handler: (ctx) => getClosedReleases(ctx),
   }),
@@ -116,35 +115,32 @@ export const routeDefs = [
     path: apiPaths.arenaBoard,
     query: { category: qEnum(ARENA_BOARD_IDS, ARENA_BOARD_IDS[0]) },
     warm: "all",
-    // One ~3MB page fetch + regex parse per category; budget stops scripted amplification.
+    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx, params) => getArenaBoard(ctx, params.category),
   }),
   defineRoute({
     path: apiPaths.arenaRankings,
-    // Single ~3MB page fetch + regex parse; cap scraping.
+    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getArenaRankings(ctx),
   }),
   defineRoute({
     path: apiPaths.officialPricing,
-    // Fans out to 6 provider doc pages (8 fetches with Kimi's 3 sub-pages);
-    // per-provider failures only shorten the TTL, so cap scraping loosely.
+    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getOfficialPricing(ctx),
   }),
   defineRoute({
     path: apiPaths.homeDashboard,
-    // 1 request fans out to 3 sub-sources; budget stops scripted amplification.
+    warmPriority: "live",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getHomeDashboard(ctx),
   }),
   defineRoute({
     path: apiPaths.statusHistory,
-    // The route self-heals stale samples on read, so CDN caching would defeat it;
-    // only the low-traffic status pages hit the origin directly.
+    // Reads self-heal stale samples, so CDN caching would defeat it.
     noStore: true,
-    // A stale read can trigger a live 7-target probe round; rate-limit it.
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getStatusHistory(ctx),
   }),
@@ -157,8 +153,8 @@ function applyCacheHeaders(c: Context, noStore: boolean): void {
 }
 
 /**
- * Best-effort KV rate limit — skipped when KV is not configured (optional binding)
- * Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/ — env.CACHE is undefined when kv_namespaces is not configured
+ * Best-effort KV rate limit — skipped when KV is not configured.
+ * Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/
  */
 async function enforceRateLimit(
   c: Context,
@@ -168,8 +164,7 @@ async function enforceRateLimit(
   if (!kv) return;
   const ip = c.req.header("CF-Connecting-IP") ?? c.req.header("X-Forwarded-For")?.split(",")[0]?.trim();
   if (!ip) return;
-  // Key is path + IP only: including the raw query string lets attackers rotate
-  // junk params to mint a fresh budget per request and bypass the limit.
+  // Path + IP only: including the query string lets attackers mint fresh budgets.
   const key = `rl:${c.req.path}:${ip}`;
   let current: number;
   try {
@@ -185,7 +180,7 @@ async function enforceRateLimit(
   }
 }
 
-/** Register every route on the Hono app: validate query params, run the handler, and stamp cache headers. */
+/** Register every route: validate query, run handler, stamp cache headers. */
 export function registerRoutes(app: Hono, routes: readonly RouteDef[]): void {
   for (const route of routes) {
     app.on(["GET", "HEAD"], route.path, async (c) => {
@@ -195,7 +190,6 @@ export function registerRoutes(app: Hono, routes: readonly RouteDef[]): void {
         if (route.rateLimit) await enforceRateLimit(c, context.kv, route.rateLimit);
         const params = validateQuery(c.req.query(), route.query ?? {});
         const data = await route.handler(context, params);
-        // Live-state routes opt out of caching; everything else gets short browser + longer CDN caching.
         applyCacheHeaders(c, route.noStore === true);
         return c.json({ data });
       } finally {
@@ -211,18 +205,15 @@ function withQuery(url: string, params: Record<string, string>): string {
 }
 
 /**
- * Expand each route into concrete warmup URLs: enum-valued params are enumerated
- * for warm routes, remaining params fall back to their schema defaults.
- * "window" routes are only due within their TTL-aligned warming window, so the
- * frequent cron skips them otherwise instead of rewriting fresh cache entries.
+ * Expand each route into warmup URLs: enum params are enumerated for warm
+ * routes, the rest use schema defaults. "window" routes are due only inside
+ * their TTL-aligned window.
  */
 export function buildWarmUrls(base: string, routes: readonly RouteDef[], now: Date = new Date()): string[] {
   const includeWarmWindow = newsWarmDue(now.getUTCMinutes());
   return (
     routes
-      // noStore routes (live probe results, self-healing history) gain nothing
-      // from CDN warming — and warming status-history would trigger a duplicate
-      // 7-target probe round on top of the scheduled sampler. Skip them.
+      // noStore routes gain nothing from warming; skip them.
       .filter((route) => route.noStore !== true)
       .filter((route) => route.warm !== "window" || includeWarmWindow)
       .flatMap((route) => {
@@ -241,4 +232,45 @@ export function buildWarmUrls(base: string, routes: readonly RouteDef[], now: Da
         return combos.map((combo) => withQuery(base + route.path, { ...defaults, ...combo }));
       })
   );
+}
+
+export interface WarmBuckets {
+  /** 30m-tier URLs warmed on every tick. */
+  live: string[];
+  /** Slow/static URLs warmed a few per tick on rotation (see worker.ts). */
+  bulk: string[];
+}
+
+/**
+ * Split the warmup set into live (every tick) and bulk (rotated) buckets.
+ * Same expansion semantics as buildWarmUrls — only the grouping differs.
+ */
+export function bucketWarmUrls(base: string, routes: readonly RouteDef[], now: Date = new Date()): WarmBuckets {
+  const isLive = (route: RouteDef): boolean => route.warmPriority === "live";
+  return {
+    live: buildWarmUrls(
+      base,
+      routes.filter((route) => isLive(route)),
+      now,
+    ),
+    bulk: buildWarmUrls(
+      base,
+      routes.filter((route) => !isLive(route)),
+      now,
+    ),
+  };
+}
+
+export const BULK_PER_TICK = 4;
+
+/**
+ * Time-slice rotation over the bulk bucket: no KV cursor (saves free-tier
+ * writes), every isolate agrees on the slice.
+ */
+export function bulkSliceForTick(bulk: string[], now: Date = new Date()): string[] {
+  if (bulk.length === 0) return [];
+  const tick = Math.floor(now.getTime() / THIRTY_MINUTES);
+  const chunks = Math.ceil(bulk.length / BULK_PER_TICK);
+  const start = (tick % chunks) * BULK_PER_TICK;
+  return bulk.slice(start, start + BULK_PER_TICK);
 }

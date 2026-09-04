@@ -9,11 +9,9 @@ import { Card, CardContent, Dot } from "@/client/components/ui";
 import { cn, formatUptime, formatUptimePct } from "@/client/utils";
 import { SOURCE_LABELS } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary } from "@/shared/types";
-import { UptimeStrip } from "./StatusParts";
-import { StatusEventList } from "./StatusParts";
+import { UptimeStrip, StatusEventList } from "./StatusParts";
 
-// Stable empty reference so source cards without daily data do not invalidate
-// the memoized UptimeStrip on every render.
+// Stable empty ref so cards without data don't bust the UptimeStrip memo.
 const EMPTY_BUCKETS: DayBucket[] = [];
 
 function statusTextClass(ok: boolean): string {
@@ -29,14 +27,14 @@ const SourceCard = memo(function SourceCard({
 }) {
   const { t } = useTranslation();
   const label = t(SOURCE_LABELS[summary.id]);
-  // No sample yet (fresh deploy): neutral "no data" instead of a false alarm.
+  // Fresh deploy with no sample yet: neutral "no data", not a false alarm.
   const unprobed = summary.checkedAt == null;
   return (
     <Link
       to={`/status/${summary.id}`}
-      className="block rounded-xl border border-border bg-bg-card p-4 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className="block border border-border bg-bg-card p-4 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
-      <div className="flex items-center justify-between gap-2 mb-3">
+      <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <Dot
             size="sm"
@@ -49,16 +47,16 @@ const SourceCard = memo(function SourceCard({
         </span>
       </div>
       <UptimeStrip buckets={buckets} />
-      <div className="flex items-center justify-between gap-2 mt-3 text-xs text-text-secondary">
+      <div className="flex items-center justify-between gap-3 mt-3 ui-caption">
         <span>
           {t("uptime24h")}
-          <span className="font-mono text-text-primary ml-1">{formatUptimePct(t, summary.uptime24h)}</span>
+          <span className="font-mono text-text-primary ml-1.5">{formatUptimePct(t, summary.uptime24h)}</span>
         </span>
         <span>
           {t("uptime7d")}
-          <span className="font-mono text-text-primary ml-1">{formatUptimePct(t, summary.uptime7d)}</span>
+          <span className="font-mono text-text-primary ml-1.5">{formatUptimePct(t, summary.uptime7d)}</span>
         </span>
-        <ChevronRight size={14} className="shrink-0 text-text-tertiary" />
+        <ChevronRight size={16} className="shrink-0 text-text-tertiary" />
       </div>
     </Link>
   );
@@ -99,7 +97,7 @@ function StatusContent() {
       </Card>
 
       <PageSection>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           {data.sources.map((summary) => (
             <SourceCard key={summary.id} summary={summary} buckets={data.daily[summary.id] ?? EMPTY_BUCKETS} />
           ))}
@@ -115,7 +113,7 @@ function StatusContent() {
   );
 }
 
-/** Data-source health dashboard: availability strips, latency and derived event timeline. */
+/** Data-source health dashboard. */
 export function StatusView() {
   return (
     <SuspenseQuery>

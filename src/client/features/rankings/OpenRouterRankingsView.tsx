@@ -16,47 +16,47 @@ import { EmptyState } from "@/client/components/shared";
 import { OpenRouterModelDetail } from "@/client/features/models/ModelDetailView";
 import { useTranslation } from "@/client/providers";
 
-// ---- client/features/rankings/openRouterColumns.tsx ----
-// Neutral gray for no change; green for growth, red for decline (zero counts as neutral).
+// ---- openRouterColumns ----
+// Gray for no change; green growth, red decline.
 function trendClass(change?: number | null) {
   if (change == null || change === 0) return "text-text-tertiary";
   return change > 0 ? "text-success" : "text-destructive";
 }
 
-/** Token count or an em-dash when the upstream value is missing (null ≠ 0). */
+/** Token count, or em-dash when missing (null means missing, not 0). */
 function tokenText(v: number | null | undefined): string {
   return typeof v === "number" && Number.isFinite(v) ? formatShortNumber(v) : "—";
 }
 
-/** OpenRouter token-usage columns plus the request-count trend badge. */
+/** Token-usage columns plus the request-count trend badge. */
 export function buildOpenRouterColumns(t: (key: TranslationKey) => string): DataTableColumn<OpenRouterRankEntry>[] {
   return [
     rankCol((item) => item.rank),
     textCol("model", t("model"), (item) => <RankingNameCell name={item.name} />, { width: "45%" }),
     rightCol("totalTokens", t("totalTokens"), (item) => (
-      <span className="font-mono font-semibold text-text-primary">{tokenText(item.totalTokens)}</span>
+      <span className="ui-mono-value font-semibold">{tokenText(item.totalTokens)}</span>
     )),
     rightCol("inputTokens", t("inputTokens"), (item) => (
-      <span className="font-mono font-semibold text-text-primary">{tokenText(item.promptTokens)}</span>
+      <span className="ui-mono-value font-semibold">{tokenText(item.promptTokens)}</span>
     )),
     rightCol("outputTokens", t("outputTokens"), (item) => (
-      <span className="font-mono font-semibold text-text-primary">{tokenText(item.completionTokens)}</span>
+      <span className="ui-mono-value font-semibold">{tokenText(item.completionTokens)}</span>
     )),
     rightCol("requests", t("requests"), (item) => (
-      <span className="font-mono text-text-secondary">{tokenText(item.requestCount)}</span>
+      <span className="ui-mono-value font-normal text-text-secondary">{tokenText(item.requestCount)}</span>
     )),
     rightCol("creator", t("creator"), (item) => (
-      <RightAlignedText className="text-xs">{item.creator || t("unknown")}</RightAlignedText>
+      <RightAlignedText className="ui-caption">{item.creator || t("unknown")}</RightAlignedText>
     )),
     rightCol("trend", t("trend"), (item) => (
-      <span className={cn(trendClass(item.change), "text-xs py-0 font-mono inline-block")}>
+      <span className={cn(trendClass(item.change), "text-xs font-mono tabular-nums inline-block")}>
         {formatTrend(item.change, t)}
       </span>
     )),
   ];
 }
 
-// ---- client/features/rankings/OpenRouterRankingsView.tsx ----
+// ---- OpenRouterRankingsView ----
 const getModelRowId = (r: OpenRouterRankEntry) => r.id;
 const getSearchFields = (r: OpenRouterRankEntry) => [r.name, r.creator, r.id];
 const renderExpandedDetail = (item: OpenRouterRankEntry) => (
@@ -65,7 +65,7 @@ const renderExpandedDetail = (item: OpenRouterRankEntry) => (
   </div>
 );
 
-/** Token-usage rankings table from OpenRouter, with expandable per-model details. */
+/** Token-usage rankings table with expandable per-model details. */
 export function OpenRouterRankingsView({ data }: { data?: OpenRouterRankingsPayload }) {
   const { t } = useTranslation();
   const modelColumns = useMemo(() => buildOpenRouterColumns(t), [t]);

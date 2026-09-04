@@ -13,13 +13,13 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { createPortal } from "react-dom";
 
-// ---- client/components/ui/badge.tsx ----
+// ---- badge ----
 /** Small outlined label chip. */
 export const Badge = memo(function Badge({ className, children }: { className?: string; children?: ReactNode }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center text-xs font-medium leading-[18px] px-2 py-0.5 rounded-full transition-colors border border-border text-text-secondary bg-transparent",
+        "inline-flex items-center text-xs font-medium leading-5 px-2 py-0.5 rounded-full transition-colors border border-border text-text-secondary bg-transparent",
         className,
       )}
     >
@@ -28,7 +28,7 @@ export const Badge = memo(function Badge({ className, children }: { className?: 
   );
 });
 
-// ---- client/components/ui/button.tsx ----
+// ---- button ----
 type ButtonVariant = "primary" | "outline" | "ghost" | "link" | "destructive";
 type ButtonSize = "sm" | "icon" | "md";
 
@@ -80,15 +80,11 @@ export function Button({
   );
 }
 
-// ---- client/components/ui/card.tsx ----
-/**
- * Card container. Content surfaces use square corners; rounded corners are
- * reserved for interactive controls and floating overlays (buttons, tabs,
- * inputs, badges, sheets).
- */
+// ---- card ----
+/** Card container. Sharp square corners, flat border — crisp data-dashboard look. */
 export const Card = memo(function Card({ children, className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("border border-border bg-bg-card shadow-xs", className)} {...props}>
+    <div className={cn("border border-border bg-bg-card", className)} {...props}>
       {children}
     </div>
   );
@@ -106,7 +102,7 @@ export const CardContent = memo(function CardContent({
 }: CardContentProps) {
   return (
     <div
-      className={cn("w-full min-w-0", padding === "sm" && "p-3.5 sm:p-4", padding === "md" && "p-4 sm:p-5", className)}
+      className={cn("w-full min-w-0", padding === "sm" && "p-4", padding === "md" && "p-4 sm:p-5", className)}
       {...props}
     >
       {children}
@@ -114,7 +110,7 @@ export const CardContent = memo(function CardContent({
   );
 });
 
-// ---- client/components/ui/dot.tsx ----
+// ---- dot ----
 const dotSizeClass = {
   sm: "w-2 h-2",
   md: "w-2.5 h-2.5",
@@ -137,22 +133,20 @@ export const Dot = memo(function Dot({
   );
 });
 
-// ---- client/components/ui/grids.tsx ----
+// ---- grids ----
 /** Pill-group container used to visually group segmented controls (e.g. tabs). */
 export function SegmentedGroup({ className, children, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex gap-1 p-0.5 rounded-lg bg-bg-secondary", className)} {...rest}>
+    <div className={cn("flex gap-1 p-1 rounded-lg bg-bg-secondary", className)} {...rest}>
       {children}
     </div>
   );
 }
 
-/**
- * Responsive card grid: 1 column on mobile, 2 from `sm`, and up to `cols` on `lg`.
- */
+/** Responsive card grid: 1 col mobile, 2 from `sm`, up to `cols` on `lg`. */
 export function CardGrid({
   cols = 3,
-  gap = 2,
+  gap = 3,
   className,
   children,
 }: {
@@ -178,16 +172,12 @@ export function CardGrid({
   );
 }
 
-/** Vertical stack with consistent spacing used for detail pages. */
+/** Vertical stack with consistent spacing for detail pages. */
 export function DetailLayout({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-4">{children}</div>;
 }
 
-/**
- * Flat titled section for detail pages. Use it for low-density content (a row
- * of stat cards, badges, a paragraph) instead of wrapping it in another Card,
- * so detail pages don't stack boxes inside boxes.
- */
+/** Flat titled section for detail pages (no nested Card). */
 export function DetailSection({
   title,
   children,
@@ -198,17 +188,14 @@ export function DetailSection({
   className?: string;
 }) {
   return (
-    <section className={cn("flex flex-col gap-3", className)}>
-      <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+    <section className={cn("flex flex-col gap-4", className)}>
+      <h2 className="ui-card-title">{title}</h2>
       {children}
     </section>
   );
 }
 
-/**
- * Statistic grid. Note `columns={4}` renders 2 columns on mobile and 4 from `md` up,
- * so stat cards stay readable on narrow screens.
- */
+/** Statistic grid (`columns={4}` renders 2 cols on mobile, 4 from `md`). */
 export function StatGrid({ columns = 4, children }: { columns?: 2 | 3 | 4; children: ReactNode }) {
   return (
     <div
@@ -224,13 +211,13 @@ export function StatGrid({ columns = 4, children }: { columns?: 2 | 3 | 4; child
   );
 }
 
-/** Two-column grid on desktop, single column on mobile, for label/value card pairs. */
+/** Two-column grid on desktop for label/value card pairs. */
 export function InfoGrid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">{children}</div>;
 }
 
-// ---- client/components/ui/info-card.tsx ----
-/** Card that groups a title above a vertical stack of label/value rows. */
+// ---- info-card ----
+/** Title above a vertical stack of label/value rows. */
 export const InfoCard = memo(function InfoCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card>
@@ -242,34 +229,24 @@ export const InfoCard = memo(function InfoCard({ title, children }: { title: str
   );
 });
 
-/** Single label/value row for use inside an InfoCard; `compact` shrinks the text size. */
-export const InfoRow = memo(function InfoRow({
-  label,
-  value,
-  compact = false,
-}: {
-  label: string;
-  value: ReactNode;
-  compact?: boolean;
-}) {
-  const textSize = compact ? "text-xs sm:text-sm" : "text-sm";
+/** Label/value row for InfoCard. Single text-sm scale. */
+export const InfoRow = memo(function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className={cn("flex flex-row justify-between min-w-0 py-1.5", compact ? "gap-2" : "gap-4")}>
-      <p className={cn(textSize, "text-text-secondary truncate")}>{label}</p>
-      {/* div (not p): values can be links/code blocks, which must not nest inside <p>. */}
-      <div className={cn(textSize, "font-mono tabular-nums text-right truncate text-text-primary font-medium min-w-0")}>
+    <div className={cn("flex flex-row justify-between min-w-0 py-1.5 gap-3")}>
+      <p className="text-sm text-text-secondary truncate">{label}</p>
+      {/* div (not p): values can be links/code blocks. */}
+      <div className="text-sm font-mono tabular-nums text-right truncate text-text-primary font-medium min-w-0">
         {value}
       </div>
     </div>
   );
 });
 
-// ---- client/components/ui/input.tsx ----
-// Hide the native number-input spinners (webkit + Firefox) for a cleaner field.
+// ---- input ----
+// Hide native number-input spinners (webkit + Firefox).
 const noSpinners =
   "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
-/** Text/number input; number fields have native spinners hidden via `noSpinners`. */
 export const Input = forwardRef<HTMLInputElement, Omit<React.InputHTMLAttributes<HTMLInputElement>, "size">>(
   function Input({ className, type, "aria-invalid": ariaInvalid, ...props }, ref) {
     return (
@@ -289,7 +266,7 @@ export const Input = forwardRef<HTMLInputElement, Omit<React.InputHTMLAttributes
 );
 Input.displayName = "Input";
 
-// ---- client/components/ui/pagination.tsx ----
+// ---- pagination ----
 interface PaginationProps {
   page: number;
   totalPages: number;
@@ -297,13 +274,13 @@ interface PaginationProps {
   className?: string;
 }
 
-/** Prev/next pagination control; renders nothing when there's only one page. */
+/** Prev/next pagination; renders nothing for a single page. */
 export const Pagination = memo(function Pagination({ page, totalPages, onChange, className }: PaginationProps) {
   const { t } = useTranslation();
   if (totalPages <= 1) return null;
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex items-center gap-3", className)}>
       <Button
         variant="outline"
         size="icon"
@@ -329,8 +306,8 @@ export const Pagination = memo(function Pagination({ page, totalPages, onChange,
   );
 });
 
-// ---- client/components/ui/sheet.tsx ----
-// Selector for elements that should be reachable inside the sheet for the focus trap.
+// ---- sheet ----
+// Focus-trap selector.
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -344,21 +321,20 @@ interface SheetProps {
 }
 
 /**
- * Bottom-sheet dialog (centered on desktop) rendered in a portal. While open it traps
- * focus, closes on Escape, locks body scroll, and restores focus to the trigger element on close.
+ * Bottom-sheet dialog (centered on desktop) in a portal. Traps focus, closes
+ * on Escape, locks body scroll, restores focus on close.
  */
 export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabelledBy }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
 
-  // Remember the trigger so focus can be restored on close; while open, trap focus
-  // within the panel (Tab cycles first/last) and Escape closes the sheet.
+  // Focus trap (Tab cycles first/last), Escape closes, restore focus on close.
   useEffect(() => {
     if (!open) return;
     triggerRef.current = document.activeElement;
     const prevOverflow = document.body.style.overflow;
     const prevPaddingRight = document.body.style.paddingRight;
-    // Lock scroll and compensate for scrollbar to avoid layout shift
+    // Lock scroll and compensate for scrollbar to avoid layout shift.
     const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (scrollbarW > 0) document.body.style.paddingRight = `${scrollbarW}px`;
@@ -380,12 +356,11 @@ export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabel
       }
     };
     document.addEventListener("keydown", handler);
-    // Focus the panel's first control on the next frame, but only when focus
-    // isn't already somewhere meaningful (don't steal it from the trigger flow).
+    // Focus the first control, unless focus is already somewhere meaningful.
     const timer = setTimeout(() => {
       if (document.activeElement && document.activeElement !== document.body) return;
       panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
-    }, 50); // Small delay to ensure DOM is ready
+    }, 50);
     return () => {
       document.removeEventListener("keydown", handler);
       clearTimeout(timer);
@@ -407,7 +382,7 @@ export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabel
         aria-label={ariaLabelledBy ? undefined : ariaLabel}
         aria-labelledby={ariaLabelledBy}
         className={cn(
-          "relative z-50 w-full max-w-md rounded-t-xl sm:rounded-xl border border-border bg-bg-primary shadow-lg animate-sheet-up focus:outline-none",
+          "relative z-50 w-full max-w-md rounded-t-lg sm:rounded-lg border border-border bg-bg-primary shadow-lg animate-sheet-up focus:outline-none",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -419,7 +394,7 @@ export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabel
   );
 }
 
-// ---- client/components/ui/stat-card.tsx ----
+// ---- stat-card ----
 interface StatCardProps {
   label: string;
   value: ReactNode;
@@ -427,26 +402,26 @@ interface StatCardProps {
   className?: string;
 }
 
-/** Compact metric card used in stat grids. */
+/** Compact metric card for stat grids. Label caption, value title scale. */
 export const StatCard = memo(function StatCard({ label, value, icon: Icon, className }: StatCardProps) {
   return (
     <Card className={className}>
       <CardContent padding="sm" className="text-center">
-        <div className="flex items-center justify-center gap-1.5 mb-1.5 min-w-0">
+        <div className="flex items-center justify-center gap-1.5 mb-2 min-w-0">
           {Icon && (
             <span className="text-text-tertiary shrink-0">
-              <Icon className="size-3.5" />
+              <Icon className="size-4" />
             </span>
           )}
-          <p className="text-[11px] sm:text-xs text-text-tertiary font-medium truncate">{label}</p>
+          <p className="text-xs text-text-tertiary font-medium truncate">{label}</p>
         </div>
-        <p className="text-lg sm:text-xl font-semibold tracking-tight break-words min-w-0">{value}</p>
+        <p className="text-xl font-semibold tracking-tight break-words min-w-0">{value}</p>
       </CardContent>
     </Card>
   );
 });
 
-// ---- client/components/ui/tabs.tsx ----
+// ---- tabs ----
 interface TabButtonProps {
   active?: boolean;
   onClick: () => void;
@@ -457,14 +432,13 @@ interface TabButtonProps {
   tabIndex?: number;
   "aria-controls"?: string;
   /**
-   * ARIA role override. Defaults to "tab" for use inside a tablist (TabContainer).
-   * View-mode switches (e.g. rankings/pricing toggle) must pass role="radio"
-   * inside a radiogroup — a bare role="tab" outside a tablist is invalid ARIA.
+   * ARIA role override. View-mode switches must pass role="radio" inside a
+   * radiogroup — a bare role="tab" outside a tablist is invalid.
    */
   role?: "tab" | "radio" | "button";
 }
 
-/** Accessible tab button; only the active tab is keyboard-focusable (roving tabindex). */
+/** Tab button with roving tabindex (only the active tab is focusable). */
 export const TabButton = memo(function TabButton({
   active,
   onClick,
@@ -513,16 +487,13 @@ interface TabContainerProps {
   activeTab: string;
   className?: string;
   tabSize?: "sm" | "md";
-  /** Stretch tabs to fill each row on sm+; opt-in for wide tab bars. */
+  /** Stretch tabs to fill each row on sm+. */
   fill?: boolean;
   onTabChange: (tabId: string) => void;
   children: ReactNode;
 }
 
-/**
- * Tab list with keyboard navigation (arrow keys wrap around and move focus) and ARIA wiring.
- * `children` is the panel content for the currently active tab.
- */
+/** Tab list with arrow-key navigation; `children` is the active panel. */
 export function TabContainer({
   tabs,
   activeTab,
@@ -549,9 +520,9 @@ export function TabContainer({
   };
 
   return (
-    <div className={cn("flex flex-col gap-4 sm:gap-5", className)}>
+    <div className={cn("flex flex-col gap-3", className)}>
       <SegmentedGroup
-        className={cn("p-1 w-fit max-w-full overflow-x-auto no-scrollbar sm:flex-wrap", fill && "sm:w-full")}
+        className={cn("w-fit max-w-full overflow-x-auto no-scrollbar sm:flex-wrap", fill && "sm:w-full")}
         role="tablist"
         onKeyDown={handleTablistKeyDown}
       >

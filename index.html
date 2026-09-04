@@ -11,8 +11,8 @@
     <meta property="og:title" content="ModelTide" />
     <meta property="og:description" content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析" />
     <meta property="og:image" content="/icons/apple-touch-icon.png" />
-    <!-- NOTE: social crawlers require an absolute og:image URL: replace the
-         relative path above with https://<production-domain>/icons/apple-touch-icon.png at deploy time. -->
+    <!-- NOTE: social crawlers need an absolute og:image URL: replace with
+         https://<production-domain>/icons/apple-touch-icon.png at deploy time. -->
     <meta name="twitter:card" content="summary" />
     <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
@@ -21,23 +21,18 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ModelTide" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- NOTE: keep theme-color (#ffffff light / #090a0b dark, flipped by the
-         pre-paint script below) in sync with manifest theme_color (#090a0b)
-         so the first paint, PWA splash, and browser chrome match. -->
-    <!-- NOTE: crossorigin is REQUIRED on font preloads: fonts are fetched via
-         anonymous CORS, and without it the preload is ignored and the font
-         downloads twice (preload + @font-face). -->
+    <!-- Keep theme-color in sync with the manifest (#000000) and the script below. -->
+    <!-- crossorigin is REQUIRED on font preloads (anonymous CORS); without it
+         the preload is ignored and the font downloads twice. -->
     <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
     <script>
-      // Apply the saved/OS theme before first paint to avoid a light/dark flash on load.
-      // NOTE: this inline block is allowlisted in public/_headers via its sha256 hash;
-      // if you edit it, regenerate the hash with `npm run build` (npm run hash:csp only prints).
+      // Pre-paint theme (avoids a light/dark flash). Allowlisted in public/_headers
+      // by sha256 — regenerate with `npm run build` after editing.
       (function () {
         var stored = null;
         try {
-          // Key must match STORAGE_KEYS.settings ("settings"): zustand/persist
-          // writes { state: { themeMode, lang } } under that key.
+          // Key must match STORAGE_KEYS.settings ("settings").
           var raw = localStorage.getItem("settings");
           if (raw) {
             var parsed = JSON.parse(raw);
@@ -54,7 +49,7 @@
         }
         var meta = document.querySelector("meta[name='theme-color']");
         if (meta) {
-          meta.setAttribute("content", dark ? "#090a0b" : "#ffffff");
+          meta.setAttribute("content", dark ? "#000000" : "#ffffff");
         }
       })();
     </script>

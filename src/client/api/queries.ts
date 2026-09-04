@@ -7,6 +7,7 @@ import {
   SLOW_TTL_MS,
   STATIC_TTL_MS,
   THIRTY_MINUTES,
+  apiPaths as baseApiPaths,
 } from "@/shared/config";
 import type {
   ArenaBoardPayload,
@@ -23,18 +24,114 @@ import type {
   StatusHistoryPayload,
 } from "@/shared/types";
 import { normalizePercent, dedupeBy } from "@/client/utils";
-import { fetcher, apiPaths, type QueryCtx } from "./client";
 
-// Query keys — derived from the shared API domain suffixes, the same source the
-// server KV cache keys use (`cacheKeys` in shared/config), so the client/server
-// naming can never drift apart.
+// ---- fetch infra ----
+// Client timeout stays above the server's ~25s route timeout so the server's
+// 504 surfaces first instead of masking as a network error.
+const FETCH_TIMEOUT_MS = 60_000;
+
+// Strip trailing slashes so apiBase concatenates safely with "/api/..." paths.
+const apiBase = import.meta.env?.VITE_API_BASE?.replace(/\/+$/, "") ?? "";
+
+export interface QueryCtx {
+  signal?: AbortSignal;
+}
+
+/** API error carrying the HTTP status (404 → NotFound, 5xx → retry). */
+export class ApiClientError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiClientError";
+    this.status = status;
+  }
+}
+
+function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), ms);
+  return ctrl.signal;
+}
+
+function combineSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
+  if (typeof AbortSignal.any === "function") return AbortSignal.any([a, b]);
+  const ctrl = new AbortController();
+  const onAbort = (): void => ctrl.abort();
+  if (a.aborted || b.aborted) ctrl.abort();
+  else {
+    a.addEventListener("abort", onAbort, { once: true });
+    b.addEventListener("abort", onAbort, { once: true });
+  }
+  return ctrl.signal;
+}
+
+async function parseErrorMessage(res: Response): Promise<string> {
+  const ct = res.headers.get("content-type") ?? "";
+  let message = `HTTP ${res.status}: ${res.statusText}`;
+  try {
+    if (ct.includes("application/json")) {
+      const body = (await res.json()) as { error?: { message?: string } } | null;
+      if (body?.error?.message) message = body.error.message;
+    } else {
+      const text = await res.text();
+      if (text) message = text.slice(0, 500);
+    }
+  } catch (e) {
+    console.warn("[api] failed to parse error response:", e);
+  }
+  return message;
+}
+
+/** GET `path` and unwrap the server's `{ data }` envelope. */
+async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { cache?: RequestCache }): Promise<T> {
+  const url = apiBase && path.startsWith("/") ? apiBase + path : path;
+  const timeout = timeoutSignal(FETCH_TIMEOUT_MS);
+  const res = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: signal ? combineSignals(signal, timeout) : timeout,
+    cache: opts?.cache,
+  });
+  if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
+  }
+  return ((await res.json()) as { data: T }).data;
+}
+
+// Client path builders from the shared apiPaths map.
+// A separate VITE_API_BASE origin also needs a connect-src entry in public/_headers.
+export const apiPaths = {
+  artificialIndex: baseApiPaths.artificialIndex,
+  openSourceModels: (() => {
+    const d = OPEN_SOURCE_MODELS_DEFAULTS;
+    return `${baseApiPaths.openSourceModels}?sort=${d.sort}&direction=${d.direction}&limit=${d.limit}`;
+  })(),
+  openSourceReleases: baseApiPaths.openSourceReleases,
+  openRouterRankings: baseApiPaths.openRouterRankings,
+  closedReleases: baseApiPaths.closedReleases,
+  arenaBoard: (category: string) => `${baseApiPaths.arenaBoard}?category=${encodeURIComponent(category)}`,
+  arenaRankings: baseApiPaths.arenaRankings,
+  officialPricing: baseApiPaths.officialPricing,
+  statusHistory: baseApiPaths.statusHistory,
+  news: (category: string) => `${baseApiPaths.news}?category=${encodeURIComponent(category)}`,
+  homeDashboard: baseApiPaths.homeDashboard,
+} as const;
+
+export const fetcher =
+  <T>(path: string) =>
+  ({ signal }: QueryCtx) =>
+    apiFetch<T>(path, signal);
+
+// Query keys derive from the shared API domain suffixes, matching the
+// server KV cache keys so client/server naming can't drift.
 export const queryKeys = {
   artificialIndex: ["api", API_DOMAINS.artificialIndex] as const,
   openSourceReleases: ["api", API_DOMAINS.openSourceReleases] as const,
   openRouterRankings: ["api", API_DOMAINS.openRouterRankings] as const,
   homeDashboard: ["api", API_DOMAINS.homeDashboard] as const,
-  // The client always requests the shared defaults; the key mirrors the URL builder
-  // in client.ts, which derives its query string from the same constants.
+  // The client always requests the shared defaults; the key mirrors the URL builder.
   openSourceModels: [
     "api",
     API_DOMAINS.openSourceModels,
@@ -51,19 +148,18 @@ export const queryKeys = {
 };
 
 interface ApiQueryOptions<T> {
-  /** Refetch cadence; also used as staleTime so the two never drift apart. */
+  /** Refetch cadence; also used as staleTime. */
   ttl?: number;
   staleTime?: number;
   refetchInterval?: number | false;
   queryFn?: (ctx: QueryCtx) => Promise<T>;
 }
 
-/** Creates a typed query for `path` with `key`, exposing `use` and `useSuspense`. */
+/** Typed query for `path` with `key`, exposing `use` and `useSuspense`. */
 function createApiQuery<T>(key: readonly (string | number)[], path: string, opts?: ApiQueryOptions<T>) {
   const { queryFn: customFn, ttl, ...rest } = opts ?? {};
   const queryFn = customFn ?? fetcher<T>(path);
-  // No background polling by default: data refetches on mount when stale.
-  // Pass refetchInterval explicitly for live data (e.g. status history).
+  // No background polling by default; pass refetchInterval explicitly for live data.
   const timing = { staleTime: ttl, refetchInterval: false as const, ...rest };
   return {
     use: (enabled = true) => useQuery<T>({ queryKey: key, queryFn, ...timing, enabled }),
@@ -74,8 +170,6 @@ function createApiQuery<T>(key: readonly (string | number)[], path: string, opts
 export const qArtificial = createApiQuery<ArtificialAnalysisModel[]>(
   queryKeys.artificialIndex,
   apiPaths.artificialIndex,
-  // Match the server's DEFAULT_TTL_MS (30 min): a longer staleTime would let a
-  // long-lived tab show data well past the server's cron refresh.
   { ttl: THIRTY_MINUTES },
 );
 export const qOpenSourceReleases = createApiQuery<OpenSourceModelEntry[]>(
@@ -97,8 +191,7 @@ export const qOpenSourceModels = createApiQuery<OpenSourceModelEntry[]>(
   { ttl: SLOW_TTL_MS },
 );
 
-// One stable query per category (module-level cache) instead of rebuilding the
-// query — and its closures — on every render.
+// One stable query per category (module-level cache).
 const newsQueries = new Map<NewsCategory, ReturnType<typeof createApiQuery<NewsItem[]>>>();
 export const qNews = (c: NewsCategory) => {
   let q = newsQueries.get(c);
@@ -109,8 +202,7 @@ export const qNews = (c: NewsCategory) => {
   return q;
 };
 
-// The rolling store updates on the cron; keep light polling here only —
-// rankings/news/home refetch on mount when stale instead of on an interval.
+// Status store updates on cron; light polling here, mount-refetch elsewhere.
 export const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHistory, apiPaths.statusHistory, {
   ttl: FIVE_MINUTES,
   refetchInterval: FIVE_MINUTES,
@@ -127,8 +219,7 @@ export const qClosedReleases = createApiQuery<ClosedReleaseEntry[]>(queryKeys.cl
   ttl: STATIC_TTL_MS,
 });
 
-// One stable query per board (module-level cache) instead of rebuilding the
-// query — and its closures — on every render.
+// One stable query per board (module-level cache).
 const boardQueries = new Map<string, ReturnType<typeof createApiQuery<ArenaBoardPayload>>>();
 export const qArenaBoard = (category: string) => {
   let q = boardQueries.get(category);
@@ -150,7 +241,6 @@ export const useSuspenseOpenSourceReleases = qOpenSourceReleases.useSuspense;
 export const useSuspenseStatusHistory = qStatusHistory.useSuspense;
 export const useSuspenseNewsByCategory = (c: NewsCategory) => qNews(c).useSuspense();
 export const useSuspenseArenaRankings = qArena.useSuspense;
-export const useSuspenseOfficialPricing = qOfficialPricing.useSuspense;
 export const useSuspenseClosedReleases = qClosedReleases.useSuspense;
 export const useSuspenseArenaBoard = (category: string) => qArenaBoard(category).useSuspense();
 
@@ -161,7 +251,7 @@ interface OpenSourceModelsQuery {
   error: Error | null;
 }
 
-/** Merges trending and release lists, de-duplicating by model id so each model appears once. Supports partial data while one query is still pending. */
+/** Merge trending + release lists, deduped by id. Supports partial data. */
 export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
   const trending = qOpenSourceModels.use(enabled);
   const releases = qOpenSourceReleases.use(enabled);
@@ -188,8 +278,7 @@ export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
   };
 }
 
-// One entry per model that has an omniscience breakdown; models without one are skipped.
-// Sorted by accuracy descending so the most reliable models rank first.
+// One entry per model with an omniscience breakdown, sorted by accuracy desc.
 function buildHallucinationRankings(models: ArtificialAnalysisModel[]): HallucinationRankingEntry[] {
   return models
     .flatMap((model) => {
@@ -210,15 +299,12 @@ function buildHallucinationRankings(models: ArtificialAnalysisModel[]): Hallucin
     .sort((a, b) => (b.accuracy ?? -Infinity) - (a.accuracy ?? -Infinity));
 }
 
-/** Memoized hallucination rankings; empty until `enabled` and data are both present. */
+/** Memoized hallucination rankings. */
 export function useHallucinationRankings(data: ArtificialAnalysisModel[], enabled = true): HallucinationRankingEntry[] {
   return useMemo(() => (enabled && data.length > 0 ? buildHallucinationRankings(data) : []), [data, enabled]);
 }
 
-/**
- * Suspense wrapper combining the Artificial Analysis rankings query with the
- * hallucination rankings derived from it — the standard way to consume both.
- */
+/** Suspense wrapper combining AA rankings with derived hallucination rankings. */
 export function useSuspenseHallucinationRankings(): HallucinationRankingEntry[] {
   const { data } = useSuspenseArtificialRankings();
   return useHallucinationRankings(data);

@@ -1,12 +1,12 @@
 import { UpstreamError } from "@/server/infra";
 
 export const MAX_RSC_BYTES = 5 * 1024 * 1024;
-/** Cap traversed JSON nodes so a malicious 5MB payload cannot burn Worker CPU. */
+/** Traversal node budget against malicious payloads burning CPU. */
 const MAX_RSC_NODES = 50_000;
-/** Skip absurd single lines early to keep per-line scans bounded. */
+/** Skip absurd single lines to keep per-line scans bounded. */
 const MAX_RSC_LINE_CHARS = 2 * 1024 * 1024;
 
-/** BFS traversal (shallowest-first, cycle-safe) with a node budget. */
+/** BFS traversal, shallowest-first, cycle-safe, with a node budget. */
 function* traverse(root: unknown): Generator<unknown> {
   const seen = new Set<object>();
   const queue: unknown[] = [root];
@@ -48,8 +48,7 @@ function isMarkerBoundary(line: string, marker: string): boolean {
   while (idx !== -1) {
     const after = line.slice(idx + q.length);
     const trimmed = after.trimStart();
-    // Whitespace-only tail (e.g. `"marker"   \n`) is NOT a boundary: require a
-    // structural char to avoid false positives from prose containing the marker.
+    // Whitespace-only tails aren't boundaries (prose may contain the marker).
     if (!trimmed) {
       idx = line.indexOf(q, idx + 1);
       continue;
@@ -61,8 +60,7 @@ function isMarkerBoundary(line: string, marker: string): boolean {
   return false;
 }
 
-// Next.js flight chunk ids are hex (e.g. `26:`, `c:`, `2E:`); match both cases
-// so uppercase ids from newer Next builds are not dropped.
+// Next.js flight chunk ids are hex (e.g. `26:`, `2E:`); match both cases.
 const STREAM_LINE_RE = /^[0-9a-fA-F]+:(.*)$/;
 
 function tryParseCandidates<T>(line: string, extract: (data: unknown) => T[] | null): T[] | null {

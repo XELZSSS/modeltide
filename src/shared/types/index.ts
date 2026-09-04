@@ -1,25 +1,21 @@
 import type { BenchmarkKey } from "@/shared/config";
 
-// ---- shared/types/rankings.ts ----
-// Ranking-domain types: Artificial Analysis + OpenRouter + HuggingFace + hallucination.
-// Former artificial.ts + openrouter.ts + huggingface.ts + hallucination.ts combined.
-// Field names mirror the Artificial Analysis API response (snake_case).
+// Ranking-domain types. Field names mirror the Artificial Analysis API (snake_case).
 
-/** Creator/vendor metadata, including a display color. */
+/** Creator/vendor metadata. */
 export interface ModelCreators {
   name?: string;
   color?: string;
 }
 
-/** Per-1M-token prices in USD (unit: $/1M tokens); cache_hit is the cached-input price. */
+/** Per-1M-token prices in USD. */
 export interface ModelPricing {
   input?: number | null;
   output?: number | null;
-  /** Snake-case upstream field (unit: $/1M tokens). Prefer reading via `cacheHit` alias below. */
+  /** Snake-case upstream field; prefer the `cacheHit` alias below. */
   cache_hit?: number | null;
   /**
-   * Camel-case alias of `cache_hit` (unit: $/1M tokens), kept for cross-source
-   * uniformity with OpenRouter `cacheHit`. Writers may set either; readers must
+   * Camel-case alias of `cache_hit`. Writers may set either; readers must
    * accept both (`pricing.cacheHit ?? pricing.cache_hit`).
    */
   cacheHit?: number | null;
@@ -50,10 +46,7 @@ export interface ModelOmniscienceBreakdown {
 
 /** A single model entry from the Artificial Analysis intelligence index. */
 export interface ArtificialAnalysisModel {
-  /**
-   * Non-empty app-wide identity (never "" — compact() drops rows without slug/name;
-   * callers must treat "" as absent and can use hasValidIdentity(m) to check).
-   */
+  /** App-wide identity, never "" — callers must treat "" as absent. */
   id: string;
   slug: string;
   name: string;
@@ -69,8 +62,8 @@ export interface ArtificialAnalysisModel {
   coding_index?: number | null;
   agentic_index?: number | null;
   /**
-   * Canonical keys are BenchmarkKey (see shared/config/benchmarks.ts); the string
-   * index keeps forward-compat for unknown upstream keys. Values are 0-100 points.
+   * Canonical keys are BenchmarkKey; the string index keeps forward-compat
+   * for unknown upstream keys. Values are 0-100 points.
    */
   benchmarks?: Partial<Record<BenchmarkKey, number | null>> & Record<string, number | null>;
   pricing?: ModelPricing;
@@ -86,7 +79,7 @@ export interface ArtificialAnalysisModel {
   omniscience_breakdown?: ModelOmniscienceBreakdown;
 }
 
-/** Text-to-Image leaderboard entry from Artificial Analysis (artificialanalysis.ai/text-to-image). */
+/** Text-to-Image leaderboard entry from Artificial Analysis. */
 export interface TextToImageModel {
   id: string;
   slug: string;
@@ -103,26 +96,12 @@ export interface TextToImageModel {
 
 /** Payload for the Text-to-Image leaderboard. */
 export interface TextToImagePayload {
-  /**
-   * Ranked models. NOTE: an empty array is ambiguous upstream (could be "no data"
-   * vs "fetch failed") — server returns this shape on partial failure with
-   * `partial: true`; HomeDashboardData uses `null` (not `[]`) to mean "source
-   * failed". Use isEmptyT2i() (shared/types/common.ts) to test emptiness.
-   */
+  /** Ranked models. Empty is ambiguous upstream — see `partial`; use isEmptyT2i(). */
   models: TextToImageModel[];
-  /** True when this payload is a degraded/empty fallback (partial-failure TTL applies). */
+  /** True when this payload is a degraded/empty fallback. */
   partial?: boolean;
-  /** ISO fetch time; optional for backward compat with older cached payloads. */
+  /** ISO fetch time. */
   fetchedAt?: string;
-}
-
-/**
- * Non-empty identity contract: id must be a non-blank string.
- * Shared by server (filter) and client (lookup) so both agree on validity.
- */
-export function hasValidIdentity(m: { id?: unknown; slug?: unknown } | null | undefined): boolean {
-  if (!m || typeof (m as { id?: unknown }).id !== "string") return false;
-  return (m as { id: string }).id.trim().length > 0;
 }
 
 /** Usage-based ranking categories from OpenRouter. */
@@ -161,11 +140,11 @@ export interface OpenRouterRankingsPayload {
 /** A model from the Hugging Face Hub open-source leaderboard. */
 export interface OpenSourceModelEntry {
   id: string;
-  /** Author org/user; null when unknown — display via orNA(t)/t("unknown"), not a sentinel. */
+  /** Author org/user; null when unknown. */
   author: string | null;
   downloads: number;
   likes: number;
-  /** SPDX-ish license id; null when unrecognized — display via orNA(t). */
+  /** License id; null when unrecognized. */
   license: string | null;
   task: string | null;
   createdAt: string | null;
@@ -173,7 +152,7 @@ export interface OpenSourceModelEntry {
   tags: string[];
 }
 
-/** One row of the Arena human-preference leaderboard (arena.ai). */
+/** One row of the Arena human-preference leaderboard. */
 export interface ArenaRankEntry {
   rank: number;
   id: string;
@@ -182,7 +161,7 @@ export interface ArenaRankEntry {
   /** Arena Elo-style score. */
   score: number | null;
   votes: number | null;
-  /** True when Arena flags the row as Preliminary (too few votes to trust the rank). */
+  /** True when Arena flags the row as Preliminary (too few votes). */
   preliminary: boolean;
   priceInput: number | null;
   priceOutput: number | null;
@@ -202,20 +181,20 @@ export interface ArenaBoardPayload {
   fetchedAt: string;
 }
 
-/** One closed-source frontier release from the Artificial Analysis changelog. */
+/** One closed-source frontier release. */
 export interface ClosedReleaseEntry {
   id: string;
   model: string;
   provider: string;
-  /** ISO calendar date (YYYY-MM-DD) as published upstream. */
+  /** ISO date (YYYY-MM-DD) as published upstream. */
   releaseDate: string;
-  /** Plain-English blurb; empty when the entry carries none. */
+  /** Blurb; empty when the entry carries none. */
   notes: string;
-  /** Artificial Analysis model page URL; null when absent. */
+  /** Model page URL; null when absent. */
   link: string | null;
 }
 
-/** One officially priced model (first-party provider rate, USD per 1M tokens). */
+/** One officially priced model (first-party rate, USD per 1M tokens). */
 export interface OfficialPriceModel {
   id: string;
   name: string;
@@ -244,38 +223,16 @@ export interface HallucinationRankingEntry {
   omniscienceIndex: number;
 }
 
-// ---- shared/types/service.ts ----
 // Service-domain types: home/search/health + news + status history.
-// Former common.ts + news.ts + status.ts combined.
 
 /** UI color theme, persisted in localStorage. */
 export type ThemeMode = "light" | "dark";
 
-/** Combined data served for the home dashboard. */
+/** Combined data served for the home dashboard (null = source failed). */
 export interface HomeDashboardData {
-  /**
-   * OpenRouter rankings, or null when that source failed (NOT [] — null means
-   * "fetch failed", so the UI can show degraded state instead of "0 models").
-   */
   orRankings: OpenRouterRankingsPayload | null;
-  /**
-   * HuggingFace open-source list, or null when that source failed. An empty []
-   * from upstream is treated as transient failure server-side (partial TTL);
-   * home.ts settles each source to null on rejection, so null = failed.
-   */
   opensource: OpenSourceModelEntry[] | null;
-  /**
-   * Text-to-Image payload, or null when that source failed. Distinguish from
-   * `{ models: [] }` (ambiguous empty): prefer null for failure; when a payload
-   * object exists check `partial === true` / isEmptyT2i() for degraded empties.
-   */
   textToImage: TextToImagePayload | null;
-}
-
-/** Which home-dashboard slices are missing (partial degradation descriptor). */
-export interface HomePartial {
-  partial: boolean;
-  missing: (keyof HomeDashboardData)[];
 }
 
 /** True when the T2I payload is absent or carries no models (null-safe). */
@@ -283,13 +240,7 @@ export function isEmptyT2i(payload: TextToImagePayload | null | undefined): bool
   return !payload || !Array.isArray(payload.models) || payload.models.length === 0;
 }
 
-/** Describe which HomeDashboardData slices failed (all-null => full failure). */
-export function describeHomePartial(data: HomeDashboardData): HomePartial {
-  const missing = (Object.keys(data) as (keyof HomeDashboardData)[]).filter((k) => data[k] == null);
-  return { partial: missing.length > 0, missing };
-}
-
-/** The ranking tabs a search result can come from (each id doubles as its i18n label). */
+/** The ranking tabs a search result can come from. */
 export type SearchResultSource =
   | "modelRankings"
   | "openRouterRankings"
@@ -308,7 +259,7 @@ export interface SearchResult {
 
 /** Health-check result for one upstream data source. */
 export interface SourceStatus {
-  id: "artificialAnalysis" | "huggingface" | "openrouter" | "news" | "arena" | "officialPricing";
+  id: "artificialAnalysis" | "huggingface" | "openrouter" | "news" | "arena" | "benchmarkList";
   ok: boolean;
   status: number | null;
   latencyMs: number | null;
@@ -316,7 +267,7 @@ export interface SourceStatus {
   checkedAt: string;
 }
 
-/** News feed categories; each maps to a group of RSS feeds in rssConfig. */
+/** News feed categories. */
 export type NewsCategory = "industry" | "opensource" | "hardware" | "funding";
 
 /** A single article parsed from an RSS feed. */
@@ -328,65 +279,64 @@ export interface NewsItem {
   source: string;
 }
 
-/** One probe result for a data source, taken by the cron scheduler (~4 min cadence). */
+/** One probe result for a data source. */
 export interface UptimeSample {
-  /** Epoch millis of the sample. */
+  /** Epoch millis. */
   t: number;
   ok: boolean;
-  /** Successful probe round-trip in millis; null when the probe failed. */
+  /** Probe round-trip millis; null on failure. */
   latencyMs: number | null;
-  /** HTTP status of the winning (successful) probe; null on failure or for older samples. */
+  /** HTTP status of the winning probe; null on failure. */
   status?: number | null;
-  /** Aggregated failure reason when the whole source is down; null when healthy or unknown. */
+  /** Failure reason; null when healthy. */
   error?: string | null;
 }
 
 /** Per-day rollup of samples for one data source (UTC days). */
 export interface DayBucket {
-  /** UTC day in "YYYY-MM-DD" form. */
+  /** UTC day "YYYY-MM-DD". */
   day: string;
   total: number;
   ok: number;
   latencySum: number;
   latencyN: number;
-  /** ok → fail transitions observed that day. */
+  /** ok → fail transitions that day. */
   incidents: number;
 }
 
-/** A derived availability state transition (failures and recoveries). */
+/** An availability state transition. */
 export interface StatusEvent {
   id: SourceStatus["id"];
   type: "down" | "up";
-  /** ISO timestamp of the sample that flipped the state. */
+  /** ISO timestamp of the flipping sample. */
   at: string;
-  /** For "down" events: minutes the outage lasted when it recovered (null while ongoing). */
+  /** Outage minutes once recovered; null while ongoing. */
   durationMin: number | null;
 }
 
-/** Per-source rollup served on the status page list. */
+/** Per-source rollup for the status page list. */
 export interface SourceHistorySummary {
   id: SourceStatus["id"];
   ok: boolean;
   latencyMs: number | null;
   checkedAt: string | null;
-  /** Uptime ratios in [0,1]; null when no samples exist in the window. */
+  /** Uptime ratios in [0,1]; null when no samples in the window. */
   uptime24h: number | null;
   uptime7d: number | null;
   uptime90d: number | null;
-  /** Average successful-probe latency over 24h in millis; null when no samples. */
+  /** Avg successful-probe latency over 24h in millis; null when no samples. */
   avgLatency24h: number | null;
 }
 
 export interface StatusHistoryPayload {
-  /** Time since the worker's first recorded launch (see sources/status-history.ts). */
   firstLaunchAt: string;
   uptimeMs: number;
   sources: SourceHistorySummary[];
-  /** Raw 24h samples per source id, oldest first. */
+  /** Raw 24h samples per source, oldest first. */
   recent: Partial<Record<SourceStatus["id"], UptimeSample[]>>;
-  /** 90 daily buckets per source id, oldest first. */
+  /** 90 daily buckets per source, oldest first. */
   daily: Partial<Record<SourceStatus["id"], DayBucket[]>>;
-  /** State transitions derived from recent samples, newest first. */
+  /** State transitions, newest first. */
   events: StatusEvent[];
   generatedAt: string;
 }

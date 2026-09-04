@@ -20,10 +20,8 @@ import {
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 /**
- * Unified line chart of the top-10 models by intelligence index, plotting
- * coding and agentic indices together. Y-axis starts at 0 and grows past 100
- * when the data exceeds it; empty data renders an EmptyState, not a blank box.
- * Merges former Home "Top 10 intelligence vs coding" and /trends "intelligence vs agentic".
+ * Top-10 models by intelligence index, plotting coding + agentic indices.
+ * Y-axis grows past 100 with the data; empty renders an EmptyState.
  */
 export const IndexLineChart = memo(function IndexLineChart({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
@@ -60,8 +58,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
     [top10, t, theme],
   );
 
-  // Indices are 0-100 today, but clamp the ceiling to the data so future
-  // above-100 scores aren't clipped off the top of the chart.
+  // Clamp the ceiling to the data so above-100 scores aren't clipped.
   const yMax = useMemo(() => {
     let peak = 100;
     for (const m of top10) {
@@ -76,7 +73,6 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
   const options = useMemo<ChartOptions<"line">>(
     () => ({
       ...chartBase,
-      // Hovering anywhere on the chart shows both series values, like the old shared tooltip.
       interaction: { mode: "index", intersect: false },
       scales: {
         x: {
@@ -102,7 +98,6 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
           ...defaultTooltipOptions(theme),
           callbacks: {
             label: (ctx) => {
-              // Null points (a model without a coding index) would render as "0" via Number(null).
               const y = ctx.parsed.y;
               return y == null ? `${ctx.dataset.label}: —` : `${ctx.dataset.label}: ${Math.round(Number(y))}`;
             },
@@ -117,7 +112,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
     return (
       <Card>
         <CardContent padding="md">
-          <p className="text-sm font-semibold mb-3">{t("intelligenceIndex")}</p>
+          <p className="ui-card-title mb-4">{t("intelligenceIndex")}</p>
           <EmptyState message={t("noRankingsData")} />
         </CardContent>
       </Card>
@@ -127,8 +122,8 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
   return (
     <Card>
       <CardContent padding="md">
-        <p className="text-sm font-semibold mb-3">{t("intelligenceIndex")}</p>
-        <div className="w-full h-[210px] sm:h-[260px]">
+        <p className="ui-card-title mb-4">{t("intelligenceIndex")}</p>
+        <div className="w-full h-[200px] sm:h-[240px]">
           <figure className="h-full">
             <Line data={data} options={options} aria-label={t("intelligenceIndex")} role="img" />
           </figure>

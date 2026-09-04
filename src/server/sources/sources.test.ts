@@ -1,23 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  backfillFromMeta,
-  compact,
-  compactOmniscienceEnrich,
-  computeBlendPrice,
-} from "@/server/sources/artificial-analysis";
+import { backfillFromMeta, compact, compactOmniscienceEnrich } from "@/server/sources/artificial-analysis";
 import { mergeBySlug, mapEntry, type RawEntry } from "@/server/sources/artificial-analysis";
 import {
   categoryFrom,
   creatorFromSlug,
   mapModels,
-  normalizeModelKey,
   parseChange,
   titleFromSlug,
   type ModelRow,
   type PricingEntry,
 } from "@/server/sources/openrouter";
+import { computeBlendPrice, normalizeModelKey } from "@/shared/utils";
 import { getModels } from "@/server/sources/huggingface";
-import { CacheService } from "@/server/infra";
+import { CacheService, type ProbeResult } from "@/server/infra";
 import {
   mergeSample,
   deriveEvents,
@@ -25,7 +20,6 @@ import {
   uptimeRatio,
   avgLatency,
   getStatusHistory,
-  statusFromStore,
   readStore,
   getUptime,
   aggregateProbes,
@@ -33,7 +27,14 @@ import {
   type HistoryStore,
   type ProbeTarget,
 } from "./status-history";
-import { BENCHMARK_KEYS, DEFAULT_TTL_MS, normalizeModelLimit, PARTIAL_FAIL_TTL_MS, SOURCE_IDS } from "@/shared/config";
+import {
+  BENCHMARK_KEYS,
+  DEFAULT_TTL_MS,
+  normalizeModelLimit,
+  PARTIAL_FAIL_TTL_MS,
+  SOURCE_IDS,
+  upstreamConfig,
+} from "@/shared/config";
 import type { AppContext } from "@/server/context";
 import type { ArtificialAnalysisModel, DayBucket, SourceStatus, UptimeSample } from "@/shared/types";
 import {
@@ -45,7 +46,8 @@ import {
   parseOpenAiPricing,
 } from "@/server/sources/official-pricing";
 import { parseArenaPage, parseArenaRow } from "@/server/sources/arena";
-import { extractInitialData, parseChangelogEntries } from "@/server/sources/closed-releases";
+import { parseBenchmarkListPage, parseBenchmarkListRow } from "@/server/sources/closed-releases";
+import { isChallengePage } from "@/server/sources/data-filter";
 
 // Consolidated tests for the upstream data sources: Artificial Analysis
 // mapping, OpenRouter mapping, official-pricing parsers, Arena/changelog feeds,
@@ -586,37 +588,6 @@ describe("aggregateProbes", () => {
   });
 });
 
-describe("statusFromStore", () => {
-  it("folds the newest sample per source into the status payload", () => {
-    const store: HistoryStore = {
-      sources: { openrouter: { recent: [sample(10, true, 800), sample(4, false)], daily: [] } },
-    };
-    const { sources, checkedAt } = statusFromStore(store, NOW);
-    const or = sources.find((s) => s.id === "openrouter")!;
-    expect(or).toMatchObject({ ok: false, latencyMs: null, error: "probe failed" });
-    expect(or.checkedAt).toBe(new Date(NOW - 4 * MIN).toISOString());
-    // Sources without any history report as down with a note instead of going missing.
-    const hf = sources.find((s) => s.id === "huggingface")!;
-    expect(hf).toMatchObject({ ok: false, error: "no samples yet" });
-    expect(checkedAt).toBe(new Date(NOW - 4 * MIN).toISOString());
-  });
-
-  it("carries the sample's HTTP status when healthy", () => {
-    const entry: HistoryStore = {
-      sources: { huggingface: { recent: [{ t: NOW, ok: true, latencyMs: 120, status: 200, error: null }], daily: [] } },
-    };
-    const { sources } = statusFromStore(entry, NOW);
-    expect(sources.find((s) => s.id === "huggingface")).toMatchObject({ ok: true, status: 200, error: null });
-  });
-
-  it("reports an empty store as all-down with placeholder timestamps", () => {
-    const { sources, checkedAt } = statusFromStore({ sources: {} }, NOW);
-    expect(sources).toHaveLength(SOURCE_IDS.length);
-    expect(sources.every((s) => s.ok === false && s.error === "no samples yet")).toBe(true);
-    expect(checkedAt).toBe(new Date(NOW).toISOString());
-  });
-});
-
 describe("deriveEvents", () => {
   it("pairs a down event with its duration and an up event on recovery", () => {
     const events = deriveEvents(historyId, [sample(30, true), sample(20, false), sample(10, false), sample(0, true)]);
@@ -739,6 +710,42 @@ describe("getStatusHistory sample-on-read", () => {
     expect(or.latencyMs).toBeNull();
     expect(or.uptime24h).toBe(0);
   });
+
+  // Vitest 5 `vi.when`: per-argument probe behaviors without a manual
+  // mockImplementation switch. NOTE: a broad `calledWith(expect.any(...))`
+  // chained after a specific URL is *merged* into that behavior (behavior
+  // merging) and stops matching other args — so the healthy default lives
+  // in `onUnmatched` instead of a trailing catch-all behavior.
+  it("marks only the failing source down when probes disagree per target", async () => {
+    const kvStore = new Map<string, string>();
+    const probe = vi.fn<(url: string) => Promise<ProbeResult>>();
+    const openrouterUrl = `${upstreamConfig.openrouter}/api/v1/models`;
+    vi.when(probe, {
+      onUnmatched: () => Promise.resolve({ ok: true, status: 200, latencyMs: 500, error: null }),
+    })
+      .calledWith(openrouterUrl)
+      .thenResolve({ ok: false, status: 503, latencyMs: null, error: "HTTP 503" });
+    const ctx: AppContext = {
+      cache: {} as AppContext["cache"],
+      http: { probe } as unknown as AppContext["http"],
+      kv: {
+        get: async (key: string) => kvStore.get(key) ?? null,
+        put: async (key: string, value: string) => {
+          kvStore.set(key, value);
+        },
+      } as AppContext["kv"],
+      log: () => {},
+    };
+    const payload = await getStatusHistory(ctx);
+    const or = payload.sources.find((s) => s.id === "openrouter")!;
+    expect(or.ok).toBe(false);
+    expect(or.uptime24h).toBe(0);
+    for (const s of payload.sources) {
+      if (s.id === "openrouter") continue;
+      expect(s.ok).toBe(true);
+    }
+    expect(probe).toHaveBeenCalledWith(openrouterUrl);
+  });
 });
 
 describe("normalizeModelLimit", () => {
@@ -758,9 +765,12 @@ describe("buildTargets", () => {
     const targets = buildTargets();
     const news = targets.filter((t) => t.id === "news");
     expect(news).toHaveLength(NEWS_CATEGORIES.length);
-    expect(targets).toHaveLength(10 + NEWS_CATEGORIES.length);
+    expect(targets).toHaveLength(5 + NEWS_CATEGORIES.length);
     expect(targets.some((t) => t.id === "arena")).toBe(true);
-    expect(targets.filter((t) => t.id === "officialPricing")).toHaveLength(6);
+    expect(targets.some((t) => t.id === "benchmarkList")).toBe(true);
+    // Official pricing stays a data route but is no longer status-monitored.
+    expect(SOURCE_IDS).not.toContain("officialPricing");
+    expect(targets.every((t) => (SOURCE_IDS as readonly string[]).includes(t.id))).toBe(true);
   });
 });
 
@@ -833,132 +843,6 @@ describe("getModels empty-result TTL", () => {
     expect(new URL(fetchedUrl).searchParams.get("limit")).toBe("50");
   });
 });
-describe("extractInitialData", () => {
-  // Builds page HTML with single-escaped flight JSON, mirroring the live markup.
-  const flightHtml = (dataJson: string) => {
-    const payload = `d:["$","$L19",null,{"initialData":{"data":[${dataJson}]}}]`;
-    return `<div>noise</div><script>self.__next_f.push([1,${JSON.stringify(payload)}])</script><div>tail</div>`;
-  };
-  const ROW_A = `{"id":"aaa","dateLa":"2026-09-03","type":"modelAdded","model":{"name":"GPT-6 Astra","slug":"gpt-6-astra","intelligenceIndex":55,"creator":{"name":"OpenAI"}}}`;
-
-  it("parses single-escaped flight JSON amid page noise", () => {
-    const data = extractInitialData(flightHtml(`${ROW_A},${ROW_A.replace("aaa", "zzz")}`));
-    expect(data).toHaveLength(2);
-    expect((data[0] as { id?: unknown }).id).toBe("aaa");
-  });
-
-  it("skips unparseable chunks and uses later good ones", () => {
-    const bad = `<div><script>self.__next_f.push([1,"d:{\\"initialData\\":{\\"data\\":[{bad]</script></div>`;
-    expect(extractInitialData(`${bad}<div>mid</div>${flightHtml(ROW_A)}`)).toHaveLength(1);
-  });
-
-  it("returns [] without the marker or on truncated input", () => {
-    expect(extractInitialData("<div>no flight data here</div>")).toEqual([]);
-    expect(extractInitialData(String.raw`prefix "initialData\":{\"data\":[{oops`)).toEqual([]);
-  });
-});
-
-describe("parseChangelogEntries", () => {
-  const openKeys = new Set(["qwen3-8-flash-next", "llama4scout"]);
-  const gptRow = (over: Record<string, unknown> = {}) => ({
-    id: "aaa",
-    dateLa: "2026-09-03",
-    type: "modelAdded",
-    model: { name: "GPT-6 Astra", slug: "gpt-6-astra", creator: { name: "OpenAI" } },
-    ...over,
-  });
-  const gptExpected = (notes = "") => ({
-    id: "aaa",
-    model: "GPT-6 Astra",
-    provider: "OpenAI",
-    releaseDate: "2026-09-03",
-    notes,
-    link: "https://artificialanalysis.ai/models/gpt-6-astra",
-  });
-
-  it("keeps closed modelAdded rows newest-first with AA links", () => {
-    expect(
-      parseChangelogEntries(
-        [
-          {
-            id: "bbb",
-            dateLa: "2026-08-27",
-            type: "modelAdded",
-            model: { name: "Qwen3.8-Flash-Next", slug: "qwen3-8-flash-next", creator: { name: "Alibaba" } },
-          },
-          gptRow({
-            title: "GPT-6 arrives",
-            subtitle: "Should not win",
-            model: { name: "GPT-6 Astra", slug: "gpt-6-astra", intelligenceIndex: 55, creator: { name: "OpenAI" } },
-          }),
-          {
-            id: "hhh",
-            dateLa: "2026-08-01",
-            type: "modelAdded",
-            model: { name: "Claude-X", slug: "claude-x", creator: { name: "Anthropic" } },
-          },
-        ],
-        openKeys,
-      ),
-    ).toEqual([
-      gptExpected("GPT-6 arrives"),
-      {
-        id: "hhh",
-        model: "Claude-X",
-        provider: "Anthropic",
-        releaseDate: "2026-08-01",
-        notes: "",
-        link: "https://artificialanalysis.ai/models/claude-x",
-      },
-    ]);
-  });
-
-  it("drops articles, open-weight, duplicate, unsafe and malformed rows", () => {
-    expect(
-      parseChangelogEntries(
-        [
-          { id: "ccc", dateLa: "2026-09-02", type: "articlePublished", title: "Benchmarking", slug: "x" },
-          {
-            id: "ddd",
-            dateLa: "2026-08-20",
-            type: "modelAdded",
-            model: { name: "Llama 4 Scout", slug: "odd-one", creator: { name: "Meta" } },
-          },
-          { id: "eee", type: "modelAdded" },
-          {
-            id: "fff",
-            dateLa: "not-a-date",
-            type: "modelAdded",
-            model: { name: "X", slug: "x", creator: { name: "Y" } },
-          },
-          {
-            id: "ggg",
-            dateLa: "2026-08-01",
-            type: "modelAdded",
-            model: { name: "Evil", slug: 'x" onmouseover="y', creator: { name: "Z" } },
-          },
-          gptRow(),
-          gptRow(),
-        ],
-        openKeys,
-      ),
-    ).toEqual([gptExpected()]);
-  });
-
-  it("returns [] for non-array payloads", () => {
-    expect(parseChangelogEntries(null, openKeys)).toEqual([]);
-    expect(parseChangelogEntries({}, openKeys)).toEqual([]);
-  });
-
-  it("end-to-end: extract then parse", () => {
-    const row =
-      '{"id":"aaa","dateLa":"2026-09-03","type":"modelAdded","model":{"name":"GPT-6 Astra","slug":"gpt-6-astra","creator":{"name":"OpenAI"}}}';
-    const payload = `d:["$","$L19",null,{"initialData":{"data":[${row}]}}]`;
-    const html = `<div>noise</div><script>self.__next_f.push([1,${JSON.stringify(payload)}])</script>`;
-    expect(parseChangelogEntries(extractInitialData(html), new Set())).toHaveLength(1);
-  });
-});
-
 describe("parseOpenAiPricing", () => {
   it("takes the first (Standard) table and strips parenthetical qualifiers", () => {
     const md = [
@@ -1207,5 +1091,77 @@ describe("parseArenaPage", () => {
 
   it("returns an empty list when no data rows exist", () => {
     expect(parseArenaPage(`<table><tbody>${ARENA_HEADER}</tbody></table>`)).toEqual([]);
+  });
+});
+
+const BL_CLOSED_ATTRS = ` data-filter-source="closed_api" data-filter-family="gpt" data-filter-developer="openai"`;
+const BL_CLOSED_INNER = [
+  '<td data-sort-value="GPT-6 Astra"><span class="model-identity"><a class="model-table-title" href="/models/openai-gpt-6-astra/">GPT-6 Astra</a></span></td>',
+  '<td data-sort-value="GPT">GPT</td>',
+  '<td data-sort-value="OpenAI">OpenAI</td>',
+  '<td data-sort-value="1"><span class="source-availability-copy">Closed</span></td>',
+  '<td data-sort-value="20260903">2026-09-03</td>',
+  '<td class="num" data-sort-value="60">60</td>',
+  '<td class="num" data-sort-value="158.29">158.29</td>',
+].join("");
+const BL_OPEN_INNER = BL_CLOSED_INNER.replace("/models/openai-gpt-6-astra/", "/models/qwen-qwen3-8b/").replace(
+  "GPT-6 Astra",
+  "Qwen3 8B",
+);
+
+describe("parseBenchmarkListRow", () => {
+  it("maps a closed row onto the release shape", () => {
+    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, BL_CLOSED_INNER)).toEqual({
+      id: "openai-gpt-6-astra",
+      model: "GPT-6 Astra",
+      provider: "OpenAI",
+      releaseDate: "2026-09-03",
+      notes: "60 benchmarks",
+      link: "https://benchmarklist.com/models/openai-gpt-6-astra/",
+    });
+  });
+
+  it("skips non-closed rows", () => {
+    expect(parseBenchmarkListRow(` data-filter-source="open_source"`, BL_OPEN_INNER)).toBeNull();
+    expect(parseBenchmarkListRow(` data-filter-source="unclassified"`, BL_OPEN_INNER)).toBeNull();
+  });
+
+  it("skips rows without a valid release date", () => {
+    const inner = BL_CLOSED_INNER.replace("2026-09-03", "—").replace(
+      'data-sort-value="20260903"',
+      'data-sort-value="—"',
+    );
+    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, inner)).toBeNull();
+  });
+
+  it("recovers the date from the YYYYMMDD sort value when the cell shows —", () => {
+    const inner = BL_CLOSED_INNER.replace(">2026-09-03<", ">—<");
+    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, inner)).toMatchObject({ releaseDate: "2026-09-03" });
+  });
+
+  it("allows dotted slugs but rejects path traversal", () => {
+    const dotted = BL_CLOSED_INNER.replace("openai-gpt-6-astra", "poolside-laguna-s.2.1");
+    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, dotted)).toMatchObject({
+      id: "poolside-laguna-s.2.1",
+      link: "https://benchmarklist.com/models/poolside-laguna-s.2.1/",
+    });
+    const traversal = BL_CLOSED_INNER.replace("/models/openai-gpt-6-astra/", "/models/../secret/");
+    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, traversal)).toBeNull();
+  });
+});
+
+describe("parseBenchmarkListPage", () => {
+  it("collects closed rows and dedupes by slug", () => {
+    const html = `<table><tbody><tr${BL_CLOSED_ATTRS}>${BL_CLOSED_INNER}</tr><tr${BL_CLOSED_ATTRS}>${BL_CLOSED_INNER}</tr><tr data-filter-source="open_source">${BL_OPEN_INNER}</tr></tbody></table>`;
+    const entries = parseBenchmarkListPage(html);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ id: "openai-gpt-6-astra" });
+  });
+
+  it("throws UpstreamError on Cloudflare challenge pages", () => {
+    expect(isChallengePage("<title>Just a moment...</title> challenges.cloudflare.com")).toBe(true);
+    expect(() => parseBenchmarkListPage("<title>Just a moment...</title> challenges.cloudflare.com")).toThrow(
+      /challenge/,
+    );
   });
 });

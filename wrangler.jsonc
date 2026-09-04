@@ -2,58 +2,48 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "modeltide",
   "main": "src/server/worker.ts",
-  "compatibility_date": "2026-07-14",
+  "compatibility_date": "2026-08-22",
   "keep_vars": false,
-  "workers_dev": false,
+  "workers_dev": true,
 
-  // wrangler.jsonc is the source of truth: vars here will overwrite Dashboard on every deploy, so you don't need to edit Dashboard manually.
-  // Put normal vars here. For secrets, don't write the real value here — add them in Dashboard or CI.
+  // Source of truth: vars here overwrite Dashboard on every deploy.
+  // Secrets don't belong here — add them in Dashboard or CI.
   "vars": {},
 
-  // Serve the built Vite client from the ASSETS binding; unknown routes fall back to index.html for the SPA.
+  // Built Vite client on the ASSETS binding; unknown routes fall back to index.html.
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
   },
 
-  // Smart Placement is optional: keep it only if p99 latency data shows a win.
-  // Default recommendation is to delete this block; re-enable on demand.
+  // Smart Placement: keep only if p99 data shows a win.
   "placement": {
     "mode": "smart",
   },
 
-  // Cron every 30min (not more often): the free KV tier caps at 1,000 writes/day
-  // and each tick costs status-history sampling + cache warmup writes.
-  // Cache TTLs are tiered by volatility (live 30m / slow 2h / static 6h, see
-  // shared/config): only soft-expired keys re-put, so steady state stays far
-  // under the cap. Tightening this to */4 or similar multiplies write
-  // amplification and will hit the cap; Workers Paid (1M writes/day) removes
-  // the limit.
+  // Cron every 30min, not more often: free KV caps at 1,000 writes/day and each
+  // tick costs sampling + warmup writes. Only soft-expired keys re-put.
+  // Each tick warms the live tier fully plus a rotating bulk slice (~1.5h per
+  // full rotation), staying under the free 10ms CPU / 50-subrequest caps.
   "triggers": {
     "crons": ["*/30 * * * *"],
   },
 
-  // Same-Worker hosting: the client (ASSETS) and /api/* are served from one
-  // Worker/origin, so no CORS is needed. Only if VITE_API_BASE ever points at a
-  // separate origin must the Worker add explicit CORS headers in code.
-  // Upstream timeout budget: Workers cap wall-clock at ~30s, so keep Hono
-  // upstream fetches well under it (25s recommended) to fail gracefully.
+  // Same-Worker hosting needs no CORS. Upstream fetches must stay well under
+  // the ~30s wall-clock cap (25s max) to fail gracefully.
   "observability": {
     "enabled": true,
   },
 
-  // KV cache (optional) — uncomment to enable persistent caching.
-  // - Enabled:  requests are cached in KV (tiered 30m/2h/6h TTLs, refreshed by cron). Recommended.
-  // - Disabled (default): no KV, every request fetches upstream directly; status-history/uptime are in-memory only.
-  // Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/
-  // To enable: 1) npx wrangler kv namespace create CACHE  2) paste the returned id below  3) uncomment the kv_namespaces block.
+  // KV cache (optional): uncomment to enable. Disabled = direct upstream fetch
+  // per request, in-memory status history. Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/
+  // Enable: 1) npx wrangler kv namespace create CACHE  2) paste the id below  3) uncomment.
   // "kv_namespaces": [
   //   { "binding": "CACHE", "id": "PASTE_KV_NAMESPACE_ID_HERE" }
   // ],
 
-  // Local dev port (8787): Vite owns 3000 via `npm run dev`, so `wrangler dev`
-  // uses 8787 to avoid a double-3000 conflict when both run side by side.
+  // Local dev port: Vite owns 3000, so `wrangler dev` uses 8787.
   "dev": {
     "port": 8787,
   },

@@ -4,7 +4,7 @@
 
 # ModelTide
 
-<strong>AI model data dashboard</strong> — aggregating model rankings, benchmarks, pricing, and release tracking
+<strong>AI model data dashboard</strong> — rankings, benchmarks, pricing, releases
 
 <p>
   <a href="./README_CN.md"><img src="https://img.shields.io/badge/阅读-中文-1677ff?style=for-the-badge" alt="中文" /></a>
@@ -23,97 +23,73 @@
 
 </div>
 
----
+## Features
 
-## 📑 Table of Contents
+| Feature          | Description                                                      |
+| ---------------- | ---------------------------------------------------------------- |
+| Model Rankings   | Intelligence index, hallucination rates, provider stats, details |
+| Release Tracking | Newest & open-source releases with download stats                |
+| News Aggregation | Multi-source RSS: industry / open source / hardware / funding    |
+| Model Comparison | Radar-chart metrics, price breakdown, monthly cost estimator     |
+| Source Status    | Upstream availability & latency monitoring                       |
 
-- [✨ Features](#-features)
-- [🧭 Project Structure](#-project-structure)
-- [🚀 Quick Start](#-quick-start)
-- [💻 Commands](#-commands)
-- [📦 Deployment](#-deployment)
-- [📄 License](#-license)
-
----
-
-## ✨ Features
-
-| Feature                 | Description                                                                   |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| 🏆 **Model Rankings**   | Intelligence index, hallucination rates, provider stats and per-model details |
-| 📢 **Release Tracking** | Newest model & open-source releases with download stats                       |
-| 📰 **News Aggregation** | Multi-source RSS for industry / open source / hardware / funding              |
-| ⚖️ **Model Comparison** | Radar-chart metrics, price breakdown and a monthly cost estimator             |
-| 🩺 **Source Status**    | Live availability & latency monitoring of upstream sources                    |
-
----
-
-## 🧭 Project Structure
+## Structure
 
 ```text
 modeltide/
-├── src/            # Source
-│   ├── client/     # Frontend
-│   ├── server/     # Worker backend
-│   ├── shared/     # Shared
-│   └── styles/     # Styles
+├── src/client/     # Frontend
+├── src/server/     # Worker backend
+├── src/shared/     # Shared types/config/i18n
+├── src/styles/     # Styles
 ├── public/         # Static assets
 ├── wrangler.jsonc  # Deploy config
 └── package.json    # Dependencies
 ```
 
----
+## Quick Start
 
-## 🚀 Quick Start
-
-**Prerequisites:** Node.js ≥ 22
+Requires Node.js ≥ 22.
 
 ```bash
 npm install
 npm run dev      # client + Worker API at http://localhost:3000
 ```
 
-No extra setup needed (see [Deployment](#-deployment) for KV behavior). For raw Worker parity, use `wrangler dev` (port 8787).
+`wrangler dev` for raw Worker parity (port 8787).
 
----
+## Commands
 
-## 💻 Commands
+| Command              | Description                  |
+| -------------------- | ---------------------------- |
+| `npm run dev`        | Dev server (port 3000)       |
+| `npm run build`      | Production build             |
+| `npm run preview`    | Preview the production build |
+| `npm run deploy`     | Build and deploy to Workers  |
+| `npm run test`       | Tests (Vitest)               |
+| `npm run lint`       | Static analysis (oxlint)     |
+| `npm run type-check` | Type checking (tsc)          |
+| `npm run format`     | Code formatting (oxfmt)      |
+| `npm run audit`      | Dependency security scan     |
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Dev server (port 3000, Vite + Workers) |
-| `npm run build` | Production build (recomputes the CSP hash; dist auto-emptied) |
-| `npm run preview` | Preview the production build locally (static only, not the Worker) |
-| `npm run deploy` | Build and deploy to Cloudflare Workers |
-| `npm run test` | Unit & Worker integration tests (Vitest) |
-| `npm run lint` | Static analysis (oxlint) |
-| `npm run type-check` | Type checking (tsc) |
-| `npm run format` | Code formatting (oxfmt) |
-| `npm run audit` | Security scan of dependencies |
+## Deployment
 
----
+One Worker serves static assets and the API; a cron refreshes the cache every 30 minutes.
 
-## 📦 Deployment
+1. Fork the repository.
+2. (Recommended) KV: Dashboard → Workers & Pages → KV → new namespace, put its ID into `kv_namespaces` in `wrangler.jsonc`.
+3. (Optional) `npx wrangler secret put HF_TOKEN` with a read-only [HF token](https://huggingface.co/settings/tokens) to raise API rate limits.
+4. Workers & Pages → Create application → Import a repository → Save and Deploy.
 
-One Cloudflare Worker serves both static assets and the API, with upstream data cached and refreshed by a scheduled cron.
+|                | Without KV (default)              | With KV (free tier suffices)   |
+| -------------- | --------------------------------- | ------------------------------ |
+| Data           | Direct upstream fetch per request | Tiered caching (30m / 2h / 6h) |
+| Status history | In-memory only                    | Persistent 90-day history      |
+| Rate limiting  | Disabled                          | Enabled                        |
 
-1. **Fork** this repository.
-2. **(Optional) KV cache** — create a namespace in [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **KV**, paste its ID into `kv_namespaces` in `wrangler.jsonc` (uncomment the block), and commit.
-3. **Deploy** — **Workers & Pages** → **Create application** → **Import a repository**, select your fork, then **Save and Deploy**.
-4. **Stay updated** — every push rebuilds and redeploys automatically.
+KV free tier allows 1,000 writes/day (steady state uses a few hundred). Cold cache misses may briefly return `1102` under the 10 ms CPU cap; cached hits are cheap.
 
-| | Without KV (default) | With KV |
-| --- | --- | --- |
-| Data | Direct upstream fetch per request | Tiered caching (30m/2h/6h by volatility) |
-| Status history | In-memory only (lost on restart) | Persistent 90-day history |
-| Rate limiting | Disabled | Enabled |
+`worker-configuration.d.ts` is generated by `npx wrangler types` — don't edit it by hand.
 
-> Note: the KV free tier caps at **1,000 writes/day**, mostly consumed by the cron scheduler (sampling + warmup). Near the cap, cache writes start failing and refreshes slow down — **Workers Paid** (1M writes/day) removes the limit.
-
-> `worker-configuration.d.ts` is generated by `npx wrangler types`; don’t edit it by hand, regenerate after changing `wrangler.jsonc`.
-
----
-
-## 📄 License
+## License
 
 [MIT](./LICENSE)

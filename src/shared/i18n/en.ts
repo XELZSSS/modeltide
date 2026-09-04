@@ -62,6 +62,7 @@ export const en = {
   releaseClosedSource: "Closed-Source Release",
   releaseType: "Type",
   aaModelPage: "Artificial Analysis model page",
+  benchmarkListModelPage: "BenchmarkList model page",
   events: "{count} events",
   promptPrice: "Input Price",
   completionPrice: "Output Price",
@@ -113,7 +114,7 @@ export const en = {
   openSourceDataSource: "Data Source: Hugging Face Hub",
   openRouterSource: "Data Source: OpenRouter",
   releaseDataSource: "Data Source: Hugging Face Hub",
-  closedReleasesSource: "Data Source: Artificial Analysis",
+  closedReleasesSource: "Data Source: BenchmarkList",
 
   openRouterRankings: "Usage",
   modelNameOrId: "Model Name / ID",
@@ -183,7 +184,7 @@ export const en = {
   sourceNameOpenRouter: "OpenRouter",
   sourceNameNews: "News RSS",
   sourceNameArena: "Arena",
-  sourceNameOfficialPricing: "Official Pricing",
+  sourceNameBenchmarkList: "BenchmarkList",
 
   uptimeDays: "{days}d {hours}h",
   uptimeHours: "{hours}h {mins}m",

@@ -12,7 +12,14 @@ import type { AppContext } from "@/server/context";
 import { findNextData, parseRscPayload } from "@/server/parsers/rsc";
 import { UpstreamError, errMsg } from "@/server/infra";
 import { getOpenRouterModelMeta, type ModelMetaEntry } from "@/server/sources/openrouter";
-import { dedupeBy, isFiniteNumber, normalizeModelKey, normalizePercent, toStringOrNull } from "@/shared/utils";
+import {
+  computeBlendPrice,
+  dedupeBy,
+  isFiniteNumber,
+  normalizeModelKey,
+  normalizePercent,
+  toStringOrNull,
+} from "@/shared/utils";
 import {
   bool,
   isoDate,
@@ -24,9 +31,14 @@ import {
   strOr,
   titleCase,
 } from "@/server/parsers/primitives";
+import {
+  hasCatalogIdentity,
+  isNonEmptyString,
+  isValidModelIdentity,
+  isValidTextToImageEntry,
+} from "@/server/sources/data-filter";
 
-// ---- catalog mapping (pure): compact rows, blend price, meta backfill ----
-/** Upstream field names that differ from the benchmark key; all other keys map 1:1. */
+// Upstream field names that differ from the benchmark key; the rest map 1:1.
 const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   mmlu_pro: "mmluPro",
   tau_banking: "tauBanking",
@@ -42,22 +54,15 @@ export function compactBenchmarks(m: Record<string, unknown>): Record<string, nu
 
 const MODALITIES = ["text", "image", "speech", "video"] as const;
 
-export function normalizeToPercent(v: number | null): number | null {
-  if (v == null) return null;
-  if (v > 1 && v <= 100) return v;
-  if (v >= 0 && v <= 1) return v * 100;
-  return normalizePercent(v);
-}
-
 function compactCodingIndex(m: Record<string, unknown>): number | null {
-  const tb = normalizeToPercent(num(m.terminalbenchV21));
-  const sc = normalizeToPercent(num(m.scicode));
+  const tb = normalizePercent(num(m.terminalbenchV21));
+  const sc = normalizePercent(num(m.scicode));
   if (tb == null && sc == null) return null;
   const values = [tb, sc].filter((v): v is number => v != null);
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-/** Project one raw upstream model record onto the public ArtificialAnalysisModel shape. */
+/** Project one raw upstream record onto the public shape. */
 export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
   const creator = obj(m.creator);
   const agentic = num(m.analystAgent);
@@ -77,7 +82,7 @@ export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
     intelligence_index: num(m.intelligenceIndex),
     is_reasoning: bool(m.isReasoning),
     coding_index: compactCodingIndex(m),
-    agentic_index: normalizeToPercent(agentic),
+    agentic_index: normalizePercent(agentic),
     release_date: releaseDate,
     is_open_weights: bool(m.isOpenWeights),
     context_window_tokens: numPositive(m.contextWindowTokens),
@@ -103,10 +108,10 @@ export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
       omniscienceBreakdown != null || omniscience != null
         ? {
             total: {
-              accuracy: normalizeToPercent(num(omniscienceBreakdown?.accuracy)),
-              attempt_rate: normalizeToPercent(num(omniscienceBreakdown?.attemptRate)),
-              hallucination_rate: normalizeToPercent(num(omniscienceBreakdown?.hallucinationRate)),
-              omniscience: normalizeToPercent(omniscience),
+              accuracy: normalizePercent(num(omniscienceBreakdown?.accuracy)),
+              attempt_rate: normalizePercent(num(omniscienceBreakdown?.attemptRate)),
+              hallucination_rate: normalizePercent(num(omniscienceBreakdown?.hallucinationRate)),
+              omniscience: normalizePercent(omniscience),
             },
           }
         : undefined,
@@ -119,7 +124,7 @@ export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
   return model;
 }
 
-/** Partial fields merged into the catalog from the omniscience page. */
+/** Partial fields merged from the omniscience page. */
 export function compactOmniscienceEnrich(m: Record<string, unknown>): Record<string, unknown> {
   const breakdown = obj(m.omniscienceBreakdown);
   return {
@@ -136,22 +141,7 @@ export function compactOmniscienceEnrich(m: Record<string, unknown>): Record<str
   };
 }
 
-/**
- * Artificial Analysis "blended price": a 7:2:1 weighted mix of the cached-input / input /
- * output prices in $/1M tokens. The cached-input price falls back to the input price when
- * the model has no cache tier (matching upstream's behavior).
- */
-export function computeBlendPrice(
-  p?: { input?: number | null; output?: number | null; cache_hit?: number | null } | null,
-): number | null {
-  if (!p) return null;
-  const { input, output } = p;
-  if (typeof input !== "number" || !Number.isFinite(input)) return null;
-  if (typeof output !== "number" || !Number.isFinite(output)) return null;
-  const cache = typeof p.cache_hit === "number" && Number.isFinite(p.cache_hit) ? p.cache_hit : input;
-  return (7 * cache + 2 * input + output) / 10;
-}
-
+/** OpenRouter directory match by loose key; needs at least one usable field. */
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {
   for (const raw of [m.name, m.short_name, m.slug]) {
     if (!raw) continue;
@@ -163,10 +153,8 @@ function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEnt
 }
 
 /**
- * Fill missing context window / agentic index / blended-price values from an OpenRouter
- * directory meta map (loose-normalized model keys). Only null values are filled — first-party
- * AA data (including its own pricing for the blend) always wins — and the number of filled
- * fields is returned for logging.
+ * Fill null context window / agentic index / blended price from the OpenRouter
+ * directory. AA first-party values always win. Returns the filled field count.
  */
 export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record<string, ModelMetaEntry>): number {
   let filled = 0;
@@ -179,13 +167,12 @@ export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record
         filled++;
       }
       if (m.agentic_index == null && entry.agenticIndex != null) {
-        m.agentic_index = normalizeToPercent(entry.agenticIndex);
+        m.agentic_index = normalizePercent(entry.agenticIndex);
         filled++;
       }
     }
-    // Blended price: prefer the model's own AA pricing; fall back to the OpenRouter
-    // directory pricing (already converted to $/1M) using the same 7:2:1 formula.
-    // Independent of an OpenRouter meta match so AA-priced models are always covered.
+    // Blended price prefers AA pricing; falls back to OpenRouter directory pricing.
+    // Independent of a meta match so AA-priced models are always covered.
     if (m.blended_price == null) {
       const fromMeta = entry?.pricing
         ? { input: entry.pricing.input, output: entry.pricing.output, cache_hit: entry.pricing.cacheHit }
@@ -200,12 +187,10 @@ export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record
   return filled;
 }
 
-// ---- rankings source (fetch + cache) ----
+// Rankings source (fetch + cache).
 /**
- * Merge the base catalog with enrichment lists by slug; first occurrence wins for
- * the catalog, later enrichments overlay their fields onto existing entries.
- * Enrichment entries whose slug is absent from the catalog are skipped so they
- * never surface as ghost models. Deep-merges nested breakdown objects.
+ * Merge the catalog with enrichment lists by slug. Enrichments overlay onto
+ * existing entries only — unknown slugs are skipped (no ghost models).
  */
 export function mergeBySlug(
   catalog: Record<string, unknown>[],
@@ -213,8 +198,8 @@ export function mergeBySlug(
 ): Record<string, unknown>[] {
   const merged = new Map<string, Record<string, unknown>>();
   for (const m of catalog) {
+    if (!hasCatalogIdentity(m)) continue;
     const slug = str(m.slug);
-    if (!slug || !str(m.name)) continue;
     if (!merged.has(slug)) merged.set(slug, { ...m });
   }
   for (const models of enrich) {
@@ -222,8 +207,7 @@ export function mergeBySlug(
       const slug = str(m.slug);
       if (!slug || !merged.has(slug)) continue;
       const cur = merged.get(slug) as Record<string, unknown>;
-      // Overlay only meaningful values: enrichment entries carry explicit nulls for
-      // missing fields, which must not clobber values the catalog already has.
+      // Enrichment nulls must not clobber catalog values.
       const mergedEntry: Record<string, unknown> = { ...cur };
       for (const [key, value] of Object.entries(m)) {
         if (value !== null && value !== undefined) mergedEntry[key] = value;
@@ -266,10 +250,8 @@ export function mapEntry(raw: RawEntry): TextToImageModel | null {
   const id = toStringOrNull(raw.id);
   const slug = toStringOrNull(raw.slug);
   const name = toStringOrNull(raw.name);
-  if (!id || !slug || !name) return null;
 
   const rank = isFiniteNumber(raw.overallRank) && raw.overallRank > 0 ? Math.trunc(raw.overallRank) : null;
-  if (rank == null) return null;
 
   const elos = Array.isArray(raw.elos) ? (raw.elos as RawElo[]) : [];
   const overallEloEntry =
@@ -290,19 +272,25 @@ export function mapEntry(raw: RawEntry): TextToImageModel | null {
   }
 
   if (elo == null && isFiniteNumber(raw.overallElo)) elo = raw.overallElo as number;
-  if (elo == null) return null;
+  // Unified dirty/invalid/unsuitable gate (identity + rank + elo).
+  if (!isValidTextToImageEntry({ id, slug, name, rank, elo })) return null;
+  const validId = id as string;
+  const validSlug = slug as string;
+  const validName = name as string;
+  const validRank = rank as number;
+  const validElo = elo as number;
 
   const pricePer1kImages = numNonNegative(raw.pricePer1kImages);
   const creator = raw.creator as Record<string, unknown> | null | undefined;
 
   return {
-    id,
-    slug,
-    name: name.trim(),
-    rank,
-    elo,
-    eloLower: ciDelta != null ? elo - ciDelta : null,
-    eloUpper: ciDelta != null ? elo + ciDelta : null,
+    id: validId,
+    slug: validSlug,
+    name: validName.trim(),
+    rank: validRank,
+    elo: validElo,
+    eloLower: ciDelta != null ? validElo - ciDelta : null,
+    eloUpper: ciDelta != null ? validElo + ciDelta : null,
     appearances,
     winRate,
     pricePer1kImages,
@@ -310,7 +298,7 @@ export function mapEntry(raw: RawEntry): TextToImageModel | null {
   };
 }
 
-// RSC request headers make Next.js serve raw flight payloads instead of rendered HTML.
+// RSC headers make Next.js serve raw flight payloads instead of HTML.
 const RSC_HEADERS = { RSC: "1", "Next-Router-State-Tree": "%5B%5D" } as const;
 
 const INDEX_PATH = "/evaluations/artificial-analysis-intelligence-index";
@@ -322,27 +310,22 @@ async function fetchAaRsc(ctx: AppContext, path: string, retries = 1): Promise<s
   return ctx.http.text(`${upstreamConfig.artificialAnalysis}${path}`, {
     headers: { ...RSC_HEADERS },
     retries,
-    // All fetches fan out in one Promise.all inside the 25s route timeout, so a
-    // single fetch is capped at UPSTREAM_TIMEOUT_MS (10s; worst case with 1 retry
-    // ≈ 21s). Enrichments pass retries 0 — they degrade to [] on failure anyway,
-    // so they must never become the long pole that 504s the whole route.
+    // Enrichments degrade to [] on failure, so they pass retries 0 and must
+    // never become the long pole that 504s the whole route.
     timeoutMs: UPSTREAM_TIMEOUT_MS,
   });
 }
 
-/** A plausible model catalog: an array of model-shaped rows (slug per row). */
+/** A plausible model catalog: rows carrying a usable slug. */
 function isModelArray(arr: unknown): arr is Record<string, unknown>[] {
   return (
     Array.isArray(arr) &&
     arr.length >= 1 &&
-    arr.some((m) => m && typeof m === "object" && "slug" in m && typeof (m as { slug?: unknown }).slug === "string")
+    arr.some((m) => m && typeof m === "object" && isNonEmptyString((m as { slug?: unknown }).slug))
   );
 }
 
-/**
- * Prefer the array whose rows carry intelligenceIndex (the true catalog), regardless
- * of key name; fall back to any large model-shaped array.
- */
+/** Prefer the array carrying intelligenceIndex (the true catalog). */
 function findModelArray(tree: unknown): Record<string, unknown>[] | null {
   const candidates = [
     findNextData<Record<string, unknown>>(tree, "initialModels"),
@@ -409,11 +392,10 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
     const catalog = parseRscPayload<Record<string, unknown>>(indexBody, "models", findModelArray);
 
     const enrichFailures = [modelsPageModels, omniscienceEnrich].filter((a) => a.length === 0).length;
-    // Use the intelligence-bearing array as primary (30 full), fall back to the catalog.
     const [primary, secondary] = indexModels.length > 0 ? [indexModels, catalog] : [catalog, indexModels];
     const models = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
       .map(compact)
-      .filter((m) => m.slug && m.name)
+      .filter((m) => isValidModelIdentity(m.id, m.slug, m.name))
       .sort((a, b) => (b.intelligence_index ?? -Infinity) - (a.intelligence_index ?? -Infinity));
     if (models.length === 0) {
       throw new UpstreamError(
@@ -423,9 +405,7 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
     // Fill gaps (context window, agentic index, blended price) using the OpenRouter
     // directory meta plus the model's own AA pricing; AA first-party values always win.
     const backfilled = backfillFromMeta(models, openRouterMeta);
-    // Debug-level: this fires on nearly every tick, keep info logs for real anomalies.
     if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
-    // Refresh sooner when any enrichment failed so partial data is retried quickly.
     return { data: models, ttl: ttlFor(enrichFailures > 0) };
   });
 
@@ -459,7 +439,7 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
       return emptyT2i(ctx, `no marker found (body=${body.length}B)`);
     }
     const mapped = rawModels.map((m) => mapEntry(m as RawEntry)).filter((m): m is TextToImageModel => m !== null);
-    // Keep the highest-elo duplicate: dedupeBy keeps first, so pre-sort by elo desc.
+    // dedupeBy keeps the first, so pre-sort by elo desc to keep the best duplicate.
     const models = dedupeBy(
       [...mapped].sort((a, b) => (b.elo ?? -Infinity) - (a.elo ?? -Infinity)),
       (m) => m.slug,

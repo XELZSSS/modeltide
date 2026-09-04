@@ -13,7 +13,7 @@ import {
 } from "chart.js";
 import type { ChartTheme } from "@/client/hooks";
 
-// Register once centrally so lazy chunks don't each bundle a separate register call.
+// Register once centrally so lazy chunks don't each repeat it.
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -26,18 +26,19 @@ ChartJS.register(
   Filler,
 );
 
-// Canvas text cannot inherit the page font; align chart typography with the app webfont once.
-ChartJS.defaults.font.family = "'Inter', system-ui, sans-serif";
+// Canvas text can't inherit the page font; align chart typography once.
+ChartJS.defaults.font.family =
+  "'Inter Variable', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif";
 ChartJS.defaults.font.size = 12;
 
-/** Shared sizing/animation baseline so every chart behaves identically. */
+/** Shared sizing/animation baseline. */
 export const chartBase = {
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
 } as const;
 
-/** Standard value-axis tick style (small muted text). */
+/** Standard value-axis tick style. */
 export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tick, font: { size: 10 } });
 
 /** Standard axis grid color. */
@@ -49,7 +50,7 @@ export const axisDashedBorderStyle = (theme: ChartTheme) => ({ color: theme.grid
 /** Standard multi-series legend style. */
 export const legendStyle = (theme: ChartTheme) => ({ labels: { color: theme.tickSecondary, font: { size: 12 } } });
 
-/** Line-drawing extras shared by multi-series line charts (monotone curves, small points). */
+/** Line-chart extras shared by multi-series line charts. */
 export const lineSeriesStyle = {
   borderWidth: 2.5,
   pointRadius: 3,
@@ -58,18 +59,16 @@ export const lineSeriesStyle = {
   spanGaps: false,
 } as const;
 
-/** Concrete color for a series slot, cycling through the theme palette. */
+/** Concrete color for a series slot, cycling the theme palette. */
 export function seriesColor(theme: ChartTheme, index: number): string {
   if (theme.palette.length === 0) return "#888";
   return theme.palette[index % theme.palette.length] as string;
 }
 
-/** Converts a 3/6-digit hex color to an rgba() string, for canvas fills that cannot read CSS vars. */
+/** Hex color to rgba() for canvas fills. Warns on non-hex input. */
 export function hexToRgba(hex: string, alpha: number): string {
   const value = hex.replace("#", "");
   if (!/^[0-9a-f]{3}$/i.test(value) && !/^[0-9a-f]{6}$/i.test(value)) {
-    // Non-hex input (e.g. an oklch() or var() string) would silently hand canvas an
-    // invalid color; warn so a palette change surfaces immediately instead of rendering blank.
     console.warn(`[charts] hexToRgba expected a 3/6-digit hex color, got: "${hex}"`);
     return hex;
   }
@@ -88,7 +87,7 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/** Returns default tooltip options aligned with the app theme. */
+/** Default tooltip options aligned with the app theme. */
 export function defaultTooltipOptions(theme: ChartTheme): Partial<TooltipOptions<"line" | "radar" | "bar">> {
   return {
     backgroundColor: theme.tooltipBg,

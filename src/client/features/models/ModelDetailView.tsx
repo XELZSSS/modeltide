@@ -51,16 +51,16 @@ import {
 } from "@/client/api/queries";
 import { useParams } from "react-router";
 
-// ---- client/features/models/ModelDetailContent.tsx ----
-// Tailwind classes colouring each input/output modality pill (cool hues only).
+// ---- ModelDetailContent ----
+// Modality pills: theme-aware soft hues with borders (no light-only fills).
 const MODALITY_STYLES = {
-  text: "bg-sky-100 text-sky-800 dark:bg-sky-400/15 dark:text-sky-300",
-  image: "bg-indigo-100 text-indigo-800 dark:bg-indigo-400/15 dark:text-indigo-300",
-  speech: "bg-teal-100 text-teal-800 dark:bg-teal-400/15 dark:text-teal-300",
-  video: "bg-violet-100 text-violet-800 dark:bg-violet-400/15 dark:text-violet-300",
+  text: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  image: "border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
+  speech: "border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-300",
+  video: "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
 } as const;
 
-// Benchmarks reported as absolute scores rather than 0-1 accuracy fractions.
+// Benchmarks reported as absolute scores, not 0-1 fractions.
 const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["gdpval"]);
 
 const MODALITY_LABEL_KEYS = {
@@ -81,15 +81,15 @@ function ModalitySection({
   model: ArtificialAnalysisModel;
   t: TFunction;
 }) {
-  // Model fields follow the naming `<prefix>_modality_<type>`, so the field name is derived from the prefix.
+  // Field names follow `<prefix>_modality_<type>`.
   const key = (m: string) => `${prefix}_modality_${m}` as keyof ArtificialAnalysisModel;
   return (
     <div>
-      <div className="text-xs font-medium mb-2 text-text-secondary">{label}</div>
-      <div className="flex gap-1.5 flex-wrap">
+      <div className="ui-caption font-medium mb-2.5">{label}</div>
+      <div className="flex gap-2 flex-wrap">
         {(["text", "image", "speech", "video"] as const).map((m) =>
           model[key(m)] ? (
-            <span key={m} className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${MODALITY_STYLES[m]}`}>
+            <span key={m} className={`px-2.5 py-1 text-xs font-medium rounded-full border ${MODALITY_STYLES[m]}`}>
               {t(MODALITY_LABEL_KEYS[m])}
             </span>
           ) : null,
@@ -99,10 +99,7 @@ function ModalitySection({
   );
 }
 
-/**
- * Full detail view for an AI model: key scores, metadata, pricing, benchmarks and modalities.
- * `showBenchmarks` hides the benchmarks card (used on list pages that already show scores).
- */
+/** Full detail view: scores, metadata, pricing, benchmarks, modalities. */
 export function ModelDetailContent({
   model,
   showBenchmarks = true,
@@ -133,27 +130,24 @@ export function ModelDetailContent({
       </StatGrid>
       <InfoGrid>
         <InfoCard title={t("modelInfo")}>
-          <InfoRow compact label={t("creator")} value={orNA(model.model_creators?.name, t)} />
-          <InfoRow compact label={t("releaseDate")} value={orNA(model.release_date, t)} />
-          <InfoRow compact label={t("openWeights")} value={formatBoolean(t, model.is_open_weights)} />
-          <InfoRow compact label={t("reasoning")} value={formatBoolean(t, model.is_reasoning === true)} />
-          <InfoRow compact label={t("contextWindow")} value={formatTokens(model.context_window_tokens, t)} />
+          <InfoRow label={t("creator")} value={orNA(model.model_creators?.name, t)} />
+          <InfoRow label={t("releaseDate")} value={orNA(model.release_date, t)} />
+          <InfoRow label={t("openWeights")} value={formatBoolean(t, model.is_open_weights)} />
+          <InfoRow label={t("reasoning")} value={formatBoolean(t, model.is_reasoning === true)} />
+          <InfoRow label={t("contextWindow")} value={formatTokens(model.context_window_tokens, t)} />
         </InfoCard>
         <InfoCard title={t("pricing")}>
-          <InfoRow compact label={t("promptPrice")} value={formatPricePerMillion(pricing.input, t)} />
-          <InfoRow compact label={t("completionPrice")} value={formatPricePerMillion(pricing.output, t)} />
-          <InfoRow compact label={t("cacheHitPrice")} value={formatPricePerMillion(pricing.cache_hit, t)} />
-          <InfoRow compact label={t("blendedPrice")} value={formatPricePerMillion(blended, t)} />
+          <InfoRow label={t("promptPrice")} value={formatPricePerMillion(pricing.input, t)} />
+          <InfoRow label={t("completionPrice")} value={formatPricePerMillion(pricing.output, t)} />
+          <InfoRow label={t("cacheHitPrice")} value={formatPricePerMillion(pricing.cache_hit, t)} />
+          <InfoRow label={t("blendedPrice")} value={formatPricePerMillion(blended, t)} />
         </InfoCard>
       </InfoGrid>
       {showBenchmarks && model.benchmarks && Object.values(model.benchmarks).some((v) => v != null) && (
         <DetailSection title={t("benchmarks")}>
           <StatGrid columns={4}>
             {Object.entries(model.benchmarks).map(([key, value]) => {
-              // Skip benchmarks the model didn't report (normalizePercent returns null).
-              // GDPval arrives as an absolute points score with a 95% CI (e.g. 1823.94),
-              // not a 0-1 accuracy fraction — percent normalization would clamp every
-              // model to 100, so absolute scores render as-is.
+              // Skip unreported benchmarks; GDPval is absolute points, render as-is.
               const display = ABSOLUTE_SCORE_BENCHMARKS.has(key as BenchmarkKey)
                 ? typeof value === "number" && Number.isFinite(value)
                   ? value
@@ -178,8 +172,8 @@ export function ModelDetailContent({
   );
 }
 
-// ---- client/features/models/OsDetailView.tsx ----
-/** Open-source model detail body (Hugging Face metadata + repository link). */
+// ---- OsDetailView ----
+/** Open-source model detail (HF metadata + repository link). */
 export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
   const { t, lang } = useTranslation();
   return (
@@ -190,27 +184,24 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
       </StatGrid>
       <InfoGrid>
         <InfoCard title={t("modelInfo")}>
-          <InfoRow compact label={t("creator")} value={orNA(model.author, t)} />
-          <InfoRow compact label={t("license")} value={orNA(model.license, t)} />
-          <InfoRow compact label={t("task")} value={orNA(model.task, t)} />
+          <InfoRow label={t("creator")} value={orNA(model.author, t)} />
+          <InfoRow label={t("license")} value={orNA(model.license, t)} />
+          <InfoRow label={t("task")} value={orNA(model.task, t)} />
           <InfoRow
-            compact
             label={t("releaseDate")}
             value={model.createdAt ? formatDate(model.createdAt, lang) : t("notAvailable")}
           />
           <InfoRow
-            compact
             label={t("lastUpdated")}
             value={model.lastModified ? formatDate(model.lastModified, lang) : t("notAvailable")}
           />
         </InfoCard>
         <InfoCard title={t("repository")}>
-          {/* Hugging Face URLs must not start with a slash, so strip it from the model id. */}
           <a
             href={`https://huggingface.co/${(model.id ?? "").replace(/^\//, "")}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-accent hover:underline break-all"
+            className="text-sm text-accent hover:underline break-all"
           >
             {model.id}
           </a>
@@ -218,7 +209,7 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
       </InfoGrid>
       {(model.tags ?? []).length > 0 && (
         <DetailSection title={t("tags")}>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {(model.tags ?? []).map((tag) => (
               <Badge key={tag}>{tag}</Badge>
             ))}
@@ -229,16 +220,16 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
   );
 }
 
-// ---- client/features/models/OpenRouterModelDetail.tsx ----
-// Prices are stored per token; convert to per-million-token for display consistency.
+// ---- OpenRouterModelDetail ----
+// Prices are per token; display per million.
 function toPerMillion(price: number | null | undefined): number | undefined {
   return typeof price === "number" && Number.isFinite(price) ? price * 1_000_000 : undefined;
 }
 
-/** Detail view for an OpenRouter ranking entry: stats, pricing, recommendation and badges. */
+/** OpenRouter entry detail: stats, pricing, recommendation, badges. */
 export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry }) {
   const { t } = useTranslation();
-  // Only surface meaningful variants; "standard"/"free" are the defaults and add noise.
+  // "standard"/"free" are defaults; only other variants get a badge.
   const showVariantBadge = !!model.variant && model.variant !== "standard" && model.variant !== "free";
   return (
     <DetailLayout>
@@ -255,34 +246,30 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
       <InfoGrid>
         <InfoCard title={t("modelInfo")}>
           <InfoRow
-            compact
             label={t("apiModelId")}
-            value={<code className="font-mono text-xs bg-bg-secondary px-1 rounded">{model.id}</code>}
+            value={<code className="font-mono text-xs bg-bg-secondary px-1.5 py-0.5 rounded-md">{model.id}</code>}
           />
-          <InfoRow compact label={t("category")} value={categoryLabel(model.category, t)} />
-          <InfoRow compact label={t("trend")} value={formatTrend(model.change, t)} />
-          <InfoRow compact label={t("totalTokens")} value={formatShortNumber(model.totalTokens ?? 0)} />
+          <InfoRow label={t("category")} value={categoryLabel(model.category, t)} />
+          <InfoRow label={t("trend")} value={formatTrend(model.change, t)} />
+          <InfoRow label={t("totalTokens")} value={formatShortNumber(model.totalTokens ?? 0)} />
         </InfoCard>
         <InfoCard title={t("pricing")}>
           <InfoRow
-            compact
             label={t("cacheHitPrice")}
             value={formatPricePerMillion(toPerMillion(model.pricing?.input_cache_read), t)}
           />
           <InfoRow
-            compact
             label={t("promptPrice")}
             value={formatPricePerMillion(toPerMillion(model.pricing?.prompt), t)}
           />
           <InfoRow
-            compact
             label={t("completionPrice")}
             value={formatPricePerMillion(toPerMillion(model.pricing?.completion), t)}
           />
         </InfoCard>
       </InfoGrid>
       {(showVariantBadge || model.isFree) && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {showVariantBadge && <Badge>{model.variant}</Badge>}
           {model.isFree && <Badge className="text-success">{t("free")}</Badge>}
         </div>
@@ -291,29 +278,27 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
   );
 }
 
-// ---- client/features/models/detailViews.tsx ----
+// ---- detailViews ----
 export function findModel<T>(data: T[], id: string, ...keys: (keyof T & string)[]): T | undefined {
   return data.find((item) => keys.some((key) => (item[key] as unknown) === id));
 }
 
-/** Shared detail-page shell: back link + page header resolved from the model source config. */
+/** Detail-page shell: back link + header from the model source config. */
 export function DetailShell({ source, title, children }: { source: ModelSource; title: string; children: ReactNode }) {
   const { t } = useTranslation();
   const config = MODEL_SOURCES[source];
   return (
-    <>
-      <BackButton labelKey={config.backLabelKey} to={config.backTo} />
+    <div className="flex flex-col">
+      <div className="mb-4">
+        <BackButton labelKey={config.backLabelKey} to={config.backTo} />
+      </div>
       <PageHeader title={title} description={t(config.sourceLabelKey)} />
       {children}
-    </>
+    </div>
   );
 }
 
-/**
- * Factory building a self-contained detail view: it looks a model up by the given
- * fields and renders the detail shell with the resolved model name (URL ids can be
- * opaque UUIDs) and the detail body.
- */
+/** Factory: look a model up by fields, render shell + body. Handles pending/error/missing. */
 function createDetailView<T>(
   useQuery: () => { data: T[] | undefined; isPending?: boolean; isError?: boolean },
   source: ModelSource,
@@ -327,11 +312,10 @@ function createDetailView<T>(
     if (!data && isPending) return <Spinner />;
     const model = data ? findModel(data, decodedId, ...keys) : undefined;
     if (!model && isPending) return <Spinner />;
-    // A failed (non-suspense) query leaves data undefined with isPending false;
-    // that must surface as a load error, not as a 404-style "model not found".
+    // Failed query (data undefined, not pending) is a load error, not a 404.
     if (!model && isError) {
       return (
-        <div className="py-20 text-center text-sm text-text-secondary" role="alert">
+        <div className="py-16 text-center ui-body-secondary" role="alert">
           {t("loadFailed")}
         </div>
       );
@@ -367,7 +351,7 @@ export const OrDetail = createDetailView(
 
 export const OSDetail = createDetailView(useAllOpenSourceModels, "os", OsDetail, (m) => shortModelId(m.id), "id");
 
-// ---- client/features/models/HallDetailView.tsx ----
+// ---- HallDetailView ----
 function HallDetailContent({
   model,
   aaModel,
@@ -385,10 +369,10 @@ function HallDetailContent({
         <StatCard label={t("attemptRate")} value={formatPercent(t, model.attemptRate)} />
       </StatGrid>
       <InfoCard title={t("modelInfo")}>
-        <InfoRow compact label={t("modelNameOrId")} value={model.model} />
-        <InfoRow compact label={t("slug")} value={model.slug} />
-        {aaModel?.model_creators?.name && <InfoRow compact label={t("creator")} value={aaModel.model_creators.name} />}
-        {aaModel?.release_date && <InfoRow compact label={t("releaseDate")} value={aaModel.release_date} />}
+        <InfoRow label={t("modelNameOrId")} value={model.model} />
+        <InfoRow label={t("slug")} value={model.slug} />
+        {aaModel?.model_creators?.name && <InfoRow label={t("creator")} value={aaModel.model_creators.name} />}
+        {aaModel?.release_date && <InfoRow label={t("releaseDate")} value={aaModel.release_date} />}
       </InfoCard>
       {aaModel && (
         <DetailSection title={t("modelDetail")}>
@@ -399,13 +383,12 @@ function HallDetailContent({
   );
 }
 
-/** Hallucination benchmark detail; metrics are derived from the same Artificial Analysis dataset. */
+/** Hallucination detail; metrics come from the same AA dataset. */
 export function HallDetail({ decodedId }: { decodedId: string }) {
   const { data: aaData } = useSuspenseArtificialRankings();
   const hallucinationRankings = useSuspenseHallucinationRankings();
   const entry = findModel(hallucinationRankings, decodedId, "id", "slug");
-  // Hall ids/slugs don't always match AA's; fall back to a name match before
-  // hiding the linked AA section (a silent empty section looks like a bug).
+  // Hall ids don't always match AA's; fall back to a name match.
   const aaModel =
     findModel(aaData, decodedId, "id", "slug") ??
     (entry ? aaData.find((m) => m.name === entry.model || m.slug === entry.slug) : undefined);
@@ -417,9 +400,8 @@ export function HallDetail({ decodedId }: { decodedId: string }) {
   );
 }
 
-// ---- client/features/models/ModelDetailView.tsx ----
-// The wildcard route param carries the model id/slug, which may be URL-encoded
-// (e.g. slashes in Hugging Face ids); decode defensively.
+// ---- ModelDetailView ----
+// The wildcard param carries the id/slug, possibly URL-encoded; decode defensively.
 function isModelSource(value: string): value is ModelSource {
   return value in MODEL_SOURCES;
 }
@@ -439,7 +421,7 @@ function useModelSourceParams(): { src: ModelSource | null; decodedId: string } 
   return { src, decodedId };
 }
 
-// Dispatch table mapping each model source (aa/or/os/hall) to its detail view.
+// Dispatch table: model source → detail view.
 const SOURCE_COMPONENTS: Record<ModelSource, React.ComponentType<{ decodedId: string }>> = {
   aa: AADetail,
   or: OrDetail,
@@ -454,8 +436,6 @@ function ModelDetailContentInner() {
 
   const SourceComponent = SOURCE_COMPONENTS[src]!;
 
-  // Detail views render their own back link and header so the title can come
-  // from the resolved model record instead of the raw URL id.
   return (
     <PageContainer>
       <SourceComponent decodedId={decodedId} />
@@ -463,10 +443,7 @@ function ModelDetailContentInner() {
   );
 }
 
-/**
- * Model detail page. Reads the source and slug from the URL and renders the
- * matching detail view (Artificial Analysis, OpenRouter, open-source, hallucination).
- */
+/** Model detail page: source + slug from the URL. */
 export function ModelDetailView() {
   return (
     <SuspenseQuery>

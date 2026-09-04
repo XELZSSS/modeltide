@@ -4,7 +4,7 @@ import { CACHE_VERSION } from "@/shared/config";
 export interface Env {
   CACHE?: KVNamespace;
   ASSETS?: Fetcher;
-  /** Optional HF API token to raise rate limits on cron-driven full scans. */
+  /** Optional HF API token for authenticated HF requests (higher rate limits). */
   HF_TOKEN?: string;
 }
 
@@ -13,9 +13,8 @@ type LogLevel = "info" | "warn" | "error";
 export interface AppContext {
   cache: CacheService;
   http: HttpClient;
-  /** Raw KV binding — undefined when kv_namespaces is not configured */
+  /** Raw KV binding — undefined when kv_namespaces is not configured. */
   kv: KVNamespace | undefined;
-  /** Optional HF API token (from env.HF_TOKEN) for authenticated HF requests. */
   hfToken?: string;
   log(level: LogLevel, msg: string, meta?: Record<string, unknown>): void;
 }
@@ -37,8 +36,6 @@ function createLogger(): AppContext["log"] {
 }
 
 export function buildContext(env: Env): AppContext {
-  // CACHE is optional: when kv_namespaces is not configured, env.CACHE is undefined and CacheService bypasses KV
-  // Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/
   return {
     cache: new CacheService(env.CACHE, CACHE_VERSION),
     http: new HttpClient(),

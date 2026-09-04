@@ -1,164 +1,156 @@
-import { STATIC_TTL_MS, UPSTREAM_TIMEOUT_MS, cacheKeys, upstreamConfig } from "@/shared/config";
+import { STATIC_TTL_MS, UPSTREAM_TIMEOUT_MS, cacheKeys, ttlForCount, upstreamConfig } from "@/shared/config";
 import type { ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, errMsg } from "@/server/infra";
-import { getIntelligenceIndex } from "@/server/sources/artificial-analysis";
-import { normalizeModelKey, toStringOrNull } from "@/shared/utils";
+import { decodeEntities, stripHtml } from "@/server/parsers/feed";
+import { isoDate } from "@/server/parsers/primitives";
+import {
+  isChallengePage,
+  isClosedSourceRow,
+  isValidClosedRelease,
+} from "@/server/sources/data-filter";
 
-const CHANGELOG_PATH = "/changelog";
+const MODELS_PATH = "/models/";
+/** Newest-first SSR pages; each page holds 50 models of all sources. */
+const MAX_PAGES = 6;
 const FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
 
-// Marker as it appears in the raw HTML: single-level \" escaping inside the
-// Next.js flight string. The trailing `[` opens the entries array.
-// (String.raw: the backslashes below are literal — in a normal string literal
-// \" would collapse to just " and the marker would never match.)
-const INITIAL_DATA_MARKER = String.raw`"initialData\":{\"data\":[`;
-
-interface RawChangelogModel {
-  name?: unknown;
-  slug?: unknown;
-  intelligenceIndex?: unknown;
-  creator?: unknown;
+interface Cell {
+  attrs: string;
+  inner: string;
 }
 
-interface RawChangelogEntry {
-  id?: unknown;
-  dateLa?: unknown;
-  type?: unknown;
-  title?: unknown;
-  subtitle?: unknown;
-  model?: unknown;
-}
-
-function isValidDate(value: string): boolean {
-  const ts = Date.parse(value);
-  return Number.isFinite(ts);
-}
-
-/** Model-page slugs are path segments; reject anything that could break the URL. */
-function isSafeSlug(slug: string): boolean {
-  return /^[A-Za-z0-9_-]+$/.test(slug);
-}
-
-/**
- * Extract the changelog `initialData.data` array from page HTML. The JSON sits
- * single-escaped inside a flight string, so bracket-match over the raw text
- * treating `\"` as an escaped char, then unescape only `\"`/`\\` (leaving
- * `\n` & friends valid for JSON.parse). Tries every marker occurrence and
- * concatenates successes — never throws. Pure (unit-tested).
- */
-export function extractInitialData(html: string): unknown[] {
-  const out: unknown[] = [];
-  let from = 0;
-  while (true) {
-    const at = html.indexOf(INITIAL_DATA_MARKER, from);
-    if (at === -1) break;
-    from = at + 1;
-    let depth = 0;
-    let inString = false;
-    let i = at + INITIAL_DATA_MARKER.length - 1; // position of `[`
-    for (; i < html.length; i++) {
-      const ch = html[i];
-      if (ch === "\\") {
-        i++;
-        continue;
-      }
-      if (ch === '"') {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-      if (ch === "[") depth++;
-      else if (ch === "]") {
-        depth--;
-        if (depth === 0) break;
-      }
-    }
-    if (depth !== 0) continue;
-    try {
-      const parsed: unknown = JSON.parse(
-        html.slice(at + INITIAL_DATA_MARKER.length - 1, i + 1).replace(/\\([\\"])/g, "$1"),
-      );
-      if (Array.isArray(parsed)) out.push(...parsed);
-    } catch {
-      // Malformed chunk — try the next marker occurrence, if any.
-    }
+function rowCellsWithAttrs(trInner: string): Cell[] {
+  const cells: Cell[] = [];
+  for (const m of trInner.matchAll(/<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi)) {
+    cells.push({ attrs: m[1] ?? "", inner: m[2] ?? "" });
   }
-  return out;
+  return cells;
+}
+
+function sortValue(attrs: string): string | null {
+  const m = /data-sort-value="([^"]*)"/.exec(attrs);
+  return m?.[1] ?? null;
+}
+
+function cellText(inner: string): string {
+  return decodeEntities(stripHtml(inner)).trim();
+}
+
+function slugFromModelCell(inner: string): string | null {
+  const m = /href="\/models\/([^"/]+)\/"/.exec(inner);
+  return m?.[1]?.trim() || null;
+}
+
+function releaseFromSortValue(v: string | null): string | null {
+  if (!v) return null;
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(v.trim());
+  if (!m?.[1] || !m?.[2] || !m?.[3]) return null;
+  const iso = `${m[1]}-${m[2]}-${m[3]}`;
+  return isoDate(iso);
 }
 
 /**
- * Keep modelAdded rows for closed-source models. Open-weight filtering reuses
- * our own (cached) intelligence index via `openKeys`: exact slugs plus loose
- * normalized keys, so index/model naming drift doesn't leak open models in.
- * Unmatched entries are kept — the changelog announces index additions, and a
- * leaked open model is still worse than a missed closed one, but an empty
- * open-set (index fetch failed) must not nuke the whole board. Pure (unit-tested).
+ * Parse one `<tr>`; null for non-closed or unusable rows.
+ * Cell order: model | family | developer | source | release | benchmarks | eci | input | output.
  */
-export function parseChangelogEntries(data: unknown, openKeys: Set<string>): ClosedReleaseEntry[] {
-  if (!Array.isArray(data)) return [];
+export function parseBenchmarkListRow(trAttrs: string, trInner: string): ClosedReleaseEntry | null {
+  if (!isClosedSourceRow(trAttrs)) return null;
+  const cells = rowCellsWithAttrs(trInner);
+  if (cells.length < 5) return null;
+
+  const modelCell = cells[0]!;
+  const slug = slugFromModelCell(modelCell.inner);
+
+  const name = sortValue(modelCell.attrs)?.trim() || cellText(modelCell.inner).split("\n")[0]?.trim();
+
+  const releaseCell = cells[4]!;
+  const releaseText = cellText(releaseCell.inner);
+  const releaseDate = isoDate(releaseText) ?? releaseFromSortValue(sortValue(releaseCell.attrs));
+  // Unified dirty/invalid/unsuitable gate (slug + name + date).
+  if (!isValidClosedRelease(slug, name, releaseDate)) return null;
+  const validSlug = slug as string;
+  const validName = name as string;
+  const validDate = releaseDate as string;
+
+  const provider = sortValue(cells[2]!.attrs)?.trim() || cellText(cells[2]!.inner) || "Unknown";
+  const day = validDate.length > 10 ? validDate.slice(0, 10) : validDate;
+
+  const benchmarksText = cells.length > 5 ? cellText(cells[5]!.inner) : "";
+  const benchmarks = /^\d+$/.test(benchmarksText) ? benchmarksText : sortValue(cells[5]?.attrs ?? "");
+  const notes = benchmarks && /^\d+$/.test(benchmarks) ? `${benchmarks} benchmarks` : "";
+
+  return {
+    id: validSlug,
+    model: validName,
+    provider,
+    releaseDate: day,
+    notes,
+    link: `${upstreamConfig.benchmarkList}/models/${validSlug}/`,
+  };
+}
+
+/** Parse a full directory page; pure. Closed rows only, deduped by slug. */
+export function parseBenchmarkListPage(html: string): ClosedReleaseEntry[] {
+  if (isChallengePage(html)) throw new UpstreamError("BenchmarkList returned a challenge page");
   const seen = new Set<string>();
   const entries: ClosedReleaseEntry[] = [];
-  for (const item of data) {
-    const row = (item ?? {}) as RawChangelogEntry;
-    if (row.type !== "modelAdded") continue;
-    const model = (row.model ?? {}) as RawChangelogModel;
-    const id = toStringOrNull(row.id);
-    const name = toStringOrNull(model.name);
-    const slug = toStringOrNull(model.slug);
-    const date = toStringOrNull(row.dateLa);
-    const creator = toStringOrNull((model.creator as { name?: unknown } | null | undefined)?.name);
-    if (!id || !name || !slug || !date || !isValidDate(date) || !creator) continue;
-    if (!isSafeSlug(slug)) continue;
-    if (seen.has(id)) continue;
-    if (openKeys.has(slug) || openKeys.has(normalizeModelKey(slug)) || openKeys.has(normalizeModelKey(name))) continue;
-    seen.add(id);
-    entries.push({
-      id,
-      model: name,
-      provider: creator,
-      releaseDate: date,
-      notes: toStringOrNull(row.title) ?? toStringOrNull(row.subtitle) ?? "",
-      link: `${upstreamConfig.artificialAnalysis}/models/${slug}`,
-    });
+  for (const m of html.matchAll(/<tr([^>]*)>([\s\S]*?)<\/tr>/gi)) {
+    let entry: ClosedReleaseEntry | null;
+    try {
+      entry = parseBenchmarkListRow(m[1] ?? "", m[2] ?? "");
+    } catch {
+      continue;
+    }
+    if (!entry || seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    entries.push(entry);
   }
-  // Newest first; the upstream feed already arrives in this order, re-sort
-  // defensively since FeedEntry rendering assumes descending ts.
-  return entries.sort((a, b) => Date.parse(b.releaseDate) - Date.parse(a.releaseDate));
+  return entries;
+}
+
+function pageUrl(page: number): string {
+  return page <= 1
+    ? `${upstreamConfig.benchmarkList}${MODELS_PATH}`
+    : `${upstreamConfig.benchmarkList}${MODELS_PATH}page/${page}/`;
 }
 
 /**
- * Closed-source frontier releases from the Artificial Analysis changelog —
- * same upstream family as the rankings, so release coverage matches what the
- * rest of the dashboard knows about. Open-weight rows are filtered against
- * the (cached) intelligence index; if that cross-check fails the board
- * degrades to unfiltered rather than going empty.
+ * Closed-source releases from the BenchmarkList model directory
+ * (`data-filter-source="closed_api"` rows, newest first).
+ * Sole upstream — failures surface as 502 with stale-cache fallback.
  */
 export const getClosedReleases = (ctx: AppContext): Promise<ClosedReleaseEntry[]> =>
   ctx.cache.withTtl(cacheKeys.closedReleases, STATIC_TTL_MS, async () => {
-    const [htmlRes, indexRes] = await Promise.allSettled([
-      ctx.http.text(`${upstreamConfig.artificialAnalysis}${CHANGELOG_PATH}`, {
-        headers: { accept: "text/html,application/xhtml+xml,*/*" },
-        ...FETCH_OPTS,
-      }),
-      getIntelligenceIndex(ctx),
-    ]);
-    if (htmlRes.status === "rejected") {
-      throw new UpstreamError(`AA changelog fetch failed: ${errMsg(htmlRes.reason)}`);
+    const settled = await Promise.allSettled(
+      Array.from({ length: MAX_PAGES }, (_, i) =>
+        ctx.http
+          .text(pageUrl(i + 1), {
+            headers: { accept: "text/html,application/xhtml+xml,*/*" },
+            ...FETCH_OPTS,
+          })
+          .then(parseBenchmarkListPage),
+      ),
+    );
+    const failed: string[] = [];
+    const seen = new Set<string>();
+    const entries: ClosedReleaseEntry[] = [];
+    settled.forEach((r, i) => {
+      if (r.status === "fulfilled") {
+        for (const e of r.value) {
+          if (seen.has(e.id)) continue;
+          seen.add(e.id);
+          entries.push(e);
+        }
+      } else {
+        failed.push(`page/${i + 1}`);
+        ctx.log("warn", `[closed-releases] page ${i + 1} failed: ${errMsg(r.reason)}`);
+      }
+    });
+    // Newest first; directory pages arrive newest-first but merges can interleave.
+    entries.sort((a, b) => Date.parse(b.releaseDate) - Date.parse(a.releaseDate));
+    if (entries.length === 0) {
+      throw new UpstreamError(`BenchmarkList models yielded 0 closed releases (${failed.join(", ") || "empty pages"})`);
     }
-    let openKeys = new Set<string>();
-    if (indexRes.status === "fulfilled") {
-      openKeys = new Set(
-        indexRes.value.flatMap((m) =>
-          m.is_open_weights === true
-            ? [m.slug, normalizeModelKey(m.slug), normalizeModelKey(m.name)].filter(Boolean)
-            : [],
-        ),
-      );
-    } else {
-      ctx.log("warn", `[closed-releases] index cross-check failed: ${errMsg(indexRes.reason)}`);
-    }
-    const entries = parseChangelogEntries(extractInitialData(htmlRes.value), openKeys);
-    if (entries.length === 0) throw new UpstreamError("AA changelog yielded 0 model entries");
-    return { data: entries, ttl: STATIC_TTL_MS };
+    return { data: entries, ttl: ttlForCount(failed.length, STATIC_TTL_MS) };
   });

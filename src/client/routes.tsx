@@ -3,15 +3,13 @@ import { Route, Routes, useLocation } from "react-router";
 import { useSearchStore } from "@/client/stores";
 import { NotFound } from "@/client/components/shared";
 
-// Route-level lazy() imports split each view into its own chunk, loaded on first navigation.
+// Route-level lazy() splits each view into its own chunk.
 const HomeView = lazy(() => import("./features/home/HomeView").then((m) => ({ default: m.HomeView })));
 const RankingsHubView = lazy(() =>
   import("./features/rankings/RankingsHubView").then((m) => ({ default: m.RankingsHubView })),
 );
 const ReleasesView = lazy(() => import("./features/releases/ReleasesView").then((m) => ({ default: m.ReleasesView })));
-// Separate entry modules so /compare and /price-compare load independent chunks
-// on first navigation instead of sharing one (two lazy() of the same module
-// would be deduped by the bundler into a single chunk).
+// Separate entry modules keep /compare and /price-compare in independent chunks.
 const CompareView = lazy(() => import("./features/compare/CompareView.lazy").then((m) => ({ default: m.CompareView })));
 const PriceCompareView = lazy(() =>
   import("./features/compare/PriceCompareView.lazy").then((m) => ({ default: m.PriceCompareView })),
@@ -36,7 +34,6 @@ function useSearchResetOnNavigate() {
 }
 
 export function AppRoutes() {
-  // Clear the global search term whenever the user navigates between routes.
   useSearchResetOnNavigate();
 
   return (

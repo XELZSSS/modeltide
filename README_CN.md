@@ -4,7 +4,7 @@
 
 # ModelTide
 
-<strong>AI 模型数据看板</strong> —— 聚合模型排名、评测基准、价格与发布动态
+<strong>AI 模型数据看板</strong> —— 排名、评测、价格、发布动态
 
 <p>
   <a href="./README_CN.md"><img src="https://img.shields.io/badge/阅读-中文-1677ff?style=for-the-badge" alt="中文" /></a>
@@ -23,97 +23,73 @@
 
 </div>
 
----
+## 功能特性
 
-## 📑 目录
+| 特性       | 说明                                  |
+| ---------- | ------------------------------------- |
+| 模型排行   | 智能指数、幻觉率、提供商统计与详情    |
+| 发布追踪   | 最新与开源发布，附下载统计            |
+| 资讯聚合   | 多源 RSS：行业 / 开源 / 硬件 / 投融资 |
+| 模型对比   | 雷达图指标、价格明细与月成本估算      |
+| 数据源状态 | 上游可用性与延迟监测                  |
 
-- [✨ 功能特性](#-功能特性)
-- [🧭 项目结构](#-项目结构)
-- [🚀 快速开始](#-快速开始)
-- [💻 常用命令](#-常用命令)
-- [📦 部署](#-部署)
-- [📄 许可证](#-许可证)
-
----
-
-## ✨ 功能特性
-
-| 特性              | 说明                                   |
-| ----------------- | -------------------------------------- |
-| 🏆 **模型排行**   | 智能指数、幻觉率、提供商统计与模型详情 |
-| 📢 **发布追踪**   | 最新模型与开源发布，附下载统计         |
-| 📰 **资讯聚合**   | 行业 / 开源 / 硬件 / 投融资多源 RSS    |
-| ⚖️ **模型对比**   | 雷达图指标对比、价格明细与月成本估算   |
-| 🩺 **数据源状态** | 上游可用性与延迟实时监测               |
-
----
-
-## 🧭 项目结构
+## 项目结构
 
 ```text
 modeltide/
-├── src/            # 源码
-│   ├── client/     # 前端
-│   ├── server/     # Worker 后端
-│   ├── shared/     # 共享
-│   └── styles/     # 样式
+├── src/client/     # 前端
+├── src/server/     # Worker 后端
+├── src/shared/     # 共享类型/配置/国际化
+├── src/styles/     # 样式
 ├── public/         # 静态资源
 ├── wrangler.jsonc  # 部署配置
 └── package.json    # 依赖
 ```
 
----
+## 快速开始
 
-## 🚀 快速开始
-
-**环境要求：** Node.js ≥ 22
+要求 Node.js ≥ 22。
 
 ```bash
 npm install
 npm run dev      # 前端 + Worker API：http://localhost:3000
 ```
 
-无需额外配置（KV 行为差异见 [部署](#-部署)）。需对齐 Worker 时用 `wrangler dev`（8787 端口）。
+需对齐 Worker 时用 `wrangler dev`（8787 端口）。
 
----
+## 常用命令
 
-## 💻 常用命令
+| 命令                 | 说明                    |
+| -------------------- | ----------------------- |
+| `npm run dev`        | 开发服务器（3000 端口） |
+| `npm run build`      | 生产构建                |
+| `npm run preview`    | 本地预览生产产物        |
+| `npm run deploy`     | 构建并部署到 Workers    |
+| `npm run test`       | 测试（Vitest）          |
+| `npm run lint`       | 静态检查（oxlint）      |
+| `npm run type-check` | 类型检查（tsc）         |
+| `npm run format`     | 代码格式化（oxfmt）     |
+| `npm run audit`      | 依赖安全扫描            |
 
-| 命令 | 说明 |
-| --- | --- |
-| `npm run dev` | 开发服务器（3000 端口，Vite + Workers） |
-| `npm run build` | 生产构建（同步更新 CSP 哈希；dist 自动清空） |
-| `npm run preview` | 本地预览生产产物（仅静态预览，非 Worker） |
-| `npm run deploy` | 构建并部署到 Cloudflare Workers |
-| `npm run test` | 单元与 Worker 集成测试（Vitest） |
-| `npm run lint` | 静态检查（oxlint） |
-| `npm run type-check` | 类型检查（tsc） |
-| `npm run format` | 代码格式化（oxfmt） |
-| `npm run audit` | 依赖安全扫描 |
+## 部署
 
----
+单个 Worker 同时托管静态资源与 API，定时 Cron 每 30 分钟刷新缓存。
 
-## 📦 部署
+1. Fork 本仓库。
+2. （推荐）KV：Dashboard → Workers & Pages → KV → 新建命名空间，将 ID 填入 `wrangler.jsonc` 的 `kv_namespaces`。
+3. （可选）`npx wrangler secret put HF_TOKEN`，填入只读 [HF 令牌](https://huggingface.co/settings/tokens)以提高 API 限额。
+4. Workers & Pages → Create application → Import a repository → Save and Deploy。
 
-单个 Cloudflare Worker 同时托管静态资源与 API，上游数据经缓存并由定时 Cron 刷新。
+|          | 未配置 KV（默认） | 配置 KV（免费版足够）             |
+| -------- | ----------------- | --------------------------------- |
+| 数据     | 每次请求直连上游  | 三档缓存（30 分钟/2 小时/6 小时） |
+| 状态历史 | 仅内存保留        | 持久化 90 天历史                  |
+| 限流     | 不生效            | 生效                              |
 
-1. **Fork** 本仓库。
-2. **（可选）KV 缓存** —— 在 [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **KV** 创建命名空间，将 ID 填入 `wrangler.jsonc` 的 `kv_namespaces`（取消注释）后提交。
-3. **部署** —— **Workers & Pages** → **Create application** → **Import a repository**，选择 Fork 的仓库并 **Save and Deploy**。
-4. **自动更新** —— 每次推送都会自动重新构建并部署。
+KV 免费版每天 1,000 次写入（稳态仅消耗几百次）。冷缓存未命中可能因 10 毫秒 CPU 上限短暂返回 `1102`；命中缓存后成本极低。
 
-| | 未配置 KV（默认） | 配置 KV |
-| --- | --- | --- |
-| 数据 | 每次请求直连上游 | 三档缓存（30 分钟/2 小时/6 小时） |
-| 状态历史 | 仅内存保留（重启后丢失） | 持久化 90 天历史 |
-| 限流 | 不生效 | 生效 |
+`worker-configuration.d.ts` 由 `npx wrangler types` 生成，请勿手工编辑。
 
-> 注意：KV 免费版限制 **1,000 次写入/天**，主要被定时任务（采样 + 预热）消耗。接近上限后缓存写入失败、刷新变慢，**Workers Paid**（100 万次写入/天）不受此限制。
-
-> 仓库根目录的 `worker-configuration.d.ts` 由 `npx wrangler types` 生成，请勿手工编辑；修改 `wrangler.jsonc` 后重新生成即可。
-
----
-
-## 📄 许可证
+## 许可证
 
 [MIT](./LICENSE)

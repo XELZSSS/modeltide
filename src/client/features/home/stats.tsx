@@ -10,7 +10,7 @@ export interface HomeBarStat {
   valueLabel: string;
 }
 
-/** Two ranked stat cards: open-source download counts and hallucination accuracy. */
+/** Ranked stat cards: open-source downloads and hallucination accuracy. */
 export const StatisticsSection = memo(function StatisticsSection({
   downloadStats,
   hallucinationStats,
@@ -42,20 +42,19 @@ const RankedStatCard = memo(function RankedStatCard({
   return (
     <Card>
       <CardContent padding="md">
-        <p className="text-sm sm:text-base font-semibold mb-1">{title}</p>
-        <p className="text-xs text-text-secondary mb-3">{source}</p>
+        <p className="ui-card-title mb-1">{title}</p>
+        <p className="ui-caption mb-4">{source}</p>
         {rows.length === 0 ? (
-          <p className="text-sm text-text-secondary">{t("notAvailable")}</p>
+          <p className="ui-body-secondary">{t("notAvailable")}</p>
         ) : (
-          <div className="flex flex-col gap-2">
-            {/* Rank position is stable here (rows are pre-sorted); label carries identity. */}
+          <div className="flex flex-col gap-1">
             {rows.map((row, i) => (
-              <div key={`${row.label}#${i + 1}`} className="flex items-center gap-3 h-7">
-                <span className="text-xs sm:text-sm font-medium text-text-tertiary w-6 text-center shrink-0">
+              <div key={`${row.label}#${i + 1}`} className="flex items-center gap-3 h-8">
+                <span className="text-xs font-medium text-text-tertiary w-6 text-center shrink-0 tabular-nums">
                   {i + 1}
                 </span>
                 <span className="text-sm truncate min-w-0 flex-1">{row.label}</span>
-                <span className="text-sm font-semibold font-mono shrink-0">{row.valueLabel}</span>
+                <span className="ui-mono-value shrink-0">{row.valueLabel}</span>
               </div>
             ))}
           </div>

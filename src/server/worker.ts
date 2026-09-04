@@ -1,17 +1,20 @@
 import { WARM_ORIGIN } from "@/shared/config";
 import { createApp } from "@/server/api";
-import { buildWarmUrls, routeDefs } from "@/server/routes";
+import { bucketWarmUrls, bulkSliceForTick, routeDefs } from "@/server/routes";
 import { recordStatusSamples } from "@/server/sources/status-history";
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
 
 const app = createApp(routeDefs);
 
-// Pre-populate caches and CDN edges for all warm routes on the scheduled trigger.
+// Pre-populate caches on the scheduled trigger: live tier every tick,
+// bulk tier a rotating slice per tick (free-tier CPU/subrequest safe).
 async function warmUrls(env: Env): Promise<void> {
-  const warmUrlsList = buildWarmUrls(WARM_ORIGIN, routeDefs, new Date());
-  // Keep concurrency low: each warm request fans out (home=3, AA=4, news=6),
-  // and Workers caps subrequests per invocation (~50). 8-way bursts tripped it.
+  const now = new Date();
+  const { live, bulk } = bucketWarmUrls(WARM_ORIGIN, routeDefs, now);
+  const warmUrlsList = [...live, ...bulkSliceForTick(bulk, now)];
+  // Low concurrency: each warm request fans out, and Workers caps
+  // simultaneous outgoing connections at 6.
   const CONCURRENCY = 3;
   let failures = 0;
   const failed: string[] = [];
@@ -20,8 +23,7 @@ async function warmUrls(env: Env): Promise<void> {
     while (queue.length > 0) {
       const url = queue.shift() ?? "?";
       try {
-        // The internal-origin header lets the API skip per-request logging for
-        // cron traffic (pure noise at a 30-minute cadence); never exposed publicly.
+        // x-warmup marks internal traffic (skipped by request logging).
         const res = await app.request(url, { headers: { "x-warmup": "1" } }, env);
         if (res.status < 200 || res.status >= 300) {
           failures++;
@@ -46,7 +48,7 @@ export default {
       const url = new URL(request.url);
       const isApi = url.pathname === "/api" || url.pathname.startsWith("/api/");
       const response = await app.fetch(request, env);
-      // Non-API 404s fall back to the static-assets fetcher so the Worker can host pages alongside the API.
+      // Non-API 404s fall back to static assets (same-Worker hosting).
       if (!isApi && response.status === 404 && env.ASSETS) {
         return env.ASSETS.fetch(request);
       }
@@ -58,8 +60,7 @@ export default {
   },
 
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-    // One probe round per tick feeds the rolling history store that the
-    // status-history route reads; sampling failures must not block the warmup.
+    // Probe sampling feeds the status-history store; failures must not block warmup.
     try {
       await recordStatusSamples(buildContext(env));
     } catch (err) {

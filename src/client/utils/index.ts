@@ -1,18 +1,18 @@
 export * from "@/shared/utils";
-import { normalizeModelKey } from "@/shared/utils";
+import { computeBlendPrice, normalizeModelKey } from "@/shared/utils";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { BENCHMARK_LABELS, ONE_MINUTE, ONE_HOUR, ONE_DAY, type ModelSource } from "@/shared/config";
 import type { TFunction, TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 
-// ---- client/utils/cn.ts ----
+// ---- cn ----
 /** Merges class names and resolves Tailwind class conflicts. */
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
-// ---- client/utils/format.ts ----
+// ---- format ----
 export function safeHref(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
@@ -40,7 +40,7 @@ function compactParts(n: number) {
   return { abs, k: abs / 1e3, m: abs / 1e6, b: abs / 1e9, t: abs / 1e12, sign: n < 0 ? "-" : "" };
 }
 
-// Threshold where rounding promotes to the next unit: 1000 - 0.5 * 10^-decimals
+// Threshold where rounding promotes to the next unit.
 const PROMOTE_2DEC = 999.995;
 const PROMOTE_1DEC = 999.95;
 
@@ -73,22 +73,22 @@ export function formatScore(t: TFunction, n?: number | null) {
   return n.toFixed(2);
 }
 
-/** Percent with one decimal; null/NaN/Infinity falls back to the localized "N/A". */
+/** Percent with one decimal; null falls back to "N/A". */
 export function formatPercent(t: TFunction, v: number | null | undefined): string {
   return typeof v !== "number" || !Number.isFinite(v) ? t("notAvailable") : `${v.toFixed(1)}%`;
 }
 
-/** Uptime ratio in [0,1] rendered as a two-decimal percentage; null falls back to the localized "no data". */
+/** Uptime ratio in [0,1] as a two-decimal percentage. */
 export function formatUptimePct(t: TFunction, v: number | null | undefined): string {
   return typeof v !== "number" || !Number.isFinite(v) ? t("uptimeNoData") : `${(v * 100).toFixed(2)}%`;
 }
 
-/** Output speed in tokens/s at one decimal with digit grouping; null falls back to the localized "N/A". */
+/** Output speed in tokens/s at one decimal. */
 export function formatSpeed(t: TFunction, v: number | null | undefined): string {
   return typeof v === "number" && Number.isFinite(v) ? formatIndex(v) : t("notAvailable");
 }
 
-/** Number at one decimal with digit grouping (speeds, index values). */
+/** Number at one decimal with digit grouping. */
 export function formatIndex(v: number): string {
   if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return v.toLocaleString("en-US", { maximumFractionDigits: 1 });
@@ -133,7 +133,7 @@ export function formatRelativeTime(isoString: string, t: TFunction): string {
   if (isNaN(date.getTime())) return isoString;
   const diffMs = Date.now() - date.getTime();
   if (diffMs < 0) return t("timeJustNow");
-  const diffMins = Math.floor(diffMs / 60_000);
+  const diffMins = Math.floor(diffMs / ONE_MINUTE);
   if (diffMins < 1) return t("timeJustNow");
   if (diffMins < 60) return t("timeMinutesAgo", { value: diffMins });
   const diffHours = Math.floor(diffMins / 60);
@@ -151,7 +151,6 @@ export function formatDate(isoString: string | number | Date, lang: string): str
   // Local timezone: UTC rendering shifted Chinese-evening dates a day behind.
   return date.toLocaleDateString(localeOf(lang));
 }
-
 export function orNA(value: string | null | undefined, t: TFunction): string {
   return value || t("notAvailable");
 }
@@ -170,7 +169,7 @@ export function formatUptime(t: TFunction, ms: number): string {
   return t("uptimeMins", { mins });
 }
 
-// ---- client/utils/model.ts ----
+// ---- model ----
 export function modelId(m: { id?: string; slug?: string }): string {
   return m.id || m.slug || "";
 }
@@ -179,7 +178,7 @@ export function modelDetailPath(source: ModelSource, id: string): string {
   return `/model/${source}/${id}`;
 }
 
-/** Last path segment of a repo-style id ("meta-llama/Llama-3" → "Llama-3"); falls back to the id itself. */
+/** Last path segment of a repo-style id ("org/Model" → "Model"). */
 export function shortModelId(id: string): string {
   return id.split("/").pop() || id;
 }
@@ -234,14 +233,8 @@ export function calcMonthlyCost(
   return daily == null ? null : daily * Math.max(1, opts.daysPerMonth);
 }
 
-// ---- client/utils/pricing.ts ----
-/**
- * Unified price resolution. First-party official doc rates (OpenAI, Anthropic,
- * Google, DeepSeek, Mistral, Kimi) always win over the catalog legs
- * (Artificial Analysis, OpenRouter-backfilled). Every price surface (rankings
- * pricing tab, monthly estimator, model detail) resolves through this so a
- * stale third-party figure can never silently override the provider own rate.
- */
+// ---- pricing ----
+/** First-party official rates win over catalog legs, per leg. */
 export type PriceAuthority = "official" | "catalog";
 
 export interface EffectivePricing {
@@ -255,8 +248,9 @@ export type OfficialGetter = (model: ArtificialAnalysisModel) => OfficialPriceMo
 
 const finiteOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-/** Exact normalized-key index over the official id + name. */
-export function indexOfficialPricing(models: OfficialPriceModel[]): Map<string, OfficialPriceModel> {
+/** Exact normalized-key index over the official id + name. */ export function indexOfficialPricing(
+  models: OfficialPriceModel[],
+): Map<string, OfficialPriceModel> {
   const map = new Map<string, OfficialPriceModel>();
   for (const m of models) {
     for (const raw of [m.name, m.id]) {
@@ -268,11 +262,7 @@ export function indexOfficialPricing(models: OfficialPriceModel[]): Map<string, 
   return map;
 }
 
-/**
- * Exact match only: fuzzy matching could attach a sibling model rate, which
- * misleads worse than a stale figure. Parenthesized variant labels, creator
- * prefixes and effort qualifiers are already stripped by normalizeModelKey.
- */
+/** Exact match only — fuzzy matches could attach a sibling model's rate. */
 export function matchOfficialPricing(
   index: Map<string, OfficialPriceModel>,
   model: { name?: string | null; short_name?: string | null; slug?: string | null },
@@ -285,7 +275,7 @@ export function matchOfficialPricing(
   return undefined;
 }
 
-/** Per-leg merge: official legs win individually, catalog fills the gaps. */
+/** Per-leg merge: official legs win, catalog fills gaps. */
 export function resolveEffectivePricing(
   catalog: ArtificialAnalysisModel["pricing"],
   official?: OfficialPriceModel | null,
@@ -298,23 +288,7 @@ export function resolveEffectivePricing(
   return { input, output, cache_hit: cacheHit, source: official ? "official" : "catalog" };
 }
 
-/**
- * 7:2:1 blended $/1M rate (cached-input : input : output); cache falls back
- * to input when the model has no cache tier. Mirrors the upstream Artificial
- * Analysis definition and the server computeBlendPrice.
- */
-export function computeBlendPrice(
-  p?: { input?: number | null; output?: number | null; cache_hit?: number | null; cacheHit?: number | null } | null,
-): number | null {
-  if (!p) return null;
-  const input = finiteOrNull(p.input);
-  const output = finiteOrNull(p.output);
-  if (input == null || output == null) return null;
-  const cache = finiteOrNull(p.cacheHit) ?? finiteOrNull(p.cache_hit) ?? input;
-  return (7 * cache + 2 * input + output) / 10;
-}
-
-/** Blended rate from the effective (official-first) legs; catalog figure as fallback. */
+/** Blended rate from effective (official-first) legs; catalog figure as fallback. */
 export function resolveBlendedPrice(
   model: ArtificialAnalysisModel,
   official?: OfficialPriceModel | null,

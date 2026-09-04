@@ -7,14 +7,14 @@ import { ErrorBoundary, Spinner } from "@/client/components/shared";
 import { AppRoutes } from "@/client/routes";
 import { FIVE_MINUTES, THIRTY_MINUTES } from "@/shared/config";
 
-// Retry transient failures but avoid background refetches on tab focus; API data is treated as fresh for 5 min.
+// Retry transient failures; no refetch on focus; data fresh for 5 min.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 2, refetchOnWindowFocus: false, staleTime: FIVE_MINUTES, gcTime: THIRTY_MINUTES },
   },
 });
 
-/** Root component wiring i18n, device, react-query, and router providers. */
+/** Root component wiring providers and router. */
 export function App() {
   return (
     <I18nProvider>
@@ -22,7 +22,7 @@ export function App() {
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <AppShell>
-              {/* Route-level boundary: lazy() chunk failures would otherwise white-screen. */}
+              {/* Lazy-chunk failures would otherwise white-screen. */}
               <ErrorBoundary>
                 <Suspense fallback={<Spinner />}>
                   <AppRoutes />

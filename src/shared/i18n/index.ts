@@ -8,12 +8,10 @@ export type TranslationKey = keyof typeof en;
 export type TranslationParams = Record<string, string | number>;
 export type TFunction = (key: TranslationKey, params?: TranslationParams) => string;
 
-// Partial by design: a language file may lag behind `en`; createT falls back
-// per-key to English, then to the key itself. Keep zh/en key sets in sync
-// (a test asserts symmetry) so the fallback stays a backstop, not a path.
+// A language file may lag behind `en`; createT falls back per-key to English.
 const dictionaries: Record<Lang, Partial<Record<TranslationKey, string>>> = { en, zh };
 
-/** Replaces {key} placeholders in a template; unknown or null params are left as-is. */
+/** Replaces {key} placeholders; unknown params are left as-is. */
 export function interpolate(template: string, params?: TranslationParams): string {
   if (!params) return template;
   return template.replace(/\{(\w+)\}/g, (match, key: string) => {
@@ -22,7 +20,7 @@ export function interpolate(template: string, params?: TranslationParams): strin
   });
 }
 
-/** Returns a translate function for the language, falling back to English for missing keys. */
+/** Translate function for the language, falling back to English for missing keys. */
 export function createT(
   lang: Lang,
   opts?: { onMissingParam?: (key: TranslationKey, rendered: string) => void },

@@ -1,9 +1,9 @@
 import { useTranslation } from "@/client/providers";
 import { MODEL_SOURCES } from "@/shared/config";
 import { ComparePageLayout } from "./ComparePageLayout";
-import { CompareContent } from "./CompareContent";
+import { CompareContent } from "./CompareTable";
 
-/** Route entry for /compare (separate lazy chunk from PriceCompareView). */
+/** Route entry for /compare (own lazy chunk, separate from PriceCompareView). */
 export function CompareView() {
   const { t } = useTranslation();
   return (

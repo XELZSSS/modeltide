@@ -6,7 +6,7 @@ import { PriceTable, PriceChart, CostEstimator, OfficialVsRouterTable } from "./
 import { MODEL_SOURCES } from "@/shared/config";
 import { ComparePageLayout } from "./ComparePageLayout";
 
-// ---- client/features/compare/PriceCompareContent.tsx ----
+// ---- PriceCompareContent ----
 export const PriceCompareContent = memo(function PriceCompareContent({
   models,
 }: {
@@ -17,7 +17,6 @@ export const PriceCompareContent = memo(function PriceCompareContent({
 
   return (
     <>
-      {/* Plain heading; PriceTable frames the table itself so there's no card-in-card. */}
       <div className="flex flex-col gap-3">
         <p className="text-sm font-semibold">{t("priceBreakdown")}</p>
         <PriceTable priceRows={priceRows} models={models} />
@@ -29,8 +28,8 @@ export const PriceCompareContent = memo(function PriceCompareContent({
   );
 });
 
-// ---- client/features/compare/PriceCompareView.lazy.tsx ----
-/** Route entry for /price-compare (separate lazy chunk from CompareView). */
+// ---- PriceCompareView.lazy ----
+/** Route entry for /price-compare (own lazy chunk, separate from CompareView). */
 export function PriceCompareView() {
   const { t } = useTranslation();
   return (

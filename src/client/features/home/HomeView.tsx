@@ -21,7 +21,7 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { HomeBarStat } from "./stats";
 
 const IndexLineChart = lazy(() => import("./charts").then((m) => ({ default: m.IndexLineChart })));
-// Light DOM-only stats ride a separate chunk so they don't wait for chart.js.
+// DOM-only stats ride a separate chunk so they don't wait for chart.js.
 const StatisticsSection = lazy(() => import("./stats").then((m) => ({ default: m.StatisticsSection })));
 
 interface HomeKpi {
@@ -44,8 +44,7 @@ function useHomeStats(
   t: (key: TranslationKey, params?: Record<string, string | number>) => string,
 ) {
   const openSourceRankings = dashboardData.opensource ?? [];
-  // Stabilize the array identity: dashboardData.textToImage is a fresh object per
-  // query resolution, and `?? []` would otherwise bust the kpiStrip memo below.
+  // Fresh object per query resolution; stabilize identity for memos below.
   const t2iModels = useMemo(() => dashboardData.textToImage?.models ?? [], [dashboardData.textToImage?.models]);
   const latestOpenRouterModel = dashboardData.orRankings?.tokenUsageRankings?.[0] ?? null;
 
@@ -77,8 +76,7 @@ function useHomeStats(
     let latestTs = -Infinity;
     let bestReasoning: ArtificialAnalysisModel | null = null;
     for (const m of artificialData) {
-      // Compare timestamps, not strings: non-zero-padded dates ("2024-1-2")
-      // sort incorrectly under lexicographic comparison.
+      // Compare timestamps, not strings (non-zero-padded dates break lexical order).
       const ts = m.release_date ? Date.parse(m.release_date) : NaN;
       if (Number.isFinite(ts) && ts > latestTs) {
         latestTs = ts;
@@ -114,8 +112,7 @@ function useHomeStats(
   const providerStats = useMemo<HomeProviderStat[]>(
     () =>
       computeProviderStats(artificialData, t("unknown"))
-        // Providers without speed samples would render as "0.0 tokens/s"; drop them
-        // instead of implying a measured speed of zero.
+        // Drop providers without speed samples (no "0.0 tokens/s" implying zero).
         .filter(({ avgSpeed }) => avgSpeed != null)
         .map(({ name, color, count, avgSpeed }) => ({ name, color, avgSpeed: avgSpeed ?? 0, count }))
         .sort((a, b) => b.avgSpeed - a.avgSpeed),
@@ -133,7 +130,7 @@ function formatRatingInterval(entry: TextToImageModel): string {
 const KpiStrip = memo(function KpiStrip({ kpis }: { kpis: HomeKpi[] }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-      {/* KPI order is fixed, but label keys are stable while positions are not. */}
+      {/* Label keys are stable while positions are not. */}
       {kpis.map((kpi) => (
         <StatCard key={kpi.label} icon={kpi.Icon} label={kpi.label} value={kpi.value} />
       ))}
@@ -146,15 +143,15 @@ const ProviderSpeedCard = memo(function ProviderSpeedCard({ providerStats }: { p
   return (
     <Card className="h-full">
       <CardContent padding="md" className="flex flex-col h-full">
-        <p className="text-[11px] font-medium text-text-tertiary mb-3">{t("providerSpeed")}</p>
+        <p className="ui-caption font-medium mb-3">{t("providerSpeed")}</p>
         <div className="flex flex-col gap-3 flex-1 justify-between">
           {providerStats.slice(0, 6).map((p) => (
-            <div key={p.name} className="flex items-center justify-between min-w-0">
+            <div key={p.name} className="flex items-center justify-between gap-3 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <Dot color={p.color} />
-                <span className="text-sm sm:text-base font-medium truncate">{p.name}</span>
+                <span className="text-sm font-medium truncate">{p.name}</span>
               </div>
-              <span className="text-sm sm:text-base font-semibold font-mono ml-3 shrink-0">
+              <span className="text-sm font-semibold font-mono ml-3 shrink-0">
                 {formatSpeed(t, p.avgSpeed)} {t("tokensPerSecond")}
               </span>
             </div>
@@ -170,17 +167,17 @@ const TextToImageCard = memo(function TextToImageCard({ entry }: { entry: TextTo
   const locale = lang === "zh" ? "zh-CN" : "en-US";
   return (
     <Card>
-      <div className="flex flex-col gap-2.5 p-4 w-full">
-        <div className="flex items-start justify-between gap-2">
+      <CardContent padding="md" className="flex flex-col gap-3 w-full">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-sm font-medium truncate">{entry.name}</span>
+            <span className="ui-card-title truncate">{entry.name}</span>
             {entry.creatorName && (
-              <span className="text-xs text-text-secondary truncate shrink-0">({entry.creatorName})</span>
+              <span className="ui-caption truncate shrink-0">({entry.creatorName})</span>
             )}
           </div>
-          <span className="text-xs font-medium text-text-tertiary font-mono shrink-0">#{entry.rank}</span>
+          <span className="font-mono tabular-nums text-xs text-text-tertiary shrink-0">#{entry.rank}</span>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 ui-caption">
           <span>
             {t("elo")}:{" "}
             <strong className="text-text-primary font-semibold">
@@ -209,7 +206,7 @@ const TextToImageCard = memo(function TextToImageCard({ entry }: { entry: TextTo
             </span>
           ) : null}
         </div>
-      </div>
+      </CardContent>
     </Card>
   );
 });
@@ -246,7 +243,7 @@ function HomeContent() {
         <SearchInput />
       </div>
 
-      <div className="mb-6">
+      <div className="mb-5 sm:mb-6">
         <KpiStrip kpis={kpiStrip} />
       </div>
 
@@ -257,8 +254,8 @@ function HomeContent() {
               fallback={
                 <Card>
                   <CardContent padding="md">
-                    <p className="text-sm font-semibold mb-3">{t("intelligenceIndex")}</p>
-                    <div className="h-[210px] sm:h-[260px] animate-pulse bg-bg-secondary" />
+                    <p className="ui-card-title mb-4">{t("intelligenceIndex")}</p>
+                    <div className="h-[200px] sm:h-[240px] animate-pulse bg-bg-secondary" />
                   </CardContent>
                 </Card>
               }
@@ -279,7 +276,7 @@ function HomeContent() {
   );
 }
 
-/** Landing page dashboard: KPI strip, chart, provider speeds, stats and text-to-image leaderboard. */
+/** Landing dashboard: KPIs, chart, provider speeds, stats, text-to-image board. */
 export function HomeView() {
   return (
     <SuspenseQuery>

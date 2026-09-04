@@ -32,10 +32,10 @@ import { useNavigate, useLocation } from "react-router";
 import { useCompareStore, useCompareModels } from "@/client/stores";
 import { useMonthlyCosts } from "@/client/features/compare/pricing";
 import { qOfficialPricing } from "@/client/api/queries";
-import { CompareChipBar } from "@/client/features/compare/CompareChipBar";
+import { CompareChipBar } from "@/client/features/compare/ComparePageLayout";
 import { CostEstimatorInputs } from "@/client/features/compare/pricing";
 
-// ---- client/features/rankings/aaColumns.tsx ----
+// ---- aaColumns ----
 function ReasoningBadge({ label }: { label: string }) {
   return <Lightbulb className="size-3.5 shrink-0 text-text-tertiary" aria-label={label} />;
 }
@@ -60,9 +60,9 @@ function CompareButton({
         e.stopPropagation();
         onToggle(model);
       }}
-      className="shrink-0 -my-2"
+      className="shrink-0"
     >
-      {isCompared ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
+      {isCompared ? <Check className="size-4" /> : <Plus className="size-4" />}
     </Button>
   );
 }
@@ -116,8 +116,6 @@ function PricedModelCell({
   return (
     <RankingNameCell
       name={row.model.name || row.model.slug}
-      nameClassName="text-sm"
-      gapClassName="gap-1"
       prefix={<ReasoningPrefix model={row.model} />}
       suffix={
         <CompareButton model={row.model} isCompared={compareSet.has(modelId(row.model))} onToggle={onToggleCompare} />
@@ -149,7 +147,7 @@ function scoreColumn(
   );
 }
 
-/** Ranking table columns – compareSet is computed once by the caller and passed to avoid per-cell store subscriptions. */
+/** Ranking columns; compareSet is computed once by the caller. */
 export function buildRankingColumns(
   t: TFunction,
   compareSet: Set<string>,
@@ -177,7 +175,7 @@ export function buildRankingColumns(
   ];
 }
 
-/** Pricing table columns: cache/prompt/completion prices and estimated monthly cost. */
+/** Pricing columns: cache/prompt/completion prices + monthly cost. */
 export function buildPricingColumns(
   t: TFunction,
   compareSet: Set<string>,
@@ -218,7 +216,7 @@ export function buildPricingColumns(
   ];
 }
 
-// ---- client/features/rankings/ArtificialAnalysisView.tsx ----
+// ---- ArtificialAnalysisView ----
 type ViewMode = "rankings" | "pricing";
 
 interface PricingRow {
@@ -226,7 +224,7 @@ interface PricingRow {
   monthlyCost: number | null;
 }
 
-/** Stable search-field selector: a fresh callback each render would defeat useFilteredData's memo. */
+/** Stable search-field selector (fresh callbacks defeat memo). */
 const getAASearchFields = (model: ArtificialAnalysisModel) => [
   model.name,
   model.slug,
@@ -237,8 +235,7 @@ const getAARowId = (model: ArtificialAnalysisModel) => modelId(model);
 const getPricingRowId = (row: PricingRow) => modelId(row.model);
 const getPricingSearchFields = (row: PricingRow) => getAASearchFields(row.model);
 
-// Module-level renderers keep prop identity stable so the memoized table body
-// is not re-rendered on every parent render (search typing, cost input, ...).
+// Module-level renderers keep prop identity stable for the memoized table.
 const renderModelDetail = (model: ArtificialAnalysisModel) => <ModelExpandedDetail model={model} />;
 const renderPricingDetail = (row: PricingRow) => <ModelExpandedDetail model={row.model} />;
 
@@ -251,8 +248,8 @@ function FilterToolbar({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-      {/* View-mode switch, not tabs: radiogroup semantics (role="tab" requires a tablist). */}
+    <div className="flex flex-wrap items-center gap-2 min-w-0">
+      {/* View-mode switch: radiogroup semantics (role="tab" needs a tablist). */}
       <SegmentedGroup className="overflow-x-auto no-scrollbar" role="radiogroup" aria-label={t("viewMode")}>
         <TabButton role="radio" active={viewMode === "rankings"} onClick={() => onViewModeChange("rankings")}>
           {t("modelRankings")}
@@ -265,17 +262,14 @@ function FilterToolbar({
   );
 }
 
-/**
- * Artificial Analysis rankings/pricing tables with compare support and
- * estimated monthly costs.
- */
+/** AA rankings/pricing tables with compare support and monthly costs. */
 export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnalysisModel[] }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
   const toggleCompareModel = useCompareStore((s) => s.toggleCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
-  // Restore the last-used view mode when navigating back (e.g. from the compare page).
+  // Restore the last-used view mode when navigating back.
   const [viewMode, setViewMode] = useState<ViewMode>(
     (location.state as { viewMode?: ViewMode })?.viewMode ?? "rankings",
   );
@@ -296,8 +290,7 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
 
   const compareIds = useCompareStore((s) => s.compareIds);
   const compareSet = useMemo(() => new Set(compareIds), [compareIds]);
-  // Server returns rankings pre-sorted by intelligence index, so the display
-  // order is the global rank; the map keeps ranks stable after search filtering.
+  // Display order is the global rank; the map keeps ranks stable after filtering.
   const rankMap = useMemo(() => indexRankMap(rankings, (m) => modelId(m)), [rankings]);
   const rankingColumns = useMemo(
     () => [
@@ -320,11 +313,11 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   );
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <FilterToolbar viewMode={viewMode} onViewModeChange={setViewMode} />
 
       {viewMode === "pricing" && (
-        <div className="flex gap-3 flex-wrap items-center">
+        <div className="flex gap-4 flex-wrap items-center">
           <CostEstimatorInputs state={costInputs} layout="input-label" avgCost={avgCost} />
         </div>
       )}

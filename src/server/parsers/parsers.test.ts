@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { decodeEntities, stripHtml, parseFeed } from "@/server/parsers/feed";
 import { findNextData, parseRscPayload } from "@/server/parsers/rsc";
-import { getOpenLicense } from "@/server/parsers/licenses";
 import {
+  getOpenLicense,
   isoDate,
   num,
   numCoerce,

@@ -1,11 +1,9 @@
-// Merged feed parser: HTML entity decoding + tag stripping + RSS/Atom parsing.
-// Former html.ts + rss.ts combined: decodeEntities/stripHtml are only consumed by parseFeed.
+// Feed parser: entity decoding + tag stripping + RSS/Atom parsing.
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
 import { UpstreamError } from "@/server/infra";
-// Common HTML named entities seen in scraped content; numeric references are handled by ENTITY_RE below.
-// Kept intentionally small (~100 high-frequency entries) to stay lean in the
-// Worker bundle; unknown entities are left untouched by decodeEntities.
+import { isSuitableNewsItem } from "@/server/sources/data-filter";
+// High-frequency named entities; unknown ones pass through untouched.
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
   lt: "<",
@@ -111,10 +109,10 @@ const NAMED_ENTITIES: Record<string, string> = {
   szlig: "\u00DF",
 };
 
-// Matches hex (&#x..) and decimal (&#..) with optional semicolon, and named entities requiring semicolon to avoid over-decoding.
+// Hex (&#x..) / decimal (&#..) with optional semicolon; named entities need one.
 const ENTITY_RE = /&(?:#x([0-9a-fA-F]+);?|#([0-9]+);?|([a-zA-Z][a-zA-Z0-9]*);)/g;
 
-/** Decode HTML entities to their Unicode characters, leaving unknown entities untouched. */
+/** Decode HTML entities; unknown ones pass through. */
 export function decodeEntities(s: string): string {
   return s.replace(ENTITY_RE, (m, hex?: string, dec?: string, name?: string) => {
     if (hex) return safeFromCodePoint(parseInt(hex, 16));
@@ -123,9 +121,7 @@ export function decodeEntities(s: string): string {
   });
 }
 
-// Only emit valid Unicode scalar values; surrogates, NUL and out-of-range
-// code points are dropped. Silent by design: feeds with malicious entities
-// must not spam Worker logs.
+// Drops invalid code points (surrogates, NUL, out-of-range) silently.
 function safeFromCodePoint(cp: number): string {
   if (!Number.isFinite(cp) || cp <= 0 || cp > 0x10ffff) return "";
   if (cp >= 0xd800 && cp <= 0xdfff) return "";
@@ -136,7 +132,7 @@ function safeFromCodePoint(cp: number): string {
   }
 }
 
-/** Block-level tags render with a break, so they become a space when stripped. */
+/** Block-level tags become a space when stripped. */
 const BLOCK_TAGS = new Set([
   "p",
   "div",
@@ -171,9 +167,8 @@ function tagNameOf(tagInner: string): string {
 }
 
 /**
- * Strip tags while keeping text; quote-aware (ignores ">" inside attributes),
- * skips comments/doctype/PI, drops <script>/<style> content, maps block tags
- * to a space to avoid "HelloWorld"粘连, and collapses whitespace.
+ * Strip tags, keep text. Quote-aware, skips comments/doctype/PI, drops
+ * script/style content, maps block tags to a space.
  */
 export function stripHtml(s: string): string {
   const parts: string[] = [];
@@ -245,13 +240,13 @@ function findTagEnd(html: string, start: number): number {
   return -1;
 }
 
-/** Cap per-feed items before merging so one noisy feed cannot dominate the response. */
+/** Cap per-feed items so one noisy feed can't dominate. */
 const MAX_ITEMS_PER_FEED = 50;
 
-/** Maximum XML feed size in bytes (2MB) to prevent Billion Laughs attacks. */
+/** Max feed size (2MB) against entity-expansion attacks. */
 export const MAX_XML_BYTES = 2 * 1024 * 1024;
 
-/** Truncation caps to prevent abusive upstream titles/links from bloating cache. */
+/** Truncation caps against abusive upstream titles/links. */
 const MAX_TITLE_CHARS = 300;
 const MAX_LINK_CHARS = 2048;
 const MAX_ID_CHARS = 2048;
@@ -262,13 +257,12 @@ export const FEED_ACCEPT = "application/rss+xml,application/xml,text/xml,*/*";
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
-  // Harden against entity-expansion (Billion Laughs) inside the 2MB window:
-  // leave entities unexpanded here; decodeEntities() normalizes text later.
+  // Leave entities unexpanded here; decodeEntities() normalizes text later.
   processEntities: false,
   htmlEntities: false,
 });
 
-/** Type guard for plain objects with string keys. */
+/** Plain-object guard. */
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === "object" && !Array.isArray(v);
 }
@@ -282,7 +276,7 @@ function sourceNameFrom(sourceUrl: string): string {
   }
 }
 
-/** Extract text from a simple element value: a string, number, or an object with a "#text" node. */
+/** Extract text from a string, number, or {"#text"} node. */
 function textOf(v: unknown): string | null {
   if (typeof v === "string") return v.trim() ? v : null;
   if (typeof v === "number" && Number.isFinite(v)) return String(v);
@@ -331,8 +325,6 @@ function itemId(item: Record<string, unknown>, link: string | null, title: strin
 
 /** UTF-8 byte length (xml.length counts UTF-16 units and undercounts CJK). */
 function utf8ByteLength(s: string): number {
-  // TextEncoder is available in Workers and Node 18+; fall back to a cheap
-  // over-estimate (3 bytes per char) if unavailable.
   try {
     return new TextEncoder().encode(s).length;
   } catch {
@@ -340,11 +332,7 @@ function utf8ByteLength(s: string): number {
   }
 }
 
-/**
- * Parse an RSS or Atom feed into normalized news items.
- * An unparseable/garbage feed throws UpstreamError so partial-failure
- * accounting upstream can react to it (maps to 502, shortens TTL).
- */
+/** Parse an RSS or Atom feed; garbage throws UpstreamError (502 + short TTL). */
 export function parseFeed(xml: string, sourceUrl: string): NewsItem[] {
   // Guard against gigantic payloads (Billion laughs / oversized feeds).
   const bytes = utf8ByteLength(xml);
@@ -373,14 +361,8 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
   if (!rawLink) return null;
   const link = rawLink.trim().slice(0, MAX_LINK_CHARS);
   const title = decodeEntities(stripHtml(String(item.title ?? "")).slice(0, MAX_TITLE_CHARS)).trim();
-  if (!title || !link) return null;
-  try {
-    const u = new URL(link);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-  } catch {
-    // Invalid per-item link: skip the item silently (feed-level failures throw).
-    return null;
-  }
+  // Unified dirty/invalid/unsuitable gate (title + link + protocol).
+  if (!isSuitableNewsItem(title, link)) return null;
   return {
     id: itemId(item, link, title),
     title,
@@ -393,8 +375,6 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
 function parseChannel(feed: unknown, sourceUrl: string): NewsItem[] {
   const channel = resolveChannel(feed);
   if (!channel || (channel.item == null && channel.entry == null && channel.title == null)) {
-    // Garbage feed: throw so upstream partial-failure accounting shortens TTL
-    // instead of caching an empty success.
     throw new UpstreamError(`Unrecognized feed format at ${sourceUrl}`);
   }
   let items = (channel.item ?? channel.entry ?? []) as unknown;
@@ -406,17 +386,16 @@ function parseChannel(feed: unknown, sourceUrl: string): NewsItem[] {
     .filter((x: NewsItem | null): x is NewsItem => x !== null);
 }
 
-/* Shared HTML table helpers: single home for the <tr> / <td> scans
- * duplicated across arena + official-pricing (anthropic/kimi). */
+/* Shared <tr>/<td> scanners for arena + official-pricing. */
 
-/** Inner HTML of every <tr> row in document order. */
+/** Inner HTML of every <tr> in document order. */
 export function tableRowInners(html: string): string[] {
   const rows: string[] = [];
   for (const match of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) rows.push(match[1] ?? "");
   return rows;
 }
 
-/** Stripped text of every <td>/<th> cell in a row, in order (empties kept for positional indexing). */
+/** Stripped text of every cell in a row, in order (empties kept for indexing). */
 export function rowCells(trInner: string): string[] {
   const cells: string[] = [];
   for (const match of trInner.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi))

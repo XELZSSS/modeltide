@@ -10,9 +10,15 @@ import {
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra";
-import { getOpenLicense } from "@/server/parsers/licenses";
+import { getOpenLicense } from "@/server/parsers/primitives";
 import { isoDate, numIntNonNegative } from "@/server/parsers/primitives";
-import { dedupeBy, toStringOrNull } from "@/shared/utils";
+import { toStringOrNull } from "@/shared/utils";
+import {
+  filterMapDedupe,
+  isOpenReleaseEntry,
+  isValidHuggingFaceId,
+  keepOpenSourceRanking,
+} from "@/server/sources/data-filter";
 
 interface HFModel {
   id?: string;
@@ -36,8 +42,8 @@ function resolveAuthor(m: HFModel, id: string): string | null {
 }
 
 function mapModel(m: HFModel): OpenSourceModelEntry | null {
-  const id = typeof m.id === "string" ? m.id.trim() : "";
-  if (!id) return null;
+  if (!isValidHuggingFaceId(m.id)) return null;
+  const id = (m.id as string).trim();
   const downloads = numIntNonNegative(m.downloads) ?? 0;
   const likes = numIntNonNegative(m.likes) ?? 0;
   const tags = Array.isArray(m.tags) ? m.tags.filter((t): t is string => typeof t === "string") : [];
@@ -78,37 +84,27 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
 
 function normalizeHfModels(items: HFModel[], filterFn?: (m: HFModel) => boolean): OpenSourceModelEntry[] {
   const filtered = filterFn ? items.filter(filterFn) : items;
-  return dedupeBy(
-    filtered.map(mapModel).filter((m): m is OpenSourceModelEntry => m !== null),
-    (m) => m.id,
-  );
+  // Unified pipeline: map drops dirty rows, dedupe keeps first per id.
+  return filterMapDedupe(filtered, mapModel, (m) => m.id);
 }
 
 export const getModels = (ctx: AppContext, p: ModelQuery): Promise<OpenSourceModelEntry[]> =>
   ctx.cache.withTtl(cacheKeys.openSourceModels(p.sort, p.direction, p.limit), SLOW_TTL_MS, async () => {
-    // Snap to the normalized bucket so the fetched payload matches the cache key,
-    // then slice back to the requested limit so ?limit=101 doesn't return 500 rows.
+    // Snap to the normalized bucket, then slice back to the requested limit.
     const limit = normalizeModelLimit(p.limit);
     const items = await fetchHFModels(ctx, p.sort, p.direction, limit);
     const mapped = sliceToLimit(
-      normalizeHfModels(items).filter((m) => m.downloads > 0),
+      normalizeHfModels(items).filter(keepOpenSourceRanking),
       p.limit,
     );
-    // Empty result means transient upstream failure — cache briefly to avoid
-    // poisoning the key for 30m (mirrors news/openrouter partial-TTL policy).
+    // Empty means transient failure — cache briefly to avoid poisoning the key.
     return { data: mapped, ttl: mapped.length === 0 ? PARTIAL_FAIL_TTL_MS : SLOW_TTL_MS };
   });
 
-// Filter on the mapped rows (HF ids are unique per response, so map-then-filter
-// matches filter-then-map) to pay one getOpenLicense + isoDate pass per item.
+// Filter on the mapped rows (HF ids are unique per response).
 export const getReleases = (ctx: AppContext): Promise<OpenSourceModelEntry[]> =>
   ctx.cache.withTtl(cacheKeys.openSourceReleases, SLOW_TTL_MS, async () => {
     const items = await fetchHFModels(ctx, "createdAt", "-1", 500);
-    const mapped = dedupeBy(
-      items
-        .map(mapModel)
-        .filter((m): m is OpenSourceModelEntry => m !== null && m.license !== null && m.createdAt !== null),
-      (m) => m.id,
-    );
+    const mapped = filterMapDedupe(items, mapModel, (m) => m.id).filter(isOpenReleaseEntry);
     return { data: mapped.sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? "")) };
   });

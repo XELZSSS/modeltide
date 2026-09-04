@@ -17,7 +17,7 @@ import { matchTerm } from "@/shared/utils";
 import { Pagination } from "@/client/components/ui";
 import { EmptyState } from "@/client/components/shared";
 
-// ---- client/components/data/cells.tsx ----
+// ---- cells ----
 interface RankingNameCellProps {
   name: string;
   /** Optional leading element (e.g. a reasoning badge). */
@@ -59,7 +59,7 @@ export const RightAlignedText = memo(function RightAlignedText({ children, class
   return <p className={cn("overflow-hidden text-ellipsis whitespace-nowrap text-right", className)}>{children}</p>;
 });
 
-// ---- client/components/data/column.tsx ----
+// ---- column ----
 export interface DataTableColumn<T> {
   id: string;
   header?: string;
@@ -79,11 +79,7 @@ export function textCol<T>(
   return { id, header, cell, ...opts };
 }
 
-/**
- * Right-aligned numeric column. NOTE: `hiddenMd` defaults to true (narrow-table
- * behavior) and is only overridden when `opts` explicitly passes it — callers
- * relying on visibility must pass `hiddenMd: false` explicitly.
- */
+/** Right-aligned numeric column (`hiddenMd` defaults to true). */
 export function rightCol<T>(
   id: string,
   header: string,
@@ -93,7 +89,7 @@ export function rightCol<T>(
   return { id, header, cell, align: "right", hiddenMd: true, ...opts };
 }
 
-/** Right-aligned column whose accessor returns null to render the quiet localized "N/A". */
+/** Right-aligned column rendering a quiet "N/A" for null. */
 export function rightColNA<T>(
   id: string,
   header: string,
@@ -106,7 +102,6 @@ export function rightColNA<T>(
     header,
     (row) => {
       const value = render(row);
-      // N/A cells stay visually quiet instead of competing with real values.
       return value == null ? (
         <RightAlignedText className="text-text-tertiary">{notAvailableLabel}</RightAlignedText>
       ) : (
@@ -126,11 +121,7 @@ export function mobilePrimaryCol<T>(
   return { id, header, cell, align: "right", hiddenMd: true, mobilePrimary: true, ...opts };
 }
 
-/**
- * Global-rank column shared by every rankings table: the rank travels with the
- * row (not the page index), so it stays correct after search filtering. Hidden
- * on mobile where the card layout has no room for a rank gutter.
- */
+/** Global-rank column: rank travels with the row, staying correct after filtering. */
 export function rankCol<T>(rankOf: (row: T) => number | null | undefined): DataTableColumn<T> {
   return {
     id: "rank",
@@ -146,12 +137,12 @@ export function rankCol<T>(rankOf: (row: T) => number | null | undefined): DataT
   };
 }
 
-/** 1-based global ranks for rows whose display order is already the ranking order. */
+/** 1-based ranks for rows already in ranking order. */
 export function indexRankMap<T>(rows: T[], getId: (row: T) => string): Map<string, number> {
   return new Map(rows.map((row, i) => [getId(row), i + 1]));
 }
 
-// ---- client/components/data/usePagedData.ts ----
+// ---- usePagedData ----
 function usePagination<T>(data: T[], size: number, resetKey?: string | number) {
   const [page, setPage] = useState(1);
   const total = Math.ceil(data.length / size);
@@ -159,8 +150,7 @@ function usePagination<T>(data: T[], size: number, resetKey?: string | number) {
   const safeTotal = Math.max(1, totalPages);
 
   useEffect(() => setPage((p) => Math.min(p, safeTotal)), [safeTotal]);
-  // Filter changes (search term, tab switch) jump back to page 1 instead of
-  // stranding the user on an empty page deep in the old result set.
+  // Filter changes jump back to page 1.
   useEffect(() => {
     setPage(1);
   }, [resetKey]);
@@ -177,22 +167,16 @@ export function usePagedData<T>(data: T[], getRowId?: (row: T) => string, pageSi
   return { dedupedData, page, totalPages, pagedData, goToPage } as const;
 }
 
-// ---- client/components/data/data-table.tsx ----
-/** Default rows per page; callers rarely need to override it. */
+// ---- data-table ----
 const DEFAULT_PAGE_SIZE = 8;
 
-/**
- * Deterministic content-based row id used when no getRowId is provided.
- * Fallback only: JSON-hashing every row each render is O(n·m) and the 32-bit
- * hash can collide — tables should pass an explicit getRowId instead.
- */
+/** Content-based row id fallback; prefer an explicit getRowId (hash can collide). */
 function rowContentId(row: unknown): string {
   let json: string;
   try {
     json = JSON.stringify(row) ?? "";
   } catch {
-    // Circular structures: fall back to a random id (loses expand persistence
-    // across renders, but never crashes the table).
+    // Circular structures: fall back to a random id (loses expand persistence).
     return `row-${Math.random().toString(36).slice(2)}`;
   }
   let hash = 0;
@@ -235,7 +219,7 @@ function ExpandToggle({
   return (
     <button
       type="button"
-      className="shrink-0 p-0.5 -m-0.5 rounded hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className="shrink-0 p-1 -m-1 rounded-md hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
       {...expandToggleProps(isExpanded, onToggle, isExpanded ? t("collapseRow") : t("expandRow"))}
     >
       <span className={cn("shrink-0 text-text-secondary transition-transform duration-200", isExpanded && "rotate-90")}>
@@ -280,9 +264,7 @@ interface MobileColumnLayout<T> {
 function resolveMobileColumns<T>(columns: DataTableColumn<T>[]): MobileColumnLayout<T> | null {
   if (columns.length === 0) return null;
   const primaryCol = columns.find((col) => !col.hiddenMd) ?? (columns[0] as DataTableColumn<T>);
-  // The emphasized stat may be flagged on a column that is hiddenMd (the rightCol /
-  // mobilePrimaryCol builders default to hiddenMd); hiddenMd only excludes a column
-  // from the desktop narrow table and from the secondary pairs below.
+  // hiddenMd only excludes a column from the desktop narrow table and secondary pairs.
   const others = columns.filter((col) => col !== primaryCol);
   const mainStatCol = others.find((col) => col.mobilePrimary) ?? others.find((col) => !col.hiddenMd);
   const secondaryCols = others.filter((col) => !col.hiddenMd && col !== mainStatCol);
@@ -302,45 +284,38 @@ function MobileTableBodyInner<T>({
   if (!layout) return null;
   const { primaryCol, mainStatCol, secondaryCols } = layout;
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-3">
       {pagedData.map((row) => {
         const { rowId, isExpanded, toggle } = getRowExpandState(row, getRowId, expandedRowId, onToggleExpand);
         return (
           <Fragment key={rowId}>
-            {/* Keyboard users expand via the ExpandToggle button; no card-level
-                onClick so there is no mouse-only interaction path. */}
+            {/* No card-level onClick: keyboard users expand via the toggle button. */}
             <div
-              className={cn(
-                "border border-border bg-bg-card p-3.5 transition-colors",
-                "hover:bg-hover",
-                isExpanded && "bg-accent-light",
-              )}
+              className={cn("border border-border bg-bg-card p-4 transition-colors", "hover:bg-hover", isExpanded && "bg-accent-light")}
             >
               <div className="flex items-center gap-2 min-w-0">
                 {isExpandable ? <ExpandToggle isExpanded={isExpanded} onToggle={toggle} size={16} /> : null}
                 <div className="min-w-0 flex-1">{primaryCol?.cell(row)}</div>
                 {mainStatCol && (
-                  <div className="shrink-0 text-right min-w-0 max-w-[45%]">
+                  <div className="shrink-0 text-right min-w-0 max-w-[40%]">
                     {mainStatCol.header && (
-                      <span className="text-[11px] sm:text-xs text-text-secondary mr-1 truncate">
-                        {mainStatCol.header}
-                      </span>
+                      <span className="text-xs text-text-secondary mr-1.5 truncate">{mainStatCol.header}</span>
                     )}
                     <span className="text-sm font-semibold">{mainStatCol.cell(row)}</span>
                   </div>
                 )}
               </div>
               {secondaryCols.length > 0 && (
-                <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2.5">
+                <div className="flex flex-wrap gap-x-4 gap-y-2 mt-3">
                   {secondaryCols.map((col) => (
                     <div
                       key={col.id}
-                      className={cn("flex items-baseline gap-1 min-w-0", col.align === "right" && "ml-auto")}
+                      className={cn("flex items-baseline gap-1.5 min-w-0", col.align === "right" && "ml-auto")}
                     >
                       {col.header && (
-                        <span className="text-[11px] sm:text-xs text-text-secondary shrink-0">{col.header}</span>
+                        <span className="text-xs text-text-secondary shrink-0">{col.header}</span>
                       )}
-                      <span className="text-xs sm:text-sm min-w-0">{col.cell(row)}</span>
+                      <span className="text-sm min-w-0">{col.cell(row)}</span>
                     </div>
                   ))}
                 </div>
@@ -366,16 +341,15 @@ export interface DataTableProps<T> {
   getRowId?: (row: T) => string;
   pageSize?: number;
   /**
-   * Controlled expanded row. Omit both `expandedRowId` and `onToggleExpand` to let
-   * the table own the state: it then resets the expansion whenever the page turns
-   * or the data set is replaced, so a stale expansion never survives a refetch.
+   * Controlled expanded row. Omit both to let the table own the state (resets
+   * on page turn or dataset replace, so stale expansions never survive).
    */
   expandedRowId?: string | null;
   onToggleExpand?: (rowId: string | null) => void;
   renderExpandedRow?: (row: T) => ReactNode;
   onPageChange?: () => void;
   caption?: string;
-  /** Pagination resets to page 1 whenever this changes (e.g. the search term). */
+  /** Pagination resets to page 1 whenever this changes. */
   resetKey?: string | number;
 }
 
@@ -390,7 +364,7 @@ interface TableBodyProps<T> {
 }
 
 function cellClasses<T>(col: DataTableColumn<T>): string {
-  return cn("px-3 py-3 sm:py-2.5", col.hiddenMd && "hidden md:table-cell");
+  return cn("px-4 py-2.5", col.hiddenMd && "hidden md:table-cell");
 }
 
 function cellInnerClasses<T>(col: DataTableColumn<T>): string {
@@ -415,7 +389,7 @@ function TableHeader<T>({
             <th
               key={col.id}
               scope="col"
-              className={cn(cellClasses(col), "font-medium text-text-tertiary whitespace-nowrap")}
+              className={cn(cellClasses(col), "ui-table-header")}
               style={{ width: col.width }}
             >
               <div className={cellInnerClasses(col)}>
@@ -504,8 +478,7 @@ function DataTableInner<T>({
   const isExpandable = !!renderExpandedRow;
   const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(data, getRowId, pageSize, resetKey);
 
-  // Collapse uncontrolled expansion when the dataset changes (e.g. search filter):
-  // a stale id could otherwise pop open on an unrelated row of the new data.
+  // Collapse uncontrolled expansion on dataset change (stale ids stay collapsed).
   useEffect(() => {
     if (uncontrolled) setOwnExpandedId(null);
   }, [dedupedData, uncontrolled]);
@@ -518,11 +491,11 @@ function DataTableInner<T>({
 
   const pagination =
     totalPages > 1 ? (
-      <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} className="pt-1 self-center" />
+      <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} className="pt-2 self-center" />
     ) : null;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-4">
       {dedupedData.length === 0 ? (
         <EmptyState message={t("noResults")} />
       ) : isMobile ? (
@@ -561,17 +534,10 @@ function DataTableInner<T>({
   );
 }
 
-/**
- * Paginated data table with optional expandable rows; renders a native table on desktop
- * and a stacked card list on mobile, with a mobile-optimised column layout.
- */
+/** Paginated table: native table on desktop, stacked cards on mobile. */
 export const DataTable = memo(DataTableInner) as typeof DataTableInner;
 
-/**
- * Filters `data` by the global search term (case-insensitive substring/prefix).
- * Full-scan O(n) per keystroke; tables paginate (pageSize 8-20) so render cost
- * stays bounded, but 10k+ row datasets should add virtualization (e.g. virtua).
- */
+/** Filter `data` by the global search term (case-insensitive). */
 function useFilteredData<T>(data: T[], getFields: (x: T) => string[]): T[] {
   const term = useSearchStore((s) => s.searchTerm)
     .toLowerCase()
@@ -590,15 +556,11 @@ function useFilteredData<T>(data: T[], getFields: (x: T) => string[]): T[] {
 
 interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
   data: T[];
-  /** Fields the global search term matches against; keep identity stable (module-level const or useCallback). */
+  /** Search-matched fields; keep identity stable. */
   getSearchFields: (row: T) => string[];
 }
 
-/**
- * DataTable wired to the global search store: filters `data` by the search term
- * before handing it to the table, collapsing the filter+table boilerplate shared
- * by the rankings, releases and AA views.
- */
+/** DataTable pre-wired to the global search store. */
 function SearchableDataTableInner<T>({ data, getSearchFields, ...tableProps }: SearchableDataTableProps<T>) {
   const filtered = useFilteredData(data, getSearchFields);
   const searchTerm = useSearchStore((s) => s.searchTerm);

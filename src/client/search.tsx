@@ -14,7 +14,7 @@ import { Loader2, Search, X } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { useSearchStore } from "@/client/stores";
 
-// ---- client/search/useSearchAllRankings.ts ----
+// ---- useSearchAllRankings ----
 interface SourceConfig<T> {
   items: T[];
   getFields: (item: T) => (string | undefined | null)[];
@@ -43,9 +43,7 @@ interface SearchState {
 
 const MAX_RESULTS = 20;
 
-/** Searches all ranking datasets for `searchTerm`. */
 export function useSearchAllRankings(searchTerm: string): SearchState {
-  // Trim first: whitespace-only input must not trigger upstream queries.
   const enabled = searchTerm.trim().length >= 2;
   const artificialQ = useArtificialRankings(enabled);
   const openSourceQ = useAllOpenSourceModels(enabled);
@@ -139,10 +137,9 @@ export function useSearchAllRankings(searchTerm: string): SearchState {
   };
 }
 
-// ---- client/search/SearchInput.tsx ----
+// ---- SearchInput ----
 /** Debounce for the local field -> global store sync. */
 const DEBOUNCE_MS = 200;
-
 function useClickOutside(ref: RefObject<HTMLElement | null>, onOutside: () => void) {
   const onOutsideRef = useRef(onOutside);
   onOutsideRef.current = onOutside;
@@ -158,7 +155,6 @@ function useClickOutside(ref: RefObject<HTMLElement | null>, onOutside: () => vo
 
 function useListKeyboard(itemCount: number, onSelect: (index: number) => void, onClose?: () => void) {
   const [activeIndex, setActiveIndex] = useState(-1);
-  // Latest callbacks without forcing handleKeyDown identity churn on every render.
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
   const closeRef = useRef(onClose);
@@ -179,8 +175,6 @@ function useListKeyboard(itemCount: number, onSelect: (index: number) => void, o
         e.preventDefault();
         setActiveIndex((i) => (i <= 0 ? itemCount - 1 : i - 1));
       } else if (e.key === "Enter") {
-        // Read the index functionally so Enter doesn't pin handleKeyDown identity
-        // to the current clampedIndex (which rebuilt the callback on every arrow key).
         e.preventDefault();
         setActiveIndex((i) => {
           const clamped = i < 0 ? -1 : Math.min(i, itemCount - 1);
@@ -213,8 +207,7 @@ export function SearchInput() {
 
   const searchTerm = useSearchStore((s) => s.searchTerm);
   const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
-  // Single debounce point for search: local field -> global store 200ms.
-  // useSearchAllRankings consumes the debounced store value directly.
+  // Local field -> global store with 200ms debounce.
   const [inputValue, setInputValue] = useState(searchTerm);
   useEffect(() => {
     const timer = setTimeout(() => setSearchTerm(inputValue), DEBOUNCE_MS);
@@ -224,9 +217,7 @@ export function SearchInput() {
 
   const { results, isPending, isError } = useSearchAllRankings(searchTerm);
 
-  // Clear the global term synchronously on select so the destination's
-  // SearchableDataTable never renders one frame filtered by the stale term
-  // (the route-change reset in useSearchResetOnNavigate stays as a backstop).
+  // Clear synchronously on select so the destination never filters by the stale term.
   const clearSearch = useCallback(() => {
     setSearchTerm("");
     setInputValue("");
@@ -259,7 +250,6 @@ export function SearchInput() {
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    // WAI-APG combobox: ArrowDown opens the popup when closed.
     if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
       if (inputValue.length >= 2) setIsOpen(true);
@@ -274,8 +264,8 @@ export function SearchInput() {
       <label htmlFor={inputId} className="sr-only">
         {t("searchPlaceholder")}
       </label>
-      <div className="flex items-center gap-1.5 border border-border rounded-lg bg-bg-card px-3 py-2 focus-within:border-text-tertiary">
-        <Search size={14} className="text-text-secondary" aria-hidden="true" />
+      <div className="flex items-center gap-2 border border-border rounded-lg bg-bg-card px-3.5 py-2.5 focus-within:border-text-tertiary">
+        <Search size={16} className="text-text-secondary shrink-0" aria-hidden="true" />
         <input
           ref={inputRef}
           id={inputId}
@@ -305,14 +295,12 @@ export function SearchInput() {
             type="button"
             aria-label={t("clear")}
             onClick={() => {
-              // Sync-clear the global store too; debounced sync alone would leave
-              // tables filtered by the stale term for one debounce window.
               clearSearch();
               setIsOpen(false);
               setActiveIndex(-1);
               inputRef.current?.focus();
             }}
-            className="rounded p-0.5 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            className="rounded-md p-1 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
           >
             <X size={14} className="text-text-secondary" />
           </button>
@@ -323,20 +311,20 @@ export function SearchInput() {
         <div
           id={listboxId}
           role="listbox"
-          className="absolute top-full left-0 right-0 mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-xl shadow-lg z-50 sm:w-72 animate-fade-in"
+          className="absolute top-full left-0 right-0 mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-lg shadow-lg z-50 sm:w-72 animate-fade-in"
         >
-          <div className="p-1">
+          <div className="p-1.5">
             {isPending && results.length === 0 ? (
-              <div className="flex items-center justify-center gap-2 p-3 text-sm text-text-secondary">
+              <div className="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary">
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                 {t("searching")}
               </div>
             ) : isError && results.length === 0 ? (
-              <div className="p-3 text-sm text-text-secondary" role="alert">
+              <div className="p-4 text-sm text-text-secondary" role="alert">
                 {t("searchFailed")}
               </div>
             ) : results.length === 0 ? (
-              <div className="p-3 text-sm text-text-secondary" role="status">
+              <div className="p-4 text-sm text-text-secondary" role="status">
                 {t("noResults")}
               </div>
             ) : (
@@ -348,17 +336,16 @@ export function SearchInput() {
                   role="option"
                   aria-selected={clampedIndex === index}
                   ref={(el) => {
-                    // Keep the keyboard-focused option visible in the scrollable list.
                     if (clampedIndex === index && el) el.scrollIntoView({ block: "nearest" });
                   }}
                   className={cn(
-                    "w-full text-left p-3 rounded-md transition-colors active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
+                    "w-full text-left p-2.5 rounded-md transition-colors active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
                     clampedIndex === index ? "bg-hover" : "hover:bg-hover",
                   )}
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => handleResultClick(result)}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-text-primary truncate">{result.name}</span>
                     {result.score != null && (
                       <span className="text-xs text-text-secondary ml-2 shrink-0 font-mono">
@@ -366,9 +353,9 @@ export function SearchInput() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs text-text-secondary">{t(result.source)}</span>
-                    {result.provider && <span className="text-xs text-text-secondary">{result.provider}</span>}
+                    {result.provider && <span className="text-xs text-text-tertiary">{result.provider}</span>}
                   </div>
                 </button>
               ))

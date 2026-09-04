@@ -32,7 +32,7 @@ import { CompareTable } from "@/client/features/compare/CompareTable";
 import { DataTable, type DataTableColumn } from "@/client/components/data";
 import { qOfficialPricing } from "@/client/api/queries";
 
-// ---- client/features/compare/pricing/useCostEstimator.ts ----
+// ---- useCostEstimator ----
 export interface CostInputState {
   dailyInput: string;
   setDailyInput: (v: string) => void;
@@ -54,7 +54,7 @@ interface CostEstimatorState extends CostInputState {
   calcDays: number;
 }
 
-/** Default estimator inputs: 2M prompt + 1M completion + 2M reasoning tokens/day, 50% cache hits, 22 workdays. */
+/** Default estimator inputs (tokens/day in M, 50% cache hits, 22 workdays). */
 export const DEFAULT_COST_INPUTS = {
   dailyInput: "2",
   dailyOutput: "1",
@@ -70,10 +70,7 @@ function useCostEstimator(): CostEstimatorState {
   const [cacheHitRate, setCacheHitRate] = useState<string>(DEFAULT_COST_INPUTS.cacheHitRate);
   const [daysPerMonth, setDaysPerMonth] = useState<string>(DEFAULT_COST_INPUTS.daysPerMonth);
 
-  // Defer parsing so heavy list re-renders don't block typing in the inputs.
-  // NOTE: non-numeric input (e.g. "e") parses to NaN → `|| 0` coerces to 0 silently;
-  // the input stays visible so the user sees what they typed, and the estimate
-  // treats it as zero rather than crashing.
+  // Deferred parsing so re-renders don't block typing; bad input counts as 0.
   const deferredInput = useDeferredValue(dailyInput);
   const deferredOutput = useDeferredValue(dailyOutput);
   const deferredReasoning = useDeferredValue(dailyReasoning);
@@ -83,7 +80,7 @@ function useCostEstimator(): CostEstimatorState {
   const calcInput = Math.max(0, Number(deferredInput) || 0);
   const calcOutput = Math.max(0, Number(deferredOutput) || 0);
   const calcReasoning = Math.max(0, Number(deferredReasoning) || 0);
-  // Cache hit rate is clamped to 0-100% and normalized to a 0..1 fraction for the cost math.
+  // Hit rate clamped to 0-100% and normalized to 0..1.
   const calcCache = Math.max(0, Math.min(100, Number(deferredCache) || 0)) / 100;
   const calcDays = Math.max(1, Number(deferredDays) || 0);
 
@@ -136,7 +133,7 @@ export function useMonthlyCosts(models: ArtificialAnalysisModel[], getOfficial?:
   return { ...estimator, monthlyCosts };
 }
 
-// ---- client/features/compare/pricing/CostEstimatorInputs.tsx ----
+// ---- CostEstimatorInputs ----
 interface CostFieldDef {
   id: string;
   value: string;
@@ -146,7 +143,6 @@ interface CostFieldDef {
 }
 
 function getCostFields(state: CostInputState, t: TFunction): CostFieldDef[] {
-  // Token volumes are entered in millions ("M") and the hit rate as a percentage.
   return [
     {
       id: "dailyInput",
@@ -187,8 +183,7 @@ interface CostEstimatorInputsProps {
 }
 
 /**
- * Numeric inputs driving the cost estimator, rendered in one of two
- * label/input arrangements to fit different screen widths.
+ * Numeric estimator inputs in two label/input arrangements for screen widths.
  */
 export const CostEstimatorInputs = memo(function CostEstimatorInputs({
   state,
@@ -196,9 +191,7 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
   avgCost,
 }: CostEstimatorInputsProps) {
   const { t } = useTranslation();
-  // Depend on the individual string values, not the `state` object identity:
-  // callers spread estimator state (`{...estimator}`), so the object is new every
-  // render and a [state] dep would rebuild fields (and re-render inputs) each time.
+  // Deps on individual values: the spread state object is new every render.
   const { dailyInput, dailyOutput, dailyReasoning, cacheHitRate, daysPerMonth } = state;
   const fields = useMemo(
     () => getCostFields(state, t),
@@ -224,7 +217,7 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
             {field.unit ? <span className="text-xs text-text-secondary">{field.unit}</span> : null}
           </div>
         ) : (
-          <div key={field.id} className="flex items-center gap-1.5">
+          <div key={field.id} className="flex items-center gap-2">
             <Input
               id={`cost-${field.id}`}
               type="number"
@@ -234,26 +227,26 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
               placeholder={field.label}
               aria-label={field.unit ? `${field.label} (${field.unit})` : field.label}
             />
-            {/* Visible unit hint: a real <label> so AT associates it with the input. */}
-            <label htmlFor={`cost-${field.id}`} className="text-xs text-text-secondary whitespace-nowrap cursor-text">
+            {/* Visible unit hint as a real <label> for AT association. */}
+            <label htmlFor={`cost-${field.id}`} className="ui-caption whitespace-nowrap cursor-text">
               {field.unit ? `${field.label} (${field.unit})` : field.label}
             </label>
           </div>
         ),
       )}
       {layout === "input-label" && typeof avgCost === "number" && (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <span className="text-sm text-text-secondary">{t("estimatedMonthlyCost")}:</span>
-          <span className="text-base font-semibold font-mono">{formatDollar(avgCost, t)}</span>
-          <span className="text-xs text-text-secondary">{t("perModelAvg")}</span>
+          <span className="text-lg font-semibold font-mono tabular-nums">{formatDollar(avgCost, t)}</span>
+          <span className="ui-caption">{t("perModelAvg")}</span>
         </div>
       )}
     </>
   );
 });
 
-// ---- client/features/compare/pricing/CostEstimator.tsx ----
-/** Interactive monthly-cost estimator that highlights the cheapest model. */
+// ---- CostEstimator ----
+/** Monthly-cost estimator highlighting the cheapest model. */
 export const CostEstimator = memo(function CostEstimator({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();
@@ -266,11 +259,7 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   }, [officialQ.data]);
   const { monthlyCosts, ...inputs } = useMonthlyCosts(models, getOfficial);
 
-  // Cheapest model among valid monthly estimates; compared with approxEq below
-  // because costs are derived floats and may not be bit-identical.
-  // NOTE: tied cheapest models all get the mark here, while computeWinners()
-  // (metric tables) skips all-tied rows — the estimator intentionally highlights
-  // every cheapest option since "cheapest" is the question being asked.
+  // Cheapest valid estimate; ties all get the mark (unlike computeWinners).
   const bestMonthlyCost = useMemo(() => {
     const valid = monthlyCosts.filter((v): v is number => v !== null);
     return valid.length > 0 ? Math.min(...valid) : null;
@@ -279,11 +268,11 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   return (
     <Card>
       <CardContent padding="md">
-        <p className="text-sm font-semibold mb-3">{t("estimatedMonthlyCost")}</p>
-        <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-4">
+        <p className="ui-card-title mb-4">{t("estimatedMonthlyCost")}</p>
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-5">
           <CostEstimatorInputs state={inputs} layout="label-input-unit" />
         </div>
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-3">
           {models.map((model, index) => {
             const cost = monthlyCosts[index];
             const isBest = cost != null && bestMonthlyCost != null && approxEq(cost, bestMonthlyCost);
@@ -309,7 +298,7 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   );
 });
 
-// ---- client/features/compare/pricing/PriceChart.tsx ----
+// ---- PriceChart ----
 export const PriceChart = memo(function PriceChart({
   priceRows,
   models,
@@ -374,8 +363,8 @@ export const PriceChart = memo(function PriceChart({
   return (
     <Card>
       <CardContent padding="md">
-        <p className="text-sm font-semibold mb-3">{t("priceComparison")}</p>
-        <div className="w-full h-[220px] sm:h-[200px]">
+        <p className="ui-card-title mb-4">{t("priceComparison")}</p>
+        <div className="w-full h-[200px] sm:h-[240px]">
           <figure className="h-full">
             <Bar data={data} options={options} role="img" aria-label={t("priceComparison")} />
           </figure>
@@ -385,7 +374,7 @@ export const PriceChart = memo(function PriceChart({
   );
 });
 
-// ---- client/features/compare/pricing/PriceTable.tsx ----
+// ---- PriceTable ----
 export const WinnerMark = memo(function WinnerMark() {
   return (
     <span className={cn("inline-flex items-center gap-0.5", "text-xs font-semibold", "text-success ml-1")}>
@@ -436,7 +425,7 @@ export const PriceTable = memo(function PriceTable({
   );
 });
 
-// ---- client/features/compare/pricing/OfficialVsRouterTable.tsx ----
+// ---- OfficialVsRouterTable ----
 interface OfficialRow {
   model: ArtificialAnalysisModel;
   official: OfficialPriceModel;
@@ -499,11 +488,7 @@ function buildColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColum
 
 const getRowId = (row: OfficialRow) => modelId(row.model);
 
-/**
- * Official first-party rates vs the OpenRouter/AA blended rates for the compared
- * models. Non-blocking: renders nothing until the official dataset loads, and
- * stays hidden when nothing matches (e.g. open-weight models without a first-party API).
- */
+/** Official first-party rates vs blended rates. Hidden until loaded / on no match. */
 export const OfficialVsRouterTable = memo(function OfficialVsRouterTable({
   models,
 }: {

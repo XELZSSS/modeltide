@@ -19,20 +19,17 @@ import {
 } from "@/client/utils/charts";
 import { SOURCE_LABELS, SOURCE_IDS, ONE_HOUR } from "@/shared/config";
 import type { SourceStatus } from "@/shared/types";
-import { UptimeStrip } from "./StatusParts";
-import { StatusEventList } from "./StatusParts";
+import { UptimeStrip, StatusEventList } from "./StatusParts";
 
 function isSourceId(value: string | undefined): value is SourceStatus["id"] {
   return value != null && (SOURCE_IDS as readonly string[]).includes(value);
 }
 
-// Beijing time (UTC+8, no DST). The offset is applied manually and the UTC fields are
-// read so the labels never depend on the viewer's host timezone.
-// NOTE: axis labels are Beijing wall-clock; overseas viewers see GMT+8, not local time.
+// Beijing wall-clock (UTC+8, no DST); axis labels show GMT+8 for all viewers.
 const BEIJING_OFFSET_MS = 8 * ONE_HOUR;
 const beijingHHMM = (ts: number): string => new Date(ts + BEIJING_OFFSET_MS).toISOString().slice(11, 16);
 
-/** Palette slot for the latency line; falls back to the tick color when the theme is minimal. */
+/** Palette slot for the latency line. */
 const LATENCY_COLOR_SLOT = 6;
 
 const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: number; latencyMs: number | null }[] }) {
@@ -76,8 +73,7 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
         tooltip: {
           ...defaultTooltipOptions(theme),
           callbacks: {
-            // Labels already carry the Beijing HH:MM strings; read them off the
-            // chart instead of closing over `samples` so options stay stable.
+            // Labels already carry the HH:MM strings; read them off the chart.
             title: (items) => items[0]?.label ?? "",
             label: (ctx) => (ctx.parsed.y == null ? "—" : `${Number(ctx.parsed.y).toFixed(2)}s`),
           },
@@ -107,7 +103,9 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
 
   return (
     <PageContainer>
-      <BackButton labelKey="backToStatus" to="/status" />
+      <div className="mb-4">
+        <BackButton labelKey="backToStatus" to="/status" />
+      </div>
       <PageHeader title={t(SOURCE_LABELS[id])} description={t("statusPageTitle")} />
 
       <StatGrid columns={4}>
@@ -133,7 +131,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
             {recent.length > 1 ? (
               <LatencyChart samples={recent} />
             ) : (
-              <p className="text-sm text-text-secondary py-8 text-center">{t("historyAccumulating")}</p>
+              <p className="ui-body-secondary py-10 text-center">{t("historyAccumulating")}</p>
             )}
           </CardContent>
         </Card>
@@ -154,7 +152,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
   );
 });
 
-/** Per-source status detail: latency history, availability strips and events. */
+/** Per-source detail: latency history, availability strip, events. */
 export function SourceDetailView() {
   const { source } = useParams<{ source: SourceStatus["id"] }>();
   if (!isSourceId(source)) return <NotFound />;
