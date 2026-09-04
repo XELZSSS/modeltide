@@ -456,7 +456,7 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
       rawModels = null;
     }
     if (!rawModels || rawModels.length === 0) {
-      return emptyT2i(ctx, "no marker found");
+      return emptyT2i(ctx, `no marker found (body=${body.length}B)`);
     }
     const mapped = rawModels.map((m) => mapEntry(m as RawEntry)).filter((m): m is TextToImageModel => m !== null);
     // Keep the highest-elo duplicate: dedupeBy keeps first, so pre-sort by elo desc.

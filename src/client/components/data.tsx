@@ -135,11 +135,13 @@ export function rankCol<T>(rankOf: (row: T) => number | null | undefined): DataT
   return {
     id: "rank",
     header: "#",
-    width: 56,
+    width: 76,
     hiddenMd: true,
     cell: (row) => {
       const rank = rankOf(row);
-      return <span className="font-mono text-sm font-semibold">{rank ?? "—"}</span>;
+      return (
+        <span className="font-mono text-sm font-semibold whitespace-nowrap tabular-nums shrink-0">{rank ?? "—"}</span>
+      );
     },
   };
 }

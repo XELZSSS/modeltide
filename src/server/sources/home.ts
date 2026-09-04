@@ -5,6 +5,7 @@ import { getModels } from "@/server/sources/huggingface";
 import { getOpenRouterRankings } from "@/server/sources/openrouter";
 import { DEFAULT_TTL_MS, PARTIAL_FAIL_TTL_MS, cacheKeys } from "@/shared/config";
 import type { HomeDashboardData } from "@/shared/types";
+import { isEmptyT2i } from "@/shared/types";
 
 const HOME_KEY = cacheKeys.homeDashboard;
 
@@ -26,7 +27,8 @@ export async function getHomeDashboard(ctx: AppContext): Promise<HomeDashboardDa
       throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`);
     }
     // Partial degradation shortens TTL so the next tick retries sooner.
-    const partial = !orRankings || !textToImage || !opensource;
+    // NOTE: text-to-image resolves (never rejects) to an empty payload on failure, so test emptiness and not just null. Otherwise one transient blip poisons the combined payload for the full TTL.
+    const partial = !orRankings || !opensource || isEmptyT2i(textToImage) || textToImage?.partial === true;
     return { data: { orRankings, textToImage, opensource }, ttl: partial ? PARTIAL_FAIL_TTL_MS : DEFAULT_TTL_MS };
   });
 }
