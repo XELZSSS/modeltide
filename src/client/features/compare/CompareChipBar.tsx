@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { ArrowLeftRight, Trash2, X } from "lucide-react";
 import { Button } from "@/client/components/ui";
 import { useTranslation } from "@/client/providers";
@@ -13,12 +13,15 @@ export function CompareChipBar({
   onClear,
   onCompare,
   compareLabel,
+  leading,
 }: {
   models: ArtificialAnalysisModel[];
   onRemove: (model: ArtificialAnalysisModel) => void;
   onClear: () => void;
   onCompare?: () => void;
   compareLabel?: string;
+  /** Optional content pinned to the leading (left) slot, e.g. a pricing disclaimer. */
+  leading?: ReactNode;
 }) {
   const { t } = useTranslation();
   const lastExceedAt = useCompareStore((s) => s.lastExceedAt);
@@ -34,6 +37,7 @@ export function CompareChipBar({
   return (
     <div className="flex flex-wrap gap-3 sm:gap-4 items-center justify-between">
       <div className="flex flex-wrap gap-2 items-center">
+        {leading}
         {models.map((model, index) => (
           <span
             key={modelId(model) || `idx-${index}`}

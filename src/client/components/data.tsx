@@ -41,7 +41,9 @@ export const RankingNameCell = memo(function RankingNameCell({
   return (
     <div className={cn("flex items-center min-w-0", gapClassName)}>
       {prefix}
-      <p className={cn("truncate flex-1 min-w-0", nameClassName)}>{name || "—"}</p>
+      <p className={cn("truncate flex-1 min-w-0", nameClassName)} title={name}>
+        {name || "—"}
+      </p>
       {suffix}
     </div>
   );
@@ -390,7 +392,7 @@ function cellClasses<T>(col: DataTableColumn<T>): string {
 }
 
 function cellInnerClasses<T>(col: DataTableColumn<T>): string {
-  return cn("flex items-center gap-2 min-w-0", col.align === "right" && "justify-end");
+  return cn("flex items-center gap-2 min-w-0 [&>*]:min-w-0", col.align === "right" && "justify-end");
 }
 
 function TableHeader<T>({
@@ -416,7 +418,7 @@ function TableHeader<T>({
             >
               <div className={cellInnerClasses(col)}>
                 {isExpandable && colIdx === 0 && <span className="w-3.5 shrink-0" aria-hidden="true" />}
-                {col.header}
+                <span className="truncate">{col.header}</span>
               </div>
             </th>
           ))}
@@ -537,7 +539,7 @@ function DataTableInner<T>({
       ) : (
         <>
           <div className="border border-border overflow-x-auto min-w-0">
-            <table className="w-full text-sm table-auto">
+            <table className="w-full text-sm table-fixed">
               <TableHeader columns={columns} isExpandable={isExpandable} caption={caption} />
               <TableBody
                 pagedData={pagedData}

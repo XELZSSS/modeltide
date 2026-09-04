@@ -1,5 +1,14 @@
 import { useDeferredValue, useMemo, useState, memo } from "react";
-import { calcMonthlyCost, formatDollar, cn, approxEq, modelId, normalizeModelKey } from "@/client/utils";
+import {
+  calcMonthlyCost,
+  formatDollar,
+  cn,
+  approxEq,
+  modelId,
+  indexOfficialPricing,
+  matchOfficialPricing,
+  type OfficialGetter,
+} from "@/client/utils";
 import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 import { Input, Card, CardContent } from "@/client/components/ui";
 import { useTranslation } from "@/client/providers";
@@ -111,7 +120,7 @@ function useCostEstimator(): CostEstimatorState {
   );
 }
 
-export function useMonthlyCosts(models: ArtificialAnalysisModel[]) {
+export function useMonthlyCosts(models: ArtificialAnalysisModel[], getOfficial?: OfficialGetter) {
   const estimator = useCostEstimator();
   const { calcInput, calcOutput, calcReasoning, calcCache, calcDays } = estimator;
   const monthlyCosts = useMemo(() => {
@@ -122,8 +131,8 @@ export function useMonthlyCosts(models: ArtificialAnalysisModel[]) {
       cacheHitRate: calcCache,
       daysPerMonth: calcDays,
     };
-    return models.map((model) => calcMonthlyCost(model, opts));
-  }, [models, calcInput, calcOutput, calcReasoning, calcCache, calcDays]);
+    return models.map((model) => calcMonthlyCost(model, opts, getOfficial?.(model)));
+  }, [models, calcInput, calcOutput, calcReasoning, calcCache, calcDays, getOfficial]);
   return { ...estimator, monthlyCosts };
 }
 
@@ -249,7 +258,13 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   const { t } = useTranslation();
   const theme = useChartTheme();
 
-  const { monthlyCosts, ...inputs } = useMonthlyCosts(models);
+  const officialQ = qOfficialPricing.use();
+  const getOfficial = useMemo(() => {
+    if (!officialQ.data) return undefined;
+    const index = indexOfficialPricing(officialQ.data.models);
+    return (m: ArtificialAnalysisModel) => matchOfficialPricing(index, m);
+  }, [officialQ.data]);
+  const { monthlyCosts, ...inputs } = useMonthlyCosts(models, getOfficial);
 
   // Cheapest model among valid monthly estimates; compared with approxEq below
   // because costs are derived floats and may not be bit-identical.
@@ -427,30 +442,6 @@ interface OfficialRow {
   official: OfficialPriceModel;
 }
 
-function indexOfficial(models: OfficialPriceModel[]): Map<string, OfficialPriceModel> {
-  const map = new Map<string, OfficialPriceModel>();
-  for (const m of models) {
-    for (const raw of [m.name, m.id]) {
-      if (!raw) continue;
-      const key = normalizeModelKey(raw);
-      if (key && !map.has(key)) map.set(key, m);
-    }
-  }
-  return map;
-}
-
-function matchOfficial(
-  index: Map<string, OfficialPriceModel>,
-  model: ArtificialAnalysisModel,
-): OfficialPriceModel | undefined {
-  for (const raw of [model.name, model.short_name, model.slug]) {
-    if (!raw) continue;
-    const hit = index.get(normalizeModelKey(raw));
-    if (hit) return hit;
-  }
-  return undefined;
-}
-
 function formatDiff(ratio: number): string {
   return `${ratio >= 0 ? "+" : ""}${(ratio * 100).toFixed(0)}%`;
 }
@@ -460,9 +451,12 @@ function buildColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColum
     {
       id: "model",
       header: t("model"),
+      width: "40%",
       cell: (row) => (
         <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{row.model.short_name || row.model.name}</p>
+          <p className="text-sm font-medium truncate" title={row.model.name}>
+            {row.model.short_name || row.model.name}
+          </p>
           <p className="text-xs text-text-secondary truncate">{row.official.provider}</p>
         </div>
       ),
@@ -520,10 +514,10 @@ export const OfficialVsRouterTable = memo(function OfficialVsRouterTable({
   const columns = useMemo(() => buildColumns(t), [t]);
   const rows = useMemo<OfficialRow[]>(() => {
     if (!officialQ.data) return [];
-    const index = indexOfficial(officialQ.data.models);
+    const index = indexOfficialPricing(officialQ.data.models);
     return models
       .map((model) => {
-        const official = matchOfficial(index, model);
+        const official = matchOfficialPricing(index, model);
         return official ? { model, official } : null;
       })
       .filter((r): r is OfficialRow => r !== null);

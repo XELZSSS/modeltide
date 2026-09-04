@@ -513,6 +513,8 @@ interface TabContainerProps {
   activeTab: string;
   className?: string;
   tabSize?: "sm" | "md";
+  /** Stretch tabs to fill each row on sm+; opt-in for wide tab bars. */
+  fill?: boolean;
   onTabChange: (tabId: string) => void;
   children: ReactNode;
 }
@@ -521,7 +523,15 @@ interface TabContainerProps {
  * Tab list with keyboard navigation (arrow keys wrap around and move focus) and ARIA wiring.
  * `children` is the panel content for the currently active tab.
  */
-export function TabContainer({ tabs, activeTab, className, tabSize = "md", onTabChange, children }: TabContainerProps) {
+export function TabContainer({
+  tabs,
+  activeTab,
+  className,
+  tabSize = "md",
+  fill,
+  onTabChange,
+  children,
+}: TabContainerProps) {
   const handleTablistKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (tabs.length === 0) return;
     const currentIndex = tabs.findIndex((tab) => tab.id === activeTab);
@@ -541,13 +551,14 @@ export function TabContainer({ tabs, activeTab, className, tabSize = "md", onTab
   return (
     <div className={cn("flex flex-col gap-4 sm:gap-5", className)}>
       <SegmentedGroup
-        className="p-1 w-fit max-w-full overflow-x-auto no-scrollbar"
+        className={cn("p-1 w-fit max-w-full overflow-x-auto no-scrollbar sm:flex-wrap", fill && "sm:w-full")}
         role="tablist"
         onKeyDown={handleTablistKeyDown}
       >
         {tabs.map((tab) => (
           <TabButton
             key={tab.id}
+            className={fill ? "sm:flex-auto sm:shrink sm:text-center" : undefined}
             active={activeTab === tab.id}
             onClick={() => onTabChange(tab.id)}
             size={tabSize}

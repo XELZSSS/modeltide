@@ -24,7 +24,12 @@ function buildOpenSourceColumns(t: ReturnType<typeof useTranslation>["t"]): Data
     {
       id: "model",
       header: t("model"),
-      cell: (item) => <p className="text-sm font-medium truncate">{shortModelId(item.id)}</p>,
+      width: "40%",
+      cell: (item) => (
+        <p className="text-sm font-medium truncate" title={item.id}>
+          {shortModelId(item.id)}
+        </p>
+      ),
     },
     {
       id: "downloads",
@@ -75,7 +80,16 @@ export function OpenSourceRankingsView({ rankings }: { rankings: OpenSourceModel
 
 function buildHallColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColumn<HallucinationRankingEntry>[] {
   return [
-    { id: "model", header: t("model"), cell: (item) => <p className="text-sm font-medium truncate">{item.model}</p> },
+    {
+      id: "model",
+      header: t("model"),
+      width: "40%",
+      cell: (item) => (
+        <p className="text-sm font-medium truncate" title={item.model}>
+          {item.model}
+        </p>
+      ),
+    },
     {
       id: "hallucinationRate",
       header: t("hallucinationRate"),
@@ -160,8 +174,9 @@ function buildArenaColumns(t: ReturnType<typeof useTranslation>["t"]): DataTable
     {
       id: "model",
       header: t("model"),
+      width: "40%",
       cell: (item) => (
-        <p className="text-sm font-medium truncate">
+        <p className="text-sm font-medium truncate" title={item.name}>
           {item.name}
           {item.preliminary && (
             <Badge className="ml-1.5 align-middle text-warning border-warning/40">{t("preliminary")}</Badge>

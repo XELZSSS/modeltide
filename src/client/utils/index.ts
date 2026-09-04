@@ -1,9 +1,10 @@
 export * from "@/shared/utils";
+import { normalizeModelKey } from "@/shared/utils";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { BENCHMARK_LABELS, ONE_MINUTE, ONE_HOUR, ONE_DAY, type ModelSource } from "@/shared/config";
 import type { TFunction, TranslationKey } from "@/shared/i18n";
-import type { ArtificialAnalysisModel } from "@/shared/types";
+import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 
 // ---- client/utils/cn.ts ----
 /** Merges class names and resolves Tailwind class conflicts. */
@@ -220,12 +221,106 @@ interface MonthlyCostOptions {
   daysPerMonth: number;
 }
 
-export function calcMonthlyCost(model: ArtificialAnalysisModel, opts: MonthlyCostOptions): number | null {
-  const daily = calcCost(model.pricing, opts.dailyInput, opts.dailyOutput, {
+export function calcMonthlyCost(
+  model: ArtificialAnalysisModel,
+  opts: MonthlyCostOptions,
+  official?: OfficialPriceModel | null,
+): number | null {
+  const pricing = official ? resolveEffectivePricing(model.pricing, official) : model.pricing;
+  const daily = calcCost(pricing, opts.dailyInput, opts.dailyOutput, {
     cacheHitRate: opts.cacheHitRate,
     reasoningTokens: opts.dailyReasoning,
   });
   return daily == null ? null : daily * Math.max(1, opts.daysPerMonth);
+}
+
+// ---- client/utils/pricing.ts ----
+/**
+ * Unified price resolution. First-party official doc rates (OpenAI, Anthropic,
+ * Google, DeepSeek, Mistral, Kimi) always win over the catalog legs
+ * (Artificial Analysis, OpenRouter-backfilled). Every price surface (rankings
+ * pricing tab, monthly estimator, model detail) resolves through this so a
+ * stale third-party figure can never silently override the provider own rate.
+ */
+export type PriceAuthority = "official" | "catalog";
+
+export interface EffectivePricing {
+  input: number | null;
+  output: number | null;
+  cache_hit: number | null;
+  source: PriceAuthority | null;
+}
+
+export type OfficialGetter = (model: ArtificialAnalysisModel) => OfficialPriceModel | undefined;
+
+const finiteOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** Exact normalized-key index over the official id + name. */
+export function indexOfficialPricing(models: OfficialPriceModel[]): Map<string, OfficialPriceModel> {
+  const map = new Map<string, OfficialPriceModel>();
+  for (const m of models) {
+    for (const raw of [m.name, m.id]) {
+      if (!raw) continue;
+      const key = normalizeModelKey(raw);
+      if (key && !map.has(key)) map.set(key, m);
+    }
+  }
+  return map;
+}
+
+/**
+ * Exact match only: fuzzy matching could attach a sibling model rate, which
+ * misleads worse than a stale figure. Parenthesized variant labels, creator
+ * prefixes and effort qualifiers are already stripped by normalizeModelKey.
+ */
+export function matchOfficialPricing(
+  index: Map<string, OfficialPriceModel>,
+  model: { name?: string | null; short_name?: string | null; slug?: string | null },
+): OfficialPriceModel | undefined {
+  for (const raw of [model.name, model.short_name, model.slug]) {
+    if (!raw) continue;
+    const hit = index.get(normalizeModelKey(raw));
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/** Per-leg merge: official legs win individually, catalog fills the gaps. */
+export function resolveEffectivePricing(
+  catalog: ArtificialAnalysisModel["pricing"],
+  official?: OfficialPriceModel | null,
+): EffectivePricing {
+  const input = finiteOrNull(official?.input) ?? finiteOrNull(catalog?.input);
+  const output = finiteOrNull(official?.output) ?? finiteOrNull(catalog?.output);
+  const cacheHit =
+    finiteOrNull(official?.cachedInput) ?? finiteOrNull(catalog?.cacheHit) ?? finiteOrNull(catalog?.cache_hit);
+  if (input == null && output == null) return { input, output, cache_hit: cacheHit, source: null };
+  return { input, output, cache_hit: cacheHit, source: official ? "official" : "catalog" };
+}
+
+/**
+ * 7:2:1 blended $/1M rate (cached-input : input : output); cache falls back
+ * to input when the model has no cache tier. Mirrors the upstream Artificial
+ * Analysis definition and the server computeBlendPrice.
+ */
+export function computeBlendPrice(
+  p?: { input?: number | null; output?: number | null; cache_hit?: number | null; cacheHit?: number | null } | null,
+): number | null {
+  if (!p) return null;
+  const input = finiteOrNull(p.input);
+  const output = finiteOrNull(p.output);
+  if (input == null || output == null) return null;
+  const cache = finiteOrNull(p.cacheHit) ?? finiteOrNull(p.cache_hit) ?? input;
+  return (7 * cache + 2 * input + output) / 10;
+}
+
+/** Blended rate from the effective (official-first) legs; catalog figure as fallback. */
+export function resolveBlendedPrice(
+  model: ArtificialAnalysisModel,
+  official?: OfficialPriceModel | null,
+): number | null {
+  if (!official) return model.blended_price ?? null;
+  return computeBlendPrice(resolveEffectivePricing(model.pricing, official)) ?? model.blended_price ?? null;
 }
 
 export function getOutputSpeed(model: ArtificialAnalysisModel): number | null {

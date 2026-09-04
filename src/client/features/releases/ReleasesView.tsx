@@ -76,7 +76,9 @@ function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
         header: t("model"),
         cell: (row) => (
           <div className="min-w-0">
-            <p className="text-sm font-medium truncate">{row.name}</p>
+            <p className="text-sm font-medium truncate" title={row.name}>
+              {row.name}
+            </p>
             <div className="flex md:hidden mt-1 items-center gap-1.5">
               <span className="text-xs font-semibold text-text-secondary">{t(TYPE_LABEL[row.type])}</span>
               <span className="text-xs text-text-tertiary">{formatDate(row.ts, lang)}</span>
@@ -143,7 +145,9 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
         header: t("model"),
         cell: (row) => (
           <div className="min-w-0">
-            <p className="text-sm font-semibold truncate">{row.entry.model}</p>
+            <p className="text-sm font-semibold truncate" title={row.entry.model}>
+              {row.entry.model}
+            </p>
             <div className="flex md:hidden mt-1 items-center gap-1.5">
               <span className="text-xs text-text-secondary">{row.entry.provider}</span>
               <span className="text-xs text-text-tertiary">{formatDate(row.ts, lang)}</span>

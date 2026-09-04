@@ -90,6 +90,8 @@ interface TabbedPageProps {
   onTabChange: (id: string) => void;
   tabSize?: "sm" | "md";
   tabClassName?: string;
+  /** Fill tab rows edge-to-edge on sm+; passed through to TabContainer. */
+  tabFill?: boolean;
   children: ReactNode;
 }
 
@@ -106,6 +108,7 @@ export function TabbedPage({
   onTabChange,
   tabSize = "sm",
   tabClassName,
+  tabFill,
   children,
 }: TabbedPageProps) {
   return (
@@ -121,6 +124,7 @@ export function TabbedPage({
         activeTab={activeTab}
         tabSize={tabSize}
         className={tabClassName}
+        fill={tabFill}
         onTabChange={onTabChange}
       >
         {children}

@@ -13,11 +13,18 @@ import {
   formatDollar,
   formatPricePerMillion,
 } from "@/client/utils";
-import { calcMonthlyCost } from "@/client/utils";
+import {
+  calcMonthlyCost,
+  computeBlendPrice,
+  indexOfficialPricing,
+  matchOfficialPricing,
+  resolveBlendedPrice,
+  resolveEffectivePricing,
+} from "@/client/utils";
 import { matchTerm } from "@/shared/utils";
 import { buildCompareRows, buildRadarData, computeWinners, type CompareRow } from "@/client/features/compare/logic";
 import { createT, interpolate } from "@/shared/i18n";
-import type { ArtificialAnalysisModel } from "@/shared/types";
+import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 import type { TFunction } from "@/shared/i18n";
 
 // Consolidated client tests: display formatters, cost estimation, search term
@@ -522,5 +529,70 @@ describe("createT", () => {
   it("falls back to the key name for unknown keys", () => {
     const zh = createT("zh");
     expect(zh("definitelyNotAKey" as never)).toBe("definitelyNotAKey");
+  });
+});
+
+function makeOfficial(over: Partial<OfficialPriceModel>): OfficialPriceModel {
+  return {
+    id: "gpt-5",
+    name: "GPT-5",
+    provider: "OpenAI",
+    input: 5,
+    output: 25,
+    cachedInput: 0.5,
+    contextWindow: null,
+    ...over,
+  };
+}
+
+describe("computeBlendPrice", () => {
+  it("mixes cache/input/output 7:2:1", () => {
+    expect(computeBlendPrice({ input: 5, output: 25, cache_hit: 0.5 })).toBeCloseTo(3.85, 5);
+  });
+  it("falls back to input when the model has no cache tier", () => {
+    expect(computeBlendPrice({ input: 2, output: 6 })).toBe(2.4);
+    expect(computeBlendPrice({ input: 2, output: 6, cache_hit: null })).toBe(2.4);
+  });
+  it("returns null without both input and output legs", () => {
+    expect(computeBlendPrice({})).toBeNull();
+    expect(computeBlendPrice({ input: 1 })).toBeNull();
+    expect(computeBlendPrice(null)).toBeNull();
+  });
+});
+
+describe("official price resolution", () => {
+  const official = makeOfficial({});
+  const index = indexOfficialPricing([official]);
+  it("matches parenthesized catalog variant names to clean official ids", () => {
+    const hit = matchOfficialPricing(index, makeModel({ name: "GPT-5 (Reasoning, High Effort)" }));
+    expect(hit?.id).toBe("gpt-5");
+  });
+  it("returns undefined without a match", () => {
+    expect(matchOfficialPricing(index, makeModel({ name: "Some Other Model" }))).toBeUndefined();
+  });
+  it("official legs win per-leg, catalog fills the gaps", () => {
+    const eff = resolveEffectivePricing({ input: 10, output: 50, cache_hit: 1 }, makeOfficial({ output: null }));
+    expect(eff).toEqual({ input: 5, output: 50, cache_hit: 0.5, source: "official" });
+  });
+  it("falls back to catalog without an official match", () => {
+    const eff = resolveEffectivePricing({ input: 10, output: 50, cache_hit: 1 });
+    expect(eff).toEqual({ input: 10, output: 50, cache_hit: 1, source: "catalog" });
+  });
+  it("reports a null source when no leg resolves", () => {
+    expect(resolveEffectivePricing(undefined, null).source).toBeNull();
+  });
+  it("recomputes blended from official legs", () => {
+    const model = makeModel({ pricing: { input: 10, output: 50, cache_hit: 1 }, blended_price: 99 });
+    expect(resolveBlendedPrice(model, official)).toBeCloseTo(3.85, 5);
+  });
+  it("passes the catalog blended figure through without an official match", () => {
+    const model = makeModel({ pricing: { input: 10, output: 50, cache_hit: 1 }, blended_price: 99 });
+    expect(resolveBlendedPrice(model)).toBe(99);
+  });
+  it("monthly cost uses official legs when matched", () => {
+    const model = makeModel({ pricing: { input: 10, output: 50, cache_hit: null } });
+    const opts = { dailyInput: 1_000_000, dailyOutput: 1_000_000, cacheHitRate: 0, daysPerMonth: 1 };
+    expect(calcMonthlyCost(model, opts)).toBe(60);
+    expect(calcMonthlyCost(model, opts, official)).toBe(30);
   });
 });

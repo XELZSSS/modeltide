@@ -13,7 +13,17 @@ import {
 } from "@/client/components/data";
 import { Button, TabButton, SegmentedGroup } from "@/client/components/ui";
 import { ModelDetailContent } from "@/client/features/models/ModelDetailView";
-import { formatScore, formatDollar, formatTokens, modelId } from "@/client/utils";
+import {
+  formatScore,
+  formatDollar,
+  formatTokens,
+  modelId,
+  indexOfficialPricing,
+  matchOfficialPricing,
+  resolveEffectivePricing,
+  resolveBlendedPrice,
+  type OfficialGetter,
+} from "@/client/utils";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import type { TFunction } from "@/shared/i18n";
 import { useTranslation } from "@/client/providers";
@@ -21,6 +31,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useCompareStore, useCompareModels } from "@/client/stores";
 import { useMonthlyCosts } from "@/client/features/compare/pricing";
+import { qOfficialPricing } from "@/client/api/queries";
 import { CompareChipBar } from "@/client/features/compare/CompareChipBar";
 import { CostEstimatorInputs } from "@/client/features/compare/pricing";
 
@@ -171,6 +182,7 @@ export function buildPricingColumns(
   t: TFunction,
   compareSet: Set<string>,
   onToggleCompare: (m: ArtificialAnalysisModel) => void,
+  getOfficial?: OfficialGetter,
 ): DataTableColumn<PricedModel>[] {
   return [
     textCol(
@@ -185,22 +197,22 @@ export function buildPricingColumns(
     rightCol(
       "cacheHitPrice",
       t("cacheHitPrice"),
-      priceCell((m) => m.model.pricing?.cache_hit, t),
+      priceCell((m) => resolveEffectivePricing(m.model.pricing, getOfficial?.(m.model)).cache_hit, t),
     ),
     rightCol(
       "blendedPrice",
       t("blendedPrice"),
-      priceCell((m) => m.model.blended_price, t),
+      priceCell((m) => resolveBlendedPrice(m.model, getOfficial?.(m.model)), t),
     ),
     rightCol(
       "promptPrice",
       t("promptPrice"),
-      priceCell((m) => m.model.pricing?.input, t),
+      priceCell((m) => resolveEffectivePricing(m.model.pricing, getOfficial?.(m.model)).input, t),
     ),
     rightCol(
       "completionPrice",
       t("completionPrice"),
-      priceCell((m) => m.model.pricing?.output, t),
+      priceCell((m) => resolveEffectivePricing(m.model.pricing, getOfficial?.(m.model)).output, t),
     ),
     { ...mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.monthlyCost, t)), hiddenMd: true },
   ];
@@ -268,7 +280,13 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
     (location.state as { viewMode?: ViewMode })?.viewMode ?? "rankings",
   );
 
-  const { monthlyCosts, ...costInputs } = useMonthlyCosts(rankings);
+  const officialQ = qOfficialPricing.use();
+  const getOfficial = useMemo(() => {
+    if (!officialQ.data) return undefined;
+    const index = indexOfficialPricing(officialQ.data.models);
+    return (m: ArtificialAnalysisModel) => matchOfficialPricing(index, m);
+  }, [officialQ.data]);
+  const { monthlyCosts, ...costInputs } = useMonthlyCosts(rankings, getOfficial);
   const comparedModels = useCompareModels(rankings);
 
   const avgCost = useMemo(() => {
@@ -291,9 +309,9 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const pricingColumns = useMemo(
     () => [
       rankCol((row: PricingRow) => rankMap.get(modelId(row.model)) ?? null),
-      ...buildPricingColumns(t, compareSet, toggleCompareModel),
+      ...buildPricingColumns(t, compareSet, toggleCompareModel, getOfficial),
     ],
-    [t, compareSet, toggleCompareModel, rankMap],
+    [t, compareSet, toggleCompareModel, rankMap, getOfficial],
   );
 
   const pricingRows = useMemo(
@@ -316,6 +334,9 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
         onRemove={(model) => toggleCompareModel(model)}
         onClear={clearCompare}
         onCompare={() => navigate(viewMode === "pricing" ? "/price-compare" : "/compare")}
+        leading={
+          viewMode === "pricing" ? <p className="text-xs text-text-tertiary">{t("pricingDisclaimer")}</p> : undefined
+        }
       />
       {viewMode === "pricing" ? (
         <SearchableDataTable

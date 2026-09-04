@@ -165,6 +165,7 @@ function RankingsContent() {
       activeTab={activeTabId}
       tabSize="md"
       tabClassName="gap-3 sm:gap-4"
+      tabFill
       onTabChange={handleTabChange}
     >
       <ActiveContent />

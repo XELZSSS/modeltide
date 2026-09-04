@@ -23,6 +23,10 @@ import {
   shortModelId,
   formatIndex,
   formatPercent,
+  indexOfficialPricing,
+  matchOfficialPricing,
+  resolveEffectivePricing,
+  resolveBlendedPrice,
 } from "@/client/utils";
 import {
   DetailLayout,
@@ -35,9 +39,11 @@ import {
   Badge,
 } from "@/client/components/ui";
 import type { ComponentType, ReactNode } from "react";
+import { useMemo } from "react";
 import { Spinner, NotFound, BackButton, SuspenseQuery } from "@/client/components/shared";
 import { PageHeader, PageContainer } from "@/client/components/layout";
 import {
+  qOfficialPricing,
   useSuspenseArtificialRankings,
   useAllOpenSourceModels,
   useSuspenseOpenRouterRankings,
@@ -105,6 +111,13 @@ export function ModelDetailContent({
   showBenchmarks?: boolean;
 }) {
   const { t } = useTranslation();
+  const officialQ = qOfficialPricing.use();
+  const official = useMemo(() => {
+    if (!officialQ.data) return undefined;
+    return matchOfficialPricing(indexOfficialPricing(officialQ.data.models), model);
+  }, [officialQ.data, model]);
+  const pricing = useMemo(() => resolveEffectivePricing(model.pricing, official), [model.pricing, official]);
+  const blended = useMemo(() => resolveBlendedPrice(model, official), [model, official]);
   const modalityKeys = (["text", "image", "speech", "video"] as const).flatMap((m) => [
     `input_modality_${m}` as keyof ArtificialAnalysisModel,
     `output_modality_${m}` as keyof ArtificialAnalysisModel,
@@ -127,14 +140,10 @@ export function ModelDetailContent({
           <InfoRow compact label={t("contextWindow")} value={formatTokens(model.context_window_tokens, t)} />
         </InfoCard>
         <InfoCard title={t("pricing")}>
-          <InfoRow compact label={t("promptPrice")} value={formatPricePerMillion(model.pricing?.input, t)} />
-          <InfoRow compact label={t("completionPrice")} value={formatPricePerMillion(model.pricing?.output, t)} />
-          <InfoRow
-            compact
-            label={t("cacheHitPrice")}
-            value={formatPricePerMillion(model.pricing?.cacheHit ?? model.pricing?.cache_hit, t)}
-          />
-          <InfoRow compact label={t("blendedPrice")} value={formatPricePerMillion(model.blended_price, t)} />
+          <InfoRow compact label={t("promptPrice")} value={formatPricePerMillion(pricing.input, t)} />
+          <InfoRow compact label={t("completionPrice")} value={formatPricePerMillion(pricing.output, t)} />
+          <InfoRow compact label={t("cacheHitPrice")} value={formatPricePerMillion(pricing.cache_hit, t)} />
+          <InfoRow compact label={t("blendedPrice")} value={formatPricePerMillion(blended, t)} />
         </InfoCard>
       </InfoGrid>
       {showBenchmarks && model.benchmarks && Object.values(model.benchmarks).some((v) => v != null) && (
