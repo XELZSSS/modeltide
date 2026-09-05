@@ -2,7 +2,15 @@ import { STATIC_TTL_MS, UPSTREAM_TIMEOUT_MS, cacheKeys, ttlForCount, upstreamCon
 import type { OfficialPriceModel, OfficialPricingPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, errMsg } from "@/server/infra";
-import { humanizeId, num, numPositive, priceCell, slugifyName, stripParen, suffixedCount } from "@/server/parsers/primitives";
+import {
+  humanizeId,
+  num,
+  numPositive,
+  priceCell,
+  slugifyName,
+  stripParen,
+  suffixedCount,
+} from "@/server/parsers/primitives";
 import { rowCells, stripHtml, tableRowInners } from "@/server/parsers/feed";
 import { dedupeBy } from "@/shared/utils";
 import {
@@ -37,7 +45,10 @@ const OPENAI_PATH = "/api/docs/pricing.md";
 /** Parse the first markdown table of the OpenAI pricing doc; pure. */
 export function parseOpenAiPricing(md: string): OfficialPriceModel[] {
   const firstTableEnd = md.indexOf("### Batch pricing data");
-  const head = firstTableEnd === -1 ? md : md.slice(0, firstTableEnd);
+  // If the Batch marker moved, fail closed instead of mixing Batch rows into
+  // Standard rates.
+  if (firstTableEnd === -1) return [];
+  const head = md.slice(0, firstTableEnd);
   const models: OfficialPriceModel[] = [];
   for (const line of head.split("\n")) {
     const trimmed = line.trim();
@@ -50,6 +61,10 @@ export function parseOpenAiPricing(md: string): OfficialPriceModel[] {
     if (cells.length < 5 || !cells.some((c) => c.includes("$"))) continue;
     const rawName = cells[0] ?? "";
     if (shouldSkipPricingHeader(rawName)) continue;
+    // Parenthesized qualifiers ("(2026-01)", "(Reasoning, High)") are stripped
+    // from the id: cross-source matching normalizes both sides the same way
+    // (normalizeModelKey drops parens), while bare-suffix variants
+    // (kimi-k2-thinking) stay distinct on both sides. Do not re-add them here.
     const id = stripParen(rawName);
     if (!cleanText(id)) continue;
     const model = officialModel(
@@ -118,7 +133,7 @@ function escapeRegExp(s: string): string {
 }
 
 /** Parse one Google model section; pure. */
-export function parseGooglePricing(html: string): OfficialPriceModel[] {
+export function parseGooglePricing(html: string, onUnknown?: (name: string) => void): OfficialPriceModel[] {
   const text = stripHtml(html);
   const models: OfficialPriceModel[] = [];
   for (const m of GOOGLE_MODELS) {
@@ -138,6 +153,18 @@ export function parseGooglePricing(html: string): OfficialPriceModel[] {
     );
     if (model) models.push(model);
   }
+  // Discovery: report Gemini generations on the page that the pinned list
+  // doesn't cover, so new launches surface instead of silently missing.
+  const known = new Set(GOOGLE_MODELS.map((m) => m.name.toLowerCase()));
+  const seen = new Set<string>();
+  for (const m of text.matchAll(/Gemini\s+\d+\.\d+\s+[A-Za-z][\w-]*/g)) {
+    const name = m[0].replace(/\s+/g, " ").trim();
+    const key = name.toLowerCase();
+    if (!known.has(key) && !seen.has(key)) {
+      seen.add(key);
+      onUnknown?.(name);
+    }
+  }
   return models.sort((a, b) => a.id.localeCompare(b.id));
 }
 
@@ -150,6 +177,10 @@ const DEEPSEEK_NAMES: Record<string, string> = {
   "deepseek-v4-pro": "DeepSeek V4 Pro",
   "deepseek-v4-flash-vision-exp": "DeepSeek V4 Flash Vision",
 };
+
+function isPlausibleUsdPerMillion(n: number | null): boolean {
+  return n != null && Number.isFinite(n) && n >= 0 && n <= 1000;
+}
 
 /** Parse the DeepSeek pricing table from stripped page text; pure. */
 export function parseDeepSeekPricing(html: string): OfficialPriceModel[] {
@@ -175,18 +206,27 @@ export function parseDeepSeekPricing(html: string): OfficialPriceModel[] {
   const miss = tripleAfter("CACHE MISS", "OUTPUT TOKENS");
   const out = tripleAfter("OUTPUT TOKENS", null);
   if (!hit || !miss || !out) return [];
+  // Order-paired ids × price columns: any length drift means the page
+  // reshuffled and pairing would misattribute rates — fail closed.
+  if (hit.length !== ids.length || miss.length !== ids.length || out.length !== ids.length) return [];
   const ctxMatch = /CONTEXT LENGTH\s*([\d.]+)\s*M/i.exec(text);
   const contextWindow = ctxMatch?.[1] ? Math.round(Number(ctxMatch[1]) * 1_000_000) : null;
   const models: OfficialPriceModel[] = [];
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i]!;
+    const input = num(miss[i]);
+    const output = num(out[i]);
+    const cached = num(hit[i]);
+    // Sanity-guard against misaligned columns showing absurd rates.
+    if (!isPlausibleUsdPerMillion(input) || !isPlausibleUsdPerMillion(output)) continue;
+    if (cached != null && !isPlausibleUsdPerMillion(cached)) continue;
     const model = officialModel(
       "DeepSeek",
       id,
       DEEPSEEK_NAMES[id] ?? humanizeId(id),
-      num(miss[i]),
-      num(out[i]),
-      num(hit[i]),
+      input,
+      output,
+      cached,
       numPositive(contextWindow),
     );
     if (model) models.push(model);
@@ -221,8 +261,13 @@ export function parseMistralPricing(html: string): OfficialPriceModel[] {
         /Input\s*\(\/M tokens\)\s*\$([\d.]+)\s*(?:Cached input\s*\(\/M tokens\)\s*\$([\d.]+)\s*)?Output\s*\(\/M tokens\)\s*\$([\d.]+)/g,
       ),
     ];
-    const last = matches[matches.length - 1];
-    if (!last) continue;
+    // Only accept a price block tightly adjacent to the slug; otherwise the
+    // "last in window" could belong to the previous card when this card is
+    // quote-only.
+    const last = matches[matches.length - 1] as RegExpMatchArray | undefined;
+    if (!last || last.index == null) continue;
+    const matchEnd = last.index + last[0].length;
+    if (window.length - matchEnd > 300) continue;
     const model = officialModel(
       "Mistral",
       m.slug,
@@ -290,7 +335,14 @@ export const getOfficialPricing = (ctx: AppContext): Promise<OfficialPricingPayl
         "anthropic",
         ctx.http.text(`${upstreamConfig.anthropic}${ANTHROPIC_PATH}`, textOpts).then(parseAnthropicPricing),
       ],
-      ["google", ctx.http.text(`${upstreamConfig.googleCloud}${GOOGLE_PATH}`, textOpts).then(parseGooglePricing)],
+      [
+        "google",
+        ctx.http
+          .text(`${upstreamConfig.googleCloud}${GOOGLE_PATH}`, textOpts)
+          .then((html) =>
+            parseGooglePricing(html, (name) => ctx.log("info", `[official-pricing] google model not pinned: ${name}`)),
+          ),
+      ],
       [
         "deepseek",
         ctx.http.text(`${upstreamConfig.deepseekDocs}${DEEPSEEK_PATH}`, textOpts).then(parseDeepSeekPricing),
@@ -298,8 +350,18 @@ export const getOfficialPricing = (ctx: AppContext): Promise<OfficialPricingPayl
       ["mistral", ctx.http.text(`${upstreamConfig.mistral}${MISTRAL_PATH}`, textOpts).then(parseMistralPricing)],
       [
         "kimi",
-        Promise.all(KIMI_PAGES.map((p) => ctx.http.text(`${upstreamConfig.moonshot}${p}`, textOpts))).then((pages) =>
-          pages.flatMap(parseKimiPricing),
+        // Per-page settlement: one down doc must not discard the other pages.
+        Promise.allSettled(KIMI_PAGES.map((p) => ctx.http.text(`${upstreamConfig.moonshot}${p}`, textOpts))).then(
+          (results) => {
+            const failed = results.filter((r) => r.status === "rejected");
+            if (failed.length > 0) {
+              ctx.log("warn", `[official-pricing] kimi ${failed.length}/${results.length} pages failed`);
+            }
+            return results
+              .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+              .map((r) => r.value)
+              .flatMap(parseKimiPricing);
+          },
         ),
       ],
     ];
@@ -313,13 +375,25 @@ export const getOfficialPricing = (ctx: AppContext): Promise<OfficialPricingPayl
         }
       }),
     );
+    // Lowercase dedupe key: providers disagree on id casing (GPT-4o vs
+    // gpt-4o). Task order is the priority (OpenAI first), so first wins.
     const models = dedupeBy(
       settled.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
-      (m) => m.id,
+      (m) => m.id.toLowerCase(),
     );
     // Rejected fetches plus fulfilled-but-empty parses (provider redesign)
     // both shorten the TTL so a redesign doesn't poison the key for 6h.
-    const emptyProviders = settled.filter((r) => r.status === "fulfilled" && r.value.length === 0).length;
+    const emptyLabels = tasks
+      .filter(
+        (_, i) =>
+          settled[i]?.status === "fulfilled" &&
+          (settled[i] as PromiseFulfilledResult<OfficialPriceModel[]>).value.length === 0,
+      )
+      .map(([label]) => label);
+    if (emptyLabels.length > 0) {
+      ctx.log("warn", `[official-pricing] empty parse (redesign?): ${emptyLabels.join(", ")}`);
+    }
+    const emptyProviders = emptyLabels.length;
     const failed = settled.filter((r) => r.status === "rejected").length + emptyProviders;
     if (models.length === 0) {
       throw new UpstreamError("Official pricing: all 6 provider fetches failed");

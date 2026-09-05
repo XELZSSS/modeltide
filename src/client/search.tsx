@@ -21,13 +21,15 @@ interface SourceConfig<T> {
   map: (item: T) => SearchResult;
 }
 
-function collect<T>(config: SourceConfig<T>, term: string, out: { result: SearchResult; match: number }[]): void {
+function collect<T>(config: SourceConfig<T>, term: string): { result: SearchResult; match: number }[] {
+  const out: { result: SearchResult; match: number }[] = [];
   for (const item of config.items) {
     const fields = config.getFields(item).map((v) => (v ? v.toLowerCase().trim() : ""));
     const { matched, score } = matchTerm(fields, term);
     if (!matched) continue;
     out.push({ result: config.map(item), match: score });
   }
+  return out;
 }
 
 function detailLink(source: SearchResultSource, id: string): string {
@@ -64,71 +66,68 @@ export function useSearchAllRankings(searchTerm: string): SearchState {
     if (!enabled) return [];
     const term = searchTerm.toLowerCase().trim();
     if (!term) return [];
-    const collected: { result: SearchResult; match: number }[] = [];
-    collect(
-      {
-        items: artificialData,
-        getFields: (m) => [m.name, m.slug, m.short_name, m.model_creators?.name],
-        map: (m) => ({
-          id: m.id,
-          name: m.name,
-          source: "modelRankings",
-          score: m.intelligence_index,
-          provider: m.model_creators?.name || null,
-          link: detailLink("modelRankings", m.slug || m.id),
-        }),
-      },
-      term,
-      collected,
-    );
-    collect(
-      {
-        items: openRouterData,
-        getFields: (m) => [m.name, m.id, m.creator],
-        map: (m) => ({
-          id: m.id,
-          name: m.name,
-          source: "openRouterRankings",
-          score: null,
-          provider: m.creator || null,
-          link: detailLink("openRouterRankings", m.id),
-        }),
-      },
-      term,
-      collected,
-    );
-    collect(
-      {
-        items: openSourceRankings ?? [],
-        getFields: (m) => [m.id, m.author ?? ""],
-        map: (m) => ({
-          id: m.id,
-          name: m.id,
-          source: "openSourceRankings",
-          score: null,
-          provider: m.author || null,
-          link: detailLink("openSourceRankings", m.id),
-        }),
-      },
-      term,
-      collected,
-    );
-    collect(
-      {
-        items: hallucinationRankings,
-        getFields: (m) => [m.model, m.slug, m.id],
-        map: (m) => ({
-          id: m.id,
-          name: m.model,
-          source: "hallucinationRankings",
-          score: m.omniscienceIndex,
-          provider: null,
-          link: detailLink("hallucinationRankings", m.slug || m.id),
-        }),
-      },
-      term,
-      collected,
-    );
+    const collected = [
+      collect(
+        {
+          items: artificialData,
+          getFields: (m) => [m.name, m.slug, m.short_name, m.model_creators?.name],
+          map: (m): SearchResult => ({
+            id: m.id,
+            name: m.name,
+            source: "modelRankings",
+            score: m.intelligence_index,
+            provider: m.model_creators?.name || null,
+            link: detailLink("modelRankings", m.slug || m.id),
+          }),
+        },
+        term,
+      ),
+      collect(
+        {
+          items: openRouterData,
+          getFields: (m) => [m.name, m.id, m.creator],
+          map: (m): SearchResult => ({
+            id: m.id,
+            name: m.name,
+            source: "openRouterRankings",
+            score: null,
+            provider: m.creator || null,
+            link: detailLink("openRouterRankings", m.id),
+          }),
+        },
+        term,
+      ),
+      collect(
+        {
+          items: openSourceRankings ?? [],
+          getFields: (m) => [m.id, m.author ?? ""],
+          map: (m): SearchResult => ({
+            id: m.id,
+            name: m.id,
+            source: "openSourceRankings",
+            score: null,
+            provider: m.author || null,
+            link: detailLink("openSourceRankings", m.id),
+          }),
+        },
+        term,
+      ),
+      collect(
+        {
+          items: hallucinationRankings,
+          getFields: (m) => [m.model, m.slug, m.id],
+          map: (m): SearchResult => ({
+            id: m.id,
+            name: m.model,
+            source: "hallucinationRankings",
+            score: m.omniscienceIndex,
+            provider: null,
+            link: detailLink("hallucinationRankings", m.slug || m.id),
+          }),
+        },
+        term,
+      ),
+    ].flat();
     collected.sort((a, b) => b.match - a.match || (b.result.score ?? -Infinity) - (a.result.score ?? -Infinity));
     return collected.map((c) => c.result).slice(0, MAX_RESULTS);
   }, [enabled, searchTerm, artificialData, openRouterData, openSourceRankings, hallucinationRankings]);
@@ -249,16 +248,23 @@ export function SearchInput() {
     setInputValue("");
   }, [setSearchTerm]);
 
+  // Single navigation path for keyboard select and mouse click.
+  const goToResult = useCallback(
+    (result: SearchResult | undefined) => {
+      if (!result) return;
+      clearSearch();
+      navigate(result.link);
+      setIsOpen(false);
+      setActiveIndex(-1);
+    },
+    [navigate, clearSearch],
+  );
+
   const handleSelect = useCallback(
     (idx: number) => {
-      const r = results[idx];
-      if (r) {
-        clearSearch();
-        navigate(r.link);
-        setIsOpen(false);
-      }
+      goToResult(results[idx]);
     },
-    [results, navigate, clearSearch],
+    [results, goToResult],
   );
 
   const { clampedIndex, setActiveIndex, handleKeyDown } = useListKeyboard(results.length, handleSelect, () => {
@@ -267,13 +273,6 @@ export function SearchInput() {
   });
 
   useClickOutside(containerRef, () => setIsOpen(false));
-
-  function handleResultClick(result: SearchResult) {
-    clearSearch();
-    navigate(result.link);
-    setIsOpen(false);
-    setActiveIndex(-1);
-  }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
@@ -285,12 +284,65 @@ export function SearchInput() {
     handleKeyDown(e);
   }
 
+  // Dropdown body: pending / error / empty / results, flattest first.
+  let dropdownBody: React.ReactNode;
+  if (isPending && results.length === 0) {
+    dropdownBody = (
+      <div className="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary">
+        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        {t("searching")}
+      </div>
+    );
+  } else if (isError && results.length === 0) {
+    dropdownBody = (
+      <div className="p-4 text-sm text-text-secondary" role="alert">
+        {t("searchFailed")}
+      </div>
+    );
+  } else if (results.length === 0) {
+    dropdownBody = (
+      <div className="p-4 text-sm text-text-secondary" role="status">
+        {t("noResults")}
+      </div>
+    );
+  } else {
+    dropdownBody = results.map((result, index) => (
+      <button
+        key={`${result.source}-${result.id}-${index}`}
+        id={`${listboxId}-option-${index}`}
+        type="button"
+        role="option"
+        aria-selected={clampedIndex === index}
+        ref={(el) => {
+          if (clampedIndex === index && el) el.scrollIntoView({ block: "nearest" });
+        }}
+        className={cn(
+          "w-full text-left p-2.5 rounded-none transition-colors active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
+          clampedIndex === index ? "bg-hover" : "hover:bg-hover",
+        )}
+        onMouseEnter={() => setActiveIndex(index)}
+        onClick={() => goToResult(result)}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-text-primary truncate">{result.name}</span>
+          {typeof result.score === "number" && Number.isFinite(result.score) && (
+            <span className="text-xs text-text-secondary ml-2 shrink-0 font-mono">{result.score.toFixed(1)}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-xs text-text-secondary">{t(result.source)}</span>
+          {result.provider && <span className="text-xs text-text-tertiary">{result.provider}</span>}
+        </div>
+      </button>
+    ));
+  }
+
   return (
-    <div ref={containerRef} className="relative w-full sm:w-56">
+    <div ref={containerRef} className="relative w-full sm:w-56 min-w-0 max-w-full">
       <label htmlFor={inputId} className="sr-only">
         {t("searchPlaceholder")}
       </label>
-      <div className="flex items-center gap-2 border border-border rounded-lg bg-bg-card px-3.5 py-2.5 focus-within:border-text-tertiary">
+      <div className="flex items-center gap-2 min-w-0 max-w-full border border-border rounded-none bg-bg-card px-3.5 py-2.5 focus-within:border-text-tertiary">
         <Search size={16} className="text-text-secondary shrink-0" aria-hidden="true" />
         <input
           ref={inputRef}
@@ -314,7 +366,7 @@ export function SearchInput() {
           }}
           onKeyDown={onKeyDown}
           placeholder={t("searchPlaceholder")}
-          className="w-full text-sm bg-transparent outline-none text-text-primary placeholder:text-text-tertiary"
+          className="min-w-0 flex-1 w-full text-base sm:text-sm bg-transparent outline-none text-text-primary placeholder:text-text-tertiary"
         />
         {inputValue && (
           <button
@@ -326,7 +378,7 @@ export function SearchInput() {
               setActiveIndex(-1);
               inputRef.current?.focus();
             }}
-            className="rounded-md p-1 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            className="shrink-0 rounded-none p-1 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
           >
             <X size={14} className="text-text-secondary" />
           </button>
@@ -337,56 +389,9 @@ export function SearchInput() {
         <div
           id={listboxId}
           role="listbox"
-          className="absolute top-full left-0 right-0 mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-lg shadow-lg z-50 sm:w-72 animate-fade-in"
+          className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-none shadow-none z-50 animate-fade-in"
         >
-          <div className="p-1.5">
-            {isPending && results.length === 0 ? (
-              <div className="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary">
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                {t("searching")}
-              </div>
-            ) : isError && results.length === 0 ? (
-              <div className="p-4 text-sm text-text-secondary" role="alert">
-                {t("searchFailed")}
-              </div>
-            ) : results.length === 0 ? (
-              <div className="p-4 text-sm text-text-secondary" role="status">
-                {t("noResults")}
-              </div>
-            ) : (
-              results.map((result, index) => (
-                <button
-                  key={`${result.source}-${result.id}-${index}`}
-                  id={`${listboxId}-option-${index}`}
-                  type="button"
-                  role="option"
-                  aria-selected={clampedIndex === index}
-                  ref={(el) => {
-                    if (clampedIndex === index && el) el.scrollIntoView({ block: "nearest" });
-                  }}
-                  className={cn(
-                    "w-full text-left p-2.5 rounded-md transition-colors active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
-                    clampedIndex === index ? "bg-hover" : "hover:bg-hover",
-                  )}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => handleResultClick(result)}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-text-primary truncate">{result.name}</span>
-                    {typeof result.score === "number" && Number.isFinite(result.score) && (
-                      <span className="text-xs text-text-secondary ml-2 shrink-0 font-mono">
-                        {result.score.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-text-secondary">{t(result.source)}</span>
-                    {result.provider && <span className="text-xs text-text-tertiary">{result.provider}</span>}
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
+          <div className="p-1.5">{dropdownBody}</div>
         </div>
       )}
       <div id={statusId} role="status" aria-live="polite" aria-atomic="true" className="sr-only">

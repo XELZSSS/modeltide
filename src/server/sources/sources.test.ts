@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { backfillFromMeta, compact, compactOmniscienceEnrich, parseChangelogModels } from "@/server/sources/artificial-analysis";
+import {
+  backfillFromMeta,
+  compact,
+  compactOmniscienceEnrich,
+  parseChangelogModels,
+} from "@/server/sources/artificial-analysis";
 import { mergeBySlug, mapEntry, type RawEntry } from "@/server/sources/artificial-analysis";
 import {
   categoryFrom,
@@ -27,14 +32,7 @@ import {
   type HistoryStore,
   type ProbeTarget,
 } from "./status-history";
-import {
-  BENCHMARK_KEYS,
-  DEFAULT_TTL_MS,
-  normalizeModelLimit,
-  PARTIAL_FAIL_TTL_MS,
-  SOURCE_IDS,
-  upstreamConfig,
-} from "@/shared/config";
+import { BENCHMARK_KEYS, normalizeModelLimit, SOURCE_IDS, upstreamConfig } from "@/shared/config";
 import type { AppContext } from "@/server/context";
 import type { ArtificialAnalysisModel, DayBucket, SourceStatus, UptimeSample } from "@/shared/types";
 import {
@@ -680,7 +678,9 @@ describe("getStatusHistory sample-on-read", () => {
   }
 
   it("skips sampling while the lock is held instead of racing the writer", async () => {
-    const kvStore = new Map<string, string>([["status:history:lock", "1"]]);
+    // New lock format carries owner token + future expiry.
+    const lockValue = `owner-${Date.now()}:${Date.now() + 120_000}`;
+    const kvStore = new Map<string, string>([["status:history:lock", lockValue]]);
     const payload = await getStatusHistory(buildHistoryCtx(kvStore));
     // No store written and every source reports as down (placeholders, not real probes).
     expect(kvStore.has("status:history:v2")).toBe(false);
@@ -725,11 +725,15 @@ describe("getStatusHistory sample-on-read", () => {
     const kvStore = new Map<string, string>();
     const probe = vi.fn<(url: string) => Promise<ProbeResult>>();
     const openrouterUrl = `${upstreamConfig.openrouter}/api/v1/models`;
+    const openrouterRankingsUrl = `${upstreamConfig.openrouter}/api/frontend/v1/rankings/models`;
+    const down = { ok: false, status: 503, latencyMs: null, error: "HTTP 503" };
     vi.when(probe, {
       onUnmatched: () => Promise.resolve({ ok: true, status: 200, latencyMs: 500, error: null }),
     })
       .calledWith(openrouterUrl)
-      .thenResolve({ ok: false, status: 503, latencyMs: null, error: "HTTP 503" });
+      .thenResolve(down)
+      .calledWith(openrouterRankingsUrl)
+      .thenResolve(down);
     const ctx: AppContext = {
       cache: {} as AppContext["cache"],
       http: { probe } as unknown as AppContext["http"],
@@ -750,6 +754,33 @@ describe("getStatusHistory sample-on-read", () => {
       expect(s.ok).toBe(true);
     }
     expect(probe).toHaveBeenCalledWith(openrouterUrl);
+    expect(probe).toHaveBeenCalledWith(openrouterRankingsUrl);
+  });
+
+  it("keeps a source healthy when any of its probes succeeds", async () => {
+    const kvStore = new Map<string, string>();
+    const probe = vi.fn<(url: string) => Promise<ProbeResult>>();
+    const openrouterUrl = `${upstreamConfig.openrouter}/api/v1/models`;
+    vi.when(probe, {
+      onUnmatched: () => Promise.resolve({ ok: true, status: 200, latencyMs: 500, error: null }),
+    })
+      .calledWith(openrouterUrl)
+      .thenResolve({ ok: false, status: 503, latencyMs: null, error: "HTTP 503" });
+    const ctx: AppContext = {
+      cache: {} as AppContext["cache"],
+      http: { probe } as unknown as AppContext["http"],
+      kv: {
+        get: async (key: string) => kvStore.get(key) ?? null,
+        put: async (key: string, value: string) => {
+          kvStore.set(key, value);
+        },
+      } as AppContext["kv"],
+      log: () => {},
+    };
+    const payload = await getStatusHistory(ctx);
+    // Directory down but rankings up: any-ok keeps openrouter green.
+    const or = payload.sources.find((s) => s.id === "openrouter")!;
+    expect(or.ok).toBe(true);
   });
 });
 
@@ -770,7 +801,11 @@ describe("buildTargets", () => {
     const targets = buildTargets();
     const news = targets.filter((t) => t.id === "news");
     expect(news).toHaveLength(NEWS_CATEGORIES.length);
-    expect(targets).toHaveLength(4 + NEWS_CATEGORIES.length);
+    // Base probes: AA index + AA text-to-image + OR directory + OR rankings +
+    // HF + arena, plus one feed per news category.
+    expect(targets).toHaveLength(6 + NEWS_CATEGORIES.length);
+    expect(targets.filter((t) => t.id === "openrouter")).toHaveLength(2);
+    expect(targets.filter((t) => t.id === "artificialAnalysis")).toHaveLength(2);
     expect(targets.some((t) => t.id === "arena")).toBe(true);
     // Official pricing stays a data route but is no longer status-monitored.
     expect(SOURCE_IDS).not.toContain("officialPricing");
@@ -815,12 +850,11 @@ describe("getModels empty-result TTL", () => {
     return { ctx, kvStore };
   }
 
-  it("caches empty results briefly so transient failures are retried soon", async () => {
-    const { ctx, kvStore } = hfCtx([]);
-    await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 500 });
-    const envelope = JSON.parse([...kvStore.values()][0]!) as { e: number };
-    expect(envelope.e - Date.now()).toBeLessThan(DEFAULT_TTL_MS);
-    expect(envelope.e - Date.now()).toBeLessThanOrEqual(PARTIAL_FAIL_TTL_MS + 1000);
+  it("throws on empty results so stale cache is served instead of poisoning the key", async () => {
+    const { ctx } = hfCtx([]);
+    await expect(getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 500 })).rejects.toThrow(
+      "no usable models",
+    );
   });
 
   it("fetches with the normalized bucket limit so payload matches the cache key", async () => {
@@ -837,7 +871,7 @@ describe("getModels empty-result TTL", () => {
       http: {
         json: async (url: string) => {
           fetchedUrl = url;
-          return [];
+          return [{ id: "org/model", downloads: 10, likes: 1, tags: ["license:mit"] }];
         },
       } as unknown as AppContext["http"],
       kv,
@@ -1198,12 +1232,12 @@ describe("toClosedReleases", () => {
 
   it("prefers exact index weights over creator rules", () => {
     // OpenAI is rule-closed, but an exact open flag wins.
-    expect(
-      isClosedChangelogRelease(clModel({ slug: "indexed-open", releaseSlug: "indexed-open" }), weights),
-    ).toBe(false);
-    expect(
-      isClosedChangelogRelease(clModel({ slug: "indexed-closed", releaseSlug: "indexed-closed" }), weights),
-    ).toBe(true);
+    expect(isClosedChangelogRelease(clModel({ slug: "indexed-open", releaseSlug: "indexed-open" }), weights)).toBe(
+      false,
+    );
+    expect(isClosedChangelogRelease(clModel({ slug: "indexed-closed", releaseSlug: "indexed-closed" }), weights)).toBe(
+      true,
+    );
   });
 
   it("dedupes variants by release family, newest first", () => {

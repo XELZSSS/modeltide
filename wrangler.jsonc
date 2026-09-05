@@ -17,15 +17,18 @@
     "not_found_handling": "single-page-application",
   },
 
-  // Smart Placement: keep only if p99 data shows a win.
-  "placement": {
-    "mode": "smart",
-  },
+  // Smart Placement removed by default: KV reads are already global and the
+  // extra routing adds cost/uncertainty. Re-enable only with p99 evidence.
+  //  "placement": {
+  //    "mode": "smart",
+  //  },
 
   // Cron every 30min, not more often: free KV caps at 1,000 writes/day and each
   // tick costs sampling + warmup writes. Only soft-expired keys re-put.
   // Each tick warms the live tier fully plus a rotating bulk slice (~1.5h per
   // full rotation), staying under the free 10ms CPU / 50-subrequest caps.
+  // TTL jitter is -10%..0 (27-30m effective), so keys may go stale up to ~3m
+  // before the next tick refreshes them; stale-while-revalidate covers the gap.
   "triggers": {
     "crons": ["*/30 * * * *"],
   },

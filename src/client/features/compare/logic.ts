@@ -82,11 +82,18 @@ function percentMetric(
   };
 }
 
+/** Raw radar values without the 0-100 clamp: intelligence can exceed 100. */
+function rawScore(v: number | null | undefined): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const scaled = v > 0 && v <= 1 ? v * 100 : v;
+  return Math.max(0, scaled);
+}
+
 export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]) {
   return [
-    { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.intelligence_index) },
-    { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.coding_index) },
-    { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.agentic_index) },
+    { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => rawScore(m.intelligence_index) },
+    { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => rawScore(m.coding_index) },
+    { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => rawScore(m.agentic_index) },
     { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.gpqa) },
     { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.hle) },
     { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.scicode) },
@@ -99,6 +106,18 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]) 
     });
     return row;
   });
+}
+
+/** Dynamic radar ceiling: 100 default, grows in 20-steps when data exceeds it. */
+export function radarMaxFor(data: Record<string, string | number | null>[], fallback = 100): number {
+  let peak = fallback;
+  for (const row of data) {
+    for (const [k, v] of Object.entries(row)) {
+      if (k === "metric" || typeof v !== "number" || !Number.isFinite(v)) continue;
+      if (v > peak) peak = v;
+    }
+  }
+  return Math.ceil(peak / 20) * 20;
 }
 
 /** Price rows (prompt/completion/cache-hit); lower is better. */

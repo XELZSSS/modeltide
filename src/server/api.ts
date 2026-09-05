@@ -55,6 +55,9 @@ export function createApp(routeDefs: readonly RouteDef[]): Hono {
     c.header("X-Content-Type-Options", "nosniff");
     c.header("Referrer-Policy", "no-referrer");
     c.header("X-Frame-Options", "DENY");
+    // Single source of truth for API security headers (public/_headers is a
+    // static-hosting backup and does not cover Worker responses).
+    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   });
 
   registerRoutes(app, routeDefs);

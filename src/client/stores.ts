@@ -7,44 +7,34 @@ import { STORAGE_KEYS } from "@/shared/config";
 import { modelId } from "@/client/utils";
 
 // ---- storage ----
+/** Run a storage op, swallowing quota/privacy failures (failures keep working in memory). */
+function attempt<T>(fn: () => T, fallback: T): T {
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
+}
+
 function guarded(storage: () => Storage): StateStorage {
-  const get = (): Storage | null => {
-    try {
-      return typeof window === "undefined" ? null : storage();
-    } catch {
-      return null;
-    }
-  };
+  // Null when SSR or when window access itself throws.
+  const get = (): Storage | null => attempt(() => (typeof window === "undefined" ? null : storage()), null);
   return {
-    getItem: (name) => {
-      try {
-        return get()?.getItem(name) ?? null;
-      } catch {
-        return null;
-      }
-    },
+    getItem: (name) => attempt(() => get()?.getItem(name) ?? null, null),
     setItem: (name, value) => {
-      try {
-        get()?.setItem(name, value);
-      } catch {
-        // Quota exceeded or writes blocked: keep working in memory.
-      }
+      attempt(() => get()?.setItem(name, value), undefined);
     },
     removeItem: (name) => {
-      try {
-        get()?.removeItem(name);
-      } catch {
-        // Ignore removal failures for the same reasons as above.
-      }
+      attempt(() => get()?.removeItem(name), undefined);
     },
   };
 }
 
-export function safeLocalStorage(): StateStorage {
+function safeLocalStorage(): StateStorage {
   return guarded(() => localStorage);
 }
 
-export function safeSessionStorage(): StateStorage {
+function safeSessionStorage(): StateStorage {
   return guarded(() => sessionStorage);
 }
 
@@ -115,22 +105,24 @@ export const useSettingsStore = create<SettingsState>()(
 /**
  * Cross-tab settings sync via the `storage` event. Mounted once (AppShell).
  */
+/** Whitelisted cross-tab fields: stored value, valid options, current selector. */
+const SYNCED_FIELDS = [
+  { key: "themeMode", valid: ["dark", "light"], get: () => useSettingsStore.getState().themeMode },
+  { key: "lang", valid: ["zh", "en"], get: () => useSettingsStore.getState().lang },
+] as const;
+
 export function useThemeStorageSync(): void {
   useEffect(() => {
     const onStorage = (e: StorageEvent): void => {
       if (e.key !== STORAGE_KEYS.settings || e.newValue == null) return;
       try {
-        const parsed = JSON.parse(e.newValue) as { state?: { themeMode?: ThemeMode; lang?: Lang } };
-        const foreignTheme = parsed.state?.themeMode;
-        if (foreignTheme === "dark" || foreignTheme === "light") {
-          if (useSettingsStore.getState().themeMode !== foreignTheme) {
-            useSettingsStore.setState({ themeMode: foreignTheme });
-          }
-        }
-        const foreignLang = parsed.state?.lang;
-        if (foreignLang === "zh" || foreignLang === "en") {
-          if (useSettingsStore.getState().lang !== foreignLang) {
-            useSettingsStore.setState({ lang: foreignLang });
+        const parsed = JSON.parse(e.newValue) as {
+          state?: Partial<Record<(typeof SYNCED_FIELDS)[number]["key"], string>>;
+        };
+        for (const field of SYNCED_FIELDS) {
+          const foreign = parsed.state?.[field.key];
+          if (foreign != null && (field.valid as readonly string[]).includes(foreign) && field.get() !== foreign) {
+            useSettingsStore.setState({ [field.key]: foreign });
           }
         }
       } catch (e) {

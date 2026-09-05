@@ -14,7 +14,7 @@ import {
   seriesColor,
   defaultTooltipOptions,
 } from "@/client/utils/charts";
-import { computeWinners, buildCompareRows, buildRadarData, type CompareRow, type Winner } from "./logic";
+import { computeWinners, buildCompareRows, buildRadarData, radarMaxFor, type CompareRow, type Winner } from "./logic";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 interface ThProps {
@@ -52,7 +52,12 @@ interface TdProps {
 const Td = memo(function Td({ align = "left", mono, className, style, children }: TdProps) {
   return (
     <td
-      className={cn("px-4 py-2.5 text-sm", mono && "font-mono tabular-nums", align === "right" && "text-right", className)}
+      className={cn(
+        "px-4 py-2.5 text-sm",
+        mono && "font-mono tabular-nums",
+        align === "right" && "text-right",
+        className,
+      )}
       style={style}
     >
       {children}
@@ -78,23 +83,22 @@ interface CompareTableProps<T> {
   mobileLayout?: "metric-rows" | "model-cards";
 }
 
-function DesktopTable<T>({
-  rows,
-  models,
-  getKey,
-  getName,
-  getColor,
-  renderValue,
-  winners,
-}: {
-  rows: CompareRow<T>[];
-  models: T[];
-  getKey: (m: T, index: number) => string;
-  getName: (m: T) => string;
-  getColor: (index: number) => string;
-  renderValue: (row: CompareRow<T>, model: T, winner: "win" | "loss" | null) => ReactNode;
-  winners: Map<string, Map<string, "win" | "loss">>;
-}) {
+/** Props shared by the desktop and mobile bodies (winners computed once above). */
+interface TablePartsProps<T> extends Omit<CompareTableProps<T>, "mobileLayout"> {
+  winners: Map<string, Map<string, Winner>>;
+}
+
+// Model identity/color accessors shared by every compare table/chart.
+export const modelKeyOf = (m: ArtificialAnalysisModel, index: number) => modelId(m) || `idx-${index}`;
+export const modelNameOf = (m: ArtificialAnalysisModel) => m.short_name || m.name;
+
+/** Series color getter bound to the current chart theme. */
+export function useModelColorOf(): (index: number) => string {
+  const theme = useChartTheme();
+  return (index: number) => seriesColor(theme, index);
+}
+
+function DesktopTable<T>({ rows, models, getKey, getName, getColor, renderValue, winners }: TablePartsProps<T>) {
   const { t } = useTranslation();
   return (
     <Card>
@@ -103,9 +107,7 @@ function DesktopTable<T>({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <Th className="font-semibold text-text-secondary sticky left-0 z-10 bg-bg-card">
-                  {t("metric")}
-                </Th>
+                <Th className="font-semibold text-text-secondary sticky left-0 z-10 bg-bg-card">{t("metric")}</Th>
                 {models.map((model, index) => (
                   <Th
                     key={getKey(model, index)}
@@ -148,16 +150,7 @@ function MobileTable<T>({
   renderValue,
   winners,
   layout,
-}: {
-  rows: CompareRow<T>[];
-  models: T[];
-  getKey: (m: T, index: number) => string;
-  getName: (m: T) => string;
-  getColor: (index: number) => string;
-  renderValue: (row: CompareRow<T>, model: T, winner: "win" | "loss" | null) => ReactNode;
-  winners: Map<string, Map<string, "win" | "loss">>;
-  layout: "metric-rows" | "model-cards";
-}) {
+}: TablePartsProps<T> & { layout: "metric-rows" | "model-cards" }) {
   if (layout === "model-cards") {
     return (
       <div className="flex flex-col gap-3">
@@ -225,38 +218,23 @@ function CompareTableInner<T>({
   const { isMobile } = useDevice();
   const winners = useMemo(() => computeWinners(rows, models, getKey), [rows, models, getKey]);
 
+  const parts = { rows, models, getKey, getName, getColor, renderValue, winners };
   if (isMobile) {
-    return (
-      <MobileTable
-        rows={rows}
-        models={models}
-        getKey={getKey}
-        getName={getName}
-        getColor={getColor}
-        renderValue={renderValue}
-        winners={winners}
-        layout={mobileLayout}
-      />
-    );
+    return <MobileTable {...parts} layout={mobileLayout} />;
   }
 
-  return (
-    <DesktopTable
-      rows={rows}
-      models={models}
-      getKey={getKey}
-      getName={getName}
-      getColor={getColor}
-      renderValue={renderValue}
-      winners={winners}
-    />
-  );
+  return <DesktopTable {...parts} />;
 }
 
 /** Comparison table: desktop table + mobile layout (metric-rows or model-cards). */
 export const CompareTable = memo(CompareTableInner) as typeof CompareTableInner;
 
 // ---- CompareContent (the /compare page body: radar + metric table) ----
+const WINNER_STYLE = {
+  win: { color: "var(--success)", Icon: TrendingUp },
+  loss: { color: "var(--destructive)", Icon: TrendingDown },
+} as const;
+
 const MetricValueDisplay = memo(function MetricValueDisplay({
   value,
   winner,
@@ -264,17 +242,14 @@ const MetricValueDisplay = memo(function MetricValueDisplay({
   value: string;
   winner: "win" | "loss" | null;
 }) {
-  const winnerColor = winner === "win" ? "var(--success)" : winner === "loss" ? "var(--destructive)" : undefined;
+  const style = winner ? WINNER_STYLE[winner] : undefined;
   return (
     <span
       className={cn("font-mono tabular-nums", winner === "win" && "font-semibold")}
-      style={winnerColor ? { color: winnerColor } : undefined}
+      style={style && { color: style.color }}
     >
       {value}
-      {winner === "win" && <TrendingUp size={12} className="inline ml-0.5" style={{ color: "var(--success)" }} />}
-      {winner === "loss" && (
-        <TrendingDown size={12} className="inline ml-0.5" style={{ color: "var(--destructive)" }} />
-      )}
+      {style && <style.Icon size={12} className="inline ml-0.5" style={{ color: style.color }} />}
     </span>
   );
 });
@@ -286,14 +261,14 @@ const MetricCompareTable = memo(function MetricCompareTable({
   rows: CompareRow<ArtificialAnalysisModel>[];
   models: ArtificialAnalysisModel[];
 }) {
-  const theme = useChartTheme();
+  const getColor = useModelColorOf();
   return (
     <CompareTable
       rows={rows}
       models={models}
-      getKey={(m, index) => modelId(m) || `idx-${index}`}
-      getName={(m) => m.short_name || m.name}
-      getColor={(index) => seriesColor(theme, index)}
+      getKey={modelKeyOf}
+      getName={modelNameOf}
+      getColor={getColor}
       renderValue={(row, model, winner) => <MetricValueDisplay value={row.getValue?.(model) ?? ""} winner={winner} />}
     />
   );
@@ -304,6 +279,7 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
   const theme = useChartTheme();
   const rows = useMemo(() => buildCompareRows(t), [t]);
   const radarData = useMemo(() => buildRadarData(t, models), [models, t]);
+  const radarMax = useMemo(() => radarMaxFor(radarData), [radarData]);
 
   const data = useMemo(
     () => ({
@@ -332,7 +308,7 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
       scales: {
         r: {
           min: 0,
-          max: 100,
+          max: radarMax,
           ticks: {
             ...axisTickStyle(theme),
             stepSize: 25,
@@ -348,7 +324,7 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
         tooltip: defaultTooltipOptions(theme),
       },
     }),
-    [theme],
+    [theme, radarMax],
   );
 
   return (

@@ -6,14 +6,17 @@
   "scripts": {
     "dev": "vite",
     "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json",
-    "build": "vite build && node scripts/csp-hash.cjs --write",
+    "build": "vite build && node scripts/csp-hash.cjs --write && node scripts/check-bundle.cjs",
     "deploy": "npm run build && wrangler deploy",
     "preview": "npm run build && vite preview",
     "lint": "oxlint",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:client": "vitest run --project client",
     "test:server": "vitest run --project server",
     "hash:csp": "node scripts/csp-hash.cjs --write",
+    "hash:check": "node scripts/csp-hash.cjs",
+    "i18n:check": "node scripts/check-i18n.cjs",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "audit": "npm audit --registry=https://registry.npmjs.org"
@@ -21,7 +24,7 @@
   "engines": {
     "node": ">=22.22"
   },
-  "packageManager": "npm@12.0.2",
+  "packageManager": "npm@10.9.3",
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",
     "chart.js": "^4.5.1",

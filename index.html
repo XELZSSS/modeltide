@@ -24,13 +24,29 @@
     <!-- Keep theme-color in sync with the manifest (#000000) and the script below. -->
     <!-- crossorigin is REQUIRED on font preloads (anonymous CORS); without it
          the preload is ignored and the font downloads twice. -->
-    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin fetchpriority="high" />
+    <link
+      rel="preload"
+      href="/fonts/jetbrains-mono-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      fetchpriority="high"
+    />
+    <style>
+      html {
+        background: #ffffff;
+      }
+      html.dark {
+        background: #000000;
+      }
+    </style>
     <script>
-      // Pre-paint theme (avoids a light/dark flash). Allowlisted in public/_headers
-      // by sha256 — regenerate with `npm run build` after editing.
+      // Pre-paint theme + lang (avoids a light/dark flash and lang mismatch).
+      // Allowlisted in public/_headers by sha256 — regenerate with `npm run build` after editing.
       (function () {
         var stored = null;
+        var lang = null;
         try {
           // Key must match STORAGE_KEYS.settings ("settings").
           var raw = localStorage.getItem("settings");
@@ -38,6 +54,9 @@
             var parsed = JSON.parse(raw);
             if (parsed && (parsed.state.themeMode === "dark" || parsed.state.themeMode === "light")) {
               stored = parsed.state.themeMode;
+            }
+            if (parsed && (parsed.state.lang === "zh" || parsed.state.lang === "en")) {
+              lang = parsed.state.lang;
             }
           }
         } catch (e) {}
@@ -50,6 +69,9 @@
         var meta = document.querySelector("meta[name='theme-color']");
         if (meta) {
           meta.setAttribute("content", dark ? "#000000" : "#ffffff");
+        }
+        if (lang) {
+          document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
         }
       })();
     </script>

@@ -10,6 +10,7 @@ import {
   BROWSER_NO_STORE_HEADER,
   CDN_CACHE_HEADER,
   CDN_NO_STORE_HEADER,
+  MAX_MODEL_LIMIT,
   THIRTY_MINUTES,
   apiPaths,
   NEWS_CATEGORIES,
@@ -69,6 +70,9 @@ export const routeDefs = [
   }),
   defineRoute({
     path: apiPaths.openSourceModels,
+    // Intentionally not warm:"all": 5 sorts x 2 dirs would fan out to 30
+    // full-bucket HF fetches per rotation. The default combo warms via the
+    // plain default URL; rarer combos cold-miss behind the 120/min limit.
     warmPriority: "bulk",
     query: {
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
@@ -76,7 +80,7 @@ export const routeDefs = [
       limit: qNum({
         default: String(OPEN_SOURCE_MODELS_DEFAULTS.limit),
         min: 1,
-        max: OPEN_SOURCE_MODELS_DEFAULTS.limit,
+        max: MAX_MODEL_LIMIT,
         integer: true,
       }),
     },
@@ -94,7 +98,9 @@ export const routeDefs = [
   defineRoute({
     path: apiPaths.news,
     query: { category: qEnum(NEWS_CATEGORIES, NEWS_CATEGORIES[0]) },
-    warm: "window",
+    // Warmed every tick: the old "window" schedule (interval 28m vs cron 30m)
+    // was trivially true on every tick, so spell it as "all" honestly.
+    warm: "all",
     warmPriority: "live",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx, params) => getNews(ctx, params.category),
@@ -154,8 +160,38 @@ function applyCacheHeaders(c: Context, noStore: boolean): void {
   c.header("Vary", "Accept-Encoding");
 }
 
+/** In-memory fallback buckets when KV is absent or errors (per-isolate, best-effort). */
+const memoryRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function hashIpForKey(raw: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < raw.length; i++) {
+    h ^= raw.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `h${(h >>> 0).toString(36)}`;
+}
+
+function checkMemoryRateLimit(key: string, rl: { windowSec: number; max: number }): void {
+  const now = Date.now();
+  const hit = memoryRateBuckets.get(key);
+  if (hit && hit.resetAt > now) {
+    if (hit.count >= rl.max) throw new RateLimitError();
+    hit.count += 1;
+    return;
+  }
+  // Opportunistic prune to bound memory.
+  if (memoryRateBuckets.size > 2000) {
+    for (const [k, v] of memoryRateBuckets) {
+      if (v.resetAt <= now) memoryRateBuckets.delete(k);
+      if (memoryRateBuckets.size <= 1500) break;
+    }
+  }
+  memoryRateBuckets.set(key, { count: 1, resetAt: now + rl.windowSec * 1000 });
+}
+
 /**
- * Best-effort KV rate limit — skipped when KV is not configured.
+ * Best-effort KV rate limit with in-memory fallback.
  * Docs: https://developers.cloudflare.com/kv/concepts/kv-bindings/
  */
 async function enforceRateLimit(
@@ -163,29 +199,44 @@ async function enforceRateLimit(
   kv: KVNamespace | undefined,
   rl: { windowSec: number; max: number },
 ): Promise<void> {
-  if (!kv) return;
-  // Prefer the CF edge header (unspoofable); fall back to the first XFF
-  // entry only when CF is absent (e.g. local dev). Sanitize to bound KV key
-  // length (512B limit) and avoid budget minting via overlong values.
-  const cfIp = c.req.header("CF-Connecting-IP")?.trim();
-  const xffFirst = c.req.header("X-Forwarded-For")?.split(",")[0]?.trim();
-  const rawIp = cfIp || xffFirst;
-  if (!rawIp) return;
-  // Basic IP/host sanity: truncate and reject control chars / overlong values.
-  if (/[\s\r\n]/.test(rawIp) || rawIp.length > 45) return;
-  const ip = rawIp.slice(0, 45);
+  // Only trust CF-Connecting-IP when the request provably came via the CF
+  // edge (CF-Ray present); otherwise it is client-controlled and forgeable.
+  const viaCfEdge = c.req.header("CF-Ray") != null;
+  const cfIp = viaCfEdge ? c.req.header("CF-Connecting-IP")?.trim() : undefined;
+  // Use the last XFF entry (closest proxy) rather than the easily-spoofed first.
+  const xffRaw = c.req.header("X-Forwarded-For");
+  const xffLast = xffRaw
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .pop();
+  const rawIp = cfIp || xffLast || "unknown";
+  // Sanitize to bound KV key length (512B limit). Invalid/overlong values are
+  // hashed into a bounded bucket instead of bypassing the limit.
+  let ip: string;
+  if (/[\s\r\n]/.test(rawIp) || rawIp.length > 45 || rawIp === "unknown") {
+    ip = rawIp === "unknown" ? "unknown" : hashIpForKey(rawIp.slice(0, 256));
+  } else {
+    ip = rawIp.slice(0, 45);
+  }
   // Path + IP only: including the query string lets attackers mint fresh budgets.
   const key = `rl:${c.req.path}:${ip}`;
+  if (!kv) {
+    checkMemoryRateLimit(key, rl);
+    return;
+  }
   let current: number;
   try {
     current = Number(await kv.get(key));
   } catch {
+    checkMemoryRateLimit(key, rl);
     return;
   }
   if (Number.isFinite(current) && current >= rl.max) throw new RateLimitError();
   try {
     await kv.put(key, String(Number.isFinite(current) ? current + 1 : 1), { expirationTtl: rl.windowSec });
   } catch {
+    checkMemoryRateLimit(key, rl);
     return;
   }
 }
@@ -194,7 +245,9 @@ async function enforceRateLimit(
 export function registerRoutes(app: Hono, routes: readonly RouteDef[]): void {
   for (const route of routes) {
     app.on(["GET", "HEAD"], route.path, async (c) => {
-      const context = buildContext(c.env as Env);
+      // Thread the request signal through so a 25s route timeout aborts
+      // in-flight upstream fetches instead of leaving them to burn subrequests.
+      const context = buildContext(c.env as Env, { signal: c.req.raw.signal });
       startTime(c, "upstream");
       try {
         if (route.rateLimit) await enforceRateLimit(c, context.kv, route.rateLimit);
@@ -277,7 +330,7 @@ export function bucketWarmUrls(base: string, routes: readonly RouteDef[], now: D
   };
 }
 
-export const BULK_PER_TICK = 4;
+export const BULK_PER_TICK = 5;
 
 /**
  * Time-slice rotation over the bulk bucket: no KV cursor (saves free-tier

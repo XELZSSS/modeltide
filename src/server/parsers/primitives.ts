@@ -59,7 +59,12 @@ export const isoDate = (v: unknown): string | null => {
   if (typeof v !== "string") return null;
   const trimmed = v.trim();
   if (!trimmed || !ISO_LIKE_RE.test(trimmed)) return null;
-  if (Number.isNaN(Date.parse(trimmed))) return null;
+  const ms = Date.parse(trimmed);
+  if (Number.isNaN(ms)) return null;
+  // Reject non-existent calendar dates (2026-02-30 normalizes to Mar 02).
+  const datePart = trimmed.slice(0, 10);
+  const normalized = new Date(`${datePart}T00:00:00Z`).toISOString().slice(0, 10);
+  if (normalized !== datePart) return null;
   // Return the trimmed string (not normalized): callers and cached payloads
   // rely on the upstream YYYY-MM-DD shape; normalization would churn cache keys.
   return trimmed;
@@ -122,13 +127,14 @@ export const priceCell = (v: string): number | null => {
   return moneyAmount(t);
 };
 
-/** Count with optional K/M suffix ("256K" -> 256000, "1.5M" -> 1500000). */
+/** Count with optional K/M/B suffix ("256K" -> 256000, "1.5M" -> 1500000, "1.2B" -> 1200000000). */
 export const suffixedCount = (v: string): number | null => {
-  const m = /^([\d.]+)\s*([KM])?/i.exec(v.replace(/,/g, ""));
+  const m = /^([\d.]+)\s*([KMB])?/i.exec(v.replace(/,/g, ""));
   if (!m?.[1]) return null;
   const n = Number(m[1]);
   if (!Number.isFinite(n)) return null;
   const suffix = (m[2] ?? "").toUpperCase();
+  if (suffix === "B") return Math.round(n * 1_000_000_000);
   if (suffix === "M") return Math.round(n * 1_000_000);
   if (suffix === "K") return Math.round(n * 1_000);
   return Math.round(n);

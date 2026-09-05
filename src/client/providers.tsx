@@ -36,15 +36,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     syncDocumentMeta(lang);
   }, [lang]);
 
-  // In dev, warn when a key renders with an uninterpolated "{param}".
+  // Warn when a key renders with an uninterpolated "{param}" (dev + prod:
+  // prod leaks like "{count}" are user-visible and must be caught).
   const t = useMemo(
     () =>
-      createT(
-        lang,
-        import.meta.env.DEV
-          ? { onMissingParam: (key, out) => console.warn(`[i18n] missing param for key "${key}": "${out}"`) }
-          : undefined,
-      ),
+      createT(lang, {
+        onMissingParam: (key, out) => console.warn(`[i18n] missing param for key "${key}": "${out}"`),
+      }),
     [lang],
   );
 

@@ -13,9 +13,10 @@ async function warmUrls(env: Env): Promise<void> {
   const now = new Date();
   const { live, bulk } = bucketWarmUrls(WARM_ORIGIN, routeDefs, now);
   const warmUrlsList = [...live, ...bulkSliceForTick(bulk, now)];
-  // Low concurrency: each warm request fans out, and Workers caps
-  // simultaneous outgoing connections at 6.
-  const CONCURRENCY = 3;
+  // Serial warmup: each warm request fans out (news ~38, official ~16
+  // subrequests), and Workers caps simultaneous outgoing connections at 6
+  // with 50 subrequests per tick. Concurrency 3 self-DDoSes into 502s.
+  const CONCURRENCY = 1;
   let failures = 0;
   const failed: string[] = [];
   const queue = [...warmUrlsList];

@@ -19,6 +19,9 @@ import {
 } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
+const SERIES_KEYS = ["intelligence_index", "coding_index", "agentic_index"] as const;
+const SERIES_LABEL_KEYS = ["intelligence", "coding", "agentic"] as const;
+
 /**
  * Top-10 models by intelligence index, plotting coding + agentic indices.
  * Y-axis grows past 100 with the data; empty renders an EmptyState.
@@ -38,17 +41,11 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
   const data = useMemo(
     () => ({
       labels: top10.map((m) => m.short_name || shortModelId(m.name) || m.id || "—"),
-      datasets: (
-        [
-          { key: "intelligence_index", label: t("intelligence") },
-          { key: "coding_index", label: t("coding") },
-          { key: "agentic_index", label: t("agentic") },
-        ] as const
-      ).map((series, slot) => {
+      datasets: SERIES_KEYS.map((key, slot) => {
         const color = seriesColor(theme, slot);
         return {
-          label: series.label,
-          data: top10.map((m) => m[series.key] ?? null),
+          label: t(SERIES_LABEL_KEYS[slot]!),
+          data: top10.map((m) => m[key] ?? null),
           borderColor: color,
           backgroundColor: color,
           ...lineSeriesStyle,
@@ -62,7 +59,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
   const yMax = useMemo(() => {
     let peak = 100;
     for (const m of top10) {
-      for (const k of ["intelligence_index", "coding_index", "agentic_index"] as const) {
+      for (const k of SERIES_KEYS) {
         const v = m[k];
         if (typeof v === "number" && Number.isFinite(v) && v > peak) peak = v;
       }
@@ -108,26 +105,19 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
     [theme, yMax],
   );
 
-  if (top10.length === 0) {
-    return (
-      <Card>
-        <CardContent padding="md">
-          <p className="ui-card-title mb-4">{t("intelligenceIndex")}</p>
-          <EmptyState message={t("noRankingsData")} />
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardContent padding="md">
         <p className="ui-card-title mb-4">{t("intelligenceIndex")}</p>
-        <div className="w-full h-[200px] sm:h-[240px]">
-          <figure className="h-full">
-            <Line data={data} options={options} aria-label={t("intelligenceIndex")} role="img" />
-          </figure>
-        </div>
+        {top10.length === 0 ? (
+          <EmptyState message={t("noRankingsData")} />
+        ) : (
+          <div className="w-full h-[200px] sm:h-[240px]">
+            <figure className="h-full">
+              <Line data={data} options={options} aria-label={t("intelligenceIndex")} role="img" />
+            </figure>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

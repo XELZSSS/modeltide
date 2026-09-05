@@ -1,15 +1,8 @@
-import {
-  upstreamConfig,
-  DEFAULT_TTL_MS,
-  PARTIAL_FAIL_TTL_MS,
-  cacheKeys,
-  ttlFor,
-  UPSTREAM_TIMEOUT_MS,
-} from "@/shared/config";
+import { upstreamConfig, DEFAULT_TTL_MS, STATIC_TTL_MS, cacheKeys, ttlFor, UPSTREAM_TIMEOUT_MS } from "@/shared/config";
 import { BENCHMARK_KEYS, type BenchmarkKey } from "@/shared/config";
 import type { ArtificialAnalysisModel, TextToImageModel, TextToImagePayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { findNextData, parseRscPayload } from "@/server/parsers/rsc";
+import { MAX_SCAN_CHARS, findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc";
 import { UpstreamError, errMsg } from "@/server/infra";
 import { getOpenRouterModelMeta, type ModelMetaEntry } from "@/server/sources/openrouter";
 import {
@@ -73,12 +66,14 @@ export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
   const rawRelease = strOr(m.releaseDate);
   const releaseDate = isoDate(rawRelease) ?? undefined;
 
+  const creatorName = creator ? str(creator.name).trim() : "";
+  const creatorColor = creator ? str(creator.color).trim() : "";
   const model: ArtificialAnalysisModel = {
     id: str(m.id) || str(m.slug),
     slug: str(m.slug),
     name: str(m.name),
     short_name: strOr(m.shortName),
-    model_creators: creator ? { name: str(creator.name), color: str(creator.color) } : undefined,
+    model_creators: creatorName ? { name: creatorName, color: creatorColor } : undefined,
     intelligence_index: num(m.intelligenceIndex),
     is_reasoning: bool(m.isReasoning),
     coding_index: compactCodingIndex(m),
@@ -141,13 +136,36 @@ export function compactOmniscienceEnrich(m: Record<string, unknown>): Record<str
   };
 }
 
-/** OpenRouter directory match by loose key; needs at least one usable field. */
+/**
+ * OpenRouter directory match by loose key; needs at least one usable field.
+ * Slug goes first: it is the most stable identifier, while display names
+ * carry marketing suffixes that collide across variants.
+ */
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {
-  for (const raw of [m.name, m.short_name, m.slug]) {
+  for (const raw of [m.slug, m.name, m.short_name]) {
     if (!raw) continue;
     const key = normalizeModelKey(raw);
     const entry = key ? meta[key] : undefined;
     if (entry && (entry.contextLength != null || entry.agenticIndex != null || entry.pricing != null)) return entry;
+  }
+  return undefined;
+}
+
+/**
+ * L2 fallback: strip a trailing date/version run (0813, 202601) so
+ * dated snapshots still match their base model. Only 4+ trailing digits are
+ * stripped — short runs are real model versions (gpt-5, qwen-2.5). Used for
+ * context/agentic backfill only, never for pricing.
+ */
+function matchMetaLoose(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {
+  const exact = matchMeta(m, meta);
+  if (exact) return exact;
+  for (const raw of [m.slug, m.name, m.short_name]) {
+    if (!raw) continue;
+    const key = normalizeModelKey(raw).replace(/\d{4,8}$/, "");
+    if (!key || key === normalizeModelKey(raw)) continue;
+    const entry = meta[key];
+    if (entry && (entry.contextLength != null || entry.agenticIndex != null)) return entry;
   }
   return undefined;
 }
@@ -161,13 +179,16 @@ export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record
   for (const m of models) {
     if (m.context_window_tokens != null && m.agentic_index != null && m.blended_price != null) continue;
     const entry = matchMeta(m, meta);
-    if (entry) {
-      if (m.context_window_tokens == null && entry.contextLength != null) {
-        m.context_window_tokens = entry.contextLength;
+    // Context/agentic may fall back to the date-stripped L2 match; pricing
+    // below stays L1-exact so sibling variants never share rates.
+    const loose = entry ?? matchMetaLoose(m, meta);
+    if (loose) {
+      if (m.context_window_tokens == null && loose.contextLength != null) {
+        m.context_window_tokens = loose.contextLength;
         filled++;
       }
-      if (m.agentic_index == null && entry.agenticIndex != null) {
-        m.agentic_index = normalizePercent(entry.agenticIndex);
+      if (m.agentic_index == null && loose.agenticIndex != null) {
+        m.agentic_index = normalizePercent(loose.agenticIndex);
         filled++;
       }
     }
@@ -364,6 +385,17 @@ async function fetchAndParseEnrich<T>(
   }
 }
 
+/**
+ * Enrichment failures from the most recent intelligence-index refresh on this
+ * isolate. Lets composite sources (closed-releases) propagate partial
+ * degradation into their own TTL. Best-effort hint only: concurrent refreshes
+ * may overwrite it, and a wrong value merely picks 6h vs 5m.
+ */
+let lastEnrichFailures = 0;
+export function lastIndexEnrichFailures(): number {
+  return lastEnrichFailures;
+}
+
 export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysisModel[]> =>
   ctx.cache.withTtl(cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async () => {
     // Fetch all independent RSC payloads in parallel; longest path is max(fetch) not sum.
@@ -392,6 +424,7 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
     const catalog = parseRscPayload<Record<string, unknown>>(indexBody, "models", findModelArray);
 
     const enrichFailures = [modelsPageModels, omniscienceEnrich].filter((a) => a.length === 0).length;
+    lastEnrichFailures = enrichFailures;
     const [primary, secondary] = indexModels.length > 0 ? [indexModels, catalog] : [catalog, indexModels];
     const models = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
       .map(compact)
@@ -404,7 +437,7 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
       });
     if (models.length === 0) {
       throw new UpstreamError(
-        `Artificial Analysis parsing yielded 0 models (catalog=${catalog.length}, enrichFailures=${enrichFailures})`,
+        `Artificial Analysis parsing yielded 0 models (catalog=${catalog.length}, kept=0, enrichFailures=${enrichFailures})`,
       );
     }
     // Fill gaps (context window, agentic index, blended price) using the OpenRouter
@@ -414,34 +447,35 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
     return { data: models, ttl: ttlFor(enrichFailures > 0) };
   });
 
-const TEXT_TO_IMAGE_PATH = "/image/models";
-
-function emptyT2i(ctx: AppContext, reason: string): { data: TextToImagePayload; ttl: number } {
-  ctx.log("warn", `[text-to-image] ${reason}, returning empty`);
-  return { data: { models: [], partial: true, fetchedAt: new Date().toISOString() }, ttl: PARTIAL_FAIL_TTL_MS };
-}
+export const TEXT_TO_IMAGE_PATH = "/image/models";
 
 export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImagePayload> =>
   ctx.cache.withTtl(cacheKeys.textToImage, DEFAULT_TTL_MS, async () => {
-    let body: string | null = null;
+    // Empty/failed results throw so withTtl serves stale instead of caching
+    // an empty leaderboard (consistent with every other source). Callers
+    // treat rejection as partial degradation (see home.ts).
+    let body: string;
     try {
       body = await fetchAaRsc(ctx, TEXT_TO_IMAGE_PATH);
     } catch (err) {
-      return emptyT2i(ctx, `fetch failed: ${errMsg(err)}`);
+      throw new UpstreamError(`Text-to-image fetch failed: ${errMsg(err)}`);
     }
     if (!body) {
-      return emptyT2i(ctx, "empty body");
+      throw new UpstreamError("Text-to-image returned an empty body");
     }
     let rawModels: Record<string, unknown>[] | null = null;
     try {
-      rawModels = parseRscPayload<Record<string, unknown>>(body, "textToImage", (tree) =>
-        findNextData(tree, "textToImage"),
+      // Prefer the longest match: pages embed both preview and full arrays.
+      rawModels = parseRscPayload<Record<string, unknown>>(
+        body,
+        "textToImage",
+        (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
       );
     } catch {
       rawModels = null;
     }
     if (!rawModels || rawModels.length === 0) {
-      return emptyT2i(ctx, `no marker found (body=${body.length}B)`);
+      throw new UpstreamError(`Text-to-image yielded 0 raw rows (raw=0, kept=0, body=${body.length}B)`);
     }
     const mapped = rawModels.map((m) => mapEntry(m as RawEntry)).filter((m): m is TextToImageModel => m !== null);
     // dedupeBy keeps the first, so pre-sort by elo desc to keep the best duplicate.
@@ -450,7 +484,7 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
       (m) => m.slug,
     ).sort((a, b) => a.rank - b.rank);
     if (models.length === 0) {
-      return emptyT2i(ctx, `mapped 0 models from raw=${rawModels.length}`);
+      throw new UpstreamError(`Text-to-image yielded 0 models (raw=${rawModels.length}, kept=0)`);
     }
     return { data: { models, fetchedAt: new Date().toISOString() } };
   });
@@ -487,7 +521,7 @@ function extractModelsArrays(html: string): unknown[] {
     let esc = false;
     for (let i = d; i < unescaped.length; i++) {
       // Bound the scan so a markup change can't spin the Worker.
-      if (i - d > 8_000_000) break;
+      if (i - d > MAX_SCAN_CHARS) break;
       const c = unescaped[i]!;
       if (inStr) {
         if (esc) esc = false;
@@ -544,7 +578,10 @@ export function parseChangelogModels(html: string): ChangelogModel[] {
   let best: ChangelogModel[] = [];
   for (const v of extractModelsArrays(html)) {
     if (!Array.isArray(v)) continue;
-    const mapped = (v as unknown[]).filter(isChangelogRaw).map(toChangelogModel).filter((m): m is ChangelogModel => m !== null);
+    const mapped = (v as unknown[])
+      .filter(isChangelogRaw)
+      .map(toChangelogModel)
+      .filter((m): m is ChangelogModel => m !== null);
     if (mapped.length > best.length) best = mapped;
   }
   return best;
@@ -552,14 +589,18 @@ export function parseChangelogModels(html: string): ChangelogModel[] {
 
 /** Full AA model history for release feeds; throws when the markup yields nothing. */
 export async function getChangelogModels(ctx: AppContext): Promise<ChangelogModel[]> {
-  const html = await ctx.http.text(`${upstreamConfig.artificialAnalysis}${CHANGELOG_PATH}`, {
-    headers: { accept: "text/html,application/xhtml+xml,*/*" },
-    timeoutMs: UPSTREAM_TIMEOUT_MS,
-    retries: 1,
+  return ctx.cache.withTtl("aa-changelog", STATIC_TTL_MS, async () => {
+    const html = await ctx.http.text(`${upstreamConfig.artificialAnalysis}${CHANGELOG_PATH}`, {
+      headers: { accept: "text/html,application/xhtml+xml,*/*" },
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
+      retries: 1,
+    });
+    const models = parseChangelogModels(html);
+    if (models.length === 0) {
+      throw new UpstreamError(
+        `AA changelog yielded 0 models (raw=1 page, kept=0, markup changed?, body=${html.length}B)`,
+      );
+    }
+    return { data: models };
   });
-  const models = parseChangelogModels(html);
-  if (models.length === 0) {
-    throw new UpstreamError(`AA changelog yielded 0 models (markup changed?, body=${html.length}B)`);
-  }
-  return models;
 }

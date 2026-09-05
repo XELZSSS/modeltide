@@ -35,7 +35,9 @@ export function ComparePageLayout({ backLabelKey, backTo, backState, title, chil
   const { t } = useTranslation();
   const removeCompareModel = useCompareStore((s) => s.removeCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
+  const compareIds = useCompareStore((s) => s.compareIds);
   const models = useComparedModelsOrNull();
+  const pruned = compareIds.length > (models?.length ?? 0);
 
   if (models === null) return <Spinner />;
 
@@ -44,6 +46,11 @@ export function ComparePageLayout({ backLabelKey, backTo, backState, title, chil
       <PageContainer>
         <div className="flex flex-col gap-4 items-center py-16">
           <p className="text-sm text-text-secondary">{t("compareLimit")}</p>
+          {pruned && (
+            <p className="text-xs text-text-tertiary" role="status">
+              {t("compareStale")}
+            </p>
+          )}
           <Button size="sm" variant="outline" onClick={() => navigate(backTo, { state: backState })}>
             {t("backToList")}
           </Button>
@@ -72,6 +79,31 @@ export function ComparePageLayout({ backLabelKey, backTo, backState, title, chil
 }
 
 // ---- CompareChipBar ----
+/** Selected-model chip with a remove button. */
+function CompareChip({
+  model,
+  onRemove,
+}: {
+  model: ArtificialAnalysisModel;
+  onRemove: (m: ArtificialAnalysisModel) => void;
+}) {
+  const { t } = useTranslation();
+  const name = model.short_name || model.name;
+  return (
+    <span className="inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-none bg-bg-card border border-border text-sm">
+      <span className="font-medium truncate max-w-36">{name}</span>
+      <button
+        type="button"
+        onClick={() => onRemove(model)}
+        aria-label={t("removeModel", { name })}
+        className="shrink-0 p-1.5 rounded-none text-text-secondary hover:text-text-primary hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      >
+        <X size={14} />
+      </button>
+    </span>
+  );
+}
+
 /** Selection bar with per-chip removal plus clear/compare actions. */
 export function CompareChipBar({
   models,
@@ -104,20 +136,7 @@ export function CompareChipBar({
       <div className="flex flex-wrap gap-2 items-center">
         {leading}
         {models.map((model, index) => (
-          <span
-            key={modelId(model) || `idx-${index}`}
-            className="inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-md bg-bg-card border border-border text-sm"
-          >
-            <span className="font-medium truncate max-w-36">{model.short_name || model.name}</span>
-            <button
-              type="button"
-              onClick={() => onRemove(model)}
-              aria-label={t("removeModel", { name: model.short_name || model.name })}
-              className="shrink-0 p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-            >
-              <X size={14} />
-            </button>
-          </span>
+          <CompareChip key={modelId(model) || `idx-${index}`} model={model} onRemove={onRemove} />
         ))}
       </div>
       <div className="flex gap-2 w-full sm:w-auto">

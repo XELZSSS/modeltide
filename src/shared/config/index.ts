@@ -284,10 +284,4 @@ export type ArenaBoardKey = keyof typeof ARENA_BOARD_CATEGORIES;
 export const ARENA_BOARD_IDS = Object.keys(ARENA_BOARD_CATEGORIES) as ArenaBoardKey[];
 
 export const REPO_URL = "https://github.com/XELZSSS/modeltide";
-export const SOURCE_IDS = [
-  "artificialAnalysis",
-  "huggingface",
-  "openrouter",
-  "news",
-  "arena",
-] as const;
+export const SOURCE_IDS = ["artificialAnalysis", "huggingface", "openrouter", "news", "arena"] as const;

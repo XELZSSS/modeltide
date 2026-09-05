@@ -2,7 +2,9 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
   API_DOMAINS,
+  ARENA_BOARD_IDS,
   FIVE_MINUTES,
+  NEWS_CATEGORIES,
   OPEN_SOURCE_MODELS_DEFAULTS,
   SLOW_TTL_MS,
   STATIC_TTL_MS,
@@ -33,7 +35,7 @@ const FETCH_TIMEOUT_MS = 60_000;
 // Strip trailing slashes so apiBase concatenates safely with "/api/..." paths.
 const apiBase = import.meta.env?.VITE_API_BASE?.replace(/\/+$/, "") ?? "";
 
-export interface QueryCtx {
+interface QueryCtx {
   signal?: AbortSignal;
 }
 
@@ -114,7 +116,7 @@ async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { cache?: 
 
 // Client path builders from the shared apiPaths map.
 // A separate VITE_API_BASE origin also needs a connect-src entry in public/_headers.
-export const apiPaths = {
+const apiPaths = {
   artificialIndex: baseApiPaths.artificialIndex,
   openSourceModels: (() => {
     const d = OPEN_SOURCE_MODELS_DEFAULTS;
@@ -131,14 +133,14 @@ export const apiPaths = {
   homeDashboard: baseApiPaths.homeDashboard,
 } as const;
 
-export const fetcher =
+const fetcher =
   <T>(path: string) =>
   ({ signal }: QueryCtx) =>
     apiFetch<T>(path, signal);
 
 // Query keys derive from the shared API domain suffixes, matching the
 // server KV cache keys so client/server naming can't drift.
-export const queryKeys = {
+const queryKeys = {
   artificialIndex: ["api", API_DOMAINS.artificialIndex] as const,
   openSourceReleases: ["api", API_DOMAINS.openSourceReleases] as const,
   openRouterRankings: ["api", API_DOMAINS.openRouterRankings] as const,
@@ -164,6 +166,7 @@ interface ApiQueryOptions<T> {
   ttl?: number;
   staleTime?: number;
   refetchInterval?: number | false;
+  refetchIntervalInBackground?: boolean;
   queryFn?: (ctx: QueryCtx) => Promise<T>;
 }
 
@@ -179,70 +182,76 @@ function createApiQuery<T>(key: readonly (string | number)[], path: string, opts
   };
 }
 
-export const qArtificial = createApiQuery<ArtificialAnalysisModel[]>(
-  queryKeys.artificialIndex,
-  apiPaths.artificialIndex,
-  { ttl: THIRTY_MINUTES },
-);
-export const qOpenSourceReleases = createApiQuery<OpenSourceModelEntry[]>(
+const qArtificial = createApiQuery<ArtificialAnalysisModel[]>(queryKeys.artificialIndex, apiPaths.artificialIndex, {
+  ttl: THIRTY_MINUTES,
+});
+const qOpenSourceReleases = createApiQuery<OpenSourceModelEntry[]>(
   queryKeys.openSourceReleases,
   apiPaths.openSourceReleases,
   { ttl: SLOW_TTL_MS },
 );
-export const qOpenRouter = createApiQuery<OpenRouterRankingsPayload>(
+const qOpenRouter = createApiQuery<OpenRouterRankingsPayload>(
   queryKeys.openRouterRankings,
   apiPaths.openRouterRankings,
   { ttl: THIRTY_MINUTES },
 );
-export const qHomeDashboard = createApiQuery<HomeDashboardData>(queryKeys.homeDashboard, apiPaths.homeDashboard, {
+const qHomeDashboard = createApiQuery<HomeDashboardData>(queryKeys.homeDashboard, apiPaths.homeDashboard, {
   ttl: THIRTY_MINUTES,
 });
-export const qOpenSourceModels = createApiQuery<OpenSourceModelEntry[]>(
+const qOpenSourceModels = createApiQuery<OpenSourceModelEntry[]>(
   queryKeys.openSourceModels,
   apiPaths.openSourceModels,
   { ttl: SLOW_TTL_MS },
 );
 
-// One stable query per category (module-level cache).
-const newsQueries = new Map<NewsCategory, ReturnType<typeof createApiQuery<NewsItem[]>>>();
-export const qNews = (c: NewsCategory) => {
-  let q = newsQueries.get(c);
+// One stable query per key (module-level cache). Allowlisted so arbitrary
+// URL params can't grow the map unboundedly.
+function cachedQuery<K extends string, T>(
+  cache: Map<K, ReturnType<typeof createApiQuery<T>>>,
+  category: string,
+  valid: readonly string[],
+  build: (safe: K) => ReturnType<typeof createApiQuery<T>>,
+): ReturnType<typeof createApiQuery<T>> {
+  const safe = (valid.includes(category) ? category : valid[0]!) as K;
+  let q = cache.get(safe);
   if (!q) {
-    q = createApiQuery<NewsItem[]>(queryKeys.news(c), apiPaths.news(c), { ttl: THIRTY_MINUTES });
-    newsQueries.set(c, q);
+    q = build(safe);
+    cache.set(safe, q);
   }
   return q;
-};
+}
+
+const newsQueries = new Map<NewsCategory, ReturnType<typeof createApiQuery<NewsItem[]>>>();
+const qNews = (c: NewsCategory) =>
+  cachedQuery(newsQueries, c, NEWS_CATEGORIES, (safe) =>
+    createApiQuery<NewsItem[]>(queryKeys.news(safe), apiPaths.news(safe), { ttl: THIRTY_MINUTES }),
+  );
 
 // Status store updates on cron; light polling here, mount-refetch elsewhere.
-export const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHistory, apiPaths.statusHistory, {
+const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHistory, apiPaths.statusHistory, {
   ttl: FIVE_MINUTES,
   refetchInterval: FIVE_MINUTES,
+  refetchIntervalInBackground: false,
 });
-export const qArena = createApiQuery<ArenaRankingsPayload>(queryKeys.arenaRankings, apiPaths.arenaRankings, {
+const qArena = createApiQuery<ArenaRankingsPayload>(queryKeys.arenaRankings, apiPaths.arenaRankings, {
   ttl: SLOW_TTL_MS,
 });
+// qOfficialPricing stays exported: pricing estimation imports it directly.
 export const qOfficialPricing = createApiQuery<OfficialPricingPayload>(
   queryKeys.officialPricing,
   apiPaths.officialPricing,
   { ttl: STATIC_TTL_MS },
 );
-export const qClosedReleases = createApiQuery<ClosedReleaseEntry[]>(queryKeys.closedReleases, apiPaths.closedReleases, {
+const qClosedReleases = createApiQuery<ClosedReleaseEntry[]>(queryKeys.closedReleases, apiPaths.closedReleases, {
   ttl: STATIC_TTL_MS,
 });
 
-// One stable query per board (module-level cache).
+// One stable query per board (module-level cache). Allowlisted to bound memory.
 const boardQueries = new Map<string, ReturnType<typeof createApiQuery<ArenaBoardPayload>>>();
-export const qArenaBoard = (category: string) => {
-  let q = boardQueries.get(category);
-  if (!q) {
-    q = createApiQuery<ArenaBoardPayload>(queryKeys.arenaBoard(category), apiPaths.arenaBoard(category), {
-      ttl: SLOW_TTL_MS,
-    });
-    boardQueries.set(category, q);
-  }
-  return q;
-};
+const qArenaBoard = (category: string) =>
+  cachedQuery(boardQueries, category, ARENA_BOARD_IDS, (safe) =>
+    createApiQuery<ArenaBoardPayload>(queryKeys.arenaBoard(safe), apiPaths.arenaBoard(safe), { ttl: SLOW_TTL_MS }),
+  );
 export const useArtificialRankings = qArtificial.use;
 export const useSuspenseArtificialRankings = qArtificial.useSuspense;
 export const useSuspenseHomeDashboard = qHomeDashboard.useSuspense;

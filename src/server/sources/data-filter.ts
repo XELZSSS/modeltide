@@ -27,9 +27,21 @@ const PLACEHOLDER_TEXTS = new Set([
   "test",
 ]);
 
-/** Spam / adult / gambling / injection signals (word-boundary matched). */
+/** Spam / adult / gambling signals for ids/slugs (word-boundary matched). */
 const UNSUITABLE_RE =
   /\b(casino|porn|xxx|viagra|gambling|betting|lottery|payday[-_ ]?loan|free[-_ ]?money)\b|赌场|赌博|六合彩|色情|javascript:|vbscript:|<script|data:text\/html/i;
+
+/** Injection-only signals for news titles: spam words like "betting odds" or
+ * "porn detection research" are legitimate headlines and must not drop news. */
+const NEWS_TITLE_BAD_RE = /javascript:|vbscript:|<script|data:text\/html|赌场|六合彩/i;
+
+/**
+ * Injection-only signals for model ids/slugs: spam words can be legitimate
+ * model names (xxx-ray, porn-detector), so ids only reject placeholders,
+ * control chars and injections. Spam-word screening still applies to display
+ * names via isUnsuitableContent.
+ */
+const ID_BAD_RE = /javascript:|vbscript:|<script|data:text\/html/i;
 
 /** Entire string is one repeated char (4+), e.g. "...." / "xxxx". */
 const REPEATED_CHAR_RE = /^(.)\1{3,}$/s;
@@ -40,7 +52,7 @@ export function isNonEmptyString(v: unknown): v is string {
 }
 
 /** True for exact placeholder tokens (case-insensitive, trimmed). */
-export function isPlaceholderText(t: string): boolean {
+function isPlaceholderText(t: string): boolean {
   return PLACEHOLDER_TEXTS.has(t.trim().toLowerCase());
 }
 
@@ -49,7 +61,7 @@ export function isPlaceholderText(t: string): boolean {
  * a repeated-char filler. Conservative by design — single chars ("A") and
  * long titles ("Axxx...") are kept; only whole-token / word-boundary hits drop.
  */
-export function isUnsuitableContent(t: string): boolean {
+function isUnsuitableContent(t: string): boolean {
   const trimmed = t.trim();
   if (!trimmed) return true;
   if (isPlaceholderText(trimmed)) return true;
@@ -75,7 +87,7 @@ export function cleanText(v: unknown, maxLen?: number): string | null {
 }
 
 /** http(s) URL only — filters javascript:, data:, relative and garbage links. */
-export function isValidHttpUrl(link: string): boolean {
+function isValidHttpUrl(link: string): boolean {
   const t = link.trim();
   if (!t) return false;
   try {
@@ -91,11 +103,14 @@ export function isValidHttpUrl(link: string): boolean {
 // ---------------------------------------------------------------------------
 
 /** Raw id check shared by HF / OpenRouter / AA directory rows. */
-export function isValidRowId(id: unknown): boolean {
+function isValidRowId(id: unknown): boolean {
   if (typeof id !== "string") return false;
   const t = id.trim();
   if (!t || t.length > 500) return false;
-  if (isUnsuitableContent(t)) return false;
+  if (isPlaceholderText(t) || REPEATED_CHAR_RE.test(t)) return false;
+  // oxlint-disable-next-line no-control-regex
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(t)) return false;
+  if (ID_BAD_RE.test(t)) return false;
   return true;
 }
 
@@ -118,12 +133,12 @@ export function isValidModelIdentity(id: unknown, slug: unknown, name: unknown):
 // ---------------------------------------------------------------------------
 
 /** Rank cells: integer >= 0 (Arena allows 0 during live reshuffles). */
-export function isValidRankNumber(n: number | null | undefined): n is number {
+function isValidRankNumber(n: number | null | undefined): n is number {
   return typeof n === "number" && Number.isInteger(n) && n >= 0;
 }
 
 /** T2I rank: strictly positive (rank 0 / missing means unranked). */
-export function isValidTextToImageRank(n: number | null | undefined): n is number {
+function isValidTextToImageRank(n: number | null | undefined): n is number {
   return typeof n === "number" && Number.isInteger(n) && n > 0;
 }
 
@@ -221,7 +236,12 @@ export function isSuitableNewsItem(title: unknown, link: unknown): boolean {
   const l = link.trim();
   if (!t || !l) return false;
   if (t.length > MAX_NEWS_TITLE_CHARS + 200) return false;
-  if (isUnsuitableContent(t)) return false;
+  // Titles use injection-only filtering; spam-word filtering would drop legit
+  // headlines like "AI for betting odds" or "porn detection research".
+  if (!t || isPlaceholderText(t) || REPEATED_CHAR_RE.test(t)) return false;
+  // oxlint-disable-next-line no-control-regex
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(t)) return false;
+  if (NEWS_TITLE_BAD_RE.test(t)) return false;
   if (!isValidHttpUrl(l)) return false;
   return true;
 }
@@ -260,10 +280,15 @@ export function shouldSkipKimiRow(id: string, unit: string): boolean {
 /**
  * Map rows, drop nulls (dirty/invalid), dedupe by key keeping the first.
  * Replaces the repeated `.map(...).filter(nonNull)` + `dedupeBy` chains.
+ * Pass `compare` to pre-sort so the kept duplicate is the best, not merely
+ * the first (e.g. highest downloads); without it upstream order wins.
  */
-export function filterMapDedupe<T, R>(items: T[], mapFn: (item: T) => R | null, keyFn: (item: R) => string | null | undefined): R[] {
-  return dedupeBy(
-    items.map(mapFn).filter((m): m is R => m !== null),
-    keyFn,
-  );
+export function filterMapDedupe<T, R>(
+  items: T[],
+  mapFn: (item: T) => R | null,
+  keyFn: (item: R) => string | null | undefined,
+  compare?: (a: R, b: R) => number,
+): R[] {
+  const mapped = items.map(mapFn).filter((m): m is R => m !== null);
+  return dedupeBy(compare ? [...mapped].sort(compare) : mapped, keyFn);
 }

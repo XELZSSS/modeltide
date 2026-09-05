@@ -75,6 +75,7 @@ export function validateQuery<S extends QuerySchema>(
 ): ValidatedQuery<S> {
   const out: Record<string, unknown> = {};
   for (const [name, spec] of Object.entries(schema)) {
+    // First value wins: explicit and resistant to ?x=good&x=evil pollution.
     const rawVal = raw[name];
     const rawStr = Array.isArray(rawVal) ? (rawVal[0] ?? "") : (rawVal ?? "");
     let v: string | undefined = rawStr.trim();
@@ -83,6 +84,10 @@ export function validateQuery<S extends QuerySchema>(
     // Guard against oversized values (potential DoS).
     if (v.length > 500) throw new ValidationError(`Query param "${name}" is too long`);
     if (spec.type === "number") {
+      // Strict decimal only: reject hex (0x64), scientific (1e2), etc.
+      if (!/^[+-]?(\d+(\.\d+)?)$/.test(v)) {
+        throw new ValidationError(`Query param "${name}" must be a number`);
+      }
       const n = Number(v);
       if (!Number.isFinite(n)) throw new ValidationError(`Query param "${name}" must be a number`);
       if (spec.integer && !Number.isInteger(n)) throw new ValidationError(`Query param "${name}" must be an integer`);
@@ -137,12 +142,15 @@ function buildHeaders(userAgent: string, accept: string, initHeaders?: HeadersIn
   };
 }
 
-function assertContentLength(url: string, contentLength: string | null, maxBytes: number): void {
+function assertContentLength(url: string, res: Response, contentLength: string | null, maxBytes: number): void {
   if (!contentLength) return;
   const trimmed = contentLength.trim();
   // Only honor plain byte counts; ignore malformed values (body check is authoritative).
   if (!/^\d+$/.test(trimmed)) return;
   if (Number(trimmed) > maxBytes) {
+    // Release the connection before throwing: a dangling body exhausts the
+    // Workers subrequest connection pool under sustained large payloads.
+    void res.body?.cancel()?.catch(() => {});
     throw new UpstreamError(`Upstream payload too large for ${url}`);
   }
 }
@@ -170,10 +178,13 @@ export class HttpClient {
   private userAgent: string;
   private timeoutMs: number;
   private defaultRetries: number;
-  constructor(opts?: { userAgent?: string; timeoutMs?: number; retries?: number }) {
+  /** Route-level abort (25s hono timeout): stops sleeping/fetching early. */
+  private defaultSignal?: AbortSignal;
+  constructor(opts?: { userAgent?: string; timeoutMs?: number; retries?: number; signal?: AbortSignal }) {
     this.userAgent = opts?.userAgent ?? USER_AGENT;
     this.timeoutMs = opts?.timeoutMs ?? 10_000;
     this.defaultRetries = opts?.retries ?? 0;
+    this.defaultSignal = opts?.signal;
   }
 
   private async doFetch(url: string, init: FetchOptions, accept: string): Promise<Response> {
@@ -181,10 +192,31 @@ export class HttpClient {
       timeoutMs = this.timeoutMs,
       retries = this.defaultRetries,
       headers: initHeaders,
-      signal: initSignal,
+      signal: initSignalOpt,
       ...rest
     } = init;
+    // Per-call signal wins; otherwise fall back to the route-level signal so
+    // a timed-out route doesn't leave upstream fetches and backoff sleeps
+    // idling the Worker.
+    const initSignal = initSignalOpt ?? this.defaultSignal;
     const headers = buildHeaders(this.userAgent, accept, initHeaders);
+    // Abort-aware sleep: if the route already timed out, don't idle the worker.
+    const sleepAbortable = (ms: number): Promise<void> =>
+      new Promise((resolve) => {
+        if (initSignal?.aborted) {
+          resolve();
+          return;
+        }
+        const t = setTimeout(() => {
+          initSignal?.removeEventListener("abort", onAbort);
+          resolve();
+        }, ms);
+        const onAbort = (): void => {
+          clearTimeout(t);
+          resolve();
+        };
+        initSignal?.addEventListener("abort", onAbort, { once: true });
+      });
     for (let attempt = 0; attempt <= retries; attempt++) {
       const signal = initSignal
         ? AbortSignal.any([initSignal, AbortSignal.timeout(timeoutMs)])
@@ -197,7 +229,8 @@ export class HttpClient {
         const msg = timedOut ? `Upstream timeout for ${url}` : `Upstream network error for ${url}`;
         if (attempt === retries) throw new UpstreamError(msg);
         const delay = 500 * 2 ** attempt + Math.random() * 250;
-        await new Promise((r) => setTimeout(r, delay));
+        await sleepAbortable(delay);
+        if (initSignal?.aborted) throw new UpstreamError(`Upstream timeout for ${url}`);
         continue;
       }
       if (res.ok) return res;
@@ -208,14 +241,15 @@ export class HttpClient {
       // Exponential backoff with jitter; honor Retry-After on 429.
       const retryAfter = res.status === 429 ? parseRetryAfterMs(res) : null;
       const delay = retryAfter ?? 500 * 2 ** attempt + Math.random() * 250;
-      await new Promise((r) => setTimeout(r, delay));
+      await sleepAbortable(delay);
+      if (initSignal?.aborted) throw new UpstreamError(`Upstream timeout for ${url}`);
     }
     throw new UpstreamError(`HTTP failed for ${url}`);
   }
 
   async json<T>(url: string, init?: FetchOptions): Promise<T> {
     const res = await this.doFetch(url, init ?? {}, "application/json");
-    assertContentLength(url, res.headers.get("content-length"), MAX_JSON_BYTES);
+    assertContentLength(url, res, res.headers.get("content-length"), MAX_JSON_BYTES);
     const body = await readBodyText(res, url);
     assertBodySize(url, body, MAX_JSON_BYTES);
     try {
@@ -227,7 +261,7 @@ export class HttpClient {
 
   async text(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
     const res = await this.doFetch(url, init ?? {}, "text/html,application/xhtml+xml,*/*");
-    assertContentLength(url, res.headers.get("content-length"), maxBytes);
+    assertContentLength(url, res, res.headers.get("content-length"), maxBytes);
     const body = await readBodyText(res, url);
     assertBodySize(url, body, maxBytes);
     return body;
@@ -289,7 +323,9 @@ function memoryGet<T>(vk: string): StaleEnvelope<T> | undefined {
 }
 
 function memorySet(vk: string, data: unknown, ttl: number): void {
-  if (!memoryCache.has(vk) && memoryCache.size >= MEMORY_MAX_KEYS) {
+  // Refresh recency so the map behaves as LRU.
+  if (memoryCache.has(vk)) memoryCache.delete(vk);
+  if (memoryCache.size >= MEMORY_MAX_KEYS) {
     const now = Date.now();
     for (const [k, e] of memoryCache) {
       if (e.e <= now) memoryCache.delete(k);
@@ -303,9 +339,14 @@ function memorySet(vk: string, data: unknown, ttl: number): void {
   memoryCache.set(vk, { d: data, e: Date.now() + ttl });
 }
 
+/** Short L1 cap when KV is present so edge isolates converge on fresh KV data. */
+const L1_MAX_TTL_MS = 60_000;
+
 /**
- * Deterministic -10%..0 TTL jitter by key, so keys born in the same tick don't
- * all expire in the same tick. Hash-based so every isolate agrees.
+ * -10%..0 TTL jitter by key + random, so keys born in the same tick don't all
+ * expire together AND different isolates don't stampede on the same key.
+ * The hash component spreads different keys; the random component spreads the
+ * same key across isolates.
  */
 function jitteredTtl(vk: string, ttl: number): number {
   let h = 2166136261;
@@ -313,7 +354,9 @@ function jitteredTtl(vk: string, ttl: number): number {
     h ^= vk.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  const factor = 0.9 + ((h >>> 0) % 100) / 1000;
+  const hashPart = ((h >>> 0) % 50) / 1000; // 0..0.049
+  const randomPart = Math.random() * 0.05; // 0..0.05
+  const factor = 0.9 + hashPart + randomPart;
   return Math.max(60_000, Math.round(ttl * factor));
 }
 
@@ -335,7 +378,9 @@ export class CacheService {
 
   private async get<T>(k: string): Promise<T | undefined> {
     if (!this.kv) return undefined;
-    const raw = await this.kv.get(k, { type: "text", cacheTtl: 30 });
+    // No edge cacheTtl: warmup writes must be visible immediately; KV is
+    // already fast and the L1 absorbs repeated reads within the isolate.
+    const raw = await this.kv.get(k, { type: "text" });
     if (!raw) return undefined;
     try {
       return JSON.parse(raw) as T;
@@ -351,16 +396,15 @@ export class CacheService {
     await this.kv.put(k, JSON.stringify(envelope), { expirationTtl });
   }
 
-  async setSafe<T>(k: string, v: T, ttl: number): Promise<void> {
-    if (!this.kv) return;
-    if (!Number.isFinite(ttl) || ttl <= 0) return;
-    await this.set(this.vk(k), v, ttl);
-  }
-
   async withTtl<T>(k: string, ttl: number, fn: () => Promise<{ data: T; ttl?: number }>): Promise<T> {
     const vk = this.vk(k);
     const mem = memoryGet<T>(vk);
-    if (mem && mem.e > Date.now()) return mem.d;
+    if (mem && mem.e > Date.now()) {
+      // When KV is present the L1 is only a 60s read-through; verify against
+      // KV on the slow path via refresh logic below. Fresh L1 still wins to
+      // absorb hot reads, but it never outlives L1_MAX_TTL_MS (see refresh).
+      return mem.d;
+    }
     // No KV: same stale-fallback semantics against the L1.
     if (!this.kv) {
       if (!mem) return this.refresh(vk, ttl, fn);
@@ -372,17 +416,23 @@ export class CacheService {
     }
     const hit = await this.get<StaleEnvelope<T>>(vk);
     if (!isEnvelope<T>(hit)) {
-      // Corrupt or legacy KV value: drop it and refresh from upstream.
-      if (hit !== undefined) {
-        try {
-          await this.kv.delete(vk);
-        } catch {
-          // Best-effort cleanup; refresh proceeds regardless.
-        }
+      if (hit === undefined) {
+        return this.refresh(vk, ttl, fn);
       }
-      return this.refresh(vk, ttl, fn);
+      // Corrupt or legacy KV value: try to refresh, but keep serving the old
+      // payload if upstream is down instead of hard-failing.
+      try {
+        return await this.refresh(vk, ttl, fn);
+      } catch {
+        // Legacy shape may still carry usable data; best-effort serve it.
+        return (hit as unknown as { d?: T }).d ?? (hit as unknown as T);
+      }
     }
-    if (hit.e > Date.now()) return hit.d;
+    if (hit.e > Date.now()) {
+      // Refresh the short-lived L1 from the fresh KV hit.
+      memorySet(vk, hit.d, Math.min(hit.e - Date.now(), L1_MAX_TTL_MS));
+      return hit.d;
+    }
     try {
       return await this.refresh(vk, ttl, fn);
     } catch {
@@ -394,16 +444,22 @@ export class CacheService {
     // Dedupes concurrent refreshes of the same key within this isolate.
     const existing = globalInflight.get(vk) as Promise<T> | undefined;
     if (existing) return existing;
+    const hasKv = !!this.kv;
     const p = (async () => {
       const { data, ttl: t } = await fn();
       const requested = t ?? ttl;
       const effective = jitteredTtl(vk, Number.isFinite(requested) && requested > 0 ? requested : ttl);
-      // L1 first so a KV outage never discards fresh upstream data.
-      memorySet(vk, data, effective);
+      // L1 first so a KV outage never discards fresh upstream data. With KV,
+      // cap the L1 so isolates re-converge on KV quickly.
+      memorySet(vk, data, hasKv ? Math.min(effective, L1_MAX_TTL_MS) : effective);
       try {
         await this.set(vk, data, effective);
       } catch {
         // KV write failures are non-fatal: L1 + stale fallback still serve.
+      }
+      // Corrupt legacy keys are cleaned only after a successful refresh.
+      if (hasKv) {
+        // No-op if the key is already a valid envelope (overwritten above).
       }
       return data;
     })();

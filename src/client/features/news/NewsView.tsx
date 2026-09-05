@@ -54,6 +54,7 @@ function NewsList({ news }: { news: NewsItem[] }) {
               </div>
             </>
           );
+          const rowClass = "group flex items-start justify-between gap-4 py-3";
           return (
             <li key={key}>
               {href ? (
@@ -61,15 +62,13 @@ function NewsList({ news }: { news: NewsItem[] }) {
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group flex items-start justify-between gap-4 py-3 transition-colors"
+                  className={`${rowClass} transition-colors`}
                   aria-label={t("newsItemLabel", { title: item.title, source: item.source })}
                 >
                   {body}
                 </a>
               ) : (
-                <span className="group flex items-start justify-between gap-4 py-3">
-                  {body}
-                </span>
+                <span className={rowClass}>{body}</span>
               )}
             </li>
           );

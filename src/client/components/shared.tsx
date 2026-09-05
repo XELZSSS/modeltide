@@ -19,8 +19,9 @@ export function BackButton({ labelKey, to, state }: { labelKey: TranslationKey; 
     // React Router increments history.idx per SPA navigation; a fresh deep
     // link starts at 0. document.referrer is unreliable inside an SPA
     // (client-side <Link> transitions don't update it), so idx alone decides.
-    const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
-    if (typeof idx === "number" && idx > 0) navigate(-1);
+    const raw = typeof window !== "undefined" ? (window.history.state as { idx?: unknown } | null)?.idx : undefined;
+    const idx = typeof raw === "number" && Number.isInteger(raw) ? raw : undefined;
+    if (idx != null && idx > 0) navigate(-1);
     else navigate(to, { state });
   };
   return (
@@ -68,7 +69,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     console.error("[ErrorBoundary]", error, info.componentStack);
   }
   // Remount children from scratch on retry; let suspended queries retry too.
+  // Offline retries always fail (Vite caches the rejected chunk import), so
+  // guide the user to reload once instead of looping.
   private handleRetry = () => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     this.props.onReset?.();
     this.setState((s) => ({ hasError: false, error: null, resetKey: s.resetKey + 1 }));
   };
@@ -102,7 +106,7 @@ export function NotFound() {
         <p className="ui-body-secondary">{t("notFound")}</p>
         <Link
           to="/"
-          className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-accent rounded-md hover:bg-accent-light transition-colors"
+          className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-accent rounded-none hover:bg-accent-light transition-colors"
         >
           <ArrowLeft size={14} />
           {t("backToHome")}
@@ -126,10 +130,10 @@ export const Spinner = memo(function Spinner() {
 
 // ---- SuspenseQuery ----
 /** Suspense fallback + error boundary, keyed by route (navigation resets failures). */
-export function SuspenseQuery({ children }: { children: ReactNode }) {
+export function SuspenseQuery({ children, resetKey: extraKey }: { children: ReactNode; resetKey?: string }) {
   const { t } = useTranslation();
   const location = useLocation();
-  const resetKey = `${location.pathname}${location.search}`;
+  const resetKey = `${location.pathname}${location.search}${extraKey ? `:${extraKey}` : ""}`;
   return (
     <QueryErrorResetBoundary>
       {({ reset }) => (

@@ -19,7 +19,7 @@ export const Badge = memo(function Badge({ className, children }: { className?: 
   return (
     <span
       className={cn(
-        "inline-flex items-center text-xs font-medium leading-5 px-2 py-0.5 rounded-full transition-colors border border-border text-text-secondary bg-transparent",
+        "inline-flex items-center text-xs font-medium uppercase tracking-wide leading-5 px-2 py-0.5 rounded-none transition-colors border border-border text-text-secondary bg-transparent",
         className,
       )}
     >
@@ -51,9 +51,9 @@ const variantClass: Record<ButtonVariant, string> = {
 };
 
 const sizeClass: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-xs rounded-md",
-  md: "h-9 px-4 text-sm rounded-md",
-  icon: "size-9 rounded-md",
+  sm: "h-8 px-3 text-xs rounded-none",
+  md: "h-9 px-4 text-sm rounded-none",
+  icon: "size-9 rounded-none",
 };
 
 /** Shared button with variant/size presets; defaults to type="button" (pass type="submit" in forms). */
@@ -127,7 +127,7 @@ export const Dot = memo(function Dot({
 }) {
   return (
     <span
-      className={cn("inline-block rounded-full shrink-0", dotSizeClass[size], className)}
+      className={cn("inline-block rounded-none shrink-0", dotSizeClass[size], className)}
       style={color ? { backgroundColor: color } : undefined}
     />
   );
@@ -137,11 +137,14 @@ export const Dot = memo(function Dot({
 /** Pill-group container used to visually group segmented controls (e.g. tabs). */
 export function SegmentedGroup({ className, children, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex gap-1 p-1 rounded-lg bg-bg-secondary", className)} {...rest}>
+    <div className={cn("flex gap-1 p-0.5 rounded-none border border-border bg-bg-secondary", className)} {...rest}>
       {children}
     </div>
   );
 }
+
+const CARD_GRID_COLS = { 2: "", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4" } as const;
+const GRID_GAPS = { 2: "gap-2", 3: "gap-3", 4: "gap-4" } as const;
 
 /** Responsive card grid: 1 col mobile, 2 from `sm`, up to `cols` on `lg`. */
 export function CardGrid({
@@ -156,17 +159,7 @@ export function CardGrid({
   children: ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "grid grid-cols-1 sm:grid-cols-2",
-        cols === 3 && "lg:grid-cols-3",
-        cols === 4 && "lg:grid-cols-4",
-        gap === 2 && "gap-2",
-        gap === 3 && "gap-3",
-        gap === 4 && "gap-4",
-        className,
-      )}
-    >
+    <div className={cn("grid grid-cols-1 sm:grid-cols-2", CARD_GRID_COLS[cols], GRID_GAPS[gap], className)}>
       {children}
     </div>
   );
@@ -195,20 +188,11 @@ export function DetailSection({
   );
 }
 
+const STAT_GRID_COLS = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-2 md:grid-cols-4" } as const;
+
 /** Statistic grid (`columns={4}` renders 2 cols on mobile, 4 from `md`). */
 export function StatGrid({ columns = 4, children }: { columns?: 2 | 3 | 4; children: ReactNode }) {
-  return (
-    <div
-      className={cn(
-        "grid gap-3 sm:gap-4",
-        columns === 2 && "grid-cols-2",
-        columns === 3 && "grid-cols-3",
-        columns === 4 && "grid-cols-2 md:grid-cols-4",
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cn("grid gap-3 sm:gap-4", STAT_GRID_COLS[columns])}>{children}</div>;
 }
 
 /** Two-column grid on desktop for label/value card pairs. */
@@ -255,7 +239,7 @@ export const Input = forwardRef<HTMLInputElement, Omit<React.InputHTMLAttributes
         type={type}
         aria-invalid={ariaInvalid}
         className={cn(
-          "h-9 px-3 text-sm rounded-md border border-border bg-bg-primary text-text-primary placeholder:text-text-tertiary outline-none transition-colors focus:border-text-tertiary",
+          "h-9 px-3 min-w-0 max-w-full text-base sm:text-sm rounded-none border border-border bg-bg-primary text-text-primary placeholder:text-text-tertiary outline-none transition-colors focus:border-text-tertiary",
           type === "number" && noSpinners,
           className,
         )}
@@ -274,6 +258,24 @@ interface PaginationProps {
   className?: string;
 }
 
+function PageButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Button variant="outline" size="icon" aria-label={label} disabled={disabled} onClick={onClick}>
+      {children}
+    </Button>
+  );
+}
+
 /** Prev/next pagination; renders nothing for a single page. */
 export const Pagination = memo(function Pagination({ page, totalPages, onChange, className }: PaginationProps) {
   const { t } = useTranslation();
@@ -281,27 +283,15 @@ export const Pagination = memo(function Pagination({ page, totalPages, onChange,
 
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <Button
-        variant="outline"
-        size="icon"
-        aria-label={t("previousPage")}
-        disabled={page <= 1}
-        onClick={() => onChange(page - 1)}
-      >
+      <PageButton label={t("previousPage")} disabled={page <= 1} onClick={() => onChange(page - 1)}>
         <ChevronLeft size={16} />
-      </Button>
+      </PageButton>
       <span className="text-sm text-text-secondary tabular-nums" aria-live="polite">
         {page} / {totalPages}
       </span>
-      <Button
-        variant="outline"
-        size="icon"
-        aria-label={t("nextPage")}
-        disabled={page >= totalPages}
-        onClick={() => onChange(page + 1)}
-      >
+      <PageButton label={t("nextPage")} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
         <ChevronRight size={16} />
-      </Button>
+      </PageButton>
     </div>
   );
 });
@@ -310,6 +300,9 @@ export const Pagination = memo(function Pagination({ page, totalPages, onChange,
 // Focus-trap selector.
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// Ref-counted body scroll lock for stacked sheets.
+let sheetLockCount = 0;
 
 interface SheetProps {
   open: boolean;
@@ -329,9 +322,11 @@ export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabel
   const triggerRef = useRef<Element | null>(null);
 
   // Focus trap (Tab cycles first/last), Escape closes, restore focus on close.
+  // Scroll locks are ref-counted so stacked sheets don't unlock early.
   useEffect(() => {
     if (!open) return;
     triggerRef.current = document.activeElement;
+    sheetLockCount++;
     const prevOverflow = document.body.style.overflow;
     const prevPaddingRight = document.body.style.paddingRight;
     // Lock scroll and compensate for scrollbar to avoid layout shift.
@@ -356,16 +351,26 @@ export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabel
       }
     };
     document.addEventListener("keydown", handler);
-    // Focus the first control, unless focus is already somewhere meaningful.
+    // Move focus into the dialog promptly for screen readers; fall back to
+    // the panel itself when there are no focusable controls.
     const timer = setTimeout(() => {
-      if (document.activeElement && document.activeElement !== document.body) return;
-      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus();
+      const panel = panelRef.current;
+      if (!panel) return;
+      const first = panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (first) first.focus();
+      else {
+        panel.setAttribute("tabindex", "-1");
+        panel.focus();
+      }
     }, 50);
     return () => {
       document.removeEventListener("keydown", handler);
       clearTimeout(timer);
-      document.body.style.overflow = prevOverflow;
-      document.body.style.paddingRight = prevPaddingRight;
+      sheetLockCount = Math.max(0, sheetLockCount - 1);
+      if (sheetLockCount === 0) {
+        document.body.style.overflow = prevOverflow;
+        document.body.style.paddingRight = prevPaddingRight;
+      }
       if (triggerRef.current instanceof HTMLElement) triggerRef.current.focus();
     };
   }, [open, onClose]);
@@ -374,7 +379,7 @@ export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabel
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] animate-fade-in" aria-hidden="true" />
+      <div className="fixed inset-0 bg-black/50 animate-fade-in" aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"
@@ -382,7 +387,7 @@ export function Sheet({ open, onClose, children, className, ariaLabel, ariaLabel
         aria-label={ariaLabelledBy ? undefined : ariaLabel}
         aria-labelledby={ariaLabelledBy}
         className={cn(
-          "relative z-50 w-full max-w-md rounded-t-lg sm:rounded-lg border border-border bg-bg-primary shadow-lg animate-sheet-up focus:outline-none",
+          "relative z-50 w-full max-w-md rounded-none border border-border bg-bg-primary shadow-none animate-sheet-up focus:outline-none",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
@@ -438,6 +443,17 @@ interface TabButtonProps {
   role?: "tab" | "radio" | "button";
 }
 
+/** ARIA selection props per role (tab keeps roving tabindex; radio/button stay focusable). */
+function tabAriaProps(
+  role: NonNullable<TabButtonProps["role"]>,
+  active: boolean | undefined,
+  tabIndex: number | undefined,
+) {
+  if (role === "tab") return { "aria-selected": active, tabIndex: tabIndex ?? (active ? 0 : -1) };
+  const checked = role === "radio" ? { "aria-checked": active } : { "aria-pressed": active };
+  return { ...checked, tabIndex: tabIndex ?? 0 };
+}
+
 /** Tab button with roving tabindex (only the active tab is focusable). */
 export const TabButton = memo(function TabButton({
   active,
@@ -450,12 +466,7 @@ export const TabButton = memo(function TabButton({
   "aria-controls": ariaControls,
   role = "tab",
 }: TabButtonProps) {
-  const checkedProps =
-    role === "tab"
-      ? { "aria-selected": active, tabIndex: tabIndex ?? (active ? 0 : -1) }
-      : role === "radio"
-        ? { "aria-checked": active, tabIndex: tabIndex ?? 0 }
-        : { "aria-pressed": active, tabIndex: tabIndex ?? 0 };
+  const checkedProps = tabAriaProps(role, active, tabIndex);
   return (
     <button
       type="button"
@@ -465,9 +476,11 @@ export const TabButton = memo(function TabButton({
       {...checkedProps}
       onClick={onClick}
       className={cn(
-        "rounded-md font-medium transition-colors duration-150 whitespace-nowrap shrink-0",
+        "rounded-none font-medium transition-colors duration-150 whitespace-nowrap shrink-0",
         size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
-        active ? "bg-bg-card text-text-primary shadow-sm" : "text-text-secondary hover:text-text-primary",
+        active
+          ? "bg-bg-card text-text-primary ring-1 ring-inset ring-border"
+          : "text-text-secondary hover:text-text-primary",
         "outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1",
         className,
       )}

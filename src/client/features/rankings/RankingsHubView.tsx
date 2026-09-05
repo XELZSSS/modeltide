@@ -1,4 +1,4 @@
-import { lazy, memo, useMemo, type ComponentType } from "react";
+import { lazy, memo, useMemo, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import {
@@ -77,6 +77,16 @@ const ArenaRankingsTab = memo(function ArenaRankingsTab() {
 
 const getProviderRowId = (p: ProviderStats) => p.name;
 
+// Right-aligned mono stat cell.
+function providerMonoCol(
+  id: string,
+  header: string,
+  format: (p: ProviderStats) => ReactNode,
+  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean },
+): DataTableColumn<ProviderStats> {
+  return { id, header, align: "right", cell: (p) => <span className="ui-mono-value">{format(p)}</span>, ...opts };
+}
+
 const ProviderCompareTab = memo(function ProviderCompareTab() {
   const { data } = useSuspenseArtificialRankings();
   const { t } = useTranslation();
@@ -95,25 +105,11 @@ const ProviderCompareTab = memo(function ProviderCompareTab() {
           </div>
         ),
       },
-      {
-        id: "count",
-        header: t("modelCount"),
-        align: "right",
-        cell: (p) => <span className="ui-mono-value">{p.count}</span>,
-      },
-      {
-        id: "avgIntelligence",
-        header: t("avgIntelligence"),
-        align: "right",
-        cell: (p) => <span className="ui-mono-value">{formatScore(t, p.avgIntelligence)}</span>,
-      },
-      {
-        id: "avgPrice",
-        header: t("avgPrice"),
-        align: "right",
-        hiddenMd: true,
-        cell: (p) => <span className="ui-mono-value font-normal">{formatPricePerMillion(p.avgPrice, t)}</span>,
-      },
+      providerMonoCol("count", t("modelCount"), (p) => p.count),
+      providerMonoCol("avgIntelligence", t("avgIntelligence"), (p) => formatScore(t, p.avgIntelligence), {
+        mobilePrimary: true,
+      }),
+      providerMonoCol("avgPrice", t("avgPrice"), (p) => formatPricePerMillion(p.avgPrice, t), { hiddenMd: true }),
       {
         id: "avgSpeed",
         header: t("avgSpeed"),
@@ -167,16 +163,15 @@ function RankingsContent() {
       tabFill
       onTabChange={handleTabChange}
     >
-      <ActiveContent />
+      {/* Only the tab body suspends; the tab bar stays interactive on switch. */}
+      <SuspenseQuery resetKey={activeTabId}>
+        <ActiveContent />
+      </SuspenseQuery>
     </TabbedPage>
   );
 }
 
 /** Rankings hub: model / usage / open-source / hallucination / benchmark / arena / provider tabs. */
 export function RankingsHubView() {
-  return (
-    <SuspenseQuery>
-      <RankingsContent />
-    </SuspenseQuery>
-  );
+  return <RankingsContent />;
 }

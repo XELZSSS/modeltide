@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import { useParams } from "react-router";
 import { type ChartOptions } from "chart.js";
 import { Line } from "react-chartjs-2";
@@ -36,19 +36,30 @@ const LATENCY_COLOR_SLOT = 6;
 const EMPTY_SAMPLES: { t: number; latencyMs: number | null }[] = [];
 const EMPTY_BUCKETS: import("@/shared/types").DayBucket[] = [];
 
+/** Downsample to ~300 points so low-end devices don't layout thousands of dots. */
+function decimateSamples<T extends { t: number }>(samples: T[], max = 300): T[] {
+  if (samples.length <= max) return samples;
+  const step = samples.length / max;
+  const out: T[] = [];
+  for (let i = 0; i < max; i++) out.push(samples[Math.floor(i * step)]!);
+  return out;
+}
+
 const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: number; latencyMs: number | null }[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();
+  const decimated = useMemo(() => decimateSamples(samples), [samples]);
 
-  const latencyColor =
-    theme.palette[LATENCY_COLOR_SLOT]?.trim() ? (theme.palette[LATENCY_COLOR_SLOT] as string) : theme.tick;
+  const latencyColor = theme.palette[LATENCY_COLOR_SLOT]?.trim()
+    ? (theme.palette[LATENCY_COLOR_SLOT] as string)
+    : theme.tick;
   const data = useMemo(
     () => ({
-      labels: samples.map((s) => beijingHHMM(s.t)),
+      labels: decimated.map((s) => beijingHHMM(s.t)),
       datasets: [
         {
-          label: t("latencyHistory"),
-          data: samples.map((s) => (s.latencyMs != null ? s.latencyMs / 1000 : null)),
+          label: `${t("latencyHistory")} (GMT+8)`,
+          data: decimated.map((s) => (s.latencyMs != null ? s.latencyMs / 1000 : null)),
           borderColor: latencyColor,
           backgroundColor: latencyColor,
           borderWidth: 2,
@@ -58,7 +69,7 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
         },
       ],
     }),
-    [samples, t, theme],
+    [decimated, t, latencyColor],
   );
 
   const options = useMemo<ChartOptions<"line">>(
@@ -97,6 +108,17 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
   );
 });
 
+/** Card section with a title; the latency/strip/event sections share it. */
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <PageSection title={title}>
+      <Card>
+        <CardContent padding="md">{children}</CardContent>
+      </Card>
+    </PageSection>
+  );
+}
+
 const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
   const { t } = useTranslation();
   const { data } = useSuspenseStatusHistory();
@@ -104,7 +126,10 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
   const recent = data.recent[id] ?? EMPTY_SAMPLES;
   const buckets = data.daily[id] ?? EMPTY_BUCKETS;
   const events = data.events.filter((e) => e.id === id).slice(0, 10);
-  const pct = (v: number | null) => formatUptimePct(t, v);
+  const uptimeStats = [
+    { id: "uptime24h", value: formatUptimePct(t, summary?.uptime24h ?? null) },
+    { id: "uptime7d", value: formatUptimePct(t, summary?.uptime7d ?? null) },
+  ] as const;
 
   return (
     <PageContainer>
@@ -122,33 +147,26 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
               : t(summary.ok ? "statusOnline" : "statusOffline")
           }
         />
-        <StatCard label={t("uptime24h")} value={pct(summary?.uptime24h ?? null)} />
-        <StatCard label={t("uptime7d")} value={pct(summary?.uptime7d ?? null)} />
+        {uptimeStats.map(({ id, value }) => (
+          <StatCard key={id} label={t(id)} value={value} />
+        ))}
         <StatCard
           label={t("latencyAvg24h")}
           value={summary?.avgLatency24h != null ? `${(summary.avgLatency24h / 1000).toFixed(2)}s` : t("uptimeNoData")}
         />
       </StatGrid>
 
-      <PageSection title={t("latencyHistory")}>
-        <Card>
-          <CardContent padding="md">
-            {recent.length > 1 ? (
-              <LatencyChart samples={recent} />
-            ) : (
-              <p className="ui-body-secondary py-10 text-center">{t("historyAccumulating")}</p>
-            )}
-          </CardContent>
-        </Card>
-      </PageSection>
+      <SectionCard title={t("latencyHistory")}>
+        {recent.length > 1 ? (
+          <LatencyChart samples={recent} />
+        ) : (
+          <p className="ui-body-secondary py-10 text-center">{t("historyAccumulating")}</p>
+        )}
+      </SectionCard>
 
-      <PageSection title={t("last90Days")}>
-        <Card>
-          <CardContent padding="md">
-            <UptimeStrip buckets={buckets} />
-          </CardContent>
-        </Card>
-      </PageSection>
+      <SectionCard title={t("last90Days")}>
+        <UptimeStrip buckets={buckets} />
+      </SectionCard>
 
       <PageSection title={t("recentEvents")}>
         <StatusEventList events={events} emptyMessage={t("noRecentEvents")} />

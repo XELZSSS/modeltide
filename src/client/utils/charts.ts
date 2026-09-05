@@ -1,5 +1,6 @@
 import {
   Chart as ChartJS,
+  ArcElement,
   CategoryScale,
   LinearScale,
   RadialLinearScale,
@@ -11,10 +12,14 @@ import {
   Filler,
   type TooltipOptions,
 } from "chart.js";
+// NOTE: adding Doughnut/Pie/Time/Log scales needs ArcElement/TimeScale/
+// LogarithmicScale registered here first, or Chart.js throws
+// "Scale is not registered" at runtime in the lazy chunk.
 import type { ChartTheme } from "@/client/hooks";
 
 // Register once centrally so lazy chunks don't each repeat it.
 ChartJS.register(
+  ArcElement,
   CategoryScale,
   LinearScale,
   RadialLinearScale,
@@ -52,9 +57,10 @@ export const legendStyle = (theme: ChartTheme) => ({ labels: { color: theme.tick
 
 /** Line-chart extras shared by multi-series line charts. */
 export const lineSeriesStyle = {
-  borderWidth: 2.5,
-  pointRadius: 3,
-  pointHoverRadius: 5,
+  borderWidth: 2,
+  pointRadius: 0,
+  pointHoverRadius: 4,
+  pointStyle: "rect",
   cubicInterpolationMode: "monotone",
   spanGaps: false,
 } as const;
@@ -70,11 +76,14 @@ export function seriesColor(theme: ChartTheme, index: number): string {
   return raw;
 }
 
-/** Hex color to rgba() for canvas fills. Warns on non-hex input. */
+/**
+ * Hex color to rgba() for canvas fills. Non-hex theme values (rgb()/oklch()/
+ * color-mix) pass through silently — the theme palette comes from computed
+ * styles and is rarely raw hex.
+ */
 export function hexToRgba(hex: string, alpha: number): string {
   const value = hex.replace("#", "");
   if (!/^[0-9a-f]{3}$/i.test(value) && !/^[0-9a-f]{6}$/i.test(value)) {
-    console.warn(`[charts] hexToRgba expected a 3/6-digit hex color, got: "${hex}"`);
     return hex;
   }
   const full =
@@ -93,14 +102,16 @@ export function hexToRgba(hex: string, alpha: number): string {
 }
 
 /** Default tooltip options aligned with the app theme. */
-export function defaultTooltipOptions(theme: ChartTheme): Partial<TooltipOptions<"line" | "radar" | "bar">> {
+export function defaultTooltipOptions(
+  theme: ChartTheme,
+): Partial<TooltipOptions<"line" | "radar" | "bar" | "doughnut">> {
   return {
     backgroundColor: theme.tooltipBg,
     titleColor: theme.tooltipText,
     bodyColor: theme.tooltipText,
     borderColor: theme.grid,
     borderWidth: 1,
-    cornerRadius: 6,
+    cornerRadius: 0,
     titleFont: { size: 12 },
     bodyFont: { size: 12 },
   };

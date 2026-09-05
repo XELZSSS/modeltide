@@ -2,7 +2,8 @@ import type { AppContext } from "@/server/context";
 import { upstreamConfig, rssConfig } from "@/shared/config";
 import { SOURCE_IDS, ONE_DAY, ONE_MINUTE } from "@/shared/config";
 import { errMsg, type ProbeResult } from "@/server/infra";
-import { INDEX_PATH } from "@/server/sources/artificial-analysis";
+import { INDEX_PATH, TEXT_TO_IMAGE_PATH } from "@/server/sources/artificial-analysis";
+import { RANKINGS_PATH } from "@/server/sources/openrouter";
 import type { DayBucket, UptimeSample, StatusEvent, SourceHistorySummary, StatusHistoryPayload } from "@/shared/types";
 import type { SourceStatus } from "@/shared/types";
 
@@ -147,8 +148,17 @@ export function buildTargets(): ProbeTarget[] {
       id: "artificialAnalysis",
       url: `${upstreamConfig.artificialAnalysis}${INDEX_PATH}`,
     },
-    { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
+    // The rankings endpoint is fetched separately from the model directory,
+    // so probe both: a green directory must not mask a red leaderboard.
     { id: "openrouter", url: `${upstreamConfig.openrouter}/api/v1/models` },
+    { id: "openrouter", url: `${upstreamConfig.openrouter}${RANKINGS_PATH}` },
+    // Text-to-image has its own page/parse path; an index-green must not mask
+    // an empty image leaderboard.
+    {
+      id: "artificialAnalysis",
+      url: `${upstreamConfig.artificialAnalysis}${TEXT_TO_IMAGE_PATH}`,
+    },
+    { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
     { id: "arena", url: `${upstreamConfig.arena}/leaderboard/text` },
     ...newsSample.map((url): ProbeTarget => ({ id: "news", url })),
   ];
@@ -274,6 +284,7 @@ export function buildHistoryPayload(
   store: HistoryStore,
   uptime: { firstLaunchAt: string; uptimeMs: number },
   now = Date.now(),
+  persisted = true,
 ): StatusHistoryPayload {
   const ids: SourceId[] = [...SOURCE_IDS];
   const recent: StatusHistoryPayload["recent"] = {};
@@ -298,6 +309,7 @@ export function buildHistoryPayload(
     daily,
     events: events.slice(0, MAX_EVENTS),
     generatedAt: new Date(now).toISOString(),
+    persisted,
   };
 }
 
@@ -310,22 +322,41 @@ let memoryStore: HistoryStore = { sources: {} };
 // cron/user triggers): concurrent callers share one probe round.
 let inflightSample: Promise<void> | null = null;
 
-async function acquireSampleLock(ctx: AppContext): Promise<boolean> {
-  if (!ctx.kv) return true;
+/**
+ * Advisory sampling lock: KV has no CAS, so this cannot guarantee mutual
+ * exclusion. It only reduces duplicate probe rounds. The lock value carries
+ * an owner token + expiry; release only deletes our own token so concurrent
+ * holders don't clobber each other. Merging stays idempotent via
+ * mergeSample upserts, so concurrent runs are safe.
+ */
+async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
+  if (!ctx.kv) return "memory";
+  const token = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  const expiresAt = Date.now() + SAMPLE_LOCK_TTL_S * 1000;
+  const value = `${token}:${expiresAt}`;
   try {
     const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
-    if (held) return false;
-    await ctx.kv.put(SAMPLE_LOCK_KEY, "1", { expirationTtl: SAMPLE_LOCK_TTL_S });
-    return true;
+    if (held) {
+      const parts = held.split(":");
+      const heldExpiry = Number(parts[parts.length - 1]);
+      if (Number.isFinite(heldExpiry) && heldExpiry > Date.now()) return null;
+      // Stale lock: fall through and steal it.
+    }
+    await ctx.kv.put(SAMPLE_LOCK_KEY, value, { expirationTtl: SAMPLE_LOCK_TTL_S });
+    return token;
   } catch {
-    return true;
+    return token;
   }
 }
 
-async function releaseSampleLock(ctx: AppContext): Promise<void> {
-  if (!ctx.kv) return;
+async function releaseSampleLock(ctx: AppContext, token: string | null): Promise<void> {
+  if (!ctx.kv || !token || token === "memory") return;
   try {
-    await ctx.kv.delete(SAMPLE_LOCK_KEY);
+    const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
+    if (held && held.startsWith(`${token}:`)) {
+      await ctx.kv.delete(SAMPLE_LOCK_KEY);
+    }
+    // Otherwise another holder stole/overwrote the lock: leave it alone.
   } catch {
     // Lock expires via TTL; ignore delete failures.
   }
@@ -394,12 +425,13 @@ function newestSampleTime(store: HistoryStore): number {
 }
 
 export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Promise<void> {
-  if (!(await acquireSampleLock(ctx))) return;
+  const token = await acquireSampleLock(ctx);
+  if (!token) return;
   try {
     const probed = await probeTargets(ctx);
     await mergeSamplesIntoStore(ctx, aggregateProbes(probed), now);
   } finally {
-    await releaseSampleLock(ctx);
+    await releaseSampleLock(ctx, token);
   }
 }
 
@@ -439,17 +471,20 @@ export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore>
   } catch {
     return memoryStore;
   }
-  if (newestSampleTime(store) < Date.now() - SAMPLE_INTERVAL_MS) {
-    try {
-      // Share one probe round across concurrent callers.
-      inflightSample ??= recordStatusSamples(ctx).finally(() => {
-        inflightSample = null;
-      });
-      await inflightSample;
-      store = await readStore(ctx);
-    } catch {
-      // Sampling failure: fall through with stale store.
-    }
+  if (newestSampleTime(store) >= Date.now() - SAMPLE_INTERVAL_MS) return store;
+  // Without KV each isolate has its own memory store; on-demand probing would
+  // add up to 8s to the user request on every isolate. Serve stale and let
+  // the cron trigger do the sampling instead.
+  if (!ctx.kv) return store;
+  try {
+    // Share one probe round across concurrent callers.
+    inflightSample ??= recordStatusSamples(ctx).finally(() => {
+      inflightSample = null;
+    });
+    await inflightSample;
+    store = await readStore(ctx);
+  } catch {
+    // Sampling failure: fall through with stale store.
   }
   return store;
 }
@@ -457,5 +492,5 @@ export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore>
 export async function getStatusHistory(ctx: AppContext) {
   const store = await ensureFreshSamples(ctx);
   const uptime = await getUptime(ctx);
-  return buildHistoryPayload(store, uptime, Date.now());
+  return buildHistoryPayload(store, uptime, Date.now(), !!ctx.kv);
 }

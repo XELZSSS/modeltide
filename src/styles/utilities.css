@@ -8,7 +8,7 @@
 
   main::-webkit-scrollbar-thumb {
     background-color: var(--text-secondary);
-    border-radius: 8px;
+    border-radius: 0;
     border: 2px solid transparent;
     background-clip: content-box;
   }
@@ -165,11 +165,11 @@ main {
 @keyframes sheet-up {
   from {
     opacity: 0;
-    transform: translateY(24px) scale(0.98);
+    transform: translateY(24px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 

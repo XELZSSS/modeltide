@@ -4,9 +4,7 @@ import { useSettingsStore, useThemeStorageSync } from "@/client/stores";
 import { useTranslation } from "@/client/providers";
 import { cn } from "@/client/utils";
 import { TabContainer, type TabItem } from "@/client/components/ui";
-import { DesktopNav } from "./navigation";
-import { MobileNav } from "./navigation";
-import { MobileMoreSheet } from "./navigation";
+import { DesktopNav, MobileNav, MobileMoreSheet } from "./navigation";
 import { SettingsSheet } from "./SettingsSheet";
 
 // Accent theme per section: nav, selection and focus match the content area.
@@ -63,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen h-[100dvh] flex flex-col bg-bg-primary overflow-x-hidden pt-[env(safe-area-inset-top,0px)]">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-bg-primary focus:border focus:border-border focus:rounded-md focus:text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-bg-primary focus:border focus:border-border focus:rounded-none focus:text-sm focus:outline-none focus:ring-2 focus:ring-accent"
       >
         {t("skipToContent")}
       </a>
@@ -73,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         id="main-content"
         tabIndex={-1}
         aria-label={t("mainContent")}
-        className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] overscroll-contain pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-4 focus:outline-none"
+        className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] overscroll-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-4 focus:outline-none"
       >
         {children}
       </main>
@@ -113,7 +111,7 @@ export function PageHeader({
         <h1 className={cn(compact ? "text-lg sm:text-xl" : "ui-page-title")}>{title}</h1>
         {description && <p className="ui-body-secondary mt-1.5">{description}</p>}
       </div>
-      {actions && <div className="flex w-full sm:w-auto items-center gap-2 sm:shrink-0">{actions}</div>}
+      {actions && <div className="flex w-full sm:w-auto min-w-0 max-w-full items-center gap-2 sm:shrink-0">{actions}</div>}
     </header>
   );
 }

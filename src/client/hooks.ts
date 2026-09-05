@@ -71,12 +71,8 @@ export function useChartTheme(): ChartTheme {
  */
 export function useUrlTab<T extends string>(validTabs: readonly T[], fallback: T): [T, (tabId: string) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
-  const paramTab = searchParams.get("tab");
-  const activeTab =
-    paramTab != null && (validTabs as readonly string[]).includes(paramTab) ? (paramTab as T) : fallback;
-  const setActiveTab = useCallback(
+  const writeTab = useCallback(
     (tabId: string) => {
-      if (!(validTabs as readonly string[]).includes(tabId)) return;
       setSearchParams(
         (prev) => {
           prev.set("tab", tabId);
@@ -85,7 +81,21 @@ export function useUrlTab<T extends string>(validTabs: readonly T[], fallback: T
         { replace: true },
       );
     },
-    [setSearchParams, validTabs],
+    [setSearchParams],
+  );
+  const paramTab = searchParams.get("tab");
+  const activeTab =
+    paramTab != null && (validTabs as readonly string[]).includes(paramTab) ? (paramTab as T) : fallback;
+  // Self-heal dirty share links (?tab=evil) so refresh/stats don't keep them.
+  useEffect(() => {
+    if (paramTab != null && !(validTabs as readonly string[]).includes(paramTab)) writeTab(fallback);
+  }, [paramTab, fallback, writeTab, validTabs]);
+  const setActiveTab = useCallback(
+    (tabId: string) => {
+      if (!(validTabs as readonly string[]).includes(tabId)) return;
+      writeTab(tabId);
+    },
+    [writeTab, validTabs],
   );
   return [activeTab, setActiveTab];
 }

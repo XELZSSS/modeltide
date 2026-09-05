@@ -131,6 +131,7 @@ export const en = {
   openSourceRankings: "Open Source",
   intelligenceIndex: "Index",
   providerSpeed: "Avg Provider Speed",
+  usageByCategory: "Task Categories",
   intelligence: "Intelligence",
   creator: "Creator",
   coding: "Coding",
@@ -241,4 +242,6 @@ export const en = {
   officialChannel: "Official",
   openRouterChannel: "OpenRouter",
   priceDiff: "Price Diff",
+  memoryModeNotice: "Memory mode: history is temporary without KV storage",
+  compareStale: "Some selected models are no longer listed and were removed.",
 } as const;

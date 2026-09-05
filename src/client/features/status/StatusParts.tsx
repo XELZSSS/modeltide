@@ -6,12 +6,16 @@ import { ONE_DAY, SOURCE_LABELS } from "@/shared/config";
 import { Dot } from "@/client/components/ui";
 
 // ---- UptimeStrip ----
+/** Bar color thresholds, highest first. */
+const BAR_THRESHOLDS = [
+  { min: 0.995, className: "bg-success" },
+  { min: 0.95, className: "bg-warning" },
+] as const;
+
 /** Bar color by daily uptime. */
 function barClass(ratio: number | null): string {
   if (ratio == null) return "bg-bg-tertiary";
-  if (ratio >= 0.995) return "bg-success";
-  if (ratio >= 0.95) return "bg-warning";
-  return "bg-destructive";
+  return BAR_THRESHOLDS.find((band) => ratio >= band.min)?.className ?? "bg-destructive";
 }
 
 /** Availability strip: one micro-bar per UTC day, 90 slots ending today. */
@@ -38,7 +42,7 @@ export const UptimeStrip = memo(function UptimeStrip({ buckets }: { buckets: Day
         return (
           <span
             key={day}
-            className={cn("flex-1 h-full rounded-sm", barClass(ratio))}
+            className={cn("flex-1 h-full rounded-none", barClass(ratio))}
             title={
               bucket && pct != null ? `${bucket.day} · ${pct}% (${bucket.total})` : `${day} · ${t("uptimeNoData")}`
             }
@@ -80,7 +84,7 @@ export const StatusEventList = memo(function StatusEventList({
 });
 
 /** One event line: state dot + Down/Up label, optional source and time. */
-export const StatusEventRow = memo(function StatusEventRow({
+const StatusEventRow = memo(function StatusEventRow({
   event,
   showSource = false,
   showTime = false,
@@ -92,9 +96,7 @@ export const StatusEventRow = memo(function StatusEventRow({
   const { t } = useTranslation();
   const down = event.type === "down";
   // Unknown future source ids fall back to the raw id instead of t(undefined).
-  const labelKey = (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[
-    event.id
-  ];
+  const labelKey = (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[event.id];
   const sourceLabel = labelKey ? t(labelKey) : event.id;
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">

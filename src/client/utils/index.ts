@@ -52,22 +52,35 @@ const strip1Dec = (v: number, suffix: string) => {
   return `${out.endsWith(".0") ? out.slice(0, -2) : out}${suffix}`;
 };
 
+/** Largest-first [min magnitude, divisor, suffix] scale tables. */
+const SHORT_SCALES: { min: number; div: number; suffix: string }[] = [
+  { min: PROMOTE_2DEC * 1e9, div: 1e12, suffix: "T" },
+  { min: PROMOTE_2DEC * 1e6, div: 1e9, suffix: "B" },
+  { min: PROMOTE_2DEC * 1e3, div: 1e6, suffix: "M" },
+  { min: 1e3, div: 1e3, suffix: "K" },
+];
+
+const TOKEN_SCALES: { min: number; div: number; suffix: string }[] = [
+  { min: PROMOTE_1DEC * 1e6, div: 1e9, suffix: "B" },
+  { min: PROMOTE_1DEC * 1e3, div: 1e6, suffix: "M" },
+  { min: 1e3, div: 1e3, suffix: "K" },
+];
+
 export function formatShortNumber(n: number) {
   if (!Number.isFinite(n)) return "—";
-  const { abs, k, m, b, t, sign } = compactParts(n);
-  if (b >= PROMOTE_2DEC) return `${sign}${t.toFixed(2)}T`;
-  if (m >= PROMOTE_2DEC) return `${sign}${b.toFixed(2)}B`;
-  if (k >= PROMOTE_2DEC) return `${sign}${m.toFixed(2)}M`;
-  if (k >= 1) return `${sign}${k.toFixed(2)}K`;
+  const { abs, sign } = compactParts(n);
+  for (const s of SHORT_SCALES) {
+    if (abs >= s.min) return `${sign}${(abs / s.div).toFixed(2)}${s.suffix}`;
+  }
   return `${sign}${abs}`;
 }
 
 export function formatTokens(n: number | null | undefined, t?: TFunction): string {
   if (typeof n !== "number" || !Number.isFinite(n)) return t ? t("notAvailable") : "N/A";
-  const { k, m } = compactParts(n);
-  if (m >= PROMOTE_1DEC) return strip1Dec(n / 1e9, "B");
-  if (k >= PROMOTE_1DEC) return strip1Dec(m, "M");
-  if (k >= 1) return strip1Dec(k, "K");
+  const { abs } = compactParts(n);
+  for (const s of TOKEN_SCALES) {
+    if (abs >= s.min) return strip1Dec(n / s.div, s.suffix);
+  }
   return String(n);
 }
 
@@ -98,12 +111,16 @@ export function formatIndex(v: number): string {
 }
 
 function usdString(v: number): string {
-  let out = v.toFixed(2);
-  if (v > 0 && Number(out) === 0) {
-    out = v.toFixed(3);
-    if (Number(out) === 0) out = v.toFixed(4);
+  if (Object.is(v, -0)) v = 0;
+  const sign = v < 0 ? "-" : "";
+  const abs = Math.abs(v);
+  let out = abs.toFixed(2);
+  if (abs > 0 && Number(out) === 0) {
+    out = abs.toFixed(3);
+    if (Number(out) === 0) out = abs.toFixed(4);
+    if (Number(out) === 0) return `${sign}<$0.0001`;
   }
-  return `$${out}`;
+  return `${sign}$${out}`;
 }
 
 export function formatDollar(v: number | null | undefined, t?: TFunction): string {
@@ -135,6 +152,12 @@ export function formatRelativeTime(isoString: string, t: TFunction): string {
   const date = new Date(isoString);
   if (isNaN(date.getTime())) return isoString;
   const diffMs = Date.now() - date.getTime();
+  // Future timestamps indicate clock skew or dirty RSS dates: show the date
+  // instead of masking them as "just now".
+  if (diffMs < -60_000) {
+    const lang = typeof document !== "undefined" && document.documentElement.lang === "zh-CN" ? "zh" : "en";
+    return formatDate(isoString, lang);
+  }
   if (diffMs < 0) return t("timeJustNow");
   const diffMins = Math.floor(diffMs / ONE_MINUTE);
   if (diffMins < 1) return t("timeJustNow");
@@ -179,7 +202,14 @@ export function modelId(m: { id?: string; slug?: string }): string {
 }
 
 export function modelDetailPath(source: ModelSource, id: string): string {
-  return `/model/${source}/${id}`;
+  // Encode each path segment so ids containing / ? # % survive the router.
+  // OS ids (org/model) rely on the /* splat; single encoding keeps / as %2F
+  // on generation and decodeURIComponent restores it on consumption.
+  const encoded = id
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+  return `/model/${source}/${encoded}`;
 }
 
 /** Last path segment of a repo-style id ("org/Model" → "Model"). */
@@ -290,11 +320,11 @@ export function resolveEffectivePricing(
   const officialCache = finiteOrNull(official?.cachedInput);
   const input = officialInput ?? finiteOrNull(catalog?.input);
   const output = officialOutput ?? finiteOrNull(catalog?.output);
-  const cacheHit =
-    officialCache ?? finiteOrNull(catalog?.cacheHit) ?? finiteOrNull(catalog?.cache_hit);
+  const cacheHit = officialCache ?? finiteOrNull(catalog?.cacheHit) ?? finiteOrNull(catalog?.cache_hit);
   if (input == null && output == null) return { input, output, cache_hit: cacheHit, source: null };
-  // Only claim "official" when at least one leg actually came from official.
-  const usedOfficial = officialInput != null || officialOutput != null || officialCache != null;
+  // Only claim "official" when an input/output leg actually came from official;
+  // a cache-only hit must not mislabel catalog rates as official.
+  const usedOfficial = officialInput != null || officialOutput != null;
   return { input, output, cache_hit: cacheHit, source: usedOfficial ? "official" : "catalog" };
 }
 
@@ -340,12 +370,13 @@ export interface ProviderStats {
 }
 
 export function computeProviderStats(models: ArtificialAnalysisModel[], unknownLabel = "Unknown"): ProviderStats[] {
+  const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
   return groupByProvider(models, unknownLabel)
     .map(({ name, color, models: group }) => {
       const count = group.length;
-      const avgPrice = avg(group.map((m) => m.pricing?.input).filter((p): p is number => p != null));
-      const avgSpeed = avg(group.map(getOutputSpeed).filter((s): s is number => s != null));
-      const avgIntelligence = avg(group.map((m) => m.intelligence_index).filter((i): i is number => i != null));
+      const avgPrice = avg(group.map((m) => m.pricing?.input).filter(finite));
+      const avgSpeed = avg(group.map(getOutputSpeed).filter(finite));
+      const avgIntelligence = avg(group.map((m) => m.intelligence_index).filter(finite));
       return { name, color, count, avgPrice, avgSpeed, avgIntelligence };
     })
     .sort((a, b) => b.count - a.count);

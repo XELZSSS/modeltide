@@ -53,22 +53,31 @@ import { useParams } from "react-router";
 
 // ---- ModelDetailContent ----
 // Modality pills: theme-aware soft hues with borders (no light-only fills).
-const MODALITY_STYLES = {
-  text: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  image: "border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
-  speech: "border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-300",
-  video: "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
-} as const;
+const MODALITIES = [
+  {
+    key: "text",
+    className: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    labelKey: "modalityText",
+  },
+  {
+    key: "image",
+    className: "border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
+    labelKey: "modalityImage",
+  },
+  {
+    key: "speech",
+    className: "border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-300",
+    labelKey: "modalitySpeech",
+  },
+  {
+    key: "video",
+    className: "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+    labelKey: "modalityVideo",
+  },
+] as const satisfies readonly { key: string; className: string; labelKey: TranslationKey }[];
 
 // Benchmarks reported as absolute scores, not 0-1 fractions.
 const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["gdpval"]);
-
-const MODALITY_LABEL_KEYS = {
-  text: "modalityText",
-  image: "modalityImage",
-  speech: "modalitySpeech",
-  video: "modalityVideo",
-} as const satisfies Record<string, TranslationKey>;
 
 function ModalitySection({
   label,
@@ -82,17 +91,17 @@ function ModalitySection({
   t: TFunction;
 }) {
   // Field names follow `<prefix>_modality_<type>`.
-  const key = (m: string) => `${prefix}_modality_${m}` as keyof ArtificialAnalysisModel;
   return (
     <div>
       <div className="ui-caption font-medium mb-2.5">{label}</div>
       <div className="flex gap-2 flex-wrap">
-        {(["text", "image", "speech", "video"] as const).map((m) =>
-          model[key(m)] ? (
-            <span key={m} className={`px-2.5 py-1 text-xs font-medium rounded-full border ${MODALITY_STYLES[m]}`}>
-              {t(MODALITY_LABEL_KEYS[m])}
-            </span>
-          ) : null,
+        {MODALITIES.map(
+          (m) =>
+            model[`${prefix}_modality_${m.key}` as keyof ArtificialAnalysisModel] && (
+              <span key={m.key} className={`px-2.5 py-1 text-xs font-medium rounded-none border ${m.className}`}>
+                {t(m.labelKey)}
+              </span>
+            ),
         )}
       </div>
     </div>
@@ -115,18 +124,23 @@ export function ModelDetailContent({
   }, [officialQ.data, model]);
   const pricing = useMemo(() => resolveEffectivePricing(model.pricing, official), [model.pricing, official]);
   const blended = useMemo(() => resolveBlendedPrice(model, official), [model, official]);
-  const modalityKeys = (["text", "image", "speech", "video"] as const).flatMap((m) => [
-    `input_modality_${m}` as keyof ArtificialAnalysisModel,
-    `output_modality_${m}` as keyof ArtificialAnalysisModel,
-  ]);
-  const hasAnyModality = modalityKeys.some((k) => model[k]);
+  const hasAnyModality = MODALITIES.some(
+    (m) =>
+      model[`input_modality_${m.key}` as keyof ArtificialAnalysisModel] ||
+      model[`output_modality_${m.key}` as keyof ArtificialAnalysisModel],
+  );
+  const scoreStats: [TranslationKey, number | null | undefined][] = [
+    ["intelligenceIndex", model.intelligence_index],
+    ["coding", model.coding_index],
+    ["agentic", model.agentic_index],
+    ["outputSpeed", getOutputSpeed(model)],
+  ];
   return (
     <DetailLayout>
       <StatGrid columns={4}>
-        <StatCard label={t("intelligenceIndex")} value={formatScore(t, model.intelligence_index)} />
-        <StatCard label={t("coding")} value={formatScore(t, model.coding_index)} />
-        <StatCard label={t("agentic")} value={formatScore(t, model.agentic_index)} />
-        <StatCard label={t("outputSpeed")} value={formatScore(t, getOutputSpeed(model))} />
+        {scoreStats.map(([labelKey, value]) => (
+          <StatCard key={labelKey} label={t(labelKey)} value={formatScore(t, value)} />
+        ))}
       </StatGrid>
       <InfoGrid>
         <InfoCard title={t("modelInfo")}>
@@ -174,8 +188,12 @@ export function ModelDetailContent({
 
 // ---- OsDetailView ----
 /** Open-source model detail (HF metadata + repository link). */
-export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
+function OsDetail({ model }: { model: OpenSourceModelEntry }) {
   const { t, lang } = useTranslation();
+  const dateRows: [TranslationKey, string | null][] = [
+    ["releaseDate", model.createdAt],
+    ["lastUpdated", model.lastModified],
+  ];
   return (
     <DetailLayout>
       <StatGrid columns={2}>
@@ -187,14 +205,9 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
           <InfoRow label={t("creator")} value={orNA(model.author, t)} />
           <InfoRow label={t("license")} value={orNA(model.license, t)} />
           <InfoRow label={t("task")} value={orNA(model.task, t)} />
-          <InfoRow
-            label={t("releaseDate")}
-            value={model.createdAt ? formatDate(model.createdAt, lang) : t("notAvailable")}
-          />
-          <InfoRow
-            label={t("lastUpdated")}
-            value={model.lastModified ? formatDate(model.lastModified, lang) : t("notAvailable")}
-          />
+          {dateRows.map(([labelKey, value]) => (
+            <InfoRow key={labelKey} label={t(labelKey)} value={value ? formatDate(value, lang) : t("notAvailable")} />
+          ))}
         </InfoCard>
         <InfoCard title={t("repository")}>
           {model.id ? (
@@ -239,12 +252,22 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
   const { t } = useTranslation();
   // "standard"/"free" are defaults; only other variants get a badge.
   const showVariantBadge = !!model.variant && model.variant !== "standard" && model.variant !== "free";
+  const priceRows: [TranslationKey, number | null | undefined][] = [
+    ["cacheHitPrice", toPerMillion(model.pricing?.input_cache_read)],
+    ["promptPrice", toPerMillion(model.pricing?.prompt)],
+    ["completionPrice", toPerMillion(model.pricing?.completion)],
+  ];
+  const tokenStats: [TranslationKey, string][] = [
+    ["inputTokens", formatShortNumber(model.promptTokens ?? 0)],
+    ["outputTokens", formatShortNumber(model.completionTokens ?? 0)],
+  ];
   return (
     <DetailLayout>
       <StatGrid columns={4}>
         <StatCard label={t("creator")} value={model.creator} />
-        <StatCard label={t("inputTokens")} value={formatShortNumber(model.promptTokens ?? 0)} />
-        <StatCard label={t("outputTokens")} value={formatShortNumber(model.completionTokens ?? 0)} />
+        {tokenStats.map(([labelKey, value]) => (
+          <StatCard key={labelKey} label={t(labelKey)} value={value} />
+        ))}
         {model.reasoningTokens ? (
           <StatCard label={t("reasoningTokens")} value={formatShortNumber(model.reasoningTokens)} />
         ) : (
@@ -255,25 +278,16 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
         <InfoCard title={t("modelInfo")}>
           <InfoRow
             label={t("apiModelId")}
-            value={<code className="font-mono text-xs bg-bg-secondary px-1.5 py-0.5 rounded-md">{model.id}</code>}
+            value={<code className="font-mono text-xs bg-bg-secondary px-1.5 py-0.5 rounded-none">{model.id}</code>}
           />
           <InfoRow label={t("category")} value={categoryLabel(model.category, t)} />
           <InfoRow label={t("trend")} value={formatTrend(model.change, t)} />
           <InfoRow label={t("totalTokens")} value={formatShortNumber(model.totalTokens ?? 0)} />
         </InfoCard>
         <InfoCard title={t("pricing")}>
-          <InfoRow
-            label={t("cacheHitPrice")}
-            value={formatPricePerMillion(toPerMillion(model.pricing?.input_cache_read), t)}
-          />
-          <InfoRow
-            label={t("promptPrice")}
-            value={formatPricePerMillion(toPerMillion(model.pricing?.prompt), t)}
-          />
-          <InfoRow
-            label={t("completionPrice")}
-            value={formatPricePerMillion(toPerMillion(model.pricing?.completion), t)}
-          />
+          {priceRows.map(([labelKey, value]) => (
+            <InfoRow key={labelKey} label={t(labelKey)} value={formatPricePerMillion(value, t)} />
+          ))}
         </InfoCard>
       </InfoGrid>
       {(showVariantBadge || model.isFree) && (
@@ -288,11 +302,17 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
 
 // ---- detailViews ----
 export function findModel<T>(data: T[], id: string, ...keys: (keyof T & string)[]): T | undefined {
-  return data.find((item) => keys.some((key) => (item[key] as unknown) === id));
+  // Priority order matters: an id collision across keys must resolve to the
+  // highest-priority key, not whichever row happens to come first.
+  for (const key of keys) {
+    const hit = data.find((item) => (item[key] as unknown) === id);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 /** Detail-page shell: back link + header from the model source config. */
-export function DetailShell({ source, title, children }: { source: ModelSource; title: string; children: ReactNode }) {
+function DetailShell({ source, title, children }: { source: ModelSource; title: string; children: ReactNode }) {
   const { t } = useTranslation();
   const config = MODEL_SOURCES[source];
   return (
@@ -337,18 +357,16 @@ function createDetailView<T>(
   };
 }
 
-export const AADetail = createDetailView(
-  useSuspenseArtificialRankings,
-  "aa",
-  ModelDetailContent,
-  (m) => m.name,
-  "id",
-  "slug",
-);
+const AADetail = createDetailView(useSuspenseArtificialRankings, "aa", ModelDetailContent, (m) => m.name, "id", "slug");
 
-export const OrDetail = createDetailView(
+const OrDetail = createDetailView(
   () => {
     const { data } = useSuspenseOpenRouterRankings();
+    // Abnormal payload shape (data present but rankings missing) is a load
+    // error, not a 404 — surface it so the shell shows loadFailed.
+    if (data && !Array.isArray(data.tokenUsageRankings)) {
+      return { data: undefined, isPending: false, isError: true };
+    }
     return { data: data?.tokenUsageRankings };
   },
   "or",
@@ -357,7 +375,7 @@ export const OrDetail = createDetailView(
   "id",
 );
 
-export const OSDetail = createDetailView(useAllOpenSourceModels, "os", OsDetail, (m) => shortModelId(m.id), "id");
+const OSDetail = createDetailView(useAllOpenSourceModels, "os", OsDetail, (m) => shortModelId(m.id), "id");
 
 // ---- HallDetailView ----
 function HallDetailContent({
@@ -368,13 +386,18 @@ function HallDetailContent({
   aaModel?: ArtificialAnalysisModel;
 }) {
   const { t } = useTranslation();
+  const hallStats: [TranslationKey, ReactNode][] = [
+    ["omniscienceIndex", formatIndex(model.omniscienceIndex)],
+    ["accuracy", formatPercent(t, model.accuracy)],
+    ["hallucinationRate", formatPercent(t, model.hallucinationRate)],
+    ["attemptRate", formatPercent(t, model.attemptRate)],
+  ];
   return (
     <DetailLayout>
       <StatGrid columns={4}>
-        <StatCard label={t("omniscienceIndex")} value={formatIndex(model.omniscienceIndex)} />
-        <StatCard label={t("accuracy")} value={formatPercent(t, model.accuracy)} />
-        <StatCard label={t("hallucinationRate")} value={formatPercent(t, model.hallucinationRate)} />
-        <StatCard label={t("attemptRate")} value={formatPercent(t, model.attemptRate)} />
+        {hallStats.map(([labelKey, value]) => (
+          <StatCard key={labelKey} label={t(labelKey)} value={value} />
+        ))}
       </StatGrid>
       <InfoCard title={t("modelInfo")}>
         <InfoRow label={t("modelNameOrId")} value={model.model} />
@@ -392,20 +415,40 @@ function HallDetailContent({
 }
 
 /** Hallucination detail; metrics come from the same AA dataset. */
-export function HallDetail({ decodedId }: { decodedId: string }) {
+function HallDetail({ decodedId }: { decodedId: string }) {
   const { data: aaData } = useSuspenseArtificialRankings();
   const hallucinationRankings = useSuspenseHallucinationRankings();
   const entry = findModel(hallucinationRankings, decodedId, "id", "slug");
-  // Hall ids don't always match AA's; fall back to a name match.
+  // Hall ids don't always match AA's; fall back to a normalized loose match.
+  // Exact normalized key only, and only when unambiguous — never take the
+  // first of several candidates.
   const aaModel =
     findModel(aaData, decodedId, "id", "slug") ??
-    (entry ? aaData.find((m) => m.name === entry.model || m.slug === entry.slug) : undefined);
+    (entry
+      ? (() => {
+          const want = normalizeModelKeyForMatch(entry.model);
+          const slugWant = normalizeModelKeyForMatch(entry.slug);
+          const candidates = aaData.filter((m) => {
+            const keys = [m.name, m.short_name, m.slug].filter(Boolean).map(normalizeModelKeyForMatch);
+            return keys.includes(want) || keys.includes(slugWant);
+          });
+          return candidates.length === 1 ? candidates[0] : undefined;
+        })()
+      : undefined);
   if (!entry) return <NotFound />;
   return (
     <DetailShell source="hall" title={entry.model}>
       <HallDetailContent model={entry} aaModel={aaModel} />
     </DetailShell>
   );
+}
+
+function normalizeModelKeyForMatch(raw: string | null | undefined): string {
+  if (!raw) return "";
+  return raw
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 // ---- ModelDetailView ----

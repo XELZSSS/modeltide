@@ -33,6 +33,12 @@ export default defineConfig(() => ({
       treeshake: true,
       output: {
         manualChunks(id: string) {
+          // Server-only deps must never ship to the browser: isolate them so
+          // any client import surfaces as a distinct server-only-violation
+          // chunk (CI asserts it is absent from dist/client).
+          if (id.includes("node_modules/hono") || id.includes("node_modules/fast-xml-parser")) {
+            return "server-only-violation";
+          }
           if (!id.includes("node_modules")) return;
           if (/node_modules\/(react|react-dom)(\/|$)/.test(id)) return "vendor-react";
           if (id.includes("react-router")) return "vendor-router";
@@ -42,8 +48,6 @@ export default defineConfig(() => ({
           if (id.includes("zustand")) return "state";
           if (id.includes("lucide-react") || id.includes("clsx") || id.includes("tailwind-merge"))
             return "vendor-utils";
-          if (id.includes("fast-xml-parser")) return "parser";
-          // No chunk rule for hono (server-only): an import surfaces as bundle growth.
         },
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",

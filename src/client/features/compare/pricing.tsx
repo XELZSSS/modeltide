@@ -28,7 +28,7 @@ import type { ChartOptions } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import type { CompareRow } from "./logic";
 import { TrendingUp } from "lucide-react";
-import { CompareTable } from "@/client/features/compare/CompareTable";
+import { CompareTable, modelKeyOf, modelNameOf, useModelColorOf } from "@/client/features/compare/CompareTable";
 import { DataTable, type DataTableColumn } from "@/client/components/data";
 import { qOfficialPricing } from "@/client/api/queries";
 
@@ -63,27 +63,48 @@ export const DEFAULT_COST_INPUTS = {
   daysPerMonth: "22",
 } as const;
 
+/** Text field with a deferred value so parsing never blocks typing. */
+function useTextField(initial: string) {
+  const [value, setValue] = useState<string>(initial);
+  const deferred = useDeferredValue(value);
+  return { value, setValue, deferred };
+}
+
 function useCostEstimator(): CostEstimatorState {
-  const [dailyInput, setDailyInput] = useState<string>(DEFAULT_COST_INPUTS.dailyInput);
-  const [dailyOutput, setDailyOutput] = useState<string>(DEFAULT_COST_INPUTS.dailyOutput);
-  const [dailyReasoning, setDailyReasoning] = useState<string>(DEFAULT_COST_INPUTS.dailyReasoning);
-  const [cacheHitRate, setCacheHitRate] = useState<string>(DEFAULT_COST_INPUTS.cacheHitRate);
-  const [daysPerMonth, setDaysPerMonth] = useState<string>(DEFAULT_COST_INPUTS.daysPerMonth);
+  const {
+    value: dailyInput,
+    setValue: setDailyInput,
+    deferred: deferredInput,
+  } = useTextField(DEFAULT_COST_INPUTS.dailyInput);
+  const {
+    value: dailyOutput,
+    setValue: setDailyOutput,
+    deferred: deferredOutput,
+  } = useTextField(DEFAULT_COST_INPUTS.dailyOutput);
+  const {
+    value: dailyReasoning,
+    setValue: setDailyReasoning,
+    deferred: deferredReasoning,
+  } = useTextField(DEFAULT_COST_INPUTS.dailyReasoning);
+  const {
+    value: cacheHitRate,
+    setValue: setCacheHitRate,
+    deferred: deferredCache,
+  } = useTextField(DEFAULT_COST_INPUTS.cacheHitRate);
+  const {
+    value: daysPerMonth,
+    setValue: setDaysPerMonth,
+    deferred: deferredDays,
+  } = useTextField(DEFAULT_COST_INPUTS.daysPerMonth);
 
-  // Deferred parsing so re-renders don't block typing; bad input counts as 0.
-  const deferredInput = useDeferredValue(dailyInput);
-  const deferredOutput = useDeferredValue(dailyOutput);
-  const deferredReasoning = useDeferredValue(dailyReasoning);
-  const deferredCache = useDeferredValue(cacheHitRate);
-  const deferredDays = useDeferredValue(daysPerMonth);
-
+  // Bad input counts as 0; hit rate clamped to 0-100% and normalized to 0..1.
   const calcInput = Math.max(0, Number(deferredInput) || 0);
   const calcOutput = Math.max(0, Number(deferredOutput) || 0);
   const calcReasoning = Math.max(0, Number(deferredReasoning) || 0);
-  // Hit rate clamped to 0-100% and normalized to 0..1.
   const calcCache = Math.max(0, Math.min(100, Number(deferredCache) || 0)) / 100;
   const calcDays = Math.max(1, Number(deferredDays) || 0);
 
+  // useState setters are stable and exempt from deps.
   return useMemo(
     () => ({
       dailyInput,
@@ -102,6 +123,7 @@ function useCostEstimator(): CostEstimatorState {
       calcCache,
       calcDays,
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       dailyInput,
       dailyOutput,
@@ -142,44 +164,66 @@ interface CostFieldDef {
   unit?: string;
 }
 
+/** Table for the estimator fields: display order, state keys, label key, unit. */
+const COST_FIELD_DEFS = [
+  { id: "dailyInput", setId: "setDailyInput", labelKey: "dailyPromptTokens", unit: "M" },
+  { id: "dailyOutput", setId: "setDailyOutput", labelKey: "dailyCompletionTokens", unit: "M" },
+  { id: "dailyReasoning", setId: "setDailyReasoning", labelKey: "dailyReasoningTokens", unit: "M" },
+  { id: "cacheHitRate", setId: "setCacheHitRate", labelKey: "cacheHitRate", unit: "%" },
+  { id: "daysPerMonth", setId: "setDaysPerMonth", labelKey: "daysPerMonth", unit: undefined },
+] as const;
+
 function getCostFields(state: CostInputState, t: TFunction): CostFieldDef[] {
-  return [
-    {
-      id: "dailyInput",
-      value: state.dailyInput,
-      onChange: state.setDailyInput,
-      label: t("dailyPromptTokens"),
-      unit: "M",
-    },
-    {
-      id: "dailyOutput",
-      value: state.dailyOutput,
-      onChange: state.setDailyOutput,
-      label: t("dailyCompletionTokens"),
-      unit: "M",
-    },
-    {
-      id: "dailyReasoning",
-      value: state.dailyReasoning,
-      onChange: state.setDailyReasoning,
-      label: t("dailyReasoningTokens"),
-      unit: "M",
-    },
-    {
-      id: "cacheHitRate",
-      value: state.cacheHitRate,
-      onChange: state.setCacheHitRate,
-      label: t("cacheHitRate"),
-      unit: "%",
-    },
-    { id: "daysPerMonth", value: state.daysPerMonth, onChange: state.setDaysPerMonth, label: t("daysPerMonth") },
-  ];
+  return COST_FIELD_DEFS.map((def) => ({
+    id: def.id,
+    value: state[def.id],
+    onChange: state[def.setId],
+    label: t(def.labelKey),
+    unit: def.unit,
+  }));
+}
+
+/** Official-rates getter bound to the pricing query; shared by every estimator. */
+export function useOfficialGetter(): OfficialGetter | undefined {
+  const officialQ = qOfficialPricing.use();
+  return useMemo(() => {
+    if (!officialQ.data) return undefined;
+    const index = indexOfficialPricing(officialQ.data.models);
+    return (m: ArtificialAnalysisModel) => matchOfficialPricing(index, m);
+  }, [officialQ.data]);
 }
 
 interface CostEstimatorInputsProps {
   state: CostInputState;
   layout?: "input-label" | "label-input-unit";
   avgCost?: number;
+}
+
+/** Number input shared by both estimator layouts (validation flag included). */
+function CostFieldInput({
+  field,
+  className,
+  placeholder,
+  "aria-label": ariaLabel,
+}: {
+  field: CostFieldDef;
+  className?: string;
+  placeholder?: string;
+  "aria-label"?: string;
+}) {
+  const invalid = field.value.trim() !== "" && !Number.isFinite(Number(field.value));
+  return (
+    <Input
+      id={`cost-${field.id}`}
+      type="number"
+      value={field.value}
+      onChange={(e) => field.onChange(e.target.value)}
+      aria-invalid={invalid || undefined}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
 }
 
 /**
@@ -203,32 +247,25 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
     <>
       {fields.map((field) =>
         layout === "label-input-unit" ? (
-          <div key={field.id} className="flex items-center gap-2">
-            <label htmlFor={`cost-${field.id}`} className="text-xs text-text-secondary whitespace-nowrap">
+          <div key={field.id} className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+            <label htmlFor={`cost-${field.id}`} className="text-xs text-text-secondary min-w-0">
               {field.label}
             </label>
-            <Input
-              id={`cost-${field.id}`}
-              type="number"
-              value={field.value}
-              onChange={(e) => field.onChange(e.target.value)}
-              className="w-20 h-9 text-sm"
-            />
-            {field.unit ? <span className="text-xs text-text-secondary">{field.unit}</span> : null}
+            <CostFieldInput field={field} className="w-20 h-9 shrink-0" />
+            {field.unit ? (
+              <span className="text-xs text-text-secondary shrink-0">{field.unit}</span>
+            ) : null}
           </div>
         ) : (
-          <div key={field.id} className="flex items-center gap-2">
-            <Input
-              id={`cost-${field.id}`}
-              type="number"
-              value={field.value}
-              onChange={(e) => field.onChange(e.target.value)}
-              className="w-24 sm:w-28"
+          <div key={field.id} className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+            <CostFieldInput
+              field={field}
+              className="w-24 sm:w-28 shrink-0"
               placeholder={field.label}
               aria-label={field.unit ? `${field.label} (${field.unit})` : field.label}
             />
             {/* Visible unit hint as a real <label> for AT association. */}
-            <label htmlFor={`cost-${field.id}`} className="ui-caption whitespace-nowrap cursor-text">
+            <label htmlFor={`cost-${field.id}`} className="ui-caption min-w-0 cursor-text">
               {field.unit ? `${field.label} (${field.unit})` : field.label}
             </label>
           </div>
@@ -251,12 +288,7 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   const { t } = useTranslation();
   const theme = useChartTheme();
 
-  const officialQ = qOfficialPricing.use();
-  const getOfficial = useMemo(() => {
-    if (!officialQ.data) return undefined;
-    const index = indexOfficialPricing(officialQ.data.models);
-    return (m: ArtificialAnalysisModel) => matchOfficialPricing(index, m);
-  }, [officialQ.data]);
+  const getOfficial = useOfficialGetter();
   const { monthlyCosts, ...inputs } = useMonthlyCosts(models, getOfficial);
 
   // Cheapest valid estimate; ties all get the mark (unlike computeWinners).
@@ -322,7 +354,7 @@ export const PriceChart = memo(function PriceChart({
           }),
           backgroundColor: hexToRgba(color, 0.85),
           hoverBackgroundColor: color,
-          borderRadius: { topLeft: 4, topRight: 4 },
+          borderRadius: 0,
         };
       }),
     }),
@@ -375,7 +407,7 @@ export const PriceChart = memo(function PriceChart({
 });
 
 // ---- PriceTable ----
-export const WinnerMark = memo(function WinnerMark() {
+const WinnerMark = memo(function WinnerMark() {
   return (
     <span className={cn("inline-flex items-center gap-0.5", "text-xs font-semibold", "text-success ml-1")}>
       <TrendingUp size={10} />
@@ -411,14 +443,14 @@ export const PriceTable = memo(function PriceTable({
   priceRows: CompareRow<ArtificialAnalysisModel>[];
   models: ArtificialAnalysisModel[];
 }) {
-  const theme = useChartTheme();
+  const getColor = useModelColorOf();
   return (
     <CompareTable
       rows={priceRows}
       models={models}
-      getKey={(m, index) => modelId(m) || `idx-${index}`}
-      getName={(m) => m.short_name || m.name}
-      getColor={(index) => seriesColor(theme, index)}
+      getKey={modelKeyOf}
+      getName={modelNameOf}
+      getColor={getColor}
       mobileLayout="model-cards"
       renderValue={(row, model, winner) => <PriceValue row={row} model={model} winner={winner} />}
     />
@@ -436,6 +468,9 @@ function formatDiff(ratio: number): string {
 }
 
 function buildColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColumn<OfficialRow>[] {
+  const priceCell = (get: (row: OfficialRow) => number | null | undefined) => (row: OfficialRow) => (
+    <span className="font-mono text-sm">{formatDollar(get(row), t)}</span>
+  );
   return [
     {
       id: "model",
@@ -454,20 +489,20 @@ function buildColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColum
       id: "officialIn",
       header: `${t("officialChannel")} ${t("promptPrice")}`,
       align: "right",
-      cell: (row) => <span className="font-mono text-sm">{formatDollar(row.official.input, t)}</span>,
+      cell: priceCell((row) => row.official.input),
     },
     {
       id: "officialOut",
       header: `${t("officialChannel")} ${t("completionPrice")}`,
       align: "right",
       hiddenMd: true,
-      cell: (row) => <span className="font-mono text-sm">{formatDollar(row.official.output, t)}</span>,
+      cell: priceCell((row) => row.official.output),
     },
     {
       id: "routerIn",
       header: `${t("openRouterChannel")} ${t("promptPrice")}`,
       align: "right",
-      cell: (row) => <span className="font-mono text-sm">{formatDollar(row.model.pricing?.input, t)}</span>,
+      cell: priceCell((row) => row.model.pricing?.input),
     },
     {
       id: "diff",
@@ -496,17 +531,17 @@ export const OfficialVsRouterTable = memo(function OfficialVsRouterTable({
 }) {
   const { t } = useTranslation();
   const officialQ = qOfficialPricing.use();
+  const getOfficial = useOfficialGetter();
   const columns = useMemo(() => buildColumns(t), [t]);
   const rows = useMemo<OfficialRow[]>(() => {
-    if (!officialQ.data) return [];
-    const index = indexOfficialPricing(officialQ.data.models);
+    if (!getOfficial) return [];
     return models
       .map((model) => {
-        const official = matchOfficialPricing(index, model);
+        const official = getOfficial(model);
         return official ? { model, official } : null;
       })
       .filter((r): r is OfficialRow => r !== null);
-  }, [officialQ.data, models]);
+  }, [getOfficial, models]);
 
   if (officialQ.isPending || officialQ.isError || rows.length === 0) return null;
   return (

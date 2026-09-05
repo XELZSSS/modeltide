@@ -18,8 +18,6 @@ import {
   formatDollar,
   formatTokens,
   modelId,
-  indexOfficialPricing,
-  matchOfficialPricing,
   resolveEffectivePricing,
   resolveBlendedPrice,
   type OfficialGetter,
@@ -30,8 +28,7 @@ import { useTranslation } from "@/client/providers";
 import { useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useCompareStore, useCompareModels } from "@/client/stores";
-import { useMonthlyCosts } from "@/client/features/compare/pricing";
-import { qOfficialPricing } from "@/client/api/queries";
+import { useMonthlyCosts, useOfficialGetter } from "@/client/features/compare/pricing";
 import { CompareChipBar } from "@/client/features/compare/ComparePageLayout";
 import { CostEstimatorInputs } from "@/client/features/compare/pricing";
 
@@ -81,7 +78,12 @@ function ReasoningPrefix({ model }: { model: ArtificialAnalysisModel }) {
   return model.is_reasoning === true ? <ReasoningBadge label={t("reasoning")} /> : null;
 }
 
-function RankingModelCell({
+interface PricedModel {
+  model: ArtificialAnalysisModel;
+  monthlyCost: number | null;
+}
+
+function CompareModelCell({
   model,
   compareSet,
   onToggleCompare,
@@ -92,34 +94,9 @@ function RankingModelCell({
 }) {
   return (
     <RankingNameCell
-      name={model.name}
+      name={model.name || model.slug}
       prefix={<ReasoningPrefix model={model} />}
       suffix={<CompareButton model={model} isCompared={compareSet.has(modelId(model))} onToggle={onToggleCompare} />}
-    />
-  );
-}
-
-interface PricedModel {
-  model: ArtificialAnalysisModel;
-  monthlyCost: number | null;
-}
-
-function PricedModelCell({
-  row,
-  compareSet,
-  onToggleCompare,
-}: {
-  row: PricedModel;
-  compareSet: Set<string>;
-  onToggleCompare: (m: ArtificialAnalysisModel) => void;
-}) {
-  return (
-    <RankingNameCell
-      name={row.model.name || row.model.slug}
-      prefix={<ReasoningPrefix model={row.model} />}
-      suffix={
-        <CompareButton model={row.model} isCompared={compareSet.has(modelId(row.model))} onToggle={onToggleCompare} />
-      }
     />
   );
 }
@@ -157,7 +134,7 @@ export function buildRankingColumns(
     textCol(
       "model",
       t("model"),
-      (model) => <RankingModelCell model={model} compareSet={compareSet} onToggleCompare={onToggleCompare} />,
+      (model) => <CompareModelCell model={model} compareSet={compareSet} onToggleCompare={onToggleCompare} />,
       { width: "40%" },
     ),
     rightCol("creator", t("creator"), (model) => (
@@ -182,36 +159,33 @@ export function buildPricingColumns(
   onToggleCompare: (m: ArtificialAnalysisModel) => void,
   getOfficial?: OfficialGetter,
 ): DataTableColumn<PricedModel>[] {
+  // One resolveEffectivePricing per cell: the three price legs share the lookup.
+  const pricingLegCol = (
+    id: string,
+    header: string,
+    getLeg: (eff: ReturnType<typeof resolveEffectivePricing>) => number | null | undefined,
+  ) =>
+    rightCol(id, header, (row: PricedModel) =>
+      formatDollar(getLeg(resolveEffectivePricing(row.model.pricing, getOfficial?.(row.model))), t),
+    );
   return [
     textCol(
       "model",
       t("model"),
-      (row) => <PricedModelCell row={row} compareSet={compareSet} onToggleCompare={onToggleCompare} />,
+      (row) => <CompareModelCell model={row.model} compareSet={compareSet} onToggleCompare={onToggleCompare} />,
       { width: "35%" },
     ),
     rightCol("provider", t("provider"), (row) => (
       <RightAlignedText>{row.model.model_creators?.name || t("notAvailable")}</RightAlignedText>
     )),
-    rightCol(
-      "cacheHitPrice",
-      t("cacheHitPrice"),
-      priceCell((m) => resolveEffectivePricing(m.model.pricing, getOfficial?.(m.model)).cache_hit, t),
-    ),
+    pricingLegCol("cacheHitPrice", t("cacheHitPrice"), (eff) => eff.cache_hit),
     rightCol(
       "blendedPrice",
       t("blendedPrice"),
       priceCell((m) => resolveBlendedPrice(m.model, getOfficial?.(m.model)), t),
     ),
-    rightCol(
-      "promptPrice",
-      t("promptPrice"),
-      priceCell((m) => resolveEffectivePricing(m.model.pricing, getOfficial?.(m.model)).input, t),
-    ),
-    rightCol(
-      "completionPrice",
-      t("completionPrice"),
-      priceCell((m) => resolveEffectivePricing(m.model.pricing, getOfficial?.(m.model)).output, t),
-    ),
+    pricingLegCol("promptPrice", t("promptPrice"), (eff) => eff.input),
+    pricingLegCol("completionPrice", t("completionPrice"), (eff) => eff.output),
     { ...mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.monthlyCost, t)), hiddenMd: true },
   ];
 }
@@ -269,17 +243,13 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const { t } = useTranslation();
   const toggleCompareModel = useCompareStore((s) => s.toggleCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
-  // Restore the last-used view mode when navigating back.
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    (location.state as { viewMode?: ViewMode })?.viewMode ?? "rankings",
-  );
+  // Restore the last-used view mode when navigating back (allowlisted).
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const raw = (location.state as { viewMode?: unknown } | null)?.viewMode;
+    return raw === "pricing" ? "pricing" : "rankings";
+  });
 
-  const officialQ = qOfficialPricing.use();
-  const getOfficial = useMemo(() => {
-    if (!officialQ.data) return undefined;
-    const index = indexOfficialPricing(officialQ.data.models);
-    return (m: ArtificialAnalysisModel) => matchOfficialPricing(index, m);
-  }, [officialQ.data]);
+  const getOfficial = useOfficialGetter();
   const { monthlyCosts, ...costInputs } = useMonthlyCosts(rankings, getOfficial);
   const comparedModels = useCompareModels(rankings);
 

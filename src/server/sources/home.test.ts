@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CacheService, resetModuleCachesForTests } from "@/server/infra";
-import { DEFAULT_TTL_MS, PARTIAL_FAIL_TTL_MS } from "@/shared/config";
+import { PARTIAL_FAIL_TTL_MS } from "@/shared/config";
+// Short outer TTL: inner sources already cache, so the outer must not extend stale.
+const HOME_OUTER_TTL_MS = 5 * 60_000;
 import type { AppContext } from "@/server/context";
 import { getHomeDashboard } from "@/server/sources/home";
 
@@ -79,11 +81,10 @@ describe("getHomeDashboard text-to-image degradation", () => {
     const { ctx, kvStore } = homeCtx();
     const data = await getHomeDashboard(ctx);
     expect(data.textToImage?.models).toEqual([]);
-    expect(envelopeTtlMs(kvStore)).toBeLessThan(DEFAULT_TTL_MS);
     expect(envelopeTtlMs(kvStore)).toBeLessThanOrEqual(PARTIAL_FAIL_TTL_MS + 1000);
   });
 
-  it("uses the full TTL when all sources are healthy", async () => {
+  it("uses the full outer TTL when all sources are healthy", async () => {
     mockHealthyOthers();
     vi.mocked(getTextToImageLeaderboard).mockResolvedValue({
       models: [
@@ -106,7 +107,6 @@ describe("getHomeDashboard text-to-image degradation", () => {
     const { ctx, kvStore } = homeCtx();
     const data = await getHomeDashboard(ctx);
     expect(data.textToImage?.models).toHaveLength(1);
-    expect(envelopeTtlMs(kvStore)).toBeGreaterThan(PARTIAL_FAIL_TTL_MS);
-    expect(envelopeTtlMs(kvStore)).toBeLessThanOrEqual(DEFAULT_TTL_MS + 1000);
+    expect(envelopeTtlMs(kvStore)).toBeLessThanOrEqual(HOME_OUTER_TTL_MS + 1000);
   });
 });

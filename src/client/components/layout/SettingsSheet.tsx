@@ -20,7 +20,7 @@ const Segmented = memo(function Segmented({
   return (
     // Clicks on an option must not bubble to the row's cycle-on-click handler.
     <div
-      className="flex rounded-lg bg-bg-secondary p-1"
+      className="flex rounded-none border border-border bg-bg-secondary p-0.5"
       role="radiogroup"
       aria-label={label}
       onClick={(e) => e.stopPropagation()}
@@ -33,9 +33,9 @@ const Segmented = memo(function Segmented({
           aria-checked={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "h-7 px-3 rounded-md inline-flex items-center justify-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+            "h-7 px-3 rounded-none inline-flex items-center justify-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
             value === opt.value
-              ? "bg-bg-card text-text-primary shadow-sm"
+              ? "bg-bg-card text-text-primary ring-1 ring-inset ring-border"
               : "text-text-secondary hover:text-text-primary",
           )}
         >

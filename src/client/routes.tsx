@@ -1,34 +1,31 @@
-import { lazy, useEffect } from "react";
+import { lazy, useLayoutEffect } from "react";
 import { Route, Routes, useLocation } from "react-router";
 import { useSearchStore } from "@/client/stores";
 import { NotFound } from "@/client/components/shared";
 
 // Route-level lazy() splits each view into its own chunk.
-const HomeView = lazy(() => import("./features/home/HomeView").then((m) => ({ default: m.HomeView })));
-const RankingsHubView = lazy(() =>
-  import("./features/rankings/RankingsHubView").then((m) => ({ default: m.RankingsHubView })),
-);
-const ReleasesView = lazy(() => import("./features/releases/ReleasesView").then((m) => ({ default: m.ReleasesView })));
+function lazyView<T extends object>(load: () => Promise<T>, name: keyof T) {
+  return lazy(() => load().then((m) => ({ default: m[name] as React.ComponentType })));
+}
+const HomeView = lazyView(() => import("./features/home/HomeView"), "HomeView");
+const RankingsHubView = lazyView(() => import("./features/rankings/RankingsHubView"), "RankingsHubView");
+const ReleasesView = lazyView(() => import("./features/releases/ReleasesView"), "ReleasesView");
 // Separate entry modules keep /compare and /price-compare in independent chunks.
-const CompareView = lazy(() => import("./features/compare/CompareView.lazy").then((m) => ({ default: m.CompareView })));
-const PriceCompareView = lazy(() =>
-  import("./features/compare/PriceCompareView.lazy").then((m) => ({ default: m.PriceCompareView })),
-);
-const NewsView = lazy(() => import("./features/news/NewsView").then((m) => ({ default: m.NewsView })));
-const ModelDetailView = lazy(() =>
-  import("./features/models/ModelDetailView").then((m) => ({ default: m.ModelDetailView })),
-);
-const StatusView = lazy(() => import("./features/status/StatusView").then((m) => ({ default: m.StatusView })));
-const SourceDetailView = lazy(() =>
-  import("./features/status/SourceDetailView").then((m) => ({ default: m.SourceDetailView })),
-);
+const CompareView = lazyView(() => import("./features/compare/CompareView.lazy"), "CompareView");
+const PriceCompareView = lazyView(() => import("./features/compare/PriceCompareView.lazy"), "PriceCompareView");
+const NewsView = lazyView(() => import("./features/news/NewsView"), "NewsView");
+const ModelDetailView = lazyView(() => import("./features/models/ModelDetailView"), "ModelDetailView");
+const StatusView = lazyView(() => import("./features/status/StatusView"), "StatusView");
+const SourceDetailView = lazyView(() => import("./features/status/SourceDetailView"), "SourceDetailView");
 
 /** Clears the global search term whenever the URL path or query changes. */
 function useSearchResetOnNavigate() {
   const location = useLocation();
   const resetSearch = useSearchStore((s) => s.resetSearch);
 
-  useEffect(() => {
+  // Layout effect: clear before paint so the next page never flashes with the
+  // previous page's filter for one frame.
+  useLayoutEffect(() => {
     resetSearch();
   }, [location.pathname, location.search, resetSearch]);
 }

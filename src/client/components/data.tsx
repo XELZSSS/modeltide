@@ -102,10 +102,11 @@ export function rightColNA<T>(
     header,
     (row) => {
       const value = render(row);
-      return value == null ? (
-        <RightAlignedText className="text-text-tertiary">{notAvailableLabel}</RightAlignedText>
-      ) : (
-        <RightAlignedText>{value}</RightAlignedText>
+      const missing = value == null;
+      return (
+        <RightAlignedText className={missing ? "text-text-tertiary" : undefined}>
+          {missing ? notAvailableLabel : value}
+        </RightAlignedText>
       );
     },
     opts,
@@ -146,24 +147,27 @@ export function indexRankMap<T>(rows: T[], getId: (row: T) => string): Map<strin
 function usePagination<T>(data: T[], size: number, resetKey?: string | number) {
   const safeSize = Number.isFinite(size) && size > 0 ? Math.floor(size) : DEFAULT_PAGE_SIZE;
   const [page, setPage] = useState(1);
-  const total = Math.ceil(data.length / safeSize);
-  const totalPages = total === 0 ? 0 : total;
+  const totalPages = Math.ceil(data.length / safeSize);
   const safeTotal = Math.max(1, totalPages);
 
   useEffect(() => setPage((p) => Math.min(p, safeTotal)), [safeTotal]);
-  // Filter changes jump back to page 1.
+  // Filter or page-size changes jump back to page 1 (e.g. mobile 10 <-> desktop 20).
   useEffect(() => {
     setPage(1);
-  }, [resetKey]);
+  }, [resetKey, safeSize]);
 
-  const cur = totalPages === 0 ? 0 : Math.min(page, totalPages);
-  const paged = totalPages === 0 ? [] : data.length > safeSize ? data.slice((cur - 1) * safeSize, cur * safeSize) : data;
+  const cur = totalPages === 0 ? 1 : Math.min(page, totalPages);
+  const paged = data.length > safeSize ? data.slice((cur - 1) * safeSize, cur * safeSize) : data;
   const goToPage = useCallback((p: number) => setPage(Math.max(1, Math.min(p, safeTotal))), [safeTotal]);
-  return { page: cur === 0 ? 1 : cur, totalPages, pagedData: paged, goToPage } as const;
+  return { page: cur, totalPages, pagedData: paged, goToPage } as const;
 }
 
 export function usePagedData<T>(data: T[], getRowId?: (row: T) => string, pageSize = 8, resetKey?: string | number) {
-  const dedupedData = useMemo(() => (getRowId ? dedupeBy(data, getRowId) : data), [data, getRowId]);
+  const dedupedData = useMemo(() => {
+    if (!getRowId) return data;
+    // Empty ids fall back to content hashes so React keys stay unique.
+    return dedupeBy(data, (row) => getRowId(row) || rowContentId(row));
+  }, [data, getRowId]);
   const { page, totalPages, pagedData, goToPage } = usePagination(dedupedData, pageSize, resetKey);
   return { dedupedData, page, totalPages, pagedData, goToPage } as const;
 }
@@ -220,7 +224,7 @@ function ExpandToggle({
   return (
     <button
       type="button"
-      className="shrink-0 p-1 -m-1 rounded-md hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className="shrink-0 p-1 -m-1 rounded-none hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
       {...expandToggleProps(isExpanded, onToggle, isExpanded ? t("collapseRow") : t("expandRow"))}
     >
       <span className={cn("shrink-0 text-text-secondary transition-transform duration-200", isExpanded && "rotate-90")}>
@@ -243,7 +247,7 @@ function getRowExpandState<T>(
   return { rowId, isExpanded, toggle };
 }
 
-interface MobileCardBodyProps<T> {
+interface RowListProps<T> {
   pagedData: T[];
   columns: DataTableColumn<T>[];
   getRowId?: (row: T) => string;
@@ -280,7 +284,7 @@ function MobileTableBodyInner<T>({
   expandedRowId,
   onToggleExpand,
   renderExpandedRow,
-}: MobileCardBodyProps<T>) {
+}: RowListProps<T>) {
   const layout = resolveMobileColumns(columns);
   if (!layout) return null;
   const { primaryCol, mainStatCol, secondaryCols } = layout;
@@ -292,7 +296,11 @@ function MobileTableBodyInner<T>({
           <Fragment key={rowId}>
             {/* No card-level onClick: keyboard users expand via the toggle button. */}
             <div
-              className={cn("border border-border bg-bg-card p-4 transition-colors", "hover:bg-hover", isExpanded && "bg-accent-light")}
+              className={cn(
+                "border border-border bg-bg-card p-4 transition-colors",
+                "hover:bg-hover",
+                isExpanded && "bg-accent-light",
+              )}
             >
               <div className="flex items-center gap-2 min-w-0">
                 {isExpandable ? <ExpandToggle isExpanded={isExpanded} onToggle={toggle} size={16} /> : null}
@@ -313,9 +321,7 @@ function MobileTableBodyInner<T>({
                       key={col.id}
                       className={cn("flex items-baseline gap-1.5 min-w-0", col.align === "right" && "ml-auto")}
                     >
-                      {col.header && (
-                        <span className="text-xs text-text-secondary shrink-0">{col.header}</span>
-                      )}
+                      {col.header && <span className="text-xs text-text-secondary shrink-0">{col.header}</span>}
                       <span className="text-sm min-w-0">{col.cell(row)}</span>
                     </div>
                   ))}
@@ -352,16 +358,6 @@ export interface DataTableProps<T> {
   caption?: string;
   /** Pagination resets to page 1 whenever this changes. */
   resetKey?: string | number;
-}
-
-interface TableBodyProps<T> {
-  pagedData: T[];
-  columns: DataTableColumn<T>[];
-  getRowId?: (row: T) => string;
-  isExpandable: boolean;
-  expandedRowId?: string | null;
-  onToggleExpand?: (rowId: string | null) => void;
-  renderExpandedRow?: (row: T) => ReactNode;
 }
 
 function cellClasses<T>(col: DataTableColumn<T>): string {
@@ -413,7 +409,7 @@ function TableBodyInner<T>({
   expandedRowId,
   onToggleExpand,
   renderExpandedRow,
-}: TableBodyProps<T>) {
+}: RowListProps<T>) {
   return (
     <tbody>
       {pagedData.map((row) => {
@@ -494,6 +490,15 @@ function DataTableInner<T>({
     totalPages > 1 ? (
       <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} className="pt-2 self-center" />
     ) : null;
+  const listProps: RowListProps<T> = {
+    pagedData,
+    columns,
+    getRowId,
+    isExpandable,
+    expandedRowId: activeExpandedRowId,
+    onToggleExpand: activeToggleExpand,
+    renderExpandedRow,
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -501,15 +506,7 @@ function DataTableInner<T>({
         <EmptyState message={t("noResults")} />
       ) : isMobile ? (
         <>
-          <MobileTableBody
-            pagedData={pagedData}
-            columns={columns}
-            getRowId={getRowId}
-            isExpandable={isExpandable}
-            expandedRowId={activeExpandedRowId}
-            onToggleExpand={activeToggleExpand}
-            renderExpandedRow={renderExpandedRow}
-          />
+          <MobileTableBody {...listProps} />
           {pagination}
         </>
       ) : (
@@ -517,15 +514,7 @@ function DataTableInner<T>({
           <div className="border border-border overflow-x-auto min-w-0">
             <table className="w-full text-sm table-fixed">
               <TableHeader columns={columns} isExpandable={isExpandable} caption={caption} />
-              <TableBody
-                pagedData={pagedData}
-                columns={columns}
-                getRowId={getRowId}
-                isExpandable={isExpandable}
-                expandedRowId={activeExpandedRowId}
-                onToggleExpand={activeToggleExpand}
-                renderExpandedRow={renderExpandedRow}
-              />
+              <TableBody {...listProps} />
             </table>
           </div>
           {pagination}

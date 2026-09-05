@@ -10,6 +10,7 @@ import { SuspenseQuery } from "@/client/components/shared";
 import { SearchInput } from "@/client/search";
 import { Card, CardContent, StatCard, CardGrid, Dot } from "@/client/components/ui";
 import { PageContainer, PageSection } from "@/client/components/layout";
+import { UsageDonut } from "./UsageDonut";
 import { computeProviderStats, formatDollar, formatShortNumber, formatSpeed, shortModelId } from "@/client/utils";
 import type {
   ArtificialAnalysisModel,
@@ -48,9 +49,12 @@ function useHomeStats(
   const t2iModels = useMemo(() => dashboardData.textToImage?.models ?? [], [dashboardData.textToImage?.models]);
   const latestOpenRouterModel = dashboardData.orRankings?.tokenUsageRankings?.[0] ?? null;
 
+  // Top-7 bar rows; callers pre-filter (hallucination drops null accuracy).
+  const top7 = <T,>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, 7).map(map);
+
   const downloadStats = useMemo<HomeBarStat[]>(
     () =>
-      openSourceRankings.slice(0, 7).map((model) => ({
+      top7(openSourceRankings, (model) => ({
         label: shortModelId(model.id),
         value: model.downloads,
         valueLabel: formatShortNumber(model.downloads),
@@ -60,14 +64,14 @@ function useHomeStats(
 
   const hallucinationStats = useMemo<HomeBarStat[]>(
     () =>
-      hallucinationRankings
-        .filter((entry) => entry.accuracy != null)
-        .slice(0, 7)
-        .map((entry) => ({
+      top7(
+        hallucinationRankings.filter((entry) => entry.accuracy != null),
+        (entry) => ({
           label: entry.model,
           value: entry.accuracy ?? 0,
           valueLabel: `${entry.accuracy?.toFixed(1)}%`,
-        })),
+        }),
+      ),
     [hallucinationRankings],
   );
 
@@ -127,6 +131,15 @@ function formatRatingInterval(entry: TextToImageModel): string {
   return ` (${entry.eloLower.toFixed(0)}–${entry.eloUpper.toFixed(0)})`;
 }
 
+/** One labeled metric in the T2I card body. */
+function T2IMetric({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span>
+      {label}: <strong className="text-text-primary font-semibold">{children}</strong>
+    </span>
+  );
+}
+
 const KpiStrip = memo(function KpiStrip({ kpis }: { kpis: HomeKpi[] }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -171,39 +184,25 @@ const TextToImageCard = memo(function TextToImageCard({ entry }: { entry: TextTo
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span className="ui-card-title truncate">{entry.name}</span>
-            {entry.creatorName && (
-              <span className="ui-caption truncate shrink-0">({entry.creatorName})</span>
-            )}
+            {entry.creatorName && <span className="ui-caption truncate shrink-0">({entry.creatorName})</span>}
           </div>
           <span className="font-mono tabular-nums text-xs text-text-tertiary shrink-0">#{entry.rank}</span>
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 ui-caption">
-          <span>
-            {t("elo")}:{" "}
-            <strong className="text-text-primary font-semibold">
-              {entry.elo != null ? `${entry.elo.toFixed(0)}${formatRatingInterval(entry)}` : t("notAvailable")}
-            </strong>
-          </span>
-          <span>
-            {t("votes")}:{" "}
-            <strong className="text-text-primary font-semibold">
-              {entry.appearances != null ? entry.appearances.toLocaleString(locale) : t("notAvailable")}
-            </strong>
-          </span>
+          <T2IMetric label={t("elo")}>
+            {entry.elo != null ? `${entry.elo.toFixed(0)}${formatRatingInterval(entry)}` : t("notAvailable")}
+          </T2IMetric>
+          <T2IMetric label={t("votes")}>
+            {entry.appearances != null ? entry.appearances.toLocaleString(locale) : t("notAvailable")}
+          </T2IMetric>
           {entry.pricePer1kImages != null ? (
-            <span>
-              {t("price")}:{" "}
-              <strong className="text-text-primary font-semibold">
-                {formatDollar(entry.pricePer1kImages, t)}
-                {t("per1kImages")}
-              </strong>
-            </span>
+            <T2IMetric label={t("price")}>
+              {formatDollar(entry.pricePer1kImages, t)}
+              {t("per1kImages")}
+            </T2IMetric>
           ) : null}
           {entry.winRate != null ? (
-            <span>
-              {t("winRateShort")}:{" "}
-              <strong className="text-text-primary font-semibold">{(entry.winRate * 100).toFixed(1)}%</strong>
-            </span>
+            <T2IMetric label={t("winRateShort")}>{(entry.winRate * 100).toFixed(1)}%</T2IMetric>
           ) : null}
         </div>
       </CardContent>
@@ -236,10 +235,12 @@ function HomeContent() {
     dashboardData,
     t,
   );
+  // Stable identity for the donut (fresh array per query resolution otherwise).
+  const usageEntries = useMemo(() => dashboardData.orRankings?.tokenUsageRankings ?? [], [dashboardData.orRankings]);
 
   return (
     <PageContainer>
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end min-w-0 mb-4">
         <SearchInput />
       </div>
 
@@ -248,8 +249,8 @@ function HomeContent() {
       </div>
 
       <PageSection>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-3">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+          <div className="lg:col-span-6">
             <Suspense
               fallback={
                 <Card>
@@ -263,7 +264,12 @@ function HomeContent() {
               <IndexLineChart models={artificialData} />
             </Suspense>
           </div>
-          <ProviderSpeedCard providerStats={providerStats} />
+          <div className="lg:col-span-3">
+            <UsageDonut entries={usageEntries} />
+          </div>
+          <div className="lg:col-span-3">
+            <ProviderSpeedCard providerStats={providerStats} />
+          </div>
         </div>
       </PageSection>
 

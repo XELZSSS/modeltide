@@ -23,8 +23,9 @@ import {
 } from "@/client/utils";
 import { matchTerm } from "@/shared/utils";
 import { buildCompareRows, buildRadarData, computeWinners, type CompareRow } from "@/client/features/compare/logic";
+import { aggregateUsageByCategory } from "@/client/features/home/usage";
 import { createT, interpolate } from "@/shared/i18n";
-import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
+import type { ArtificialAnalysisModel, OfficialPriceModel, OpenRouterRankEntry } from "@/shared/types";
 import type { TFunction } from "@/shared/i18n";
 
 // Consolidated client tests: display formatters, cost estimation, search term
@@ -594,5 +595,28 @@ describe("official price resolution", () => {
     const opts = { dailyInput: 1_000_000, dailyOutput: 1_000_000, cacheHitRate: 0, daysPerMonth: 1 };
     expect(calcMonthlyCost(model, opts)).toBe(60);
     expect(calcMonthlyCost(model, opts, official)).toBe(30);
+  });
+});
+
+describe("aggregateUsageByCategory", () => {
+  const entry = (category: OpenRouterRankEntry["category"]) => ({ category });
+  it("counts models per category in fixed order", () => {
+    const { slices, total } = aggregateUsageByCategory([
+      entry("general"),
+      entry("coding"),
+      entry("reasoning"),
+      entry("coding"),
+    ]);
+    expect(slices.map((s) => s.key)).toEqual(["coding", "reasoning", "general"]);
+    expect(slices.map((s) => s.total)).toEqual([2, 1, 1]);
+    expect(total).toBe(4);
+  });
+  it("drops empty categories so small slices stay visible", () => {
+    const { slices, total } = aggregateUsageByCategory([entry("reasoning"), entry("reasoning")]);
+    expect(slices).toEqual([{ key: "reasoning", total: 2 }]);
+    expect(total).toBe(2);
+  });
+  it("returns empty slices for empty input", () => {
+    expect(aggregateUsageByCategory([])).toEqual({ slices: [], total: 0 });
   });
 });

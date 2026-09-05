@@ -30,8 +30,8 @@ export function createT(
     const template = dict[key] ?? en[key] ?? key;
     const out = interpolate(template, params);
     // Surface missing interpolations via the hook instead of rendering "{count}".
-    // (Shared code stays free of import.meta/process checks; the Vite client passes
-    // a DEV-only warn, the Worker leaves it silent.)
+    // (Shared code stays free of import.meta/process checks; callers pass the
+    // warn callback for both dev and prod so leaks are visible.)
     if (opts?.onMissingParam && /\{\w+\}/.test(out)) opts.onMissingParam(key, out);
     return out;
   };

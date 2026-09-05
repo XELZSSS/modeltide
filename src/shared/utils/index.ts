@@ -1,11 +1,15 @@
 // Shared by the React app and the Cloudflare Worker.
 
-/** Keeps the first occurrence of each key; empty keys are always kept. */
+/**
+ * Keeps the first occurrence of each key; rows with an empty key are dropped
+ * (an empty id means the row failed identity validation upstream and must
+ * not leak into payloads or React keys).
+ */
 export function dedupeBy<T>(items: T[], keyFn: (item: T) => string | null | undefined): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
     const key = keyFn(item);
-    if (!key) return true;
+    if (!key) return false;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -36,19 +40,14 @@ export function approxEq(a: number, b: number, eps = 1e-9): boolean {
   return Math.abs(a - b) < eps * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
-/** Qualifier tokens stripped when building loose cross-source match keys. */
-const QUALIFIER_TOKENS = new Set([
-  "adaptive",
-  "reasoning",
-  "thinking",
-  "effort",
-  "xhigh",
-  "high",
-  "medium",
-  "low",
-  "ultra",
-  "extended",
-]);
+/**
+ * Qualifier tokens stripped when building loose cross-source match keys.
+ * Variant-distinguishing tokens (thinking/reasoning/high/medium/low) are
+ * intentionally KEPT: kimi-k2 vs kimi-k2-thinking have different pricing and
+ * must not collapse to one key. Parenthesized labels are already stripped
+ * separately, so "(Reasoning, High)" suffixes still match loosely.
+ */
+const QUALIFIER_TOKENS = new Set(["adaptive", "effort", "xhigh", "extended"]);
 
 /**
  * Loose match key for cross-source model matching: drops creator prefixes,
@@ -64,13 +63,14 @@ export function normalizeModelKey(raw: string): string {
     .join("");
 }
 
-/** Term match over pre-lowercased fields: 4 = exact, 3 = prefix, 2 = substring. */
+/** Term match: 4 = exact, 3 = prefix, 2 = substring. Normalizes both sides. */
 export function matchTerm(fields: string[], term: string): { matched: boolean; score: number } {
-  const needle = term.toLowerCase().trim();
+  const needle = term.toLowerCase().trim().replace(/\s+/g, " ");
   if (!needle) return { matched: false, score: 0 };
-  for (const f of fields) if (f === needle) return { matched: true, score: 4 };
+  const normalized = fields.map((f) => f.toLowerCase().trim().replace(/\s+/g, " "));
+  for (const f of normalized) if (f === needle) return { matched: true, score: 4 };
   let best = 0;
-  for (const f of fields) best = Math.max(best, f.startsWith(needle) ? 3 : f.includes(needle) ? 2 : 0);
+  for (const f of normalized) best = Math.max(best, f.startsWith(needle) ? 3 : f.includes(needle) ? 2 : 0);
   return { matched: best > 0, score: best };
 }
 

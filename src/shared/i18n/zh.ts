@@ -131,6 +131,7 @@ export const zh = {
   openSourceRankings: "开源",
   intelligenceIndex: "智能指数",
   providerSpeed: "提供商平均速度",
+  usageByCategory: "任务分类",
   intelligence: "智能",
   creator: "厂商",
   coding: "代码",
@@ -241,4 +242,6 @@ export const zh = {
   officialChannel: "官网",
   openRouterChannel: "OpenRouter",
   priceDiff: "价格差",
+  memoryModeNotice: "内存模式：未配置 KV，历史数据为临时存储",
+  compareStale: "部分已选模型已下线，已自动移除。",
 } as const satisfies Record<keyof EnDict, string>;

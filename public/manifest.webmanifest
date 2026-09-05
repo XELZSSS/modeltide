@@ -5,9 +5,9 @@
   "description": "AI model rankings, release dates, benchmarks, and provider comparisons.",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "orientation": "any",
   "categories": ["productivity", "utilities"],
   "icons": [

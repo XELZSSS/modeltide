@@ -48,14 +48,17 @@ const SourceCard = memo(function SourceCard({
       </div>
       <UptimeStrip buckets={buckets} />
       <div className="flex items-center justify-between gap-3 mt-3 ui-caption">
-        <span>
-          {t("uptime24h")}
-          <span className="font-mono text-text-primary ml-1.5">{formatUptimePct(t, summary.uptime24h)}</span>
-        </span>
-        <span>
-          {t("uptime7d")}
-          <span className="font-mono text-text-primary ml-1.5">{formatUptimePct(t, summary.uptime7d)}</span>
-        </span>
+        {(
+          [
+            ["uptime24h", summary.uptime24h],
+            ["uptime7d", summary.uptime7d],
+          ] as const
+        ).map(([labelKey, value]) => (
+          <span key={labelKey}>
+            {t(labelKey)}
+            <span className="font-mono text-text-primary ml-1.5">{formatUptimePct(t, value)}</span>
+          </span>
+        ))}
         <ChevronRight size={16} className="shrink-0 text-text-tertiary" />
       </div>
     </Link>
@@ -71,6 +74,14 @@ function StatusContent() {
   return (
     <PageContainer>
       <PageHeader title={t("statusPageTitle")} description={t("sourceStatus")} />
+
+      {data.persisted === false && (
+        <Card>
+          <CardContent padding="md">
+            <p className="text-xs text-text-secondary">{t("memoryModeNotice")}</p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent padding="md" className="flex items-center justify-between gap-3 flex-wrap">
@@ -106,7 +117,12 @@ function StatusContent() {
 
       {hasData && (
         <PageSection title={t("recentEvents")}>
-          <StatusEventList events={(data.events ?? []).slice(0, 15)} emptyMessage={t("noRecentEvents")} showSource showTime />
+          <StatusEventList
+            events={(data.events ?? []).slice(0, 15)}
+            emptyMessage={t("noRecentEvents")}
+            showSource
+            showTime
+          />
         </PageSection>
       )}
     </PageContainer>

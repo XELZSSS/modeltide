@@ -3,10 +3,10 @@
   Cache-Control: public, max-age=31536000, immutable
 
 /fonts/*
-  Cache-Control: public, max-age=31536000, immutable
+  Cache-Control: public, max-age=86400
 
 /icons/*
-  Cache-Control: public, max-age=86400, immutable
+  Cache-Control: public, max-age=86400
 
 /manifest.webmanifest
   Cache-Control: public, max-age=86400
@@ -24,11 +24,13 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   # sha256 allowlists the inline theme script in index.html; regenerate: npm run hash:csp
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-BZs7fjco45WszHor06GYQGdlfFZDAlufv9uvJHld5G8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-udaa/U/BncDg6sDafQy/7p8kDrK2aLB88Uz+gxPAhAA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
 
-# Backup headers for same-Worker API responses.
+# Backup headers for same-Worker API responses. Authoritative headers live in
+# src/server/api.ts (Referrer-Policy: no-referrer); this block only covers
+# edge-cached fallbacks and must stay in sync.
 /api/*
   X-Content-Type-Options: nosniff
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Frame-Options: DENY
-  Referrer-Policy: strict-origin-when-cross-origin
+  Referrer-Policy: no-referrer

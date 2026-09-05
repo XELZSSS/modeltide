@@ -61,6 +61,38 @@ function useReleaseFeedEntries(openSourceReleases: OpenSourceModelEntry[]): Feed
 const getFeedSearchFields = (e: FeedEntry) => [e.name, e.id];
 const getFeedRowId = (e: FeedEntry) => e.id;
 
+/** Model cell with the mobile-only subline (type/date or provider/date). */
+function ReleaseModelCell({
+  title,
+  name,
+  line,
+  semibold,
+}: {
+  title: string;
+  name: string;
+  line: React.ReactNode;
+  semibold?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className={`text-sm truncate ${semibold ? "font-semibold" : "font-medium"}`} title={title}>
+        {name}
+      </p>
+      <div className="flex md:hidden mt-1.5 items-center gap-2">{line}</div>
+    </div>
+  );
+}
+
+/** Right-aligned mono release-date column shared by both release tabs. */
+function releaseDateCol<T>(t: ReturnType<typeof useTranslation>["t"], lang: string, getTs: (row: T) => number) {
+  return {
+    header: t("releaseDate"),
+    align: "right" as const,
+    hiddenMd: true,
+    cell: (row: T) => <span className="ui-mono-value font-normal">{formatDate(getTs(row), lang)}</span>,
+  };
+}
+
 function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
   const { t, lang } = useTranslation();
 
@@ -74,24 +106,22 @@ function FeedTab({ allEntries }: { allEntries: FeedEntry[] }) {
         id: "model",
         header: t("model"),
         cell: (row) => (
-          <div className="min-w-0">
-            <p className="text-sm font-medium truncate" title={row.name}>
-              {row.name}
-            </p>
-            <div className="flex md:hidden mt-1.5 items-center gap-2">
-              <span className="text-xs font-medium text-text-secondary">{t(TYPE_LABEL[row.type])}</span>
-              <span className="ui-meta">{formatDate(row.ts, lang)}</span>
-            </div>
-          </div>
+          <ReleaseModelCell
+            title={row.name}
+            name={row.name}
+            line={
+              <>
+                <span className="text-xs font-medium text-text-secondary">{t(TYPE_LABEL[row.type])}</span>
+                <span className="ui-meta">{formatDate(row.ts, lang)}</span>
+              </>
+            }
+          />
         ),
       },
       {
         id: "date",
-        header: t("releaseDate"),
-        align: "right",
         width: 120,
-        hiddenMd: true,
-        cell: (row) => <span className="ui-mono-value font-normal">{formatDate(row.ts, lang)}</span>,
+        ...releaseDateCol(t, lang, (row: FeedEntry) => row.ts),
       },
       {
         id: "type",
@@ -143,15 +173,17 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
         id: "model",
         header: t("model"),
         cell: (row) => (
-          <div className="min-w-0">
-            <p className="text-sm font-semibold truncate" title={row.entry.model}>
-              {row.entry.model}
-            </p>
-            <div className="flex md:hidden mt-1.5 items-center gap-2">
-              <span className="text-xs text-text-secondary">{row.entry.provider}</span>
-              <span className="ui-meta">{formatDate(row.ts, lang)}</span>
-            </div>
-          </div>
+          <ReleaseModelCell
+            title={row.entry.model}
+            name={row.entry.model}
+            semibold
+            line={
+              <>
+                <span className="text-xs text-text-secondary">{row.entry.provider}</span>
+                <span className="ui-meta">{formatDate(row.ts, lang)}</span>
+              </>
+            }
+          />
         ),
       },
       {
@@ -164,11 +196,8 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
       },
       {
         id: "releaseDate",
-        header: t("releaseDate"),
-        align: "right",
         width: "18%",
-        hiddenMd: true,
-        cell: (row) => <span className="ui-mono-value font-normal">{formatDate(row.ts, lang)}</span>,
+        ...releaseDateCol(t, lang, (row: ClosedRow) => row.ts),
       },
     ],
     [t, lang],

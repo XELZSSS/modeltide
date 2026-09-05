@@ -2,6 +2,7 @@ import {
   type DataTableColumn,
   RankingNameCell,
   RightAlignedText,
+  mobilePrimaryCol,
   rankCol,
   rightCol,
   textCol,
@@ -28,27 +29,34 @@ function tokenText(v: number | null | undefined): string {
   return typeof v === "number" && Number.isFinite(v) ? formatShortNumber(v) : "—";
 }
 
+/** Token count cell; `muted` dims secondary columns. */
+function tokenCol(
+  id: string,
+  header: string,
+  get: (item: OpenRouterRankEntry) => number | null | undefined,
+  opts?: { primary?: boolean; muted?: boolean },
+): DataTableColumn<OpenRouterRankEntry> {
+  const col = opts?.primary ? mobilePrimaryCol : rightCol;
+  return col(id, header, (item) => (
+    <span className={`ui-mono-value ${opts?.muted ? "font-normal text-text-secondary" : "font-semibold"}`}>
+      {tokenText(get(item))}
+    </span>
+  ));
+}
+
 /** Token-usage columns plus the request-count trend badge. */
 export function buildOpenRouterColumns(t: (key: TranslationKey) => string): DataTableColumn<OpenRouterRankEntry>[] {
   return [
     rankCol((item) => item.rank),
     textCol("model", t("model"), (item) => <RankingNameCell name={item.name} />, { width: "45%" }),
-    rightCol("totalTokens", t("totalTokens"), (item) => (
-      <span className="ui-mono-value font-semibold">{tokenText(item.totalTokens)}</span>
-    )),
-    rightCol("inputTokens", t("inputTokens"), (item) => (
-      <span className="ui-mono-value font-semibold">{tokenText(item.promptTokens)}</span>
-    )),
-    rightCol("outputTokens", t("outputTokens"), (item) => (
-      <span className="ui-mono-value font-semibold">{tokenText(item.completionTokens)}</span>
-    )),
-    rightCol("requests", t("requests"), (item) => (
-      <span className="ui-mono-value font-normal text-text-secondary">{tokenText(item.requestCount)}</span>
-    )),
+    tokenCol("totalTokens", t("totalTokens"), (item) => item.totalTokens, { primary: true }),
+    tokenCol("inputTokens", t("inputTokens"), (item) => item.promptTokens),
+    tokenCol("outputTokens", t("outputTokens"), (item) => item.completionTokens),
+    tokenCol("requests", t("requests"), (item) => item.requestCount, { muted: true }),
     rightCol("creator", t("creator"), (item) => (
       <RightAlignedText className="ui-caption">{item.creator || t("unknown")}</RightAlignedText>
     )),
-    rightCol("trend", t("trend"), (item) => (
+    mobilePrimaryCol("trend", t("trend"), (item) => (
       <span className={cn(trendClass(item.change), "text-xs font-mono tabular-nums inline-block")}>
         {formatTrend(item.change, t)}
       </span>

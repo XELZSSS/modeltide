@@ -35,12 +35,22 @@ function createLogger(): AppContext["log"] {
   };
 }
 
-export function buildContext(env: Env): AppContext {
+let warnedMissingKv = false;
+
+export function buildContext(env: Env, init?: { signal?: AbortSignal }): AppContext {
+  const log = createLogger();
+  if (!env.CACHE && !warnedMissingKv) {
+    warnedMissingKv = true;
+    log(
+      "warn",
+      "[context] CACHE KV not configured: rate limiting disabled (memory fallback), status history is per-isolate memory only",
+    );
+  }
   return {
     cache: new CacheService(env.CACHE, CACHE_VERSION),
-    http: new HttpClient(),
+    http: new HttpClient(init?.signal ? { signal: init.signal } : undefined),
     kv: env.CACHE,
     hfToken: env.HF_TOKEN,
-    log: createLogger(),
+    log,
   };
 }

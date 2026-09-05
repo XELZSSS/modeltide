@@ -97,6 +97,17 @@ const SUM_KEYS = [
   "video_output_seconds",
 ] as const;
 
+/**
+ * Total usage for ranking/dominance. Rows with no usable token figures score
+ * -1 so unknown usage sorts below genuine zero (display still shows 0).
+ */
+function usageTotal(row: ModelRow): number {
+  const p = numOr(row.total_prompt_tokens, NaN);
+  const c = numOr(row.total_completion_tokens, NaN);
+  if (!Number.isFinite(p) && !Number.isFinite(c)) return -1;
+  return (Number.isFinite(p) ? p : 0) + (Number.isFinite(c) ? c : 0);
+}
+
 export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry>): OpenRouterRankEntry[] {
   // Upstream emits one row per variant; merge into one entry per model id.
   // Usage fields sum; the dominant variant lends its label and pricing.
@@ -110,7 +121,7 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
   for (const row of rows) {
     if (!isValidOpenRouterRowId(row.model_permaslug)) continue;
     const id = row.model_permaslug.trim();
-    const tokens = numOr(row.total_prompt_tokens, 0) + numOr(row.total_completion_tokens, 0);
+    const tokens = usageTotal(row);
     const group = grouped.get(id);
     if (!group) {
       grouped.set(id, {
@@ -122,8 +133,16 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
       continue;
     }
     for (const k of SUM_KEYS) group.agg[k] = numOr(group.agg[k], 0) + numOr(row[k], 0);
-    // `change` belongs to the latest-dated row.
-    if (row.date && (!group.latestDate || row.date > group.latestDate)) {
+    // `change` belongs to the latest-dated row; same-date rows take the last.
+    // Dates compare as epoch millis (ISO strings sort lexicographically too,
+    // but Date.parse is explicit and NaN-safe).
+    const rowTime = row.date ? Date.parse(row.date) : NaN;
+    const latestTime = group.latestDate ? Date.parse(group.latestDate) : NaN;
+    const isLater =
+      row.date != null &&
+      row.date !== "" &&
+      (!group.latestDate || (Number.isFinite(rowTime) && (!Number.isFinite(latestTime) || rowTime >= latestTime)));
+    if (isLater) {
       group.latestDate = row.date;
       group.agg.date = row.date;
       const parsedChange = parseChange(row.change);
@@ -137,18 +156,19 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
       group.dominantTokens = tokens;
     }
   }
-  const merged = Array.from(grouped.values()).sort(
-    (a, b) =>
-      numOr(b.agg.total_prompt_tokens, 0) +
-      numOr(b.agg.total_completion_tokens, 0) -
-      (numOr(a.agg.total_prompt_tokens, 0) + numOr(a.agg.total_completion_tokens, 0)),
-  );
+  const merged = Array.from(grouped.values()).sort((a, b) => usageTotal(b.agg) - usageTotal(a.agg));
   const out: OpenRouterRankEntry[] = [];
   for (let i = 0; i < merged.length; i++) {
     const { agg: row, dominant } = merged[i]!;
     const id = row.model_permaslug;
     const name = titleFromSlug(id) || id;
-    const pricing = pricingMap.get(dominant.variant_permaslug) ?? pricingMap.get(id);
+    const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
+    // Lowercase fallbacks cover directory payloads cached before alias keys.
+    const pricing =
+      (variantKey ? pricingMap.get(variantKey) : undefined) ??
+      (variantKey ? pricingMap.get(variantKey.toLowerCase()) : undefined) ??
+      pricingMap.get(id) ??
+      pricingMap.get(id.toLowerCase());
     const isFree = pricing
       ? pricing.prompt === 0 && pricing.completion === 0 && pricing.input_cache_read === 0
       : undefined;
@@ -176,6 +196,9 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
 
 // Rankings source (fetch + cache).
 const OPENROUTER = upstreamConfig.openrouter;
+
+/** Frontend rankings endpoint (probed separately from the /api/v1/models directory). */
+export const RANKINGS_PATH = "/api/frontend/v1/rankings/models";
 
 interface PricingRow {
   id: string;
@@ -231,8 +254,15 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
     const pricingEntry = buildPricingEntry(prompt, completion, inputCacheRead);
     if (pricingEntry) {
       pricingRecord[m.id.trim()] = pricingEntry;
-      if (typeof m.canonical_slug === "string" && m.canonical_slug.trim())
+      // Lowercase alias: providers disagree on id casing (GPT-4o vs gpt-4o).
+      // Case-only collisions merge (last wins); no such distinct models exist.
+      const lowerId = m.id.trim().toLowerCase();
+      if (lowerId !== m.id.trim()) pricingRecord[lowerId] = pricingEntry;
+      if (typeof m.canonical_slug === "string" && m.canonical_slug.trim()) {
         pricingRecord[m.canonical_slug.trim()] = pricingEntry;
+        const lowerSlug = m.canonical_slug.trim().toLowerCase();
+        if (lowerSlug !== m.canonical_slug.trim()) pricingRecord[lowerSlug] = pricingEntry;
+      }
     }
     const contextLength = numPositive(m.context_length);
     const agenticIndex = num(m.benchmarks?.artificial_analysis?.agentic_index);
@@ -252,7 +282,9 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
       metaRecord[key] = cur ? mergeMetaRecord(cur, metaEntry) : metaEntry;
     }
   }
-  if (Object.keys(pricingRecord).length === 0) throw new UpstreamError("OpenRouter: empty pricing response");
+  if (Object.keys(pricingRecord).length === 0) {
+    throw new UpstreamError(`OpenRouter: empty pricing response (raw=${rows.length}, kept=0)`);
+  }
   return { pricing: pricingRecord, meta: metaRecord };
 }
 
@@ -278,6 +310,8 @@ async function fetchModelDirectory(ctx: AppContext): Promise<{
     ctx.log("warn", `[openrouter] directory fetch failed: ${errMsg(err)}`);
     return { pricing: new Map<string, PricingEntry>(), meta: {} };
   }
+  // Note: empty pricing (0 entries) is a partial failure, logged by the
+  // caller via partialFailure TTL shortening.
 }
 
 /** Normalized-key AA meta for backfill; empty when unavailable (never throws). */
@@ -289,12 +323,10 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
     // Fetch rankings + directory in parallel: serial 10s x retries worst-case
     // (~40s) exceeds the 25s route timeout on cold start.
     const [rankingsResult, directoryResult] = await Promise.all([
-      ctx.http
-        .json<{ data: ModelRow[] }>(`${OPENROUTER}/api/frontend/v1/rankings/models`, DIRECTORY_FETCH_OPTS)
-        .then(
-          (v) => ({ ok: true as const, value: v }),
-          (err) => ({ ok: false as const, error: err }),
-        ),
+      ctx.http.json<{ data: ModelRow[] }>(`${OPENROUTER}${RANKINGS_PATH}`, DIRECTORY_FETCH_OPTS).then(
+        (v) => ({ ok: true as const, value: v }),
+        (err) => ({ ok: false as const, error: err }),
+      ),
       fetchModelDirectory(ctx),
     ]);
     if (!rankingsResult.ok) {
@@ -313,6 +345,9 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
     }
     const pricingMap = directoryResult.pricing;
     const partialFailure = pricingMap.size === 0;
+    if (partialFailure) {
+      ctx.log("warn", "[openrouter] directory empty, serving rankings without pricing");
+    }
     const models = mapModels(validRows, pricingMap);
     if (models.length === 0 && validRows.length > 0) {
       throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${validRows.length} rows`);

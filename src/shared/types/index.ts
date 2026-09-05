@@ -339,4 +339,6 @@ export interface StatusHistoryPayload {
   /** State transitions, newest first. */
   events: StatusEvent[];
   generatedAt: string;
+  /** False when KV is absent: history is per-isolate memory and lost on restart. */
+  persisted: boolean;
 }

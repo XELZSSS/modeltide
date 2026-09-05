@@ -361,9 +361,17 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
   const rawLink = itemLink(item);
   if (!rawLink) return null;
   const link = rawLink.trim().slice(0, MAX_LINK_CHARS);
-  const title = decodeEntities(stripHtml(String(item.title ?? "")).slice(0, MAX_TITLE_CHARS)).trim();
+  // Decode-then-strip (twice): entity-encoded HTML like &lt;script&gt; must not
+  // survive as live tags after decoding.
+  const rawTitle = String(item.title ?? "");
+  const title = stripHtml(decodeEntities(stripHtml(rawTitle)))
+    .slice(0, MAX_TITLE_CHARS)
+    .trim();
   // Unified dirty/invalid/unsuitable gate (title + link + protocol).
   if (!isSuitableNewsItem(title, link)) return null;
+  // Defense in depth: reject links with embeddable quotes/brackets even if the
+  // URL parser accepts them.
+  if (/["<>\s]/.test(link)) return null;
   return {
     id: itemId(item, link, title),
     title,
@@ -390,7 +398,7 @@ function parseChannel(feed: unknown, sourceUrl: string): NewsItem[] {
     .map((item) => toNewsItem(item, source))
     .filter((x: NewsItem | null): x is NewsItem => x !== null);
   if (parsed.length === 0) {
-    throw new UpstreamError(`Feed at ${sourceUrl} yielded 0 usable items`);
+    throw new UpstreamError(`Feed at ${sourceUrl} yielded 0 usable items (raw=${records.length}, kept=0)`);
   }
   return parsed;
 }
@@ -407,7 +415,11 @@ export function tableRowInners(html: string): string[] {
 /** Stripped text of every cell in a row, in order (empties kept for indexing). */
 export function rowCells(trInner: string): string[] {
   const cells: string[] = [];
-  for (const match of trInner.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi))
-    cells.push(stripHtml(match[1] ?? "").trim());
+  // Self-closing <td/> keeps column alignment; nested tables are flattened
+  // (upstream pages are flat — nested tables would misalign by design).
+  for (const match of trInner.matchAll(/<t[dh][^>]*?(?:\/>|>([\s\S]*?)<\/t[dh]>)/gi)) {
+    const inner = match[1] ?? "";
+    cells.push(stripHtml(inner).trim());
+  }
   return cells;
 }
