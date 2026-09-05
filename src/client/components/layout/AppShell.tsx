@@ -39,8 +39,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const closeMore = useCallback(() => setMobileMoreOpen(false), []);
 
   // Toggle the theme before paint to avoid a flash on load/switch.
+  // Also keep the theme-color meta in sync so mobile status bar / PWA chrome
+  // follows the theme without requiring a reload.
   useLayoutEffect(() => {
-    document.documentElement.classList.toggle("dark", themeMode === "dark");
+    const dark = themeMode === "dark";
+    document.documentElement.classList.toggle("dark", dark);
+    document.documentElement.style.colorScheme = dark ? "dark" : "light";
+    const meta = document.querySelector("meta[name='theme-color']");
+    if (meta) meta.setAttribute("content", dark ? "#000000" : "#ffffff");
   }, [themeMode]);
 
   // Scope the accent to <body> so portal sheets inherit it too.

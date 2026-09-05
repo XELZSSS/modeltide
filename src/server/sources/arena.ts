@@ -2,7 +2,7 @@ import { SLOW_TTL_MS, UPSTREAM_TIMEOUT_MS, cacheKeys, upstreamConfig } from "@/s
 import type { ArenaRankEntry, ArenaRankingsPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError } from "@/server/infra";
-import { decodeEntities, stripHtml, tableRowInners } from "@/server/parsers/feed";
+import { decodeEntities, tableRowInners, rowCells } from "@/server/parsers/feed";
 import { leadingInt, leadingNumber, moneyAmount, suffixedCount } from "@/server/parsers/primitives";
 import { isValidArenaRow } from "@/server/sources/data-filter";
 
@@ -19,17 +19,19 @@ export const ARENA_CATEGORIES = [
 ] as const;
 
 function cellTexts(trInner: string): string[] {
-  // Split on closing tags so nested spans don't collapse cell boundaries.
-  return trInner
-    .split(/<\/(?:td|th)[^>]*>/gi)
-    .map((cell) => decodeEntities(stripHtml(cell)).trim())
-    .filter((cell) => cell.length > 0);
+  // Keep empty cells for column alignment: a missing price/vote cell must
+  // not shift subsequent columns left. rowCells preserves empties in order.
+  const cells = rowCells(trInner).map((cell) => decodeEntities(cell).trim());
+  // Drop the trailing artifact from splitting (content after the last </td>).
+  // rowCells never produces it, but keep the guard for direct callers.
+  return cells;
 }
 
 function titleOf(trInner: string): string | null {
-  const m = /<span[^>]*\btitle=([^ >]+)/i.exec(trInner);
-  if (!m?.[1]) return null;
-  return m[1].replace(/^["']|["']$/g, "").trim() || null;
+  const m = /<span[^>]*\btitle\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(trInner);
+  if (!m) return null;
+  const value = (m[1] ?? m[2] ?? m[3] ?? "").trim();
+  return value || null;
 }
 
 function parseScore(v: string): number | null {
@@ -85,7 +87,10 @@ function creatorFor(id: string, name: string): string {
  */
 function parseRank(v: string | undefined): number | null {
   if (v == null) return null;
-  const n = Number(v.replace(/,/g, "").trim());
+  const trimmed = v.replace(/,/g, "").trim();
+  // Empty strings must not coerce via Number("") === 0.
+  if (!trimmed) return null;
+  const n = Number(trimmed);
   return Number.isInteger(n) && n >= 0 ? n : null;
 }
 

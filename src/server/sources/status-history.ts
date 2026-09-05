@@ -150,8 +150,6 @@ export function buildTargets(): ProbeTarget[] {
     { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
     { id: "openrouter", url: `${upstreamConfig.openrouter}/api/v1/models` },
     { id: "arena", url: `${upstreamConfig.arena}/leaderboard/text` },
-    // Closed-source releases directory (same page the releases source scrapes).
-    { id: "benchmarkList", url: `${upstreamConfig.benchmarkList}/models/` },
     ...newsSample.map((url): ProbeTarget => ({ id: "news", url })),
   ];
 }
@@ -185,8 +183,11 @@ export function aggregateProbes(
     g.total += 1;
     if (probe.ok) {
       g.ok = true;
-      g.status = probe.status;
-      g.latencyMs = probe.latencyMs;
+      g.status ??= probe.status;
+      // Keep the fastest successful probe as representative, not the last.
+      if (probe.latencyMs != null && (g.latencyMs == null || probe.latencyMs < g.latencyMs)) {
+        g.latencyMs = probe.latencyMs;
+      }
     } else {
       g.failures += 1;
       g.firstError ??= probe.error;
@@ -305,6 +306,10 @@ const SAMPLE_LOCK_KEY = "status:history:lock";
 // In-memory fallback when KV is not configured.
 let memoryStore: HistoryStore = { sources: {} };
 
+// Dedupes concurrent on-demand sampling (no-KV deploys and overlapping
+// cron/user triggers): concurrent callers share one probe round.
+let inflightSample: Promise<void> | null = null;
+
 async function acquireSampleLock(ctx: AppContext): Promise<boolean> {
   if (!ctx.kv) return true;
   try {
@@ -326,6 +331,25 @@ async function releaseSampleLock(ctx: AppContext): Promise<void> {
   }
 }
 
+function isValidSample(s: unknown): s is UptimeSample {
+  if (!s || typeof s !== "object" || Array.isArray(s)) return false;
+  const r = s as Record<string, unknown>;
+  return typeof r.t === "number" && Number.isFinite(r.t) && typeof r.ok === "boolean";
+}
+
+function isValidBucket(b: unknown): b is DayBucket {
+  if (!b || typeof b !== "object" || Array.isArray(b)) return false;
+  const r = b as Record<string, unknown>;
+  return (
+    typeof r.day === "string" &&
+    typeof r.total === "number" &&
+    typeof r.ok === "number" &&
+    typeof r.latencySum === "number" &&
+    typeof r.latencyN === "number" &&
+    typeof r.incidents === "number"
+  );
+}
+
 function isValidStoreShape(v: unknown): v is HistoryStore {
   if (!v || typeof v !== "object" || Array.isArray(v)) return false;
   const sources = (v as { sources?: unknown }).sources;
@@ -335,6 +359,7 @@ function isValidStoreShape(v: unknown): v is HistoryStore {
     if (typeof entry !== "object" || Array.isArray(entry)) return false;
     const { recent, daily } = entry as { recent?: unknown; daily?: unknown };
     if (!Array.isArray(recent) || !Array.isArray(daily)) return false;
+    if (!recent.every(isValidSample) || !daily.every(isValidBucket)) return false;
   }
   return true;
 }
@@ -416,7 +441,11 @@ export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore>
   }
   if (newestSampleTime(store) < Date.now() - SAMPLE_INTERVAL_MS) {
     try {
-      await recordStatusSamples(ctx);
+      // Share one probe round across concurrent callers.
+      inflightSample ??= recordStatusSamples(ctx).finally(() => {
+        inflightSample = null;
+      });
+      await inflightSample;
       store = await readStore(ctx);
     } catch {
       // Sampling failure: fall through with stale store.

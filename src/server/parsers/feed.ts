@@ -207,9 +207,10 @@ export function stripHtml(s: string): string {
     }
     const end = findTagEnd(s, i);
     if (end === -1) {
-      parts.push("<");
-      i++;
-      continue;
+      // No closing ">" anywhere ahead: the rest is plain text. Appending it
+      // verbatim avoids re-scanning to the end for every stray "<" (O(n^2)).
+      parts.push(s.slice(i));
+      break;
     }
     const inner = s.slice(i + 1, end);
     const name = tagNameOf(inner);
@@ -380,10 +381,18 @@ function parseChannel(feed: unknown, sourceUrl: string): NewsItem[] {
   let items = (channel.item ?? channel.entry ?? []) as unknown;
   if (!Array.isArray(items)) items = [items];
   const source = channelTitle(channel, sourceUrl);
-  return (items as Record<string, unknown>[])
+  const records = (items as unknown[]).filter((item): item is Record<string, unknown> => isRecord(item));
+  if (records.length === 0 && (items as unknown[]).length > 0) {
+    throw new UpstreamError(`Unrecognized feed items at ${sourceUrl}`);
+  }
+  const parsed = records
     .slice(0, MAX_ITEMS_PER_FEED)
     .map((item) => toNewsItem(item, source))
     .filter((x: NewsItem | null): x is NewsItem => x !== null);
+  if (parsed.length === 0) {
+    throw new UpstreamError(`Feed at ${sourceUrl} yielded 0 usable items`);
+  }
+  return parsed;
 }
 
 /* Shared <tr>/<td> scanners for arena + official-pricing. */

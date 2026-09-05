@@ -9,6 +9,8 @@ export const API_DOMAINS = {
   openSourceReleases: "open-source-releases",
   news: "news",
   openRouterRankings: "openrouter-rankings",
+  // Internal-only KV key (no public route): the OR model directory backing
+  // pricing + AA backfill. Kept here so cache clears stay in one place.
   openRouterPricing: "openrouter-pricing-map",
   closedReleases: "closed-releases",
   arenaBoard: "arena-board",
@@ -116,7 +118,6 @@ export function newsWarmDue(utcMinutes: number = new Date().getUTCMinutes()): bo
 // USER_AGENT, WARM_ORIGIN, REPO_URL use the deployed name — keep in sync on rename.
 export const upstreamConfig = {
   artificialAnalysis: "https://artificialanalysis.ai",
-  benchmarkList: "https://benchmarklist.com",
   huggingface: "https://huggingface.co/api/models",
   openrouter: "https://openrouter.ai",
   /** Arena human-preference leaderboard (Next.js page, server-rendered table rows). */
@@ -127,10 +128,9 @@ export const upstreamConfig = {
   googleCloud: "https://cloud.google.com",
   deepseekDocs: "https://api-docs.deepseek.com",
   mistral: "https://mistral.ai",
-  moonshot: "https://platform.moonshot.ai",
+  moonshot: "https://platform.kimi.ai",
 } as const satisfies Record<
   | "artificialAnalysis"
-  | "benchmarkList"
   | "huggingface"
   | "openrouter"
   | "arena"
@@ -151,7 +151,7 @@ export const USER_AGENT = "ModelTide/2.0 (+https://github.com/XELZSSS/modeltide)
 export const WARM_ORIGIN = "https://modeltide.internal";
 
 // Feeds below were verified reachable with plain fetch + UA.
-const VENTUREBEAT_AI = "https://venturebeat.com/category/ai/feed/";
+const AI_NEWS = "https://www.artificialintelligence-news.com/feed/";
 const TECHCRUNCH_AI = "https://techcrunch.com/category/artificial-intelligence/feed/";
 const SILICONANGLE_AI = "https://siliconangle.com/category/ai/feed/";
 const ARS_TECHNICA = "https://feeds.arstechnica.com/arstechnica/index";
@@ -173,7 +173,7 @@ const BLOCKS_AND_FILES = "https://blocksandfiles.com/feed/";
 
 /** A category is healthy while any one feed responds; failures shorten the TTL. */
 export const rssConfig: Record<NewsCategory, readonly string[]> = {
-  industry: [VENTUREBEAT_AI, TECHCRUNCH_AI, SILICONANGLE_AI, ARS_TECHNICA, MIT_TECH_REVIEW, WIRED_AI],
+  industry: [AI_NEWS, TECHCRUNCH_AI, SILICONANGLE_AI, ARS_TECHNICA, MIT_TECH_REVIEW, WIRED_AI],
   opensource: [ANALYTICS_VIDHYA, HF_BLOG, IMPORT_AI, LAST_WEEK_IN_AI, PHORONIX],
   hardware: [TOMS_HARDWARE, TECHPOWERUP, SERVE_THE_HOME, TECHCRUNCH_HARDWARE, TECHCRUNCH_GADGETS],
   funding: [TECHCRUNCH_STARTUPS, CRUNCHBASE_NEWS, BLOCKS_AND_FILES],
@@ -269,7 +269,6 @@ export const SOURCE_LABELS: Record<SourceStatus["id"], TranslationKey> = {
   openrouter: "sourceNameOpenRouter",
   news: "sourceNameNews",
   arena: "sourceNameArena",
-  benchmarkList: "sourceNameBenchmarkList",
 };
 
 /** Allowlist: each entry maps to a verified /leaderboard/text/<slug> page. */
@@ -291,5 +290,4 @@ export const SOURCE_IDS = [
   "openrouter",
   "news",
   "arena",
-  "benchmarkList",
 ] as const;

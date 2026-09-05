@@ -149,7 +149,9 @@ export const routeDefs = [
 function applyCacheHeaders(c: Context, noStore: boolean): void {
   c.header("Cache-Control", noStore ? BROWSER_NO_STORE_HEADER : BROWSER_CACHE_HEADER);
   c.header("CDN-Cache-Control", noStore ? CDN_NO_STORE_HEADER : CDN_CACHE_HEADER);
-  c.header("Vary", "Accept, Accept-Encoding");
+  // JSON API responses don't vary by Accept; keep encoding-only to avoid
+  // needless cache fragmentation.
+  c.header("Vary", "Accept-Encoding");
 }
 
 /**
@@ -162,8 +164,16 @@ async function enforceRateLimit(
   rl: { windowSec: number; max: number },
 ): Promise<void> {
   if (!kv) return;
-  const ip = c.req.header("CF-Connecting-IP") ?? c.req.header("X-Forwarded-For")?.split(",")[0]?.trim();
-  if (!ip) return;
+  // Prefer the CF edge header (unspoofable); fall back to the first XFF
+  // entry only when CF is absent (e.g. local dev). Sanitize to bound KV key
+  // length (512B limit) and avoid budget minting via overlong values.
+  const cfIp = c.req.header("CF-Connecting-IP")?.trim();
+  const xffFirst = c.req.header("X-Forwarded-For")?.split(",")[0]?.trim();
+  const rawIp = cfIp || xffFirst;
+  if (!rawIp) return;
+  // Basic IP/host sanity: truncate and reject control chars / overlong values.
+  if (/[\s\r\n]/.test(rawIp) || rawIp.length > 45) return;
+  const ip = rawIp.slice(0, 45);
   // Path + IP only: including the query string lets attackers mint fresh budgets.
   const key = `rl:${c.req.path}:${ip}`;
   let current: number;
@@ -228,6 +238,12 @@ export function buildWarmUrls(base: string, routes: readonly RouteDef[], now: Da
         for (const [name, spec] of Object.entries(specs)) {
           if (spec.type !== "enum") continue;
           combos = combos.flatMap((combo) => spec.values.map((v) => ({ ...combo, [name]: v })));
+          // Bound cartesian explosion: future multi-enum routes must not
+          // silently blow the per-tick subrequest budget.
+          if (combos.length > 20) {
+            combos = combos.slice(0, 20);
+            break;
+          }
         }
         return combos.map((combo) => withQuery(base + route.path, { ...defaults, ...combo }));
       })
@@ -269,8 +285,10 @@ export const BULK_PER_TICK = 4;
  */
 export function bulkSliceForTick(bulk: string[], now: Date = new Date()): string[] {
   if (bulk.length === 0) return [];
-  const tick = Math.floor(now.getTime() / THIRTY_MINUTES);
-  const chunks = Math.ceil(bulk.length / BULK_PER_TICK);
+  const time = now.getTime();
+  if (!Number.isFinite(time)) return bulk.slice(0, BULK_PER_TICK);
+  const tick = Math.floor(time / THIRTY_MINUTES);
+  const chunks = Math.max(1, Math.ceil(bulk.length / BULK_PER_TICK));
   const start = (tick % chunks) * BULK_PER_TICK;
   return bulk.slice(start, start + BULK_PER_TICK);
 }

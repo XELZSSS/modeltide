@@ -32,11 +32,16 @@ const beijingHHMM = (ts: number): string => new Date(ts + BEIJING_OFFSET_MS).toI
 /** Palette slot for the latency line. */
 const LATENCY_COLOR_SLOT = 6;
 
+// Stable empty refs so UptimeStrip memo isn't busted by fresh [] each render.
+const EMPTY_SAMPLES: { t: number; latencyMs: number | null }[] = [];
+const EMPTY_BUCKETS: import("@/shared/types").DayBucket[] = [];
+
 const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: number; latencyMs: number | null }[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();
 
-  const latencyColor = theme.palette[LATENCY_COLOR_SLOT] ?? theme.tick;
+  const latencyColor =
+    theme.palette[LATENCY_COLOR_SLOT]?.trim() ? (theme.palette[LATENCY_COLOR_SLOT] as string) : theme.tick;
   const data = useMemo(
     () => ({
       labels: samples.map((s) => beijingHHMM(s.t)),
@@ -96,8 +101,8 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
   const { t } = useTranslation();
   const { data } = useSuspenseStatusHistory();
   const summary = data.sources.find((s) => s.id === id);
-  const recent = data.recent[id] ?? [];
-  const buckets = data.daily[id] ?? [];
+  const recent = data.recent[id] ?? EMPTY_SAMPLES;
+  const buckets = data.daily[id] ?? EMPTY_BUCKETS;
   const events = data.events.filter((e) => e.id === id).slice(0, 10);
   const pct = (v: number | null) => formatUptimePct(t, v);
 

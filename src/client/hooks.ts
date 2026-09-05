@@ -14,14 +14,14 @@ export interface ChartTheme {
 
 function resolveChartTheme(): ChartTheme {
   const styles = getComputedStyle(document.documentElement);
-  const read = (name: string) => styles.getPropertyValue(name).trim();
+  const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
   return {
-    grid: read("--border"),
-    tick: read("--text-tertiary"),
-    tickSecondary: read("--text-secondary"),
-    tooltipBg: read("--bg-secondary"),
-    tooltipText: read("--text-primary"),
-    palette: Array.from({ length: 10 }, (_, i) => read(`--chart-${i + 1}`)),
+    grid: read("--border", "#e4e4e7"),
+    tick: read("--text-tertiary", "#71717a"),
+    tickSecondary: read("--text-secondary", "#52525b"),
+    tooltipBg: read("--bg-secondary", "#ffffff"),
+    tooltipText: read("--text-primary", "#111111"),
+    palette: Array.from({ length: 10 }, (_, i) => read(`--chart-${i + 1}`, "")),
   };
 }
 

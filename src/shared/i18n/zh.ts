@@ -62,7 +62,6 @@ export const zh = {
   releaseClosedSource: "闭源发布",
   releaseType: "类型",
   aaModelPage: "Artificial Analysis 模型页",
-  benchmarkListModelPage: "BenchmarkList 模型页",
   events: "{count} 条动态",
   promptPrice: "输入价格",
   completionPrice: "输出价格",
@@ -114,7 +113,7 @@ export const zh = {
   openSourceDataSource: "数据来源：Hugging Face Hub",
   openRouterSource: "数据来源：OpenRouter",
   releaseDataSource: "数据来源：Hugging Face Hub",
-  closedReleasesSource: "数据来源：BenchmarkList",
+  closedReleasesSource: "数据来源：Artificial Analysis",
 
   openRouterRankings: "用量",
   modelNameOrId: "模型名称 / ID",
@@ -184,7 +183,6 @@ export const zh = {
   sourceNameOpenRouter: "OpenRouter",
   sourceNameNews: "新闻 RSS",
   sourceNameArena: "Arena",
-  sourceNameBenchmarkList: "BenchmarkList",
 
   uptimeDays: "{days} 天 {hours} 小时",
   uptimeHours: "{hours} 小时 {mins} 分",

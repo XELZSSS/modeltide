@@ -67,9 +67,9 @@ export const StatusEventList = memo(function StatusEventList({
   }
   return (
     <div className="divide-y divide-border border border-border bg-bg-card">
-      {events.map((event) => (
+      {events.map((event, idx) => (
         <StatusEventRow
-          key={`${event.id}-${event.at}-${event.type}`}
+          key={`${event.id}-${event.at}-${event.type}-${idx}`}
           event={event}
           showSource={showSource}
           showTime={showTime}
@@ -91,6 +91,11 @@ export const StatusEventRow = memo(function StatusEventRow({
 }) {
   const { t } = useTranslation();
   const down = event.type === "down";
+  // Unknown future source ids fall back to the raw id instead of t(undefined).
+  const labelKey = (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[
+    event.id
+  ];
+  const sourceLabel = labelKey ? t(labelKey) : event.id;
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="flex items-center gap-2 min-w-0">
@@ -102,7 +107,7 @@ export const StatusEventRow = memo(function StatusEventRow({
           {showSource && (
             <>
               <span className="text-text-secondary mx-1.5">·</span>
-              <span className="text-text-secondary">{t(SOURCE_LABELS[event.id])}</span>
+              <span className="text-text-secondary">{sourceLabel}</span>
             </>
           )}
         </span>

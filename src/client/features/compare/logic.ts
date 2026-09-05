@@ -103,10 +103,11 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]) 
 
 /** Price rows (prompt/completion/cache-hit); lower is better. */
 export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
+  const cacheOf = (m: ArtificialAnalysisModel) => m.pricing?.cacheHit ?? m.pricing?.cache_hit;
   return [
     { label: t("promptPrice"), getNumeric: (m) => m.pricing?.input, bestIs: "min" },
     { label: t("completionPrice"), getNumeric: (m) => m.pricing?.output, bestIs: "min" },
-    { label: t("cacheHitPrice"), getNumeric: (m) => m.pricing?.cache_hit, bestIs: "min" },
+    { label: t("cacheHitPrice"), getNumeric: cacheOf, bestIs: "min" },
   ];
 }
 

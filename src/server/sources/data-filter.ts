@@ -90,19 +90,6 @@ export function isValidHttpUrl(link: string): boolean {
 // 1. Identity / slug
 // ---------------------------------------------------------------------------
 
-/** Model-page slugs are path segments; dots occur upstream (e.g. `laguna-s.2.1`). */
-const SAFE_SLUG_RE = /^[A-Za-z0-9_.-]+$/;
-
-/** Unified safe-slug check (path traversal + placeholder + unsuitable safe). */
-export function isSafeSlug(slug: string): boolean {
-  const t = slug.trim();
-  if (!t || t.length > 200) return false;
-  if (!SAFE_SLUG_RE.test(t)) return false;
-  if (t.includes("..")) return false;
-  if (isUnsuitableContent(t)) return false;
-  return true;
-}
-
 /** Raw id check shared by HF / OpenRouter / AA directory rows. */
 export function isValidRowId(id: unknown): boolean {
   if (typeof id !== "string") return false;
@@ -240,29 +227,7 @@ export function isSuitableNewsItem(title: unknown, link: unknown): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// 8. Closed releases (BenchmarkList)
-// ---------------------------------------------------------------------------
-
-/** Only closed_api rows belong to this feed; open/unclassified are unrelated. */
-export function isClosedSourceRow(trAttrs: string): boolean {
-  return trAttrs.includes('data-filter-source="closed_api"');
-}
-
-/** Cloudflare Managed Challenge pages carry no table rows. */
-export function isChallengePage(html: string): boolean {
-  return html.includes("Just a moment") && html.includes("challenges.cloudflare.com");
-}
-
-/** Closed-release rows need a safe slug, a real name and a release date. */
-export function isValidClosedRelease(slug: string | null, name: string | undefined, releaseDate: string | null): boolean {
-  if (!slug || !isSafeSlug(slug)) return false;
-  if (!name || !name.trim() || isUnsuitableContent(name)) return false;
-  if (!releaseDate) return false;
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// 9. Official pricing
+// 8. Official pricing
 // ---------------------------------------------------------------------------
 
 /** Header rows ("Model") carry no rates. */
@@ -289,7 +254,7 @@ export function shouldSkipKimiRow(id: string, unit: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// 10. Generic pipeline: map + drop nulls + dedupe by key
+// 9. Generic pipeline: map + drop nulls + dedupe by key
 // ---------------------------------------------------------------------------
 
 /**

@@ -106,7 +106,7 @@ function StatusContent() {
 
       {hasData && (
         <PageSection title={t("recentEvents")}>
-          <StatusEventList events={data.events.slice(0, 15)} emptyMessage={t("noRecentEvents")} showSource showTime />
+          <StatusEventList events={(data.events ?? []).slice(0, 15)} emptyMessage={t("noRecentEvents")} showSource showTime />
         </PageSection>
       )}
     </PageContainer>

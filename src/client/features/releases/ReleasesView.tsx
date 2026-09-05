@@ -186,7 +186,7 @@ function ClosedReleasesTab({ releases }: { releases: ClosedReleaseEntry[] }) {
             rel="noopener noreferrer"
             className="group inline-flex items-center gap-1.5 text-sm text-accent w-fit"
           >
-            {t("benchmarkListModelPage")}
+            {t("aaModelPage")}
             <ExternalLink size={14} className="md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
           </a>
         )}

@@ -17,6 +17,9 @@ export function safeHref(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
   if (!trimmed) return undefined;
+  // Reject protocol-relative URLs ("//evil.com") which inherit the page
+  // scheme and navigate off-site; only single-slash app paths are internal.
+  if (trimmed.startsWith("//")) return undefined;
   // Allow app-relative links; only external URLs need protocol validation.
   if (trimmed.startsWith("/")) return trimmed;
   try {
@@ -161,6 +164,7 @@ export function benchmarkLabel(key: string, t: TFunction): string {
 }
 
 export function formatUptime(t: TFunction, ms: number): string {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return t("uptimeNoData");
   const days = Math.floor(ms / ONE_DAY);
   const hours = Math.floor((ms % ONE_DAY) / ONE_HOUR);
   const mins = Math.floor((ms % ONE_HOUR) / ONE_MINUTE);
@@ -179,7 +183,8 @@ export function modelDetailPath(source: ModelSource, id: string): string {
 }
 
 /** Last path segment of a repo-style id ("org/Model" → "Model"). */
-export function shortModelId(id: string): string {
+export function shortModelId(id: string | null | undefined): string {
+  if (typeof id !== "string" || !id) return "";
   return id.split("/").pop() || id;
 }
 
@@ -280,12 +285,17 @@ export function resolveEffectivePricing(
   catalog: ArtificialAnalysisModel["pricing"],
   official?: OfficialPriceModel | null,
 ): EffectivePricing {
-  const input = finiteOrNull(official?.input) ?? finiteOrNull(catalog?.input);
-  const output = finiteOrNull(official?.output) ?? finiteOrNull(catalog?.output);
+  const officialInput = finiteOrNull(official?.input);
+  const officialOutput = finiteOrNull(official?.output);
+  const officialCache = finiteOrNull(official?.cachedInput);
+  const input = officialInput ?? finiteOrNull(catalog?.input);
+  const output = officialOutput ?? finiteOrNull(catalog?.output);
   const cacheHit =
-    finiteOrNull(official?.cachedInput) ?? finiteOrNull(catalog?.cacheHit) ?? finiteOrNull(catalog?.cache_hit);
+    officialCache ?? finiteOrNull(catalog?.cacheHit) ?? finiteOrNull(catalog?.cache_hit);
   if (input == null && output == null) return { input, output, cache_hit: cacheHit, source: null };
-  return { input, output, cache_hit: cacheHit, source: official ? "official" : "catalog" };
+  // Only claim "official" when at least one leg actually came from official.
+  const usedOfficial = officialInput != null || officialOutput != null || officialCache != null;
+  return { input, output, cache_hit: cacheHit, source: usedOfficial ? "official" : "catalog" };
 }
 
 /** Blended rate from effective (official-first) legs; catalog figure as fallback. */

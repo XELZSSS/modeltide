@@ -37,7 +37,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
 
   const data = useMemo(
     () => ({
-      labels: top10.map((m) => m.short_name || shortModelId(m.name)),
+      labels: top10.map((m) => m.short_name || shortModelId(m.name) || m.id || "—"),
       datasets: (
         [
           { key: "intelligence_index", label: t("intelligence") },

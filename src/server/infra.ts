@@ -138,7 +138,11 @@ function buildHeaders(userAgent: string, accept: string, initHeaders?: HeadersIn
 }
 
 function assertContentLength(url: string, contentLength: string | null, maxBytes: number): void {
-  if (contentLength && Number(contentLength) > maxBytes) {
+  if (!contentLength) return;
+  const trimmed = contentLength.trim();
+  // Only honor plain byte counts; ignore malformed values (body check is authoritative).
+  if (!/^\d+$/.test(trimmed)) return;
+  if (Number(trimmed) > maxBytes) {
     throw new UpstreamError(`Upstream payload too large for ${url}`);
   }
 }
@@ -243,7 +247,7 @@ export class HttpClient {
       return { ok: res.ok, status: res.status, latencyMs, error: res.ok ? null : `HTTP ${res.status}` };
     } catch (e) {
       const latencyMs = Date.now() - started;
-      const timedOut = e instanceof Error && e.name === "TimeoutError";
+      const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
       return { ok: false, status: null, latencyMs, error: timedOut ? "timeout" : "network error" };
     }
   }
@@ -367,15 +371,23 @@ export class CacheService {
       }
     }
     const hit = await this.get<StaleEnvelope<T>>(vk);
-    if (hit !== undefined) {
-      if (hit.e > Date.now()) return hit.d;
-      try {
-        return await this.refresh(vk, ttl, fn);
-      } catch {
-        return hit.d; // soft-expired but upstream failed: serve stale
+    if (!isEnvelope<T>(hit)) {
+      // Corrupt or legacy KV value: drop it and refresh from upstream.
+      if (hit !== undefined) {
+        try {
+          await this.kv.delete(vk);
+        } catch {
+          // Best-effort cleanup; refresh proceeds regardless.
+        }
       }
+      return this.refresh(vk, ttl, fn);
     }
-    return this.refresh(vk, ttl, fn);
+    if (hit.e > Date.now()) return hit.d;
+    try {
+      return await this.refresh(vk, ttl, fn);
+    } catch {
+      return hit.d; // soft-expired but upstream failed: serve stale
+    }
   }
 
   private async refresh<T>(vk: string, ttl: number, fn: () => Promise<{ data: T; ttl?: number }>): Promise<T> {
@@ -384,9 +396,15 @@ export class CacheService {
     if (existing) return existing;
     const p = (async () => {
       const { data, ttl: t } = await fn();
-      const effective = jitteredTtl(vk, t ?? ttl);
-      await this.set(vk, data, effective);
+      const requested = t ?? ttl;
+      const effective = jitteredTtl(vk, Number.isFinite(requested) && requested > 0 ? requested : ttl);
+      // L1 first so a KV outage never discards fresh upstream data.
       memorySet(vk, data, effective);
+      try {
+        await this.set(vk, data, effective);
+      } catch {
+        // KV write failures are non-fatal: L1 + stale fallback still serve.
+      }
       return data;
     })();
     globalInflight.set(vk, p);

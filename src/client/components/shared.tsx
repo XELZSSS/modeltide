@@ -16,16 +16,11 @@ export function BackButton({ labelKey, to, state }: { labelKey: TranslationKey; 
   const navigate = useNavigate();
   const { t } = useTranslation();
   const goBack = () => {
-    // In-app history needs a same-origin referrer; otherwise push `to`.
+    // React Router increments history.idx per SPA navigation; a fresh deep
+    // link starts at 0. document.referrer is unreliable inside an SPA
+    // (client-side <Link> transitions don't update it), so idx alone decides.
     const idx = typeof window !== "undefined" ? (window.history.state as { idx?: number } | null)?.idx : undefined;
-    const ref = typeof document !== "undefined" ? document.referrer : "";
-    let sameOriginRef = false;
-    try {
-      sameOriginRef = !!ref && new URL(ref).origin === window.location.origin;
-    } catch {
-      sameOriginRef = false;
-    }
-    if (typeof idx === "number" && idx > 0 && sameOriginRef) navigate(-1);
+    if (typeof idx === "number" && idx > 0) navigate(-1);
     else navigate(to, { state });
   };
   return (

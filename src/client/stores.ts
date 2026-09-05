@@ -189,6 +189,16 @@ export const useCompareStore = create<CompareState>()(
       // sessionStorage keeps the selection per-tab.
       storage: createJSONStorage(safeSessionStorage),
       partialize: (state) => ({ compareIds: state.compareIds }),
+      // Validate persisted ids: drop non-strings, dedupe, enforce MAX_COMPARE.
+      // Without this a hand-edited/legacy session value could inject 3+ ids.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as { compareIds?: unknown };
+        const raw = Array.isArray(p.compareIds) ? p.compareIds : [];
+        const clean = Array.from(
+          new Set(raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0)),
+        ).slice(0, MAX_COMPARE);
+        return { ...current, compareIds: clean };
+      },
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn("[compare] rehydrate failed", error);
       },

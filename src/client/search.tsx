@@ -43,15 +43,19 @@ interface SearchState {
 
 const MAX_RESULTS = 20;
 
+// Stable empty refs: `?? []` inline would create a new array every render
+// and defeat the useMemo deps below during pending states.
+const EMPTY_ARRAY: never[] = [];
+
 export function useSearchAllRankings(searchTerm: string): SearchState {
   const enabled = searchTerm.trim().length >= 2;
   const artificialQ = useArtificialRankings(enabled);
   const openSourceQ = useAllOpenSourceModels(enabled);
   const orQ = useOpenRouterRankings(enabled);
 
-  const artificialData = artificialQ.data ?? [];
+  const artificialData = artificialQ.data ?? EMPTY_ARRAY;
   const openSourceRankings = openSourceQ.data;
-  const openRouterData = orQ.data?.tokenUsageRankings ?? [];
+  const openRouterData = orQ.data?.tokenUsageRankings ?? EMPTY_ARRAY;
   const hallucinationRankings = useHallucinationRankings(artificialData, enabled);
 
   const error = [artificialQ.error, openSourceQ.error, orQ.error].find((e): e is Error | null => e != null) ?? null;
@@ -176,17 +180,17 @@ function useListKeyboard(itemCount: number, onSelect: (index: number) => void, o
         setActiveIndex((i) => (i <= 0 ? itemCount - 1 : i - 1));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        setActiveIndex((i) => {
-          const clamped = i < 0 ? -1 : Math.min(i, itemCount - 1);
-          if (clamped >= 0) selectRef.current(clamped);
-          return -1;
-        });
+        // Select synchronously from the rendered index: never navigate
+        // inside a setState updater (StrictMode double-invokes updaters).
+        const clamped = activeIndex < 0 ? -1 : Math.min(activeIndex, itemCount - 1);
+        if (clamped >= 0) selectRef.current(clamped);
+        setActiveIndex(-1);
       } else if (e.key === "Escape") {
         setActiveIndex(-1);
         closeRef.current?.();
       }
     },
-    [itemCount],
+    [itemCount, activeIndex],
   );
 
   const clampedIndex = activeIndex < 0 ? -1 : Math.min(activeIndex, itemCount - 1);
@@ -209,16 +213,38 @@ export function SearchInput() {
   const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
   // Local field -> global store with 200ms debounce.
   const [inputValue, setInputValue] = useState(searchTerm);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    const timer = setTimeout(() => setSearchTerm(inputValue), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [inputValue, setSearchTerm]);
+    // Skip redundant syncs (e.g. just cleared) to avoid timer churn.
+    if (inputValue === searchTerm) return;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      setSearchTerm(inputValue);
+    }, DEBOUNCE_MS);
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [inputValue, searchTerm, setSearchTerm]);
   useEffect(() => setInputValue(searchTerm), [searchTerm]);
+  // Unmount safety: never resurrect a stale term after navigation.
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const { results, isPending, isError } = useSearchAllRankings(searchTerm);
 
   // Clear synchronously on select so the destination never filters by the stale term.
   const clearSearch = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setSearchTerm("");
     setInputValue("");
   }, [setSearchTerm]);
@@ -330,7 +356,7 @@ export function SearchInput() {
             ) : (
               results.map((result, index) => (
                 <button
-                  key={`${result.source}-${result.id}`}
+                  key={`${result.source}-${result.id}-${index}`}
                   id={`${listboxId}-option-${index}`}
                   type="button"
                   role="option"
@@ -347,7 +373,7 @@ export function SearchInput() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-text-primary truncate">{result.name}</span>
-                    {result.score != null && (
+                    {typeof result.score === "number" && Number.isFinite(result.score) && (
                       <span className="text-xs text-text-secondary ml-2 shrink-0 font-mono">
                         {result.score.toFixed(1)}
                       </span>

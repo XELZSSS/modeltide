@@ -2,7 +2,7 @@ import { STATIC_TTL_MS, UPSTREAM_TIMEOUT_MS, cacheKeys, ttlForCount, upstreamCon
 import type { OfficialPriceModel, OfficialPricingPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, errMsg } from "@/server/infra";
-import { humanizeId, num, numPositive, priceCell, slugifyName, stripParen } from "@/server/parsers/primitives";
+import { humanizeId, num, numPositive, priceCell, slugifyName, stripParen, suffixedCount } from "@/server/parsers/primitives";
 import { rowCells, stripHtml, tableRowInners } from "@/server/parsers/feed";
 import { dedupeBy } from "@/shared/utils";
 import {
@@ -100,7 +100,7 @@ export function parseAnthropicPricing(html: string): OfficialPriceModel[] {
 // Google Vertex pricing page (ai.google.dev blocks scrapers).
 // Sections are `Name Input … Global$a … Text output … Global$b`; the first
 // Global pair is the current effective rate.
-const GOOGLE_PATH = "/vertex-ai/generative-ai/pricing";
+const GOOGLE_PATH = "/gemini-enterprise-agent-platform/generative-ai/pricing";
 
 const GOOGLE_MODELS = [
   { name: "Gemini 3.1 Pro Preview", id: "gemini-3.1-pro" },
@@ -249,7 +249,9 @@ export function parseKimiPricing(html: string): OfficialPriceModel[] {
     if (cells.length < 6) continue;
     const id = cells[0] ?? "";
     if (shouldSkipKimiRow(id, cells[1] ?? "")) continue;
-    const ctxDigits = (cells[5] ?? "").replace(/[^\d]/g, "");
+    // Context may carry K/M units ("128K", "200K", "1M"): parse with suffix
+    // support instead of stripping to digits (which would be 1000x off).
+    const contextWindow = suffixedCount(cells[5] ?? "");
     const model = officialModel(
       "Kimi",
       id.toLowerCase(),
@@ -257,7 +259,7 @@ export function parseKimiPricing(html: string): OfficialPriceModel[] {
       priceCell(cells[3] ?? ""),
       priceCell(cells[4] ?? ""),
       priceCell(cells[2] ?? ""),
-      ctxDigits ? numPositive(Number(ctxDigits)) : null,
+      contextWindow,
     );
     if (model) models.push(model);
   }
@@ -315,7 +317,10 @@ export const getOfficialPricing = (ctx: AppContext): Promise<OfficialPricingPayl
       settled.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
       (m) => m.id,
     );
-    const failed = settled.filter((r) => r.status === "rejected").length;
+    // Rejected fetches plus fulfilled-but-empty parses (provider redesign)
+    // both shorten the TTL so a redesign doesn't poison the key for 6h.
+    const emptyProviders = settled.filter((r) => r.status === "fulfilled" && r.value.length === 0).length;
+    const failed = settled.filter((r) => r.status === "rejected").length + emptyProviders;
     if (models.length === 0) {
       throw new UpstreamError("Official pricing: all 6 provider fetches failed");
     }

@@ -22,8 +22,9 @@ const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
   funding: "catFunding",
 };
 
-// Server dedupes by link. Module-level for a stable reference.
-const getNewsRowId = (item: NewsItem): string => item.link;
+// Server dedupes by link. Fall back to title+date so link-less or
+// duplicate-link rows don't collapse into one row / duplicate keys.
+const getNewsRowId = (item: NewsItem): string => item.link || `${item.title}::${item.pubDate}::${item.source}`;
 
 function NewsList({ news }: { news: NewsItem[] }) {
   const { t } = useTranslation();
@@ -35,15 +36,11 @@ function NewsList({ news }: { news: NewsItem[] }) {
   return (
     <div className="flex flex-col">
       <ul className="flex flex-col divide-y divide-border">
-        {currentNews.map((item) => (
-          <li key={item.link}>
-            <a
-              href={safeHref(item.link)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-start justify-between gap-4 py-3 transition-colors"
-              aria-label={t("newsItemLabel", { title: item.title, source: item.source })}
-            >
+        {currentNews.map((item, idx) => {
+          const href = safeHref(item.link);
+          const key = `${getNewsRowId(item)}::${idx}`;
+          const body = (
+            <>
               <h3 className="ui-body font-medium leading-relaxed group-hover:text-accent transition-colors min-w-0 break-words">
                 {item.title}
               </h3>
@@ -55,9 +52,28 @@ function NewsList({ news }: { news: NewsItem[] }) {
                 </span>
                 <ExternalLink size={14} className="md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
               </div>
-            </a>
-          </li>
-        ))}
+            </>
+          );
+          return (
+            <li key={key}>
+              {href ? (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-start justify-between gap-4 py-3 transition-colors"
+                  aria-label={t("newsItemLabel", { title: item.title, source: item.source })}
+                >
+                  {body}
+                </a>
+              ) : (
+                <span className="group flex items-start justify-between gap-4 py-3">
+                  {body}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {totalPages > 1 && (
         <div className="mt-5 flex justify-center">

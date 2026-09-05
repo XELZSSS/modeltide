@@ -47,15 +47,15 @@ export class ApiClientError extends Error {
   }
 }
 
-function timeoutSignal(ms: number): AbortSignal {
-  if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
+function timeoutSignal(ms: number): { signal: AbortSignal; cleanup: () => void } {
+  if (typeof AbortSignal.timeout === "function") return { signal: AbortSignal.timeout(ms), cleanup: () => {} };
   const ctrl = new AbortController();
-  setTimeout(() => ctrl.abort(), ms);
-  return ctrl.signal;
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return { signal: ctrl.signal, cleanup: () => clearTimeout(timer) };
 }
 
-function combineSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
-  if (typeof AbortSignal.any === "function") return AbortSignal.any([a, b]);
+function combineSignals(a: AbortSignal, b: AbortSignal): { signal: AbortSignal; cleanup: () => void } {
+  if (typeof AbortSignal.any === "function") return { signal: AbortSignal.any([a, b]), cleanup: () => {} };
   const ctrl = new AbortController();
   const onAbort = (): void => ctrl.abort();
   if (a.aborted || b.aborted) ctrl.abort();
@@ -63,7 +63,13 @@ function combineSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
     a.addEventListener("abort", onAbort, { once: true });
     b.addEventListener("abort", onAbort, { once: true });
   }
-  return ctrl.signal;
+  return {
+    signal: ctrl.signal,
+    cleanup: () => {
+      a.removeEventListener("abort", onAbort);
+      b.removeEventListener("abort", onAbort);
+    },
+  };
 }
 
 async function parseErrorMessage(res: Response): Promise<string> {
@@ -87,17 +93,23 @@ async function parseErrorMessage(res: Response): Promise<string> {
 async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { cache?: RequestCache }): Promise<T> {
   const url = apiBase && path.startsWith("/") ? apiBase + path : path;
   const timeout = timeoutSignal(FETCH_TIMEOUT_MS);
-  const res = await fetch(url, {
-    headers: { accept: "application/json" },
-    signal: signal ? combineSignals(signal, timeout) : timeout,
-    cache: opts?.cache,
-  });
-  if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
-  const ct = res.headers.get("content-type") ?? "";
-  if (!ct.includes("application/json")) {
-    throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
+  const combined = signal ? combineSignals(signal, timeout.signal) : null;
+  try {
+    const res = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: combined ? combined.signal : timeout.signal,
+      cache: opts?.cache,
+    });
+    if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
+    const ct = res.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
+    }
+    return ((await res.json()) as { data: T }).data;
+  } finally {
+    combined?.cleanup();
+    timeout.cleanup();
   }
-  return ((await res.json()) as { data: T }).data;
 }
 
 // Client path builders from the shared apiPaths map.
@@ -268,7 +280,9 @@ export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
   const hasData = data.length > 0;
   const isPending = enabled && !hasData && (trending.isPending || releases.isPending);
   const isError = enabled && !hasData && (trending.isError || releases.isError);
-  const error = trending.error ?? releases.error ?? null;
+  // Only surface an error when there's nothing to show; otherwise callers
+  // rendering partial data would misinterpret error != null as failure.
+  const error = isError ? (trending.error ?? releases.error ?? null) : null;
 
   return {
     data,

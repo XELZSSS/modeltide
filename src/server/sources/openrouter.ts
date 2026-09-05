@@ -203,7 +203,10 @@ function parsePrice(v: unknown): number {
 
 function buildPricingEntry(prompt: number, completion: number, inputCacheRead: number): PricingEntry | null {
   if (!isUsableOpenRouterPricing(prompt, completion)) return null;
-  return { prompt, completion, input_cache_read: Number.isFinite(inputCacheRead) ? inputCacheRead : 0 };
+  // Unknown cache rate falls back to the input rate so blended prices don't
+  // collapse toward zero (computeBlendPrice uses cache ?? input).
+  const cache = Number.isFinite(inputCacheRead) ? inputCacheRead : prompt;
+  return { prompt, completion, input_cache_read: cache };
 }
 
 function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
@@ -223,7 +226,8 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
     const prompt = parsePrice(pricing.prompt);
     const completion = parsePrice(pricing.completion);
     const rawCache = parsePrice(pricing.input_cache_read);
-    const inputCacheRead = Number.isFinite(rawCache) ? rawCache : 0;
+    // Missing cache rate inherits the prompt rate (see buildPricingEntry).
+    const inputCacheRead = Number.isFinite(rawCache) ? rawCache : prompt;
     const pricingEntry = buildPricingEntry(prompt, completion, inputCacheRead);
     if (pricingEntry) {
       pricingRecord[m.id.trim()] = pricingEntry;
@@ -282,15 +286,21 @@ export const getOpenRouterModelMeta = async (ctx: AppContext): Promise<Record<st
 
 export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankingsPayload> =>
   ctx.cache.withTtl(cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async () => {
-    let rankings: { data?: ModelRow[] };
-    try {
-      rankings = await ctx.http.json<{ data: ModelRow[] }>(
-        `${OPENROUTER}/api/frontend/v1/rankings/models`,
-        DIRECTORY_FETCH_OPTS,
-      );
-    } catch (err) {
-      throw new UpstreamError(`OpenRouter: all upstream requests failed (${errMsg(err)})`);
+    // Fetch rankings + directory in parallel: serial 10s x retries worst-case
+    // (~40s) exceeds the 25s route timeout on cold start.
+    const [rankingsResult, directoryResult] = await Promise.all([
+      ctx.http
+        .json<{ data: ModelRow[] }>(`${OPENROUTER}/api/frontend/v1/rankings/models`, DIRECTORY_FETCH_OPTS)
+        .then(
+          (v) => ({ ok: true as const, value: v }),
+          (err) => ({ ok: false as const, error: err }),
+        ),
+      fetchModelDirectory(ctx),
+    ]);
+    if (!rankingsResult.ok) {
+      throw new UpstreamError(`OpenRouter: all upstream requests failed (${errMsg(rankingsResult.error)})`);
     }
+    const rankings = rankingsResult.value;
     if (!Array.isArray(rankings?.data)) {
       throw new UpstreamError("OpenRouter: rankings upstream returned a non-array response");
     }
@@ -301,7 +311,7 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
     if (validRows.length === 0 && rankings.data.length > 0) {
       throw new UpstreamError(`OpenRouter: all ${rankings.data.length} ranking rows had invalid model_permaslug`);
     }
-    const pricingMap = (await fetchModelDirectory(ctx)).pricing;
+    const pricingMap = directoryResult.pricing;
     const partialFailure = pricingMap.size === 0;
     const models = mapModels(validRows, pricingMap);
     if (models.length === 0 && validRows.length > 0) {

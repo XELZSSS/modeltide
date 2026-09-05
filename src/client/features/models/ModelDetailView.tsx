@@ -197,14 +197,22 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
           />
         </InfoCard>
         <InfoCard title={t("repository")}>
-          <a
-            href={`https://huggingface.co/${(model.id ?? "").replace(/^\//, "")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-accent hover:underline break-all"
-          >
-            {model.id}
-          </a>
+          {model.id ? (
+            <a
+              href={`https://huggingface.co/${model.id
+                .replace(/^\//, "")
+                .split("/")
+                .map((seg) => encodeURIComponent(seg))
+                .join("/")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-accent hover:underline break-all"
+            >
+              {model.id}
+            </a>
+          ) : (
+            <span className="text-sm text-text-tertiary">{t("notAvailable")}</span>
+          )}
         </InfoCard>
       </InfoGrid>
       {(model.tags ?? []).length > 0 && (
@@ -403,7 +411,9 @@ export function HallDetail({ decodedId }: { decodedId: string }) {
 // ---- ModelDetailView ----
 // The wildcard param carries the id/slug, possibly URL-encoded; decode defensively.
 function isModelSource(value: string): value is ModelSource {
-  return value in MODEL_SOURCES;
+  // Use hasOwn (not `in`): `in` walks the prototype chain, so
+  // "/model/__proto__/x" would pass and crash on the dispatch table.
+  return Object.hasOwn(MODEL_SOURCES, value);
 }
 
 function useModelSourceParams(): { src: ModelSource | null; decodedId: string } {

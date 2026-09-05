@@ -1,156 +1,107 @@
-import { STATIC_TTL_MS, UPSTREAM_TIMEOUT_MS, cacheKeys, ttlForCount, upstreamConfig } from "@/shared/config";
-import type { ClosedReleaseEntry } from "@/shared/types";
+import { STATIC_TTL_MS, cacheKeys, upstreamConfig } from "@/shared/config";
+import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError, errMsg } from "@/server/infra";
-import { decodeEntities, stripHtml } from "@/server/parsers/feed";
-import { isoDate } from "@/server/parsers/primitives";
+import { UpstreamError } from "@/server/infra";
 import {
-  isChallengePage,
-  isClosedSourceRow,
-  isValidClosedRelease,
-} from "@/server/sources/data-filter";
+  getChangelogModels,
+  getIntelligenceIndex,
+  type ChangelogModel,
+} from "@/server/sources/artificial-analysis";
+import { dedupeBy } from "@/shared/utils";
 
-const MODELS_PATH = "/models/";
-/** Newest-first SSR pages; each page holds 50 models of all sources. */
-const MAX_PAGES = 6;
-const FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
-
-interface Cell {
-  attrs: string;
-  inner: string;
-}
-
-function rowCellsWithAttrs(trInner: string): Cell[] {
-  const cells: Cell[] = [];
-  for (const m of trInner.matchAll(/<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi)) {
-    cells.push({ attrs: m[1] ?? "", inner: m[2] ?? "" });
-  }
-  return cells;
-}
-
-function sortValue(attrs: string): string | null {
-  const m = /data-sort-value="([^"]*)"/.exec(attrs);
-  return m?.[1] ?? null;
-}
-
-function cellText(inner: string): string {
-  return decodeEntities(stripHtml(inner)).trim();
-}
-
-function slugFromModelCell(inner: string): string | null {
-  const m = /href="\/models\/([^"/]+)\/"/.exec(inner);
-  return m?.[1]?.trim() || null;
-}
-
-function releaseFromSortValue(v: string | null): string | null {
-  if (!v) return null;
-  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(v.trim());
-  if (!m?.[1] || !m?.[2] || !m?.[3]) return null;
-  const iso = `${m[1]}-${m[2]}-${m[3]}`;
-  return isoDate(iso);
+interface CreatorRule {
+  /** Release matches when `include` hits (default: every release of the creator). */
+  include?: RegExp;
+  /** `exclude` always wins (open-weights product lines of mixed vendors). */
+  exclude?: RegExp;
 }
 
 /**
- * Parse one `<tr>`; null for non-closed or unusable rows.
- * Cell order: model | family | developer | source | release | benchmarks | eci | input | output.
+ * Curated closed-vendor rules for changelog history, which carries no
+ * open-weights flag. Fail-closed: creators absent here never list (the long
+ * tail is open-research labs). `haystack` is "<releaseSlug> <releaseName>".
  */
-export function parseBenchmarkListRow(trAttrs: string, trInner: string): ClosedReleaseEntry | null {
-  if (!isClosedSourceRow(trAttrs)) return null;
-  const cells = rowCellsWithAttrs(trInner);
-  if (cells.length < 5) return null;
+export const CLOSED_CREATOR_RULES: Record<string, CreatorRule> = {
+  OpenAI: {},
+  Anthropic: {},
+  Amazon: {},
+  Baidu: {},
+  Google: { exclude: /gemma/i },
+  SpaceXAI: { exclude: /^grok-1\b/i },
+  Meta: { exclude: /^llama[\s-]/i },
+  Mistral: {
+    include: /(large|medium|magistral)/i,
+    exclude: /(small|ministral|mixtral|codestral|devstral)/i,
+  },
+  Upstage: { include: /solar pro/i },
+  Perplexity: { exclude: /1776/i },
+};
 
-  const modelCell = cells[0]!;
-  const slug = slugFromModelCell(modelCell.inner);
+export function matchesClosedRule(creatorName: string, haystack: string): boolean {
+  const rule = CLOSED_CREATOR_RULES[creatorName];
+  if (!rule) return false;
+  if (rule.exclude?.test(haystack)) return false;
+  if (rule.include && !rule.include.test(haystack)) return false;
+  return true;
+}
 
-  const name = sortValue(modelCell.attrs)?.trim() || cellText(modelCell.inner).split("\n")[0]?.trim();
+/** Exact weights keyed by model slug (and id when it differs). */
+export function buildWeightsIndex(models: ArtificialAnalysisModel[]): Map<string, boolean> {
+  const map = new Map<string, boolean>();
+  for (const m of models) {
+    if (typeof m.is_open_weights !== "boolean") continue;
+    if (m.slug) map.set(m.slug, m.is_open_weights);
+    if (m.id && m.id !== m.slug) map.set(m.id, m.is_open_weights);
+  }
+  return map;
+}
 
-  const releaseCell = cells[4]!;
-  const releaseText = cellText(releaseCell.inner);
-  const releaseDate = isoDate(releaseText) ?? releaseFromSortValue(sortValue(releaseCell.attrs));
-  // Unified dirty/invalid/unsuitable gate (slug + name + date).
-  if (!isValidClosedRelease(slug, name, releaseDate)) return null;
-  const validSlug = slug as string;
-  const validName = name as string;
-  const validDate = releaseDate as string;
+/**
+ * Closed iff exactly flagged closed in the index, else iff the curated
+ * creator rule matches. Unknown creators fail closed (excluded).
+ */
+export function isClosedChangelogRelease(e: ChangelogModel, weights: Map<string, boolean>): boolean {
+  const exact = weights.get(e.slug) ?? weights.get(e.releaseSlug);
+  if (exact === false) return true;
+  if (exact === true) return false;
+  return matchesClosedRule(e.creatorName, `${e.releaseSlug} ${e.releaseName}`);
+}
 
-  const provider = sortValue(cells[2]!.attrs)?.trim() || cellText(cells[2]!.inner) || "Unknown";
-  const day = validDate.length > 10 ? validDate.slice(0, 10) : validDate;
-
-  const benchmarksText = cells.length > 5 ? cellText(cells[5]!.inner) : "";
-  const benchmarks = /^\d+$/.test(benchmarksText) ? benchmarksText : sortValue(cells[5]?.attrs ?? "");
-  const notes = benchmarks && /^\d+$/.test(benchmarks) ? `${benchmarks} benchmarks` : "";
-
+function toClosedRelease(e: ChangelogModel): ClosedReleaseEntry {
+  const releaseDate = e.releaseDate.length > 10 ? e.releaseDate.slice(0, 10) : e.releaseDate;
   return {
-    id: validSlug,
-    model: validName,
-    provider,
-    releaseDate: day,
-    notes,
-    link: `${upstreamConfig.benchmarkList}/models/${validSlug}/`,
+    id: e.releaseSlug,
+    model: e.releaseName,
+    provider: e.creatorName,
+    releaseDate,
+    notes: "",
+    link: `${upstreamConfig.artificialAnalysis}/models/${e.releaseSlug}`,
   };
 }
 
-/** Parse a full directory page; pure. Closed rows only, deduped by slug. */
-export function parseBenchmarkListPage(html: string): ClosedReleaseEntry[] {
-  if (isChallengePage(html)) throw new UpstreamError("BenchmarkList returned a challenge page");
-  const seen = new Set<string>();
-  const entries: ClosedReleaseEntry[] = [];
-  for (const m of html.matchAll(/<tr([^>]*)>([\s\S]*?)<\/tr>/gi)) {
-    let entry: ClosedReleaseEntry | null;
-    try {
-      entry = parseBenchmarkListRow(m[1] ?? "", m[2] ?? "");
-    } catch {
-      continue;
-    }
-    if (!entry || seen.has(entry.id)) continue;
-    seen.add(entry.id);
-    entries.push(entry);
-  }
+/**
+ * Closed-source frontier releases newest-first, one row per release family.
+ * History comes from the AA changelog (full timeline incl. 2025 and earlier);
+ * closed/open comes from exact index weights with curated creator rules as
+ * fallback. Failures surface as 502 with stale-cache fallback.
+ */
+export function toClosedReleases(changelog: ChangelogModel[], weights: Map<string, boolean>): ClosedReleaseEntry[] {
+  const entries = dedupeBy(
+    changelog.filter((e) => isClosedChangelogRelease(e, weights)),
+    (e) => e.releaseSlug,
+  ).map(toClosedRelease);
+  // Newest first; the client re-sorts defensively.
+  entries.sort((a, b) => Date.parse(b.releaseDate) - Date.parse(a.releaseDate));
   return entries;
 }
 
-function pageUrl(page: number): string {
-  return page <= 1
-    ? `${upstreamConfig.benchmarkList}${MODELS_PATH}`
-    : `${upstreamConfig.benchmarkList}${MODELS_PATH}page/${page}/`;
-}
-
-/**
- * Closed-source releases from the BenchmarkList model directory
- * (`data-filter-source="closed_api"` rows, newest first).
- * Sole upstream — failures surface as 502 with stale-cache fallback.
- */
 export const getClosedReleases = (ctx: AppContext): Promise<ClosedReleaseEntry[]> =>
   ctx.cache.withTtl(cacheKeys.closedReleases, STATIC_TTL_MS, async () => {
-    const settled = await Promise.allSettled(
-      Array.from({ length: MAX_PAGES }, (_, i) =>
-        ctx.http
-          .text(pageUrl(i + 1), {
-            headers: { accept: "text/html,application/xhtml+xml,*/*" },
-            ...FETCH_OPTS,
-          })
-          .then(parseBenchmarkListPage),
-      ),
-    );
-    const failed: string[] = [];
-    const seen = new Set<string>();
-    const entries: ClosedReleaseEntry[] = [];
-    settled.forEach((r, i) => {
-      if (r.status === "fulfilled") {
-        for (const e of r.value) {
-          if (seen.has(e.id)) continue;
-          seen.add(e.id);
-          entries.push(e);
-        }
-      } else {
-        failed.push(`page/${i + 1}`);
-        ctx.log("warn", `[closed-releases] page ${i + 1} failed: ${errMsg(r.reason)}`);
-      }
-    });
-    // Newest first; directory pages arrive newest-first but merges can interleave.
-    entries.sort((a, b) => Date.parse(b.releaseDate) - Date.parse(a.releaseDate));
+    // Independent payloads in parallel; longest path is max(fetch), not sum.
+    const [models, changelog] = await Promise.all([getIntelligenceIndex(ctx), getChangelogModels(ctx)]);
+    const entries = toClosedReleases(changelog, buildWeightsIndex(models));
     if (entries.length === 0) {
-      throw new UpstreamError(`BenchmarkList models yielded 0 closed releases (${failed.join(", ") || "empty pages"})`);
+      throw new UpstreamError("Closed releases: changelog yielded 0 closed releases");
     }
-    return { data: entries, ttl: ttlForCount(failed.length, STATIC_TTL_MS) };
+    return { data: entries };
   });

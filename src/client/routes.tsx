@@ -23,14 +23,14 @@ const SourceDetailView = lazy(() =>
   import("./features/status/SourceDetailView").then((m) => ({ default: m.SourceDetailView })),
 );
 
-/** Clears the global search term whenever the URL path changes. */
+/** Clears the global search term whenever the URL path or query changes. */
 function useSearchResetOnNavigate() {
   const location = useLocation();
   const resetSearch = useSearchStore((s) => s.resetSearch);
 
   useEffect(() => {
     resetSearch();
-  }, [location.pathname, resetSearch]);
+  }, [location.pathname, location.search, resetSearch]);
 }
 
 export function AppRoutes() {

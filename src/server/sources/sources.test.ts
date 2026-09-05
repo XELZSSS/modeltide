@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { backfillFromMeta, compact, compactOmniscienceEnrich } from "@/server/sources/artificial-analysis";
+import { backfillFromMeta, compact, compactOmniscienceEnrich, parseChangelogModels } from "@/server/sources/artificial-analysis";
 import { mergeBySlug, mapEntry, type RawEntry } from "@/server/sources/artificial-analysis";
 import {
   categoryFrom,
@@ -46,8 +46,13 @@ import {
   parseOpenAiPricing,
 } from "@/server/sources/official-pricing";
 import { parseArenaPage, parseArenaRow } from "@/server/sources/arena";
-import { parseBenchmarkListPage, parseBenchmarkListRow } from "@/server/sources/closed-releases";
-import { isChallengePage } from "@/server/sources/data-filter";
+import {
+  buildWeightsIndex,
+  isClosedChangelogRelease,
+  matchesClosedRule,
+  toClosedReleases,
+} from "@/server/sources/closed-releases";
+import type { ChangelogModel } from "@/server/sources/artificial-analysis";
 
 // Consolidated tests for the upstream data sources: Artificial Analysis
 // mapping, OpenRouter mapping, official-pricing parsers, Arena/changelog feeds,
@@ -565,13 +570,13 @@ const okProbe = (status = 200, latencyMs = 500) => ({ ok: true, status, latencyM
 const failProbe = (error = "network error") => ({ ok: false, status: null, latencyMs: null, error });
 
 describe("aggregateProbes", () => {
-  it("any successful probe makes the source healthy; the last success donates status/latency", () => {
+  it("any successful probe makes the source healthy; the fastest success donates latency", () => {
     const agg = aggregateProbes([
       { target: target("news"), probe: okProbe(200, 300) },
       { target: target("news"), probe: failProbe() },
       { target: target("news"), probe: okProbe(204, 700) },
     ]);
-    expect(agg.get("news")).toEqual({ ok: true, status: 204, latencyMs: 700, error: null });
+    expect(agg.get("news")).toEqual({ ok: true, status: 200, latencyMs: 300, error: null });
   });
 
   it("summarizes total failure across multiple feeds as x/y failed", () => {
@@ -765,9 +770,8 @@ describe("buildTargets", () => {
     const targets = buildTargets();
     const news = targets.filter((t) => t.id === "news");
     expect(news).toHaveLength(NEWS_CATEGORIES.length);
-    expect(targets).toHaveLength(5 + NEWS_CATEGORIES.length);
+    expect(targets).toHaveLength(4 + NEWS_CATEGORIES.length);
     expect(targets.some((t) => t.id === "arena")).toBe(true);
-    expect(targets.some((t) => t.id === "benchmarkList")).toBe(true);
     // Official pricing stays a data route but is no longer status-monitored.
     expect(SOURCE_IDS).not.toContain("officialPricing");
     expect(targets.every((t) => (SOURCE_IDS as readonly string[]).includes(t.id))).toBe(true);
@@ -1094,74 +1098,145 @@ describe("parseArenaPage", () => {
   });
 });
 
-const BL_CLOSED_ATTRS = ` data-filter-source="closed_api" data-filter-family="gpt" data-filter-developer="openai"`;
-const BL_CLOSED_INNER = [
-  '<td data-sort-value="GPT-6 Astra"><span class="model-identity"><a class="model-table-title" href="/models/openai-gpt-6-astra/">GPT-6 Astra</a></span></td>',
-  '<td data-sort-value="GPT">GPT</td>',
-  '<td data-sort-value="OpenAI">OpenAI</td>',
-  '<td data-sort-value="1"><span class="source-availability-copy">Closed</span></td>',
-  '<td data-sort-value="20260903">2026-09-03</td>',
-  '<td class="num" data-sort-value="60">60</td>',
-  '<td class="num" data-sort-value="158.29">158.29</td>',
-].join("");
-const BL_OPEN_INNER = BL_CLOSED_INNER.replace("/models/openai-gpt-6-astra/", "/models/qwen-qwen3-8b/").replace(
-  "GPT-6 Astra",
-  "Qwen3 8B",
-);
+function clModel(over: Partial<ChangelogModel> = {}): ChangelogModel {
+  return {
+    slug: "claude-opus-4-5-thinking",
+    name: "Claude Opus 4.5 (Reasoning)",
+    releaseSlug: "claude-opus-4-5",
+    releaseName: "Claude Opus 4.5",
+    releaseDate: "2025-11-24",
+    creatorName: "Anthropic",
+    ...over,
+  };
+}
 
-describe("parseBenchmarkListRow", () => {
-  it("maps a closed row onto the release shape", () => {
-    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, BL_CLOSED_INNER)).toEqual({
-      id: "openai-gpt-6-astra",
-      model: "GPT-6 Astra",
-      provider: "OpenAI",
-      releaseDate: "2026-09-03",
-      notes: "60 benchmarks",
-      link: "https://benchmarklist.com/models/openai-gpt-6-astra/",
+// Minimal flight-escaped changelog HTML: two variants of one release plus an open line.
+function changelogHtml(): string {
+  const models = [
+    {
+      slug: "claude-opus-4-5-thinking",
+      name: "Claude Opus 4.5 (Reasoning)",
+      deprecated: true,
+      isReasoning: true,
+      effort: null,
+      release: { slug: "claude-opus-4-5", name: "Claude Opus 4.5" },
+      releaseDate: "2025-11-24",
+      creator: { id: "aa", name: "Anthropic", logo: "/img/logos/anthropic_small.svg" },
+    },
+    {
+      slug: "claude-opus-4-5",
+      name: "Claude Opus 4.5 (Non-reasoning)",
+      deprecated: true,
+      isReasoning: false,
+      effort: null,
+      release: { slug: "claude-opus-4-5", name: "Claude Opus 4.5" },
+      releaseDate: "2025-11-24",
+      creator: { id: "aa", name: "Anthropic", logo: "/img/logos/anthropic_small.svg" },
+    },
+    {
+      slug: "llama-3-3-70b",
+      name: "Llama 3.3 70B",
+      deprecated: false,
+      isReasoning: false,
+      effort: null,
+      release: { slug: "llama-3-3", name: "Llama 3.3" },
+      releaseDate: "2024-12-06",
+      creator: { id: "mm", name: "Meta", logo: "/img/logos/meta_small.svg" },
+    },
+  ];
+  const payload = JSON.stringify({ models }).replace(/"/g, '\\"');
+  return `<html><body><script>self.__next_f.push([1,"${payload}"])</script></body></html>`;
+}
+
+describe("parseChangelogModels", () => {
+  it("extracts the models array from flight-escaped HTML", () => {
+    const models = parseChangelogModels(changelogHtml());
+    expect(models).toHaveLength(3);
+    expect(models[0]).toMatchObject({
+      slug: "claude-opus-4-5-thinking",
+      releaseSlug: "claude-opus-4-5",
+      releaseName: "Claude Opus 4.5",
+      releaseDate: "2025-11-24",
+      creatorName: "Anthropic",
     });
   });
 
-  it("skips non-closed rows", () => {
-    expect(parseBenchmarkListRow(` data-filter-source="open_source"`, BL_OPEN_INNER)).toBeNull();
-    expect(parseBenchmarkListRow(` data-filter-source="unclassified"`, BL_OPEN_INNER)).toBeNull();
-  });
-
-  it("skips rows without a valid release date", () => {
-    const inner = BL_CLOSED_INNER.replace("2026-09-03", "—").replace(
-      'data-sort-value="20260903"',
-      'data-sort-value="—"',
-    );
-    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, inner)).toBeNull();
-  });
-
-  it("recovers the date from the YYYYMMDD sort value when the cell shows —", () => {
-    const inner = BL_CLOSED_INNER.replace(">2026-09-03<", ">—<");
-    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, inner)).toMatchObject({ releaseDate: "2026-09-03" });
-  });
-
-  it("allows dotted slugs but rejects path traversal", () => {
-    const dotted = BL_CLOSED_INNER.replace("openai-gpt-6-astra", "poolside-laguna-s.2.1");
-    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, dotted)).toMatchObject({
-      id: "poolside-laguna-s.2.1",
-      link: "https://benchmarklist.com/models/poolside-laguna-s.2.1/",
-    });
-    const traversal = BL_CLOSED_INNER.replace("/models/openai-gpt-6-astra/", "/models/../secret/");
-    expect(parseBenchmarkListRow(BL_CLOSED_ATTRS, traversal)).toBeNull();
+  it("returns [] when no models array is present", () => {
+    expect(parseChangelogModels("<html><body>no data</body></html>")).toEqual([]);
   });
 });
 
-describe("parseBenchmarkListPage", () => {
-  it("collects closed rows and dedupes by slug", () => {
-    const html = `<table><tbody><tr${BL_CLOSED_ATTRS}>${BL_CLOSED_INNER}</tr><tr${BL_CLOSED_ATTRS}>${BL_CLOSED_INNER}</tr><tr data-filter-source="open_source">${BL_OPEN_INNER}</tr></tbody></table>`;
-    const entries = parseBenchmarkListPage(html);
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ id: "openai-gpt-6-astra" });
+describe("matchesClosedRule", () => {
+  it("fails closed for unknown creators", () => {
+    expect(matchesClosedRule("Some New Lab", "some-model")).toBe(false);
   });
 
-  it("throws UpstreamError on Cloudflare challenge pages", () => {
-    expect(isChallengePage("<title>Just a moment...</title> challenges.cloudflare.com")).toBe(true);
-    expect(() => parseBenchmarkListPage("<title>Just a moment...</title> challenges.cloudflare.com")).toThrow(
-      /challenge/,
+  it("lists all releases of exclusively proprietary vendors", () => {
+    expect(matchesClosedRule("OpenAI", "gpt-5 GPT-5")).toBe(true);
+    expect(matchesClosedRule("Anthropic", "claude-opus-4-5 Claude Opus 4.5")).toBe(true);
+  });
+
+  it("excludes open-weights lines of mixed vendors", () => {
+    expect(matchesClosedRule("Google", "gemma-3 Gemma 3")).toBe(false);
+    expect(matchesClosedRule("Google", "diffusiongemma-26b-a4b DiffusionGemma 26B")).toBe(false);
+    expect(matchesClosedRule("Google", "gemini-2-5-pro Gemini 2.5 Pro")).toBe(true);
+    expect(matchesClosedRule("Meta", "llama-3-3 Llama 3.3")).toBe(false);
+    expect(matchesClosedRule("Meta", "muse-spark-1-3 Muse Spark 1.3")).toBe(true);
+    expect(matchesClosedRule("Mistral", "mistral-large-3 Mistral Large 3")).toBe(true);
+    expect(matchesClosedRule("Mistral", "mistral-small-3-1 Mistral Small 3.1")).toBe(false);
+    expect(matchesClosedRule("Mistral", "devstral-medium Devstral Medium")).toBe(false);
+    expect(matchesClosedRule("SpaceXAI", "grok-1 Grok-1")).toBe(false);
+    expect(matchesClosedRule("SpaceXAI", "grok-4 Grok 4")).toBe(true);
+  });
+});
+
+describe("toClosedReleases", () => {
+  const weights = buildWeightsIndex([
+    { slug: "indexed-open", id: "indexed-open", name: "Indexed Open", is_open_weights: true },
+    { slug: "indexed-closed", id: "indexed-closed", name: "Indexed Closed", is_open_weights: false },
+  ] as ArtificialAnalysisModel[]);
+
+  it("prefers exact index weights over creator rules", () => {
+    // OpenAI is rule-closed, but an exact open flag wins.
+    expect(
+      isClosedChangelogRelease(clModel({ slug: "indexed-open", releaseSlug: "indexed-open" }), weights),
+    ).toBe(false);
+    expect(
+      isClosedChangelogRelease(clModel({ slug: "indexed-closed", releaseSlug: "indexed-closed" }), weights),
+    ).toBe(true);
+  });
+
+  it("dedupes variants by release family, newest first", () => {
+    const entries = toClosedReleases(
+      [
+        clModel(),
+        clModel({ slug: "claude-opus-4-5", name: "Claude Opus 4.5 (Non-reasoning)" }),
+        clModel({
+          slug: "llama-3-3-70b",
+          name: "Llama 3.3 70B",
+          releaseSlug: "llama-3-3",
+          releaseName: "Llama 3.3",
+          releaseDate: "2024-12-06",
+          creatorName: "Meta",
+        }),
+        clModel({
+          slug: "mystery-1",
+          name: "Mystery 1",
+          releaseSlug: "mystery-1",
+          releaseName: "Mystery 1",
+          releaseDate: "2025-06-01",
+          creatorName: "Some New Lab",
+        }),
+      ],
+      new Map(),
     );
+    // One row per release family; Llama (open line) and unknown vendors drop out.
+    expect(entries.map((e) => e.id)).toEqual(["claude-opus-4-5"]);
+    expect(entries[0]).toMatchObject({
+      model: "Claude Opus 4.5",
+      provider: "Anthropic",
+      releaseDate: "2025-11-24",
+      link: `${upstreamConfig.artificialAnalysis}/models/claude-opus-4-5`,
+    });
   });
 });

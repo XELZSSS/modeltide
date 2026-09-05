@@ -61,8 +61,13 @@ export const lineSeriesStyle = {
 
 /** Concrete color for a series slot, cycling the theme palette. */
 export function seriesColor(theme: ChartTheme, index: number): string {
-  if (theme.palette.length === 0) return "#888";
-  return theme.palette[index % theme.palette.length] as string;
+  const fallback = "#888888";
+  if (theme.palette.length === 0) return fallback;
+  const raw = theme.palette[index % theme.palette.length];
+  // CSS var missing (empty string) or whitespace: fall back instead of
+  // handing Chart.js a transparent/invalid color.
+  if (typeof raw !== "string" || !raw.trim()) return fallback;
+  return raw;
 }
 
 /** Hex color to rgba() for canvas fills. Warns on non-hex input. */

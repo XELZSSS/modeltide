@@ -144,8 +144,9 @@ export function indexRankMap<T>(rows: T[], getId: (row: T) => string): Map<strin
 
 // ---- usePagedData ----
 function usePagination<T>(data: T[], size: number, resetKey?: string | number) {
+  const safeSize = Number.isFinite(size) && size > 0 ? Math.floor(size) : DEFAULT_PAGE_SIZE;
   const [page, setPage] = useState(1);
-  const total = Math.ceil(data.length / size);
+  const total = Math.ceil(data.length / safeSize);
   const totalPages = total === 0 ? 0 : total;
   const safeTotal = Math.max(1, totalPages);
 
@@ -156,7 +157,7 @@ function usePagination<T>(data: T[], size: number, resetKey?: string | number) {
   }, [resetKey]);
 
   const cur = totalPages === 0 ? 0 : Math.min(page, totalPages);
-  const paged = totalPages === 0 ? [] : data.length > size ? data.slice((cur - 1) * size, cur * size) : data;
+  const paged = totalPages === 0 ? [] : data.length > safeSize ? data.slice((cur - 1) * safeSize, cur * safeSize) : data;
   const goToPage = useCallback((p: number) => setPage(Math.max(1, Math.min(p, safeTotal))), [safeTotal]);
   return { page: cur === 0 ? 1 : cur, totalPages, pagedData: paged, goToPage } as const;
 }
@@ -538,7 +539,7 @@ function DataTableInner<T>({
 export const DataTable = memo(DataTableInner) as typeof DataTableInner;
 
 /** Filter `data` by the global search term (case-insensitive). */
-function useFilteredData<T>(data: T[], getFields: (x: T) => string[]): T[] {
+function useFilteredData<T>(data: T[], getFields: (x: T) => (string | null | undefined)[]): T[] {
   const term = useSearchStore((s) => s.searchTerm)
     .toLowerCase()
     .trim();
@@ -547,7 +548,7 @@ function useFilteredData<T>(data: T[], getFields: (x: T) => string[]): T[] {
     return data.filter(
       (x) =>
         matchTerm(
-          getFields(x).map((f) => f.toLowerCase().trim()),
+          getFields(x).map((f) => (f ?? "").toLowerCase().trim()),
           term,
         ).matched,
     );
@@ -557,7 +558,7 @@ function useFilteredData<T>(data: T[], getFields: (x: T) => string[]): T[] {
 interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
   data: T[];
   /** Search-matched fields; keep identity stable. */
-  getSearchFields: (row: T) => string[];
+  getSearchFields: (row: T) => (string | null | undefined)[];
 }
 
 /** DataTable pre-wired to the global search store. */

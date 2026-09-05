@@ -259,7 +259,7 @@ export interface SearchResult {
 
 /** Health-check result for one upstream data source. */
 export interface SourceStatus {
-  id: "artificialAnalysis" | "huggingface" | "openrouter" | "news" | "arena" | "benchmarkList";
+  id: "artificialAnalysis" | "huggingface" | "openrouter" | "news" | "arena";
   ok: boolean;
   status: number | null;
   latencyMs: number | null;

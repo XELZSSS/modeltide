@@ -12,6 +12,9 @@ function* traverse(root: unknown): Generator<unknown> {
   const queue: unknown[] = [root];
   let visited = 0;
   let head = 0;
+  // Bound queue growth as well: a single wide node could otherwise OOM
+  // before the visited budget trips.
+  const maxQueued = MAX_RSC_NODES * 4;
   while (head < queue.length) {
     const cur = queue[head++]!;
     if (!cur || typeof cur !== "object") continue;
@@ -23,7 +26,14 @@ function* traverse(root: unknown): Generator<unknown> {
     }
     yield cur;
     const children = Array.isArray(cur) ? cur : Object.values(cur as Record<string, unknown>);
-    for (const v of children) if (v !== null && typeof v === "object") queue.push(v);
+    for (const v of children) {
+      if (v !== null && typeof v === "object") {
+        if (queue.length >= maxQueued) {
+          throw new UpstreamError(`RSC payload too wide (>${maxQueued} queued nodes)`);
+        }
+        queue.push(v);
+      }
+    }
   }
 }
 
@@ -79,8 +89,14 @@ function tryParseCandidates<T>(line: string, extract: (data: unknown) => T[] | n
 }
 
 export function parseRscPayload<T>(body: string, marker: string, extract: (data: unknown) => T[] | null): T[] {
-  if (body.length > MAX_RSC_BYTES)
-    throw new UpstreamError(`RSC body too large (${body.length} bytes, limit ${MAX_RSC_BYTES})`);
+  let byteLength: number;
+  try {
+    byteLength = new TextEncoder().encode(body).length;
+  } catch {
+    byteLength = body.length * 3;
+  }
+  if (byteLength > MAX_RSC_BYTES)
+    throw new UpstreamError(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);
   if (!body.includes(marker)) {
     throw new UpstreamError(
       `RSC marker "${marker}" not found or payload empty. body length=${body.length} snippet=${JSON.stringify(body.slice(0, 200))}`,

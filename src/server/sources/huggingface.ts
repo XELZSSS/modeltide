@@ -106,5 +106,7 @@ export const getReleases = (ctx: AppContext): Promise<OpenSourceModelEntry[]> =>
   ctx.cache.withTtl(cacheKeys.openSourceReleases, SLOW_TTL_MS, async () => {
     const items = await fetchHFModels(ctx, "createdAt", "-1", 500);
     const mapped = filterMapDedupe(items, mapModel, (m) => m.id).filter(isOpenReleaseEntry);
-    return { data: mapped.sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? "")) };
+    const sorted = mapped.sort((a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""));
+    // Empty means transient failure — cache briefly to avoid poisoning the key.
+    return { data: sorted, ttl: sorted.length === 0 ? PARTIAL_FAIL_TTL_MS : SLOW_TTL_MS };
   });

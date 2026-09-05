@@ -35,9 +35,15 @@ export const getNews = (ctx: AppContext, category: NewsCategory): Promise<NewsIt
     dated.sort((a, b) => b.ts - a.ts);
     // Defense-in-depth: re-apply the unified news gate (feed already filters).
     const suitable = dated.map((d) => d.item).filter((i) => isSuitableNewsItem(i.title, i.link));
-    const unique = dedupeBy(
-      suitable,
-      (i) => i.link,
-    );
+    const unique = dedupeBy(suitable, (i) => {
+      try {
+        const u = new URL(i.link);
+        // Normalize trailing slash + hostname case so the same article
+        // with/without "/" doesn't appear twice.
+        return `${u.protocol}//${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}${u.hash}`;
+      } catch {
+        return i.link.trim().replace(/\/+$/, "");
+      }
+    });
     return { data: unique.slice(0, MAX_TOTAL), ttl: ttlForCount(failCount, NEWS_TTL_MS) };
   });

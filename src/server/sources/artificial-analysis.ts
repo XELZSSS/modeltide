@@ -396,7 +396,12 @@ export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysi
     const models = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
       .map(compact)
       .filter((m) => isValidModelIdentity(m.id, m.slug, m.name))
-      .sort((a, b) => (b.intelligence_index ?? -Infinity) - (a.intelligence_index ?? -Infinity));
+      .sort((a, b) => {
+        const av = a.intelligence_index ?? Number.NEGATIVE_INFINITY;
+        const bv = b.intelligence_index ?? Number.NEGATIVE_INFINITY;
+        if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
+        return bv - av;
+      });
     if (models.length === 0) {
       throw new UpstreamError(
         `Artificial Analysis parsing yielded 0 models (catalog=${catalog.length}, enrichFailures=${enrichFailures})`,
@@ -449,3 +454,112 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
     }
     return { data: { models, fetchedAt: new Date().toISOString() } };
   });
+
+// Changelog: full model history (the intelligence index only carries the
+// current leaderboard). The page is server-rendered HTML embedding Next.js
+// flight payloads; the `models` array holds one entry per model variant with
+// its release family, date and creator — but no open-weights flag (callers
+// join weights from the index or fall back to curated creator rules).
+export const CHANGELOG_PATH = "/changelog";
+
+export interface ChangelogModel {
+  slug: string;
+  name: string;
+  releaseSlug: string;
+  releaseName: string;
+  releaseDate: string;
+  creatorName: string;
+}
+
+/** Scan flight-escaped HTML for `"models":[...]` arrays; returns each parsed array. */
+function extractModelsArrays(html: string): unknown[] {
+  // Payloads sit inside JS strings, so quotes arrive backslash-escaped.
+  const unescaped = html.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  const found: unknown[] = [];
+  const needle = '"models":[';
+  let from = 0;
+  while (true) {
+    const k = unescaped.indexOf(needle, from);
+    if (k === -1) break;
+    const d = k + needle.length - 1; // at '['
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (let i = d; i < unescaped.length; i++) {
+      // Bound the scan so a markup change can't spin the Worker.
+      if (i - d > 8_000_000) break;
+      const c = unescaped[i]!;
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+      } else if (c === '"') {
+        inStr = true;
+      } else if (c === "[") {
+        depth++;
+      } else if (c === "]") {
+        depth--;
+        if (depth === 0) {
+          try {
+            found.push(JSON.parse(unescaped.slice(d, i + 1)));
+          } catch {
+            // Truncated payload — ignore this candidate.
+          }
+          break;
+        }
+      }
+    }
+    from = k + 1;
+  }
+  return found;
+}
+
+function isChangelogRaw(e: unknown): e is Record<string, unknown> {
+  if (!e || typeof e !== "object" || Array.isArray(e)) return false;
+  const r = e as Record<string, unknown>;
+  if (typeof r.slug !== "string" || typeof r.name !== "string" || typeof r.releaseDate !== "string") return false;
+  if (!isRecordLike(r.release) || !isRecordLike(r.creator)) return false;
+  return true;
+}
+
+function isRecordLike(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function toChangelogModel(e: Record<string, unknown>): ChangelogModel | null {
+  const release = e.release as Record<string, unknown>;
+  const creator = e.creator as Record<string, unknown>;
+  const slug = str(e.slug).trim();
+  const name = str(e.name).trim();
+  const releaseSlug = str(release.slug).trim();
+  const releaseName = str(release.name).trim();
+  const releaseDate = str(e.releaseDate).trim();
+  const creatorName = str(creator.name).trim();
+  if (!slug || !name || !releaseSlug || !releaseName || !releaseDate || !creatorName) return null;
+  return { slug, name, releaseSlug, releaseName, releaseDate, creatorName };
+}
+
+/** Parse the changelog `models` array (largest shape-valid candidate wins); pure. */
+export function parseChangelogModels(html: string): ChangelogModel[] {
+  let best: ChangelogModel[] = [];
+  for (const v of extractModelsArrays(html)) {
+    if (!Array.isArray(v)) continue;
+    const mapped = (v as unknown[]).filter(isChangelogRaw).map(toChangelogModel).filter((m): m is ChangelogModel => m !== null);
+    if (mapped.length > best.length) best = mapped;
+  }
+  return best;
+}
+
+/** Full AA model history for release feeds; throws when the markup yields nothing. */
+export async function getChangelogModels(ctx: AppContext): Promise<ChangelogModel[]> {
+  const html = await ctx.http.text(`${upstreamConfig.artificialAnalysis}${CHANGELOG_PATH}`, {
+    headers: { accept: "text/html,application/xhtml+xml,*/*" },
+    timeoutMs: UPSTREAM_TIMEOUT_MS,
+    retries: 1,
+  });
+  const models = parseChangelogModels(html);
+  if (models.length === 0) {
+    throw new UpstreamError(`AA changelog yielded 0 models (markup changed?, body=${html.length}B)`);
+  }
+  return models;
+}
