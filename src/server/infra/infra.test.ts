@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { CacheService, resetModuleCachesForTests } from "@/server/infra/cache-service";
-import { MEMORY_CACHE_MAX_BYTES } from "@/shared/config";
+import { MEMORY_CACHE_MAX_BYTES } from "@/server/config";
 import { validateQuery, qEnum, qNum } from "@/server/infra/validation";
-import { buildWarmUrls, bulkSliceForTick, BULK_PER_TICK } from "@/server/routes/warmup";
+import { buildWarmUrls } from "@/server/routes/warmup";
 import { defineRoute } from "@/server/routes/table";
 import { parseFeed } from "@/server/parsers/feed";
 import { runCapped } from "@/server/infra/pool";
@@ -138,28 +138,21 @@ describe("validation", () => {
 });
 
 describe("warmup", () => {
-  it("skips noStore routes and caps enum cartesian products", () => {
-    const routes = [
-      defineRoute({ path: "/api/a", handler: async () => ({}) }),
-      defineRoute({ path: "/api/b", noStore: true, handler: async () => ({}) }),
-      defineRoute({
-        path: "/api/c",
-        query: { category: qEnum(["x", "y"] as const, "x") },
-        warm: "all",
-        handler: async () => ({}),
-      }),
-    ];
+  const routes = [
+    defineRoute({ path: "/api/a", handler: async () => ({}) }),
+    defineRoute({ path: "/api/b", noStore: true, handler: async () => ({}) }),
+    defineRoute({
+      path: "/api/c",
+      query: { category: qEnum(["x", "y"] as const, "x") },
+      warm: "all",
+      handler: async () => ({}),
+    }),
+  ];
+  it("warms every route except noStore and caps enum cartesian products", () => {
     const urls = buildWarmUrls("https://x.internal", routes);
     expect(urls.some((u) => u.includes("/api/b"))).toBe(false);
+    expect(urls.filter((u) => u.includes("/api/a"))).toHaveLength(1);
     expect(urls.filter((u) => u.includes("/api/c"))).toHaveLength(2);
-  });
-  it("rotates bulk slices deterministically", () => {
-    const bulk = Array.from({ length: BULK_PER_TICK * 2 + 1 }, (_, i) => `u${i}`);
-    const a = bulkSliceForTick(bulk, new Date(0));
-    const b = bulkSliceForTick(bulk, new Date(30 * 60_000));
-    expect(a).toHaveLength(BULK_PER_TICK);
-    expect(b).toHaveLength(BULK_PER_TICK);
-    expect(a[0]).not.toBe(b[0]);
   });
 });
 

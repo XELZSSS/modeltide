@@ -1,15 +1,9 @@
 import { memo, useMemo } from "react";
 import { formatDollar } from "@/client/utils/format";
 import type { TFunction } from "@/shared/i18n";
-import { makeOfficialGetter, type OfficialGetter } from "@/client/utils/pricing-merge";
 import { Input } from "@/client/components/ui/input";
 import { useTranslation } from "@/client/providers";
-import { qOfficialPricing } from "@/client/api/queries";
-import {
-  COST_FIELDS,
-  type CostFieldId,
-  type CostInputState,
-} from "@/client/features/compare/price-compare/cost-inputs";
+import { COST_FIELDS, type CostFieldId, type CostInputState } from "@/client/features/pricing/cost-inputs";
 
 interface CostFieldDef {
   id: CostFieldId;
@@ -27,11 +21,6 @@ function getCostFields(state: CostInputState, t: TFunction): CostFieldDef[] {
     label: t(def.labelKey),
     unit: def.unit,
   }));
-}
-
-export function useOfficialGetter(enabled = true): OfficialGetter | undefined {
-  const officialQ = qOfficialPricing.use(enabled);
-  return useMemo(() => (officialQ.data ? makeOfficialGetter(officialQ.data.models) : undefined), [officialQ.data]);
 }
 
 interface CostEstimatorInputsProps {
@@ -96,7 +85,6 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
               placeholder={field.label}
               aria-label={field.unit ? `${field.label} (${field.unit})` : field.label}
             />
-            {}
             <label htmlFor={`cost-${field.id}`} className="ui-caption min-w-0 cursor-text">
               {field.unit ? `${field.label} (${field.unit})` : field.label}
             </label>

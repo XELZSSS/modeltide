@@ -93,3 +93,7 @@ export function computeBlendPrice(
   const cache = isFiniteNumber(p.cacheHit) ? p.cacheHit : input;
   return (7 * cache + 2 * input + output) / 10;
 }
+
+export function isEmptyT2i(payload: { models?: unknown } | null | undefined): boolean {
+  return !payload || !Array.isArray(payload.models) || payload.models.length === 0;
+}

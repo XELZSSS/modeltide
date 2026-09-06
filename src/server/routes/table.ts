@@ -7,15 +7,12 @@ import { qEnum, qNum } from "@/server/infra/validation";
 import type { AppContext } from "@/server/context";
 import {
   ARENA_BOARD_IDS,
-  BROWSER_CACHE_HEADER,
-  BROWSER_NO_STORE_HEADER,
-  CDN_CACHE_HEADER,
-  CDN_NO_STORE_HEADER,
   MAX_MODEL_LIMIT,
   apiPaths,
   NEWS_CATEGORIES,
   OPEN_SOURCE_MODELS_DEFAULTS,
 } from "@/shared/config";
+import { BROWSER_CACHE_HEADER, BROWSER_NO_STORE_HEADER, CDN_CACHE_HEADER, CDN_NO_STORE_HEADER } from "@/server/config";
 import { getIntelligenceIndex } from "@/server/sources/aa/intelligence-index";
 import { getArenaBoard, getArenaRankings } from "@/server/sources/arena";
 import { getOfficialPricing } from "@/server/sources/pricing";
@@ -26,12 +23,12 @@ import { getOpenRouterRankings } from "@/server/sources/openrouter";
 import { getClosedReleases } from "@/server/sources/closed-releases";
 import { getStatusHistory } from "@/server/sources/status-history";
 import { enforceRateLimit } from "@/server/routes/rate-limit";
+import { isWarmupRequest } from "@/server/routes/warmup";
 
 export interface RouteDef<S extends QuerySchema = QuerySchema> {
   path: string;
   query?: S;
   warm?: "all";
-  warmPriority?: "live" | "bulk";
   noStore?: boolean;
   rateLimit?: { windowSec: number; max: number };
   handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<unknown>;
@@ -47,13 +44,11 @@ const SORT_DIRECTIONS = ["-1", "1"] as const;
 export const routeDefs = [
   defineRoute({
     path: apiPaths.artificialIndex,
-    warmPriority: "live",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getIntelligenceIndex(ctx),
   }),
   defineRoute({
     path: apiPaths.openSourceModels,
-    warmPriority: "bulk",
     query: {
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
       direction: qEnum(SORT_DIRECTIONS, OPEN_SOURCE_MODELS_DEFAULTS.direction),
@@ -69,7 +64,6 @@ export const routeDefs = [
   }),
   defineRoute({
     path: apiPaths.openSourceReleases,
-    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getReleases(ctx),
   }),
@@ -77,19 +71,16 @@ export const routeDefs = [
     path: apiPaths.news,
     query: { category: qEnum(NEWS_CATEGORIES, NEWS_CATEGORIES[0]) },
     warm: "all",
-    warmPriority: "live",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx, params) => getNews(ctx, params.category),
   }),
   defineRoute({
     path: apiPaths.openRouterRankings,
-    warmPriority: "live",
     rateLimit: { windowSec: 60, max: 120 },
     handler: (ctx) => getOpenRouterRankings(ctx),
   }),
   defineRoute({
     path: apiPaths.closedReleases,
-    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 120 },
     handler: (ctx) => getClosedReleases(ctx),
   }),
@@ -97,25 +88,21 @@ export const routeDefs = [
     path: apiPaths.arenaBoard,
     query: { category: qEnum(ARENA_BOARD_IDS, ARENA_BOARD_IDS[0]) },
     warm: "all",
-    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx, params) => getArenaBoard(ctx, params.category),
   }),
   defineRoute({
     path: apiPaths.arenaRankings,
-    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getArenaRankings(ctx),
   }),
   defineRoute({
     path: apiPaths.officialPricing,
-    warmPriority: "bulk",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getOfficialPricing(ctx),
   }),
   defineRoute({
     path: apiPaths.homeDashboard,
-    warmPriority: "live",
     rateLimit: { windowSec: 60, max: 60 },
     handler: (ctx) => getHomeDashboard(ctx),
   }),
@@ -139,7 +126,7 @@ export function registerRoutes(app: Hono, routes: readonly RouteDef[]): void {
       const context = buildContext(c.env as Env, { signal: c.req.raw.signal });
       startTime(c, "upstream");
       try {
-        if (route.rateLimit) await enforceRateLimit(c, context.kv, route.rateLimit);
+        if (route.rateLimit && !isWarmupRequest(c)) enforceRateLimit(c, route.rateLimit);
         const params = validateQuery(c.req.query(), route.query ?? {});
         const data = await route.handler(context, params);
         applyCacheHeaders(c, route.noStore === true);

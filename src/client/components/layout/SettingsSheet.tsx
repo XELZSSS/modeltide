@@ -85,7 +85,6 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
       <SheetBody>
         <SheetHeader title={t("settings")} onClose={onClose} />
 
-        {}
         <div className="divide-y divide-border">
           <SettingRow icon={<Languages size={16} />} label={t("language")} onActivate={toggleLang}>
             <Segmented

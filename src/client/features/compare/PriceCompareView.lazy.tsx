@@ -35,8 +35,7 @@ export function PriceCompareView() {
   return (
     <ComparePageLayout
       backLabelKey="backToPricing"
-      backTo={MODEL_SOURCES.aa.backTo}
-      backState={{ viewMode: "pricing" }}
+      backTo={`${MODEL_SOURCES.aa.backTo}&view=pricing`}
       title={t("priceComparison")}
     >
       {(models) => <PriceCompareContent models={models} />}

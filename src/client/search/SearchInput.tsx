@@ -188,7 +188,6 @@ export function SearchInput() {
           placeholder={t("searchPlaceholder")}
           className="min-w-0 flex-1 w-full text-base sm:text-sm bg-transparent outline-none text-text-primary placeholder:text-text-tertiary"
         />
-        {}
         <button
           type="button"
           aria-label={t("clear")}

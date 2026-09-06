@@ -8,18 +8,10 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { registerRoutes } from "@/server/routes/table";
 import type { RouteDef } from "@/server/routes/table";
 import { ApiError, RateLimitError } from "@/server/infra/errors";
-import { ONE_DAY, WARM_ORIGIN } from "@/shared/config";
+import { ONE_DAY } from "@/shared/config";
+import { isWarmupRequest } from "@/server/routes/warmup";
 
 const ROUTE_TIMEOUT_MS = 25_000;
-const WARM_HOST = safeHost(WARM_ORIGIN);
-
-function safeHost(origin: string): string {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return "";
-  }
-}
 
 function clampStatus(status: number): ContentfulStatusCode {
   return (status >= 100 && status < 600 ? status : 500) as ContentfulStatusCode;
@@ -32,7 +24,7 @@ export function createApp(routeDefs: readonly RouteDef[]): Hono {
 
   const httpLogger = logger();
   app.use("/api/*", async (c, next) => {
-    if (c.req.header("x-warmup") === "1" && c.req.header("host") === WARM_HOST) return next();
+    if (isWarmupRequest(c)) return next();
     return httpLogger(c, next);
   });
   app.use(

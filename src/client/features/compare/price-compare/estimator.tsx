@@ -8,15 +8,16 @@ import { Card, CardContent } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
 import { useChartTheme } from "@/client/ui-hooks";
 import { seriesColor } from "@/client/utils/charts";
-import { useMonthlyCosts } from "@/client/features/compare/price-compare/cost-inputs";
-import { CostEstimatorInputs, useOfficialGetter } from "@/client/features/compare/price-compare/inputs";
+import { useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
+import { CostEstimatorInputs } from "@/client/features/pricing/inputs";
+import { useOfficialPricing } from "@/client/features/pricing/official";
 import { WinnerMark } from "@/client/features/compare/price-compare/price-table";
 
 export const CostEstimator = memo(function CostEstimator({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();
 
-  const getOfficial = useOfficialGetter();
+  const { getOfficial } = useOfficialPricing();
   const { monthlyCosts, ...inputs } = useMonthlyCosts(models, getOfficial);
   const bestMonthlyCost = useMemo(() => {
     const valid = monthlyCosts.filter((v): v is number => v !== null);

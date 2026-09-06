@@ -1,5 +1,6 @@
 import type { AppContext } from "@/server/context";
-import { DEFAULT_TTL_MS, cacheKeys } from "@/shared/config";
+import { DEFAULT_TTL_MS } from "@/shared/config";
+import { cacheKeys } from "@/server/config";
 import type { TextToImageModel, TextToImagePayload } from "@/shared/types";
 import { findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc";
 import { UpstreamError, errMsg } from "@/server/infra/errors";

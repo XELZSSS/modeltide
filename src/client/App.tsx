@@ -6,7 +6,7 @@ import { AppShell } from "@/client/components/layout";
 import { ErrorBoundary, Spinner } from "@/client/components/feedback";
 import { AppRoutes } from "@/client/routes";
 import { FIVE_MINUTES, THIRTY_MINUTES } from "@/shared/config";
-import { ApiClientError } from "@/client/api/queries";
+import { ApiClientError } from "@/client/api/client";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,7 +32,6 @@ export function App() {
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <AppShell>
-              {}
               <ErrorBoundary>
                 <Suspense fallback={<Spinner />}>
                   <AppRoutes />

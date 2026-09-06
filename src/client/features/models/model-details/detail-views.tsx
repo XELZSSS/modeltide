@@ -53,7 +53,3 @@ export function createDetailView<T>(
     );
   };
 }
-
-export { AADetail } from "@/client/features/models/model-details/aa-view";
-export { OrDetail } from "@/client/features/models/model-details/or-view";
-export { OSDetail } from "@/client/features/models/model-details/os-view";

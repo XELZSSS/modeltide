@@ -1,5 +1,5 @@
 import type { AppContext } from "@/server/context";
-import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/shared/config";
+import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
 import { findNextData, parseRscPayload } from "@/server/parsers/rsc";
 import { isNonEmptyString } from "@/server/sources/data-filter";
 import { errMsg } from "@/server/infra/errors";

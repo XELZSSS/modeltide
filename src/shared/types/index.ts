@@ -1,5 +1,4 @@
 export type * from "@/shared/types/catalog";
-export { isEmptyT2i } from "@/shared/types/catalog";
 
 export type * from "@/shared/types/rankings";
 

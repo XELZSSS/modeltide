@@ -2,7 +2,6 @@ import type { AppContext } from "@/server/context";
 import { API_DOMAINS, CACHE_VERSION } from "@/shared/config";
 import type { DayBucket, UptimeSample } from "@/shared/types";
 import { mergeSample, type HistoryStore, type SourceId } from "@/server/sources/status/windows";
-import { SAMPLE_INTERVAL_MS } from "@/server/sources/status/windows";
 import { aggregateProbes, probeTargets, type SourceAggregate } from "@/server/sources/status/probe";
 import { fetchProviderStatuses } from "@/server/sources/provider-status";
 
@@ -12,8 +11,6 @@ const SAMPLE_LOCK_TTL_S = 120;
 export const SAMPLE_LOCK_KEY = `${CACHE_VERSION}:${API_DOMAINS.statusHistory}:lock`;
 
 let memoryStore: HistoryStore = { sources: {} };
-
-let inflightSample: Promise<void> | null = null;
 
 async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
   if (!ctx.kv) return "memory";
@@ -97,15 +94,6 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
   }
 }
 
-function newestSampleTime(store: HistoryStore): number {
-  let newest = 0;
-  for (const entry of Object.values(store.sources)) {
-    const last = entry?.recent[entry.recent.length - 1];
-    if (last && last.t > newest) newest = last.t;
-  }
-  return newest;
-}
-
 export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Promise<void> {
   const token = await acquireSampleLock(ctx);
   if (!token) return;
@@ -156,20 +144,9 @@ export async function mergeSamplesIntoStore(
 }
 
 export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore> {
-  let store: HistoryStore;
   try {
-    store = await readStore(ctx);
+    return await readStore(ctx);
   } catch {
     return memoryStore;
   }
-  if (newestSampleTime(store) >= Date.now() - SAMPLE_INTERVAL_MS) return store;
-  if (!ctx.kv) return store;
-  try {
-    inflightSample ??= recordStatusSamples(ctx).finally(() => {
-      inflightSample = null;
-    });
-    await inflightSample;
-    store = await readStore(ctx);
-  } catch {}
-  return store;
 }

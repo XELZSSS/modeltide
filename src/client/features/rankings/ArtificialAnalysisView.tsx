@@ -1,20 +1,22 @@
-import { useCallback, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useCallback, useMemo } from "react";
+import { useNavigate } from "react-router";
 import { useTranslation } from "@/client/providers";
+import { useUrlParam } from "@/client/ui-hooks";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelId } from "@/client/utils/model";
 import { indexRankMap, rankCol } from "@/client/components/data/columns";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { useCompareModels, useCompareStore } from "@/client/stores";
-import { useMonthlyCosts } from "@/client/features/compare/price-compare/cost-inputs";
-import { CostEstimatorInputs, useOfficialGetter } from "@/client/features/compare/price-compare/inputs";
-import { CompareChipBar } from "@/client/features/compare/ComparePageLayout";
+import { useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
+import { CostEstimatorInputs } from "@/client/features/pricing/inputs";
+import { useOfficialPricing } from "@/client/features/pricing/official";
+import { CompareChipBar } from "@/client/components/compare-tray";
 import { ModelExpandedDetail } from "@/client/features/rankings/aa/cells";
 import { buildRankingColumns } from "@/client/features/rankings/aa/columns-rank";
 import { buildPricingColumns, type PricingRow } from "@/client/features/rankings/aa/columns-price";
 import { RadioToolbar } from "@/client/components/ui/tabs";
 
-type ViewMode = "rankings" | "pricing";
+const VIEW_MODES = ["rankings", "pricing"] as const;
 
 const getAASearchFields = (model: ArtificialAnalysisModel) => [
   model.name,
@@ -31,16 +33,12 @@ const renderPricingDetail = (row: PricingRow) => <ModelExpandedDetail model={row
 
 export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnalysisModel[] }) {
   const navigate = useNavigate();
-  const location = useLocation();
   const { t } = useTranslation();
   const toggleCompareModel = useCompareStore((s) => s.toggleCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const raw = (location.state as { viewMode?: unknown } | null)?.viewMode;
-    return raw === "pricing" ? "pricing" : "rankings";
-  });
+  const [viewMode, setViewMode] = useUrlParam("view", VIEW_MODES, VIEW_MODES[0]);
 
-  const getOfficial = useOfficialGetter(viewMode === "pricing");
+  const { getOfficial } = useOfficialPricing(viewMode === "pricing");
   const { monthlyCosts, ...costInputs } = useMonthlyCosts(
     viewMode === "pricing" ? rankings : [],
     viewMode === "pricing" ? getOfficial : undefined,
@@ -93,7 +91,7 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
           { id: "pricing", label: t("pricing") },
         ]}
         value={viewMode}
-        onChange={(id) => setViewMode(id as ViewMode)}
+        onChange={setViewMode}
       />
 
       {viewMode === "pricing" && (

@@ -22,7 +22,6 @@ export function BenchmarkBoardView() {
         value={category}
         onChange={(id) => setCategory(id as ArenaBoardKey)}
       />
-      {}
       <SuspenseQuery resetKey={category}>
         <BenchmarkBoardContent category={category} />
       </SuspenseQuery>

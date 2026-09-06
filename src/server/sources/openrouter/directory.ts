@@ -1,4 +1,5 @@
-import { SLOW_TTL_MS, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig } from "@/shared/config";
+import { SLOW_TTL_MS } from "@/shared/config";
+import { UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, errMsg } from "@/server/infra/errors";
 import { num, numOr, numPositive } from "@/server/parsers/primitives";

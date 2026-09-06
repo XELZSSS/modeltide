@@ -44,7 +44,6 @@ function NewsList({ news }: { news: NewsItem[] }) {
               </h3>
               <div className="flex items-center gap-3 shrink-0 ui-caption mt-0.5">
                 <span className="hidden sm:inline">{item.source}</span>
-                {}
                 <span className="flex items-center gap-1.5" title={formatDate(item.pubDate, lang)}>
                   <Clock size={12} />
                   {formatRelativeTime(item.pubDate, t, lang)}

@@ -1,7 +1,8 @@
 import type { AppContext } from "@/server/context";
-import { FAST_FETCH_OPTS, cacheKeys, STATIC_TTL_MS } from "@/shared/config";
+import { STATIC_TTL_MS } from "@/shared/config";
+import { FAST_FETCH_OPTS, cacheKeys } from "@/server/config";
 import { obj, str } from "@/server/parsers/primitives";
-import { UpstreamError } from "@/server/infra/errors";
+import { UpstreamError, errMsg } from "@/server/infra/errors";
 import { runCapped } from "@/server/infra/pool";
 
 const HEALTHY_COMPONENT_STATES = new Set(["operational"]);
@@ -60,10 +61,6 @@ async function fetchStatuspage(ctx: AppContext, url: string, label: string): Pro
     ctx.log("warn", `[provider-status] ${label} parse failed: ${errMsg(err)}`);
     return { ok: false, status: 200, latencyMs, error: "unrecognized status payload" };
   }
-}
-
-function errMsg(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 interface GcpIncident {

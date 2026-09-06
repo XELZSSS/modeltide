@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json",
-    "prebuild": "npm run type-check && npm run i18n:check && npm run guard:shared",
+    "prebuild": "npm run type-check && npm run i18n:check && npm run guard:shared && npm run guard:boundaries",
     "build": "vite build && node scripts/csp-hash.cjs --write && node scripts/check-bundle.cjs",
     "deploy": "npm run build && wrangler deploy",
     "preview": "npm run build && vite preview",
@@ -20,6 +20,7 @@
     "hash:check": "node scripts/csp-hash.cjs",
     "i18n:check": "node scripts/check-i18n.cjs",
     "guard:shared": "node scripts/check-shared-dom.cjs",
+    "guard:boundaries": "node scripts/check-boundaries.cjs",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "audit": "npm audit --registry=https://registry.npmjs.org"

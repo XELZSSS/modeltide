@@ -50,7 +50,6 @@ function MobileTableBodyInner<T>({
         const { rowId, isExpanded, toggle } = getRowExpandState(row, getRowId, expandedRowId, onToggleExpand);
         return (
           <Fragment key={rowId}>
-            {}
             <div
               className={cn(
                 "border border-border bg-bg-card p-4 transition-colors",
@@ -146,7 +145,6 @@ function TableBodyInner<T>({
         const { rowId, isExpanded, toggle } = getRowExpandState(row, getRowId, expandedRowId, onToggleExpand);
         return (
           <Fragment key={rowId}>
-            {}
             <tr
               className={cn(
                 "border-b border-border last:border-b-0 transition-colors bg-bg-card",

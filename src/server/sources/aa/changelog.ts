@@ -1,5 +1,6 @@
 import type { AppContext } from "@/server/context";
-import { MAX_FEED_BYTES, STATIC_TTL_MS, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig } from "@/shared/config";
+import { STATIC_TTL_MS } from "@/shared/config";
+import { MAX_FEED_BYTES, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig } from "@/server/config";
 import { UpstreamError } from "@/server/infra/errors";
 import { MAX_SCAN_CHARS } from "@/server/parsers/rsc";
 import { isRecord, str } from "@/server/parsers/primitives";
@@ -99,22 +100,26 @@ export function parseChangelogModels(html: string): ChangelogModel[] {
   return best;
 }
 
+export async function fetchChangelogModels(ctx: AppContext): Promise<ChangelogModel[]> {
+  const html = await ctx.http.text(
+    `${upstreamConfig.artificialAnalysis}${CHANGELOG_PATH}`,
+    {
+      headers: { accept: "text/html,application/xhtml+xml,*/*" },
+      ...UPSTREAM_FETCH_OPTS,
+    },
+    MAX_FEED_BYTES,
+  );
+  const models = parseChangelogModels(html);
+  if (models.length === 0) {
+    throw new UpstreamError(
+      `AA changelog yielded 0 models (raw=1 page, kept=0, markup changed?, body=${html.length}B)`,
+    );
+  }
+  return models;
+}
+
 export async function getChangelogModels(ctx: AppContext): Promise<ChangelogModel[]> {
   return ctx.cache.withTtl(cacheKeys.changelog, STATIC_TTL_MS, async () => {
-    const html = await ctx.http.text(
-      `${upstreamConfig.artificialAnalysis}${CHANGELOG_PATH}`,
-      {
-        headers: { accept: "text/html,application/xhtml+xml,*/*" },
-        ...UPSTREAM_FETCH_OPTS,
-      },
-      MAX_FEED_BYTES,
-    );
-    const models = parseChangelogModels(html);
-    if (models.length === 0) {
-      throw new UpstreamError(
-        `AA changelog yielded 0 models (raw=1 page, kept=0, markup changed?, body=${html.length}B)`,
-      );
-    }
-    return { data: models };
+    return { data: await fetchChangelogModels(ctx) };
   });
 }

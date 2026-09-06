@@ -1,6 +1,6 @@
-import { WARM_ORIGIN } from "@/shared/config";
+import { WARM_ORIGIN } from "@/server/config";
 import { createApp } from "@/server/api";
-import { bucketWarmUrls, bulkSliceForTick } from "@/server/routes/warmup";
+import { buildWarmUrls } from "@/server/routes/warmup";
 import { routeDefs } from "@/server/routes/table";
 import { recordStatusSamples } from "@/server/sources/status/store";
 import { buildContext } from "@/server/context";
@@ -13,9 +13,7 @@ const WARM_TICK_BUDGET_MS = 60_000;
 
 async function warmUrls(env: Env): Promise<void> {
   const started = Date.now();
-  const now = new Date();
-  const { live, bulk } = bucketWarmUrls(WARM_ORIGIN, routeDefs, now);
-  const warmUrlsList = [...live, ...bulkSliceForTick(bulk, now)];
+  const warmUrlsList = buildWarmUrls(WARM_ORIGIN, routeDefs);
   let failures = 0;
   const failed: string[] = [];
   for (const url of warmUrlsList) {

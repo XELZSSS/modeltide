@@ -1,4 +1,4 @@
-import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/shared/config";
+import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
 import { UpstreamError } from "@/server/infra/errors";
 

@@ -1,4 +1,5 @@
-import { DEFAULT_TTL_MS, UPSTREAM_FETCH_OPTS, cacheKeys, ttlFor } from "@/shared/config";
+import { DEFAULT_TTL_MS, ttlFor } from "@/shared/config";
+import { UPSTREAM_FETCH_OPTS, cacheKeys } from "@/server/config";
 import type { OpenRouterRankingsPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, errMsg, settled } from "@/server/infra/errors";

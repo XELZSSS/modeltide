@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { MEMORY_RATE_MAX_KEYS, MEMORY_RATE_PRUNE_TO } from "@/shared/config";
+import { MEMORY_RATE_MAX_KEYS, MEMORY_RATE_PRUNE_TO } from "@/server/config";
 import { fnv1aHash } from "@/shared/utils";
 import { RateLimitError } from "@/server/infra/errors";
 
@@ -37,11 +37,7 @@ function checkMemoryRateLimit(key: string, rl: { windowSec: number; max: number 
   return { count: 1, resetAt };
 }
 
-export async function enforceRateLimit(
-  c: Context,
-  kv: KVNamespace | undefined,
-  rl: { windowSec: number; max: number },
-): Promise<void> {
+export function enforceRateLimit(c: Context, rl: { windowSec: number; max: number }): void {
   const viaCfEdge = c.req.header("CF-Ray") != null;
   const cfIp = viaCfEdge ? c.req.header("CF-Connecting-IP")?.trim() : undefined;
   let rawIp: string;
@@ -65,19 +61,5 @@ export async function enforceRateLimit(
     ip = rawIp.slice(0, 45);
   }
   const key = `rl:${c.req.path}:${ip}`;
-  const mem = checkMemoryRateLimit(key, rl);
-  if (!kv) return;
-  if (mem.count * 2 < rl.max) return;
-  let current: number;
-  try {
-    current = Number(await kv.get(key));
-  } catch {
-    return;
-  }
-  if (Number.isFinite(current) && current >= rl.max) throw new RateLimitError(undefined, rl.windowSec);
-  try {
-    await kv.put(key, String(Number.isFinite(current) ? current + 1 : 1), { expirationTtl: rl.windowSec });
-  } catch {
-    return;
-  }
+  checkMemoryRateLimit(key, rl);
 }

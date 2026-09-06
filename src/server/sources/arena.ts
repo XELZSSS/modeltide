@@ -1,11 +1,5 @@
-import {
-  ARENA_BOARD_IDS,
-  MAX_FEED_BYTES,
-  SLOW_TTL_MS,
-  UPSTREAM_FETCH_OPTS,
-  cacheKeys,
-  upstreamConfig,
-} from "@/shared/config";
+import { ARENA_BOARD_IDS, SLOW_TTL_MS } from "@/shared/config";
+import { MAX_FEED_BYTES, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig } from "@/server/config";
 import type { ArenaRankEntry, ArenaRankingsPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError } from "@/server/infra/errors";

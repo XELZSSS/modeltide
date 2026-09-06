@@ -1,11 +1,5 @@
-import {
-  upstreamConfig,
-  SLOW_TTL_MS,
-  UPSTREAM_FETCH_OPTS,
-  cacheKeys,
-  normalizeModelLimit,
-  sliceToLimit,
-} from "@/shared/config";
+import { SLOW_TTL_MS, normalizeModelLimit, sliceToLimit } from "@/shared/config";
+import { upstreamConfig, UPSTREAM_FETCH_OPTS, cacheKeys } from "@/server/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";

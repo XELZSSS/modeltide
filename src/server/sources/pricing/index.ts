@@ -1,4 +1,5 @@
-import { STATIC_TTL_MS, cacheKeys } from "@/shared/config";
+import { STATIC_TTL_MS } from "@/shared/config";
+import { cacheKeys } from "@/server/config";
 import type { OfficialPricingPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { getLitellmPricing } from "@/server/sources/pricing/litellm";

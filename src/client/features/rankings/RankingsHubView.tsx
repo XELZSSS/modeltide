@@ -162,7 +162,6 @@ function RankingsContent() {
       tabFill
       onTabChange={handleTabChange}
     >
-      {}
       <SuspenseQuery resetKey={activeTabId}>
         <ActiveContent />
       </SuspenseQuery>

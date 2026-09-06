@@ -1,5 +1,5 @@
 import type { AppContext } from "@/server/context";
-import { rssConfig, upstreamConfig } from "@/shared/config";
+import { rssConfig, upstreamConfig } from "@/server/config";
 import type { ProbeResult } from "@/server/infra/http-client";
 import { runCapped } from "@/server/infra/pool";
 import { INDEX_PATH } from "@/server/sources/aa/fetch";

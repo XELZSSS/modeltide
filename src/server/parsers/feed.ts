@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
-import { MAX_FEED_BYTES } from "@/shared/config";
+import { MAX_FEED_BYTES } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
 import { UpstreamError } from "@/server/infra/errors";
 import { isSuitableNewsItem } from "@/server/sources/data-filter";

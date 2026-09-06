@@ -1,10 +1,11 @@
-import { PARTIAL_FAIL_TTL_MS, STATIC_TTL_MS, cacheKeys, upstreamConfig } from "@/shared/config";
+import { PARTIAL_FAIL_TTL_MS, STATIC_TTL_MS } from "@/shared/config";
+import { cacheKeys, upstreamConfig } from "@/server/config";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, settled } from "@/server/infra/errors";
 import { isoDate } from "@/server/parsers/primitives";
-import { getChangelogModels, type ChangelogModel } from "@/server/sources/aa/changelog";
-import { getIntelligenceIndex, lastIndexEnrichFailures } from "@/server/sources/aa/intelligence-index";
+import { fetchChangelogModels, type ChangelogModel } from "@/server/sources/aa/changelog";
+import { fetchIntelligenceIndex } from "@/server/sources/aa/intelligence-index";
 import { dedupeBy } from "@/shared/utils";
 
 interface CreatorRule {
@@ -87,10 +88,11 @@ export function toClosedReleases(changelog: ChangelogModel[], weights: Map<strin
 
 export const getClosedReleases = (ctx: AppContext): Promise<ClosedReleaseEntry[]> =>
   ctx.cache.withTtl(cacheKeys.closedReleases, STATIC_TTL_MS, async () => {
-    const [modelsRes, changelogRes] = await Promise.allSettled([getIntelligenceIndex(ctx), getChangelogModels(ctx)]);
-    const models = settled(modelsRes, []);
+    const [indexRes, changelogRes] = await Promise.allSettled([fetchIntelligenceIndex(ctx), fetchChangelogModels(ctx)]);
+    const index = settled(indexRes, { models: [], enrichFailed: true });
+    const models = index.models;
     const changelog = settled(changelogRes, []);
-    if (modelsRes.status === "rejected") ctx.log("warn", `[closed-releases] index failed, changelog-only`);
+    if (indexRes.status === "rejected") ctx.log("warn", `[closed-releases] index failed, changelog-only`);
     if (changelogRes.status === "rejected") ctx.log("warn", `[closed-releases] changelog failed, index-only`);
     if (models.length === 0 && changelog.length === 0) {
       throw new UpstreamError(`Closed releases: both index and changelog failed`);
@@ -108,8 +110,7 @@ export const getClosedReleases = (ctx: AppContext): Promise<ClosedReleaseEntry[]
     if (entries.length === 0) {
       throw new UpstreamError(`Closed releases yielded 0 rows (changelog=${changelog.length}, index=${models.length})`);
     }
-    const partial =
-      lastIndexEnrichFailures() > 0 || modelsRes.status === "rejected" || changelogRes.status === "rejected";
+    const partial = index.enrichFailed || indexRes.status === "rejected" || changelogRes.status === "rejected";
     if (partial) {
       ctx.log("warn", "[closed-releases] serving partial (source failure or degraded enrichment)");
     }

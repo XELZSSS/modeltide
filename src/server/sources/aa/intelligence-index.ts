@@ -1,5 +1,6 @@
 import type { AppContext } from "@/server/context";
-import { DEFAULT_TTL_MS, cacheKeys, ttlFor } from "@/shared/config";
+import { DEFAULT_TTL_MS, ttlFor } from "@/shared/config";
+import { cacheKeys } from "@/server/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { parseRscPayloads, findNextData } from "@/server/parsers/rsc";
 import { UpstreamError } from "@/server/infra/errors";
@@ -45,57 +46,61 @@ export function mergeBySlug(
   return [...merged.values()];
 }
 
-let lastEnrichFailures = 0;
-export function lastIndexEnrichFailures(): number {
-  return lastEnrichFailures;
+export interface IntelligenceIndexResult {
+  models: ArtificialAnalysisModel[];
+  enrichFailed: boolean;
+}
+
+export async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceIndexResult> {
+  const [indexBody, [modelsPageModels, omniscienceEnrich], openRouterMeta] = await Promise.all([
+    fetchAaRsc(ctx, INDEX_PATH),
+    Promise.all([
+      fetchAndParseEnrich<Record<string, unknown>>(ctx, "/models", MODELS_PATH, "initialModels", (tree) =>
+        findNextData(tree, "initialModels"),
+      ),
+      fetchAndParseEnrich<Record<string, unknown>>(
+        ctx,
+        "omniscience",
+        OMNISCIENCE_PATH,
+        "initialModels",
+        (tree) => {
+          const arr = findNextData<Record<string, unknown>>(tree, "initialModels");
+          return Array.isArray(arr) && arr.some((m) => m.omniscienceBreakdown != null) ? arr : null;
+        },
+        (arr) => arr.map(compactOmniscienceEnrich),
+      ),
+    ]),
+    fetchModelDirectory(ctx).then((d) => d.meta),
+  ]);
+
+  const [indexModels, catalog] = parseRscPayloads(indexBody, ["intelligenceIndex", "models"], findModelArray) as [
+    Record<string, unknown>[],
+    Record<string, unknown>[],
+  ];
+
+  const enrichFailures = [modelsPageModels, omniscienceEnrich].filter((a) => a.length === 0).length;
+  const [primary, secondary] = indexModels.length > 0 ? [indexModels, catalog] : [catalog, indexModels];
+  const models = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
+    .map(compact)
+    .filter((m) => isValidModelIdentity(m.id, m.slug, m.name))
+    .sort((a, b) => {
+      const av = a.intelligence_index ?? Number.NEGATIVE_INFINITY;
+      const bv = b.intelligence_index ?? Number.NEGATIVE_INFINITY;
+      if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
+      return bv - av;
+    });
+  if (models.length === 0) {
+    throw new UpstreamError(
+      `Artificial Analysis parsing yielded 0 models (catalog=${catalog.length}, kept=0, enrichFailures=${enrichFailures})`,
+    );
+  }
+  const backfilled = backfillFromMeta(models, openRouterMeta);
+  if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
+  return { models, enrichFailed: enrichFailures > 0 };
 }
 
 export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysisModel[]> =>
   ctx.cache.withTtl(cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async () => {
-    const [indexBody, [modelsPageModels, omniscienceEnrich], openRouterMeta] = await Promise.all([
-      fetchAaRsc(ctx, INDEX_PATH),
-      Promise.all([
-        fetchAndParseEnrich<Record<string, unknown>>(ctx, "/models", MODELS_PATH, "initialModels", (tree) =>
-          findNextData(tree, "initialModels"),
-        ),
-        fetchAndParseEnrich<Record<string, unknown>>(
-          ctx,
-          "omniscience",
-          OMNISCIENCE_PATH,
-          "initialModels",
-          (tree) => {
-            const arr = findNextData<Record<string, unknown>>(tree, "initialModels");
-            return Array.isArray(arr) && arr.some((m) => m.omniscienceBreakdown != null) ? arr : null;
-          },
-          (arr) => arr.map(compactOmniscienceEnrich),
-        ),
-      ]),
-      fetchModelDirectory(ctx).then((d) => d.meta),
-    ]);
-
-    const [indexModels, catalog] = parseRscPayloads(indexBody, ["intelligenceIndex", "models"], findModelArray) as [
-      Record<string, unknown>[],
-      Record<string, unknown>[],
-    ];
-
-    const enrichFailures = [modelsPageModels, omniscienceEnrich].filter((a) => a.length === 0).length;
-    lastEnrichFailures = enrichFailures;
-    const [primary, secondary] = indexModels.length > 0 ? [indexModels, catalog] : [catalog, indexModels];
-    const models = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
-      .map(compact)
-      .filter((m) => isValidModelIdentity(m.id, m.slug, m.name))
-      .sort((a, b) => {
-        const av = a.intelligence_index ?? Number.NEGATIVE_INFINITY;
-        const bv = b.intelligence_index ?? Number.NEGATIVE_INFINITY;
-        if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
-        return bv - av;
-      });
-    if (models.length === 0) {
-      throw new UpstreamError(
-        `Artificial Analysis parsing yielded 0 models (catalog=${catalog.length}, kept=0, enrichFailures=${enrichFailures})`,
-      );
-    }
-    const backfilled = backfillFromMeta(models, openRouterMeta);
-    if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
-    return { data: models, ttl: ttlFor(enrichFailures > 0) };
+    const { models, enrichFailed } = await fetchIntelligenceIndex(ctx);
+    return { data: models, ttl: ttlFor(enrichFailed) };
   });

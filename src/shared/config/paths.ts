@@ -1,5 +1,4 @@
-import type { NewsCategory } from "@/shared/types/news";
-import { normalizeModelLimit, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config/limits";
+import { OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config/limits";
 
 export const API_DOMAINS = {
   artificialIndex: "artificial-analysis-index",
@@ -14,9 +13,6 @@ export const API_DOMAINS = {
   officialPricing: "official-pricing",
   statusHistory: "status-history",
   homeDashboard: "home-dashboard",
-  textToImage: "aa-text-to-image",
-  changelog: "aa-changelog",
-  providerStatus: "provider-status",
 } as const;
 
 export const apiPaths = {
@@ -33,25 +29,7 @@ export const apiPaths = {
   homeDashboard: `/api/${API_DOMAINS.homeDashboard}`,
 } as const;
 
-export const cacheKeys = {
-  intelligenceIndex: API_DOMAINS.artificialIndex,
-  openSourceModels: (sort: string, direction: string, limit: number) =>
-    `${API_DOMAINS.openSourceModels}:${sort}:${direction}:${normalizeModelLimit(limit)}`,
-  openSourceReleases: API_DOMAINS.openSourceReleases,
-  news: (category: NewsCategory) => `${API_DOMAINS.news}:${category}`,
-  openRouterRankings: API_DOMAINS.openRouterRankings,
-  openRouterPricing: API_DOMAINS.openRouterPricing,
-  closedReleases: API_DOMAINS.closedReleases,
-  arenaBoard: (category: string) => `${API_DOMAINS.arenaBoard}:${category}`,
-  arenaRankings: API_DOMAINS.arenaRankings,
-  officialPricing: API_DOMAINS.officialPricing,
-  textToImage: API_DOMAINS.textToImage,
-  changelog: API_DOMAINS.changelog,
-  providerStatus: API_DOMAINS.providerStatus,
-  homeDashboard: API_DOMAINS.homeDashboard,
-} as const;
-
-export const clientApiPaths = {
+export const publicApiPaths = {
   artificialIndex: apiPaths.artificialIndex,
   openSourceModels: (() => {
     const d = OPEN_SOURCE_MODELS_DEFAULTS;

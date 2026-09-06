@@ -1,4 +1,5 @@
-import { L1_MAX_TTL_MS, MEMORY_CACHE_MAX_BYTES, MEMORY_CACHE_MAX_KEYS, ONE_DAY } from "@/shared/config";
+import { ONE_DAY } from "@/shared/config";
+import { L1_MAX_TTL_MS, MEMORY_CACHE_MAX_BYTES, MEMORY_CACHE_MAX_KEYS } from "@/server/config";
 import { fnv1aHash, utf8ByteLength } from "@/shared/utils";
 import { UpstreamError } from "@/server/infra/errors";
 

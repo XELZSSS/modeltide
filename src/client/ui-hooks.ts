@@ -58,31 +58,34 @@ export function useChartTheme(): ChartTheme {
 }
 
 export function useUrlTab<T extends string>(validTabs: readonly T[], fallback: T): [T, (tabId: string) => void] {
+  const [activeTab, setActiveTab] = useUrlParam("tab", validTabs, fallback);
+  const paramTab = useSearchParams()[0].get("tab");
+  useEffect(() => {
+    if (paramTab != null && !(validTabs as readonly string[]).includes(paramTab)) setActiveTab(fallback);
+  }, [paramTab, fallback, setActiveTab, validTabs]);
+  return [activeTab, setActiveTab];
+}
+
+export function useUrlParam<T extends string>(
+  key: string,
+  validValues: readonly T[],
+  fallback: T,
+): [T, (value: string) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
-  const writeTab = useCallback(
-    (tabId: string) => {
+  const writeParam = useCallback(
+    (value: string) => {
+      if (!(validValues as readonly string[]).includes(value)) return;
       setSearchParams(
         (prev) => {
-          prev.set("tab", tabId);
+          prev.set(key, value);
           return prev;
         },
         { replace: true },
       );
     },
-    [setSearchParams],
+    [setSearchParams, key, validValues],
   );
-  const paramTab = searchParams.get("tab");
-  const activeTab =
-    paramTab != null && (validTabs as readonly string[]).includes(paramTab) ? (paramTab as T) : fallback;
-  useEffect(() => {
-    if (paramTab != null && !(validTabs as readonly string[]).includes(paramTab)) writeTab(fallback);
-  }, [paramTab, fallback, writeTab, validTabs]);
-  const setActiveTab = useCallback(
-    (tabId: string) => {
-      if (!(validTabs as readonly string[]).includes(tabId)) return;
-      writeTab(tabId);
-    },
-    [writeTab, validTabs],
-  );
-  return [activeTab, setActiveTab];
+  const raw = searchParams.get(key);
+  const active = raw != null && (validValues as readonly string[]).includes(raw) ? (raw as T) : fallback;
+  return [active, writeParam];
 }

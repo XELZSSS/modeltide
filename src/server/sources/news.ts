@@ -1,4 +1,5 @@
-import { rssConfig, NEWS_TTL_MS, FAST_FETCH_OPTS, MAX_FEED_BYTES, cacheKeys, ttlForRatio } from "@/shared/config";
+import { NEWS_TTL_MS, ttlForRatio } from "@/shared/config";
+import { rssConfig, FAST_FETCH_OPTS, MAX_FEED_BYTES, cacheKeys } from "@/server/config";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError, formatSettleErrors } from "@/server/infra/errors";

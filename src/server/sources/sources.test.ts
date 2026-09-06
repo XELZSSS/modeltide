@@ -13,13 +13,14 @@ import { computeBlendPrice, normalizeModelKey } from "@/shared/utils";
 import { getModels } from "@/server/sources/huggingface";
 import { CacheService } from "@/server/infra/cache-service";
 import type { ProbeResult } from "@/server/infra/http-client";
-import { HISTORY_KEY, SAMPLE_LOCK_KEY, readStore } from "@/server/sources/status/store";
+import { HISTORY_KEY, SAMPLE_LOCK_KEY, readStore, recordStatusSamples } from "@/server/sources/status/store";
 import { mergeSample, deriveEvents, uptimeRatio, avgLatency, type HistoryStore } from "@/server/sources/status/windows";
 import { buildHistoryPayload } from "@/server/sources/status/payload";
 import { getUptime } from "@/server/sources/status/uptime";
 import { aggregateProbes, buildTargets, type ProbeTarget } from "@/server/sources/status/probe";
 import { getStatusHistory } from "./status-history";
-import { normalizeModelLimit, SOURCE_IDS, upstreamConfig } from "@/shared/config";
+import { normalizeModelLimit, SOURCE_IDS } from "@/shared/config";
+import { upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import type { ArtificialAnalysisModel, DayBucket, SourceStatus, UptimeSample } from "@/shared/types";
 import { parseArenaRscBoard, getArenaRankings } from "@/server/sources/arena";
@@ -705,12 +706,16 @@ describe("buildHistoryPayload", () => {
   });
 });
 
-describe("getStatusHistory sample-on-read", () => {
+describe("getStatusHistory read-only", () => {
   function buildHistoryCtx(kvStore: Map<string, string>, probeOk = true): AppContext {
     return {
       cache: {} as AppContext["cache"],
       http: {
         probe: async () => ({ ok: probeOk, status: probeOk ? 200 : 503, latencyMs: probeOk ? 500 : null, error: null }),
+        json: async (url: string) => {
+          if (url.includes("status.cloud.google.com")) return [];
+          return { components: [{ name: "API", status: "operational" }] };
+        },
       } as unknown as AppContext["http"],
       kv: {
         get: async (key: string) => kvStore.get(key) ?? null,
@@ -722,36 +727,43 @@ describe("getStatusHistory sample-on-read", () => {
     };
   }
 
-  it("skips sampling while the lock is held instead of racing the writer", async () => {
-    const lockValue = `owner-${Date.now()}:${Date.now() + 120_000}`;
-    const kvStore = new Map<string, string>([[SAMPLE_LOCK_KEY, lockValue]]);
-    const payload = await getStatusHistory(buildHistoryCtx(kvStore));
+  it("serves an empty store without sampling, so reads never touch upstreams", async () => {
+    const kvStore = new Map<string, string>();
+    const probe = vi.fn(async () => ({ ok: true, status: 200, latencyMs: 500, error: null }));
+    const ctx = { ...buildHistoryCtx(kvStore), http: { probe } as unknown as AppContext["http"] };
+    const payload = await getStatusHistory(ctx);
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
+    expect(probe).not.toHaveBeenCalled();
     expect(payload.sources.every((s) => s.ok === false)).toBe(true);
   });
 
-  it("samples on first read when the store is empty, so the page is never falsely 'down'", async () => {
+  it("serves persisted samples without re-probing", async () => {
     const kvStore = new Map<string, string>();
-    const payload = await getStatusHistory(buildHistoryCtx(kvStore));
+    await recordStatusSamples(buildHistoryCtx(kvStore));
     expect(kvStore.has(HISTORY_KEY)).toBe(true);
+    const probe = vi.fn(async () => {
+      throw new Error("must not probe on read");
+    });
+    const ctx = { ...buildHistoryCtx(kvStore), http: { probe } as unknown as AppContext["http"] };
+    const payload = await getStatusHistory(ctx);
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(true);
     expect(or.checkedAt).not.toBeNull();
     expect(or.uptime24h).toBe(1);
+    expect(probe).not.toHaveBeenCalled();
   });
 
-  it("skips sampling while the newest sample is inside the interval", async () => {
-    const kvStore = new Map<string, string>();
-    const ctx = buildHistoryCtx(kvStore);
-    await getStatusHistory(ctx);
-    const snapshot = kvStore.get(HISTORY_KEY)!;
-    await getStatusHistory(ctx);
-    expect(kvStore.get(HISTORY_KEY)).toBe(snapshot);
+  it("skips the write while the lock is held instead of racing the writer", async () => {
+    const lockValue = `owner-${Date.now()}:${Date.now() + 120_000}`;
+    const kvStore = new Map<string, string>([[SAMPLE_LOCK_KEY, lockValue]]);
+    await recordStatusSamples(buildHistoryCtx(kvStore));
+    expect(kvStore.has(HISTORY_KEY)).toBe(false);
   });
 
   it("records a failed probe as a down sample when probes fail", async () => {
     const kvStore = new Map<string, string>();
-    const payload = await getStatusHistory(buildHistoryCtx(kvStore, false));
+    await recordStatusSamples(buildHistoryCtx(kvStore, false));
+    const payload = await getStatusHistory(buildHistoryCtx(kvStore));
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(false);
     expect(or.latencyMs).toBeNull();
@@ -788,6 +800,7 @@ describe("getStatusHistory sample-on-read", () => {
       } as AppContext["kv"],
       log: () => {},
     };
+    await recordStatusSamples(ctx);
     const payload = await getStatusHistory(ctx);
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(false);
@@ -826,6 +839,7 @@ describe("getStatusHistory sample-on-read", () => {
       } as AppContext["kv"],
       log: () => {},
     };
+    await recordStatusSamples(ctx);
     const payload = await getStatusHistory(ctx);
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(true);

@@ -1,5 +1,5 @@
 import type { NewsItem } from "@/shared/types";
-import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/shared/config";
+import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
 import { isRecord } from "@/server/parsers/primitives";

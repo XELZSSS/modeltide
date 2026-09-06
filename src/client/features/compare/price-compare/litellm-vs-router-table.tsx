@@ -5,8 +5,7 @@ import { useTranslation } from "@/client/providers";
 import { modelId } from "@/client/utils/model";
 import { DataTable } from "@/client/components/data/table";
 import type { DataTableColumn } from "@/client/components/data/columns";
-import { qOfficialPricing } from "@/client/api/queries";
-import { makeOfficialGetter, type OfficialGetter } from "@/client/utils/pricing-merge";
+import { useOfficialPricing } from "@/client/features/pricing/official";
 import { EmptyState } from "@/client/components/feedback";
 
 interface OfficialRow {
@@ -80,11 +79,7 @@ export const LiteLLMVsRouterTable = memo(function LiteLLMVsRouterTable({
   models: ArtificialAnalysisModel[];
 }) {
   const { t } = useTranslation();
-  const officialQ = qOfficialPricing.use();
-  const getOfficial = useMemo<OfficialGetter | undefined>(
-    () => (officialQ.data ? makeOfficialGetter(officialQ.data.models) : undefined),
-    [officialQ.data],
-  );
+  const { getOfficial, isPending, isError } = useOfficialPricing();
   const columns = useMemo(() => buildColumns(t), [t]);
   const rows = useMemo<OfficialRow[]>(() => {
     if (!getOfficial) return [];
@@ -96,7 +91,7 @@ export const LiteLLMVsRouterTable = memo(function LiteLLMVsRouterTable({
       .filter((r): r is OfficialRow => r !== null);
   }, [getOfficial, models]);
 
-  if (officialQ.isPending) {
+  if (isPending) {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm font-semibold">{t("officialVsRouter")}</p>
@@ -104,7 +99,7 @@ export const LiteLLMVsRouterTable = memo(function LiteLLMVsRouterTable({
       </div>
     );
   }
-  if (officialQ.isError) {
+  if (isError) {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm font-semibold">{t("officialVsRouter")}</p>

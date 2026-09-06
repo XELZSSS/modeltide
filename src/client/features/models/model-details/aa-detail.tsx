@@ -13,11 +13,11 @@ import {
 } from "@/client/utils/format";
 import { normalizePercent } from "@/shared/utils";
 import { getOutputSpeed } from "@/client/utils/cost-estimator";
-import { makeOfficialGetter, resolveBlendedPrice, resolveEffectivePricing } from "@/client/utils/pricing-merge";
+import { resolveBlendedPrice, resolveEffectivePricing } from "@/client/utils/pricing-merge";
 import { DetailLayout, DetailSection, InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
-import { qOfficialPricing } from "@/client/api/queries";
+import { useOfficialPricing } from "@/client/features/pricing/official";
 
 const MODALITIES = [
   {
@@ -80,11 +80,8 @@ export function ModelDetailContent({
   showBenchmarks?: boolean;
 }) {
   const { t } = useTranslation();
-  const officialQ = qOfficialPricing.use();
-  const official = useMemo(
-    () => (officialQ.data ? makeOfficialGetter(officialQ.data.models)(model) : undefined),
-    [officialQ.data, model],
-  );
+  const { getOfficial } = useOfficialPricing();
+  const official = useMemo(() => getOfficial?.(model), [getOfficial, model]);
   const pricing = useMemo(() => resolveEffectivePricing(model.pricing, official), [model.pricing, official]);
   const blended = useMemo(() => resolveBlendedPrice(model, official), [model, official]);
   const hasAnyModality = MODALITIES.some(

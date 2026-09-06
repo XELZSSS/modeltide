@@ -1,5 +1,5 @@
 import type { OfficialPriceModel } from "@/shared/types";
-import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/shared/config";
+import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
 import { humanizeId, isRecord, numCoerce, numPositive, str } from "@/server/parsers/primitives";
@@ -33,9 +33,7 @@ interface LitellmEntry {
   max_input_tokens?: unknown;
 }
 
-const seen = new Set<string>();
-
-function toPricingModel(key: string, value: unknown): OfficialPriceModel | null {
+function toPricingModel(key: string, value: unknown, seen: Set<string>): OfficialPriceModel | null {
   if (!isRecord(value)) return null;
   const entry = value as LitellmEntry;
   const mode = str(entry.mode).trim().toLowerCase();
@@ -67,11 +65,11 @@ function toPricingModel(key: string, value: unknown): OfficialPriceModel | null 
 export function parseLitellmPricing(raw: unknown): OfficialPriceModel[] {
   const spec = isRecord(raw) ? raw : undefined;
   if (!spec) throw new UpstreamError("LiteLLM pricing returned a non-object payload");
-  seen.clear();
+  const seen = new Set<string>();
   const models: OfficialPriceModel[] = [];
   for (const [key, value] of Object.entries(spec)) {
     if (key === "sample_spec") continue;
-    const model = toPricingModel(key, value);
+    const model = toPricingModel(key, value, seen);
     if (model) models.push(model);
   }
   if (models.length === 0) {

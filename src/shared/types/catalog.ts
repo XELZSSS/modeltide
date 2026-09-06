@@ -79,7 +79,3 @@ export interface TextToImagePayload {
   partial?: boolean;
   fetchedAt?: string;
 }
-
-export function isEmptyT2i(payload: TextToImagePayload | null | undefined): boolean {
-  return !payload || !Array.isArray(payload.models) || payload.models.length === 0;
-}
