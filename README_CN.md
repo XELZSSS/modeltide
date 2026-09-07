@@ -23,13 +23,13 @@
 
 ## 功能特性
 
-| 特性       | 说明                                  |
-| ---------- | ------------------------------------- |
-| 模型排行   | 智能指数、幻觉率、提供商统计与详情    |
-| 发布追踪   | 最新与开源发布，附下载统计            |
-| 资讯聚合   | 多源 RSS：行业 / 开源 / 硬件 / 投融资 |
-| 模型对比   | 雷达图指标、价格明细与月成本估算      |
-| 数据源状态 | 上游可用性与延迟监测                  |
+| 特性       | 说明                                    |
+| ---------- | --------------------------------------- |
+| 模型排行   | 多维度排行、基准评测与趋势洞察          |
+| 发布追踪   | 最新与开源发布                          |
+| 资讯聚合   | RSS：行业 / 开源 / 硬件 / 投融资 / 研究 |
+| 模型对比   | 雷达图、价格、成本估算                  |
+| 数据源状态 | 可用性与延迟监测                        |
 
 ## 项目结构
 
@@ -40,20 +40,21 @@ modeltide/
 ├── src/shared/     # 共享类型/配置/国际化
 ├── src/styles/     # 样式
 ├── public/         # 静态资源
+├── scripts/        # 构建检查
 ├── wrangler.jsonc  # 部署配置
 └── package.json    # 依赖
 ```
 
 ## 快速开始
 
-要求 Node.js ≥ 22。
+要求 Node.js ≥ 22.22
 
 ```bash
 npm install
 npm run dev      # 前端 + Worker API：http://localhost:3000
 ```
 
-需对齐 Worker 时用 `wrangler dev`（8787 端口）。
+需对齐 Worker 时用 `wrangler dev`（8787 端口）
 
 ## 常用命令
 
@@ -69,24 +70,25 @@ npm run dev      # 前端 + Worker API：http://localhost:3000
 | `npm run format`     | 代码格式化（oxfmt）     |
 | `npm run audit`      | 依赖安全扫描            |
 
+`build` 会自动执行 `type-check`、`i18n:check` 和边界检查
+
 ## 部署
 
-单个 Worker 同时托管静态资源与 API，定时 Cron 每 30 分钟刷新缓存。
+单个 Worker 托管站点与 API，定时任务每 30 分钟刷新缓存
 
-1. Fork 本仓库。
-2. （推荐）KV：Dashboard → Workers & Pages → KV → 新建命名空间，将 ID 填入 `wrangler.jsonc` 的 `kv_namespaces`。
-3. （可选）`npx wrangler secret put HF_TOKEN`，填入只读 [HF 令牌](https://huggingface.co/settings/tokens)以提高 API 限额。
-4. Workers & Pages → Create application → Import a repository → Save and Deploy。
+1. Fork 本仓库
+2. （推荐）新建 KV 命名空间，替换 `wrangler.jsonc` 中的 ID
+3. （可选）`npx wrangler secret put HF_TOKEN`，填入只读 [HF 令牌](https://huggingface.co/settings/tokens)，用于 Hugging Face 接口
+4. 在 Workers & Pages 导入仓库 → Save and Deploy
 
-|          | 未配置 KV（默认） | 配置 KV（免费版足够）             |
-| -------- | ----------------- | --------------------------------- |
-| 数据     | 每次请求直连上游  | 三档缓存（30 分钟/2 小时/6 小时） |
-| 状态历史 | 仅内存保留        | 持久化 90 天历史                  |
-| 限流     | 不生效            | 生效                              |
+|          | 未配置 KV | 配置 KV                     |
+| -------- | --------- | --------------------------- |
+| 数据     | 内存缓存  | KV 缓存（30分/2小时/6小时） |
+| 状态历史 | 仅内存    | 保留 90 天                  |
 
-KV 免费版每天 1,000 次写入（稳态仅消耗几百次）。冷缓存未命中可能因 10 毫秒 CPU 上限短暂返回 `1102`；命中缓存后成本极低。
+限流始终为内存实现，删除 `kv_namespaces` 则回退到内存 + 浏览器/CDN 缓存
 
-`worker-configuration.d.ts` 由 `npx wrangler types` 生成，请勿手工编辑。
+`worker-configuration.d.ts` 由 `npx wrangler types` 生成，请勿手工编辑
 
 ## 许可证
 
