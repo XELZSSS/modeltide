@@ -3,6 +3,7 @@ import { STATIC_TTL_MS } from "@/shared/config";
 import { MAX_FEED_BYTES, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig } from "@/server/config";
 import { UpstreamError } from "@/server/infra/errors";
 import { MAX_SCAN_CHARS } from "@/server/parsers/rsc";
+import { balancedJsonEnd } from "@/server/parsers/balanced";
 import { isRecord, str } from "@/server/parsers/primitives";
 
 const CHANGELOG_PATH = "/changelog";
@@ -16,8 +17,8 @@ export interface ChangelogModel {
   creatorName: string;
 }
 
-const MODELS_NEEDLE_RE = /\\?"models\\?":\[/g;
-const MODELS_NEEDLE = '"models":[';
+const MODELS_NEEDLE_RE = /\\?"models\\?"\s*:/g;
+const MODELS_KEY = '"models"';
 const CANDIDATE_PREFIX_CHARS = 256;
 const CANDIDATE_SUFFIX_CHARS = MAX_SCAN_CHARS + CANDIDATE_PREFIX_CHARS;
 
@@ -26,30 +27,11 @@ function unescapeWindow(window: string): string {
 }
 
 function parseModelsArrayAt(unescaped: string, d: number, found: unknown[]): void {
-  let depth = 0;
-  let inStr = false;
-  let esc = false;
-  for (let i = d; i < unescaped.length; i++) {
-    if (i - d > MAX_SCAN_CHARS) break;
-    const c = unescaped[i]!;
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === "\\") esc = true;
-      else if (c === '"') inStr = false;
-    } else if (c === '"') {
-      inStr = true;
-    } else if (c === "[") {
-      depth++;
-    } else if (c === "]") {
-      depth--;
-      if (depth === 0) {
-        try {
-          found.push(JSON.parse(unescaped.slice(d, i + 1)));
-        } catch {}
-        break;
-      }
-    }
-  }
+  const end = balancedJsonEnd(unescaped, d, MAX_SCAN_CHARS);
+  if (end === -1) return;
+  try {
+    found.push(JSON.parse(unescaped.slice(d, end)));
+  } catch {}
 }
 
 function extractModelsArrays(html: string): unknown[] {
@@ -59,8 +41,15 @@ function extractModelsArrays(html: string): unknown[] {
   while ((match = MODELS_NEEDLE_RE.exec(html)) !== null) {
     const start = Math.max(0, match.index - CANDIDATE_PREFIX_CHARS);
     const window = unescapeWindow(html.slice(start, match.index + CANDIDATE_SUFFIX_CHARS));
-    const at = window.indexOf(MODELS_NEEDLE);
-    if (at !== -1) parseModelsArrayAt(window, at + MODELS_NEEDLE.length - 1, found);
+    const at = window.indexOf(MODELS_KEY);
+    if (at === -1) continue;
+    let c = at + MODELS_KEY.length;
+    while (c < window.length && /\s/.test(window[c]!)) c++;
+    if (window[c] !== ":") continue;
+    c++;
+    while (c < window.length && /\s/.test(window[c]!)) c++;
+    if (window[c] !== "[") continue;
+    parseModelsArrayAt(window, c, found);
     MODELS_NEEDLE_RE.lastIndex = match.index + match[0].length;
   }
   return found;

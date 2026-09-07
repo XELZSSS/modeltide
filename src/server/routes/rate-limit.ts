@@ -1,13 +1,12 @@
 import type { Context } from "hono";
 import { MEMORY_RATE_MAX_KEYS, MEMORY_RATE_PRUNE_TO } from "@/server/config";
-import { fnv1aHash } from "@/shared/utils";
 import { RateLimitError } from "@/server/infra/errors";
 
 const memoryRateBuckets = new Map<string, { count: number; resetAt: number }>();
 
-function hashIpForKey(raw: string): string {
-  return `h${fnv1aHash(raw)}`;
-}
+const IPV4_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+const IPV6_RE = /^[0-9a-fA-F:]+$/;
+const UNKNOWN_BUCKET_DIVISOR = 6;
 
 function pruneMemoryBuckets(now: number): void {
   for (const [k, v] of memoryRateBuckets) {
@@ -38,28 +37,11 @@ function checkMemoryRateLimit(key: string, rl: { windowSec: number; max: number 
 }
 
 export function enforceRateLimit(c: Context, rl: { windowSec: number; max: number }): void {
-  const viaCfEdge = c.req.header("CF-Ray") != null;
-  const cfIp = viaCfEdge ? c.req.header("CF-Connecting-IP")?.trim() : undefined;
-  let rawIp: string;
-  if (cfIp) {
-    rawIp = cfIp;
-  } else if (viaCfEdge) {
-    const xffRaw = c.req.header("X-Forwarded-For");
-    rawIp =
-      xffRaw
-        ?.split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .pop() ?? "unknown";
-  } else {
-    rawIp = "unknown";
-  }
-  let ip: string;
-  if (/[\s\r\n]/.test(rawIp) || rawIp.length > 45 || rawIp === "unknown") {
-    ip = rawIp === "unknown" ? "unknown" : hashIpForKey(rawIp.slice(0, 256));
-  } else {
-    ip = rawIp.slice(0, 45);
-  }
-  const key = `rl:${c.req.path}:${ip}`;
-  checkMemoryRateLimit(key, rl);
+  const cfIp = (c.req.header("CF-Connecting-IP") ?? "").trim();
+  const ip =
+    cfIp.length > 0 && cfIp.length <= 45 && (IPV4_RE.test(cfIp) || (cfIp.includes(":") && IPV6_RE.test(cfIp)))
+      ? cfIp
+      : "unknown";
+  const max = ip === "unknown" ? Math.max(1, Math.ceil(rl.max / UNKNOWN_BUCKET_DIVISOR)) : rl.max;
+  checkMemoryRateLimit(`rl:${c.req.path}:${ip}`, { windowSec: rl.windowSec, max });
 }

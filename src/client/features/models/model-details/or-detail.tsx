@@ -6,17 +6,13 @@ import { DetailLayout, InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 
-function toPerMillion(price: number | null | undefined): number | undefined {
-  return typeof price === "number" && Number.isFinite(price) ? price * 1_000_000 : undefined;
-}
-
 export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry }) {
   const { t } = useTranslation();
   const showVariantBadge = !!model.variant && model.variant !== "standard" && model.variant !== "free";
   const priceRows: [TranslationKey, number | null | undefined][] = [
-    ["cacheHitPrice", toPerMillion(model.pricing?.cacheHit)],
-    ["promptPrice", toPerMillion(model.pricing?.input)],
-    ["completionPrice", toPerMillion(model.pricing?.output)],
+    ["cacheHitPrice", model.pricing?.cacheHit],
+    ["promptPrice", model.pricing?.input],
+    ["completionPrice", model.pricing?.output],
   ];
   const tokenStats: [TranslationKey, string][] = [
     ["inputTokens", formatShortNumber(model.promptTokens ?? 0)],

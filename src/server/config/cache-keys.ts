@@ -9,7 +9,7 @@ export const cacheKeys = {
   openSourceReleases: API_DOMAINS.openSourceReleases,
   news: (category: NewsCategory) => `${API_DOMAINS.news}:${category}`,
   openRouterRankings: API_DOMAINS.openRouterRankings,
-  openRouterPricing: API_DOMAINS.openRouterPricing,
+  openRouterPricing: "openrouter-pricing-map:per-million",
   closedReleases: API_DOMAINS.closedReleases,
   arenaBoard: (category: string) => `${API_DOMAINS.arenaBoard}:${category}`,
   arenaRankings: API_DOMAINS.arenaRankings,

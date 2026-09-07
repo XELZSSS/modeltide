@@ -156,6 +156,16 @@ describe("mergeBySlug", () => {
     expect(a.omniscience).toBe(80);
     expect("medianOutputSpeed" in a).toBe(false);
   });
+
+  it("ignores prototype keys from enrichment payloads", () => {
+    const merged = mergeBySlug(
+      [{ slug: "a", name: "A" }],
+      [JSON.parse('{"slug":"a","__proto__":{"polluted":true},"constructor":"x","prototype":"y"}')],
+    );
+    expect(merged).toHaveLength(1);
+    expect(Object.getPrototypeOf(merged[0]!)).toBe(Object.prototype);
+    expect(Object.hasOwn(merged[0]!, "__proto__")).toBe(false);
+  });
 });
 
 describe("normalizeModelKey", () => {
@@ -916,6 +926,16 @@ describe("getModels empty-result TTL", () => {
     );
   });
 
+  it("excludes rows without an open license, like releases do", async () => {
+    const { ctx } = hfCtx([
+      { id: "org/open", downloads: 10, likes: 1, tags: ["license:mit"] },
+      { id: "org/closed", downloads: 99, likes: 9, tags: ["license:proprietary"] },
+      { id: "org/unknown", downloads: 50, likes: 5, tags: [] },
+    ]);
+    const models = await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 500 });
+    expect(models.map((m) => m.id)).toEqual(["org/open"]);
+  });
+
   it("fetches with the normalized bucket limit so payload matches the cache key", async () => {
     let fetchedUrl = "";
     const kvStore = new Map<string, string>();
@@ -1156,6 +1176,26 @@ describe("parseChangelogModels", () => {
     const models = parseChangelogModels(`<html><div data-payload='${payload}'></div></html>`);
     expect(models).toHaveLength(1);
     expect(models[0]).toMatchObject({ slug: "gpt-5", creatorName: "OpenAI" });
+  });
+
+  it("tolerates whitespace after the colon and common escapes", () => {
+    const payload = JSON.stringify({
+      models: [
+        {
+          slug: "m1",
+          name: "M\nOne é",
+          release: { slug: "m1", name: "M One" },
+          releaseDate: "2026-02-01",
+          creator: { id: "x", name: "X" },
+        },
+      ],
+    })
+      .replace("é", "\\u00e9")
+      .replace(/"models":/, '"models" :');
+    const escaped = payload.replace(/"/g, '\\"');
+    const models = parseChangelogModels(`<html><script>push([1,"${escaped}"])</script></html>`);
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({ slug: "m1", name: "M\nOne é" });
   });
 });
 

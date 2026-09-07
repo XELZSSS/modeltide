@@ -61,10 +61,7 @@ for (const file of walk("src")) {
     if (rel.startsWith("src/server/") && spec.startsWith("@/client/")) {
       fail(`${rel} imports client code "${spec}"`);
     }
-    if (
-      rel.startsWith("src/shared/") &&
-      (spec.startsWith("@/server/") || spec.startsWith("@/client/"))
-    ) {
+    if (rel.startsWith("src/shared/") && (spec.startsWith("@/server/") || spec.startsWith("@/client/"))) {
       fail(`${rel} imports layered code "${spec}" (shared must stay pure)`);
     }
     if (ownFeature && ROUTE_FEATURES.includes(ownFeature)) {

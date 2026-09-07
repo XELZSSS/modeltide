@@ -2,8 +2,14 @@ import type { Context } from "hono";
 import { WARM_HOST } from "@/server/config";
 import type { RouteDef } from "@/server/routes/table";
 
-export function isWarmupRequest(c: Context): boolean {
-  return c.req.header("x-warmup") === "1" && c.req.header("host") === WARM_HOST;
+export function warmupHeaders(env: { WARM_TOKEN?: string }): Record<string, string> {
+  return env.WARM_TOKEN ? { "x-warmup": env.WARM_TOKEN } : { "x-warmup": "1" };
+}
+
+export function isWarmupRequest(c: Context, env: { WARM_TOKEN?: string }): boolean {
+  const got = c.req.header("x-warmup") ?? "";
+  if (env.WARM_TOKEN) return got !== "" && got === env.WARM_TOKEN;
+  return got === "1" && c.req.header("host") === WARM_HOST;
 }
 
 function withQuery(url: string, params: Record<string, string>): string {

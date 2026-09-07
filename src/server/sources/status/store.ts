@@ -28,7 +28,7 @@ async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
     await ctx.kv.put(SAMPLE_LOCK_KEY, value, { expirationTtl: SAMPLE_LOCK_TTL_S });
     return token;
   } catch {
-    return token;
+    return null;
   }
 }
 

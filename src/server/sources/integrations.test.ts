@@ -153,4 +153,20 @@ describe("parseLitellmPricing", () => {
     expect(() => parseLitellmPricing("nope")).toThrow(/non-object/);
     expect(() => parseLitellmPricing({ sample_spec: {} })).toThrow(/0 usable rows/);
   });
+
+  it("resolves newer provider families instead of dropping them", () => {
+    const out = parseLitellmPricing({
+      "openai/o3": { mode: "chat", input_cost_per_token: 0.000002, output_cost_per_token: 0.000008 },
+      "google/gemma-3": { mode: "chat", input_cost_per_token: 0.0000005, output_cost_per_token: 0.000001 },
+      "qwen/qwen3-max": { mode: "chat", input_cost_per_token: 0.000001, output_cost_per_token: 0.000003 },
+      "meta-llama/llama-4": { mode: "chat", input_cost_per_token: 0.000001, output_cost_per_token: 0.000002 },
+      "xai/grok-4": { mode: "chat", input_cost_per_token: 0.000003, output_cost_per_token: 0.000015 },
+    });
+    const byId = new Map(out.map((m) => [m.id, m.provider]));
+    expect(byId.get("o3")).toBe("openai");
+    expect(byId.get("gemma-3")).toBe("google");
+    expect(byId.get("qwen3-max")).toBe("qwen");
+    expect(byId.get("llama-4")).toBe("meta");
+    expect(byId.get("grok-4")).toBe("xai");
+  });
 });

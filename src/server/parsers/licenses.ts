@@ -1,11 +1,23 @@
 const OPEN_LICENSES = new Set(["openrail++", "osl-3.0", "nvidia-open-model-license", "sil-openrail-1.0"]);
-const OPEN_PREFIXES = [
+const SPDX_PREFIXES = [
   "apache",
   "mit",
   "bsd",
   "isc",
   "cc",
   "odc-by",
+  "gpl",
+  "agpl",
+  "lgpl",
+  "mpl",
+  "epl",
+  "unlicense",
+  "wtfpl",
+  "mulanpsl",
+  "artistic",
+  "zlib",
+];
+const MODEL_FAMILY_PREFIXES = [
   "openrail",
   "bigscience",
   "bigcode",
@@ -28,17 +40,8 @@ const OPEN_PREFIXES = [
   "stablelm",
   "bloom",
   "ministral",
-  "gpl",
-  "agpl",
-  "lgpl",
-  "mpl",
-  "epl",
-  "unlicense",
-  "wtfpl",
-  "mulanpsl",
-  "artistic",
-  "zlib",
 ];
+const OPEN_PREFIXES = [...SPDX_PREFIXES, ...MODEL_FAMILY_PREFIXES];
 function isDeniedNoDerivatives(id: string): boolean {
   return id.startsWith("cc-") && (id.includes("-nd-") || id.endsWith("-nd"));
 }

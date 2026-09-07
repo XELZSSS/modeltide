@@ -35,10 +35,16 @@ export function mergeBySlug(
       const cur = merged.get(slug) as Record<string, unknown>;
       const mergedEntry: Record<string, unknown> = { ...cur };
       for (const [key, value] of Object.entries(m)) {
-        if (value !== null && value !== undefined) mergedEntry[key] = value;
+        if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+        if (value !== null && value !== undefined && value !== "") mergedEntry[key] = value;
       }
       if (cur.omniscienceBreakdown && m.omniscienceBreakdown) {
-        mergedEntry.omniscienceBreakdown = { ...obj(cur.omniscienceBreakdown), ...obj(m.omniscienceBreakdown) };
+        const patch = Object.fromEntries(
+          Object.entries(obj(m.omniscienceBreakdown) ?? {}).filter(
+            ([, v]) => v !== null && v !== undefined && v !== "",
+          ),
+        );
+        mergedEntry.omniscienceBreakdown = { ...obj(cur.omniscienceBreakdown), ...patch };
       }
       merged.set(slug, mergedEntry);
     }

@@ -6,7 +6,6 @@ export const API_DOMAINS = {
   openSourceReleases: "open-source-releases",
   news: "news",
   openRouterRankings: "openrouter-rankings",
-  openRouterPricing: "openrouter-pricing-map",
   closedReleases: "closed-releases",
   arenaBoard: "arena-board",
   arenaRankings: "arena-rankings",

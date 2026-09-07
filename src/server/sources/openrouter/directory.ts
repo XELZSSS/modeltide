@@ -31,7 +31,7 @@ const PER_MILLION = 1_000_000;
 function buildPricingEntry(input: number, output: number, cacheHitRate: number): PricingEntry | null {
   if (!isUsableOpenRouterPricing(input, output)) return null;
   const cache = Number.isFinite(cacheHitRate) ? cacheHitRate : input;
-  return { input, output, cacheHit: cache };
+  return { input: input * PER_MILLION, output: output * PER_MILLION, cacheHit: cache * PER_MILLION };
 }
 
 function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
@@ -63,9 +63,7 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
     }
     const contextLength = numPositive(m.context_length);
     const agenticIndex = num(m.benchmarks?.artificial_analysis?.agentic_index);
-    const metaPricing = pricingEntry
-      ? { input: input * PER_MILLION, output: output * PER_MILLION, cacheHit: cacheHitRate * PER_MILLION }
-      : undefined;
+    const metaPricing = pricingEntry ? { ...pricingEntry } : undefined;
     if (contextLength == null && agenticIndex == null && metaPricing == null) continue;
     const metaEntry: ModelMetaEntry = {};
     if (contextLength != null) metaEntry.contextLength = contextLength;

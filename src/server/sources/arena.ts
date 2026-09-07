@@ -103,11 +103,12 @@ export const getArenaRankings = (ctx: AppContext): Promise<ArenaRankingsPayload>
 export const getArenaBoard = (
   ctx: AppContext,
   category: string,
-): Promise<{ category: string; entries: ArenaRankEntry[]; fetchedAt: string }> =>
-  ctx.cache.withTtl(cacheKeys.arenaBoard(category), SLOW_TTL_MS, async () => {
-    if (!(ARENA_BOARD_IDS as readonly string[]).includes(category)) {
-      throw new ValidationError(`Unknown arena board "${category}"`);
-    }
+): Promise<{ category: string; entries: ArenaRankEntry[]; fetchedAt: string }> => {
+  if (!(ARENA_BOARD_IDS as readonly string[]).includes(category)) {
+    throw new ValidationError(`Unknown arena board "${category}"`);
+  }
+  return ctx.cache.withTtl(cacheKeys.arenaBoard(category), SLOW_TTL_MS, async () => {
     const entries = await fetchArenaBoard(ctx, category);
     return { data: { category, entries, fetchedAt: new Date().toISOString() } };
   });
+};

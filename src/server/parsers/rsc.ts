@@ -1,4 +1,5 @@
 import { UpstreamError } from "@/server/infra/errors";
+import { balancedJsonEnd } from "@/server/parsers/balanced";
 import { fnv1aHash, utf8ByteLength } from "@/shared/utils";
 
 export const MAX_RSC_BYTES = 5 * 1024 * 1024;
@@ -180,32 +181,6 @@ function parseWindowCandidates(
   }
 }
 
-function balancedValueEnd(line: string, start: number, maxEnd: number): number {
-  let depth = 0;
-  let inStr = false;
-  let esc = false;
-  for (let i = start; i < maxEnd; i++) {
-    const c = line.charAt(i);
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === "\\") esc = true;
-      else if (c === '"') inStr = false;
-      continue;
-    }
-    if (c === '"') {
-      inStr = true;
-      continue;
-    }
-    if (c === "[" || c === "{") {
-      depth++;
-    } else if (c === "]" || c === "}") {
-      depth--;
-      if (depth === 0) return i + 1;
-    }
-  }
-  return -1;
-}
-
 function parseBalancedMarkerValue(line: string, idx: number, marker: string, budgetChars: number): string | null {
   if (budgetChars <= 0) return null;
   const needle = `"${marker}"`;
@@ -216,7 +191,7 @@ function parseBalancedMarkerValue(line: string, idx: number, marker: string, bud
   const open = line.charAt(v);
   if (open !== "[" && open !== "{") return null;
   const maxEnd = Math.min(line.length, v + MAX_SCAN_CHARS, v + budgetChars);
-  const end = balancedValueEnd(line, v, maxEnd);
+  const end = balancedJsonEnd(line, v, maxEnd - v);
   return end === -1 ? null : line.slice(v, end);
 }
 

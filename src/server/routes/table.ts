@@ -126,7 +126,7 @@ export function registerRoutes(app: Hono, routes: readonly RouteDef[]): void {
       const context = buildContext(c.env as Env, { signal: c.req.raw.signal });
       startTime(c, "upstream");
       try {
-        if (route.rateLimit && !isWarmupRequest(c)) enforceRateLimit(c, route.rateLimit);
+        if (route.rateLimit && !isWarmupRequest(c, c.env as Env)) enforceRateLimit(c, route.rateLimit);
         const params = validateQuery(c.req.query(), route.query ?? {});
         const data = await route.handler(context, params);
         applyCacheHeaders(c, route.noStore === true);

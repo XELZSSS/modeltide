@@ -1,15 +1,25 @@
 import { BENCHMARK_LABELS, ONE_MINUTE, ONE_HOUR, ONE_DAY } from "@/shared/config";
 import type { Lang, TFunction, TranslationKey } from "@/shared/i18n";
 
+export function stripControlChars(s: string): string {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f || code === 0xfeff) continue;
+    out += s.charAt(i);
+  }
+  return out;
+}
+
 export function safeHref(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
-  const trimmed = url.trim();
-  if (!trimmed) return undefined;
-  if (trimmed.startsWith("//") || trimmed.startsWith("/\\")) return undefined;
-  if (trimmed.startsWith("/")) return trimmed;
+  const cleaned = stripControlChars(url);
+  if (!cleaned) return undefined;
+  if (cleaned.startsWith("//") || cleaned.startsWith("/\\")) return undefined;
+  if (cleaned.startsWith("/")) return cleaned;
   try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === "https:" || parsed.protocol === "http:") return trimmed;
+    const parsed = new URL(cleaned);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") return cleaned;
   } catch (e) {
     console.warn("[format] invalid URL:", e);
     return undefined;

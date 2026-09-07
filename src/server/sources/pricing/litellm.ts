@@ -6,12 +6,15 @@ import { humanizeId, isRecord, numCoerce, numPositive, str } from "@/server/pars
 import { officialModel } from "@/server/sources/pricing/model";
 
 const PROVIDER_PREFIX_RULES: readonly (readonly [label: string, pattern: RegExp])[] = [
-  ["openai", /^(gpt-|o[134]($|-)|chatgpt-)/i],
+  ["openai", /^(gpt-|chatgpt-|o\d($|-))/i],
   ["anthropic", /^claude/i],
-  ["google", /^gemini/i],
+  ["google", /^(gemini|gemma)/i],
   ["deepseek", /^deepseek/i],
   ["mistral", /^(mistral|codestral|ministral|pixtral|magistral|devstral)/i],
   ["kimi", /^kimi/i],
+  ["qwen", /^qwen/i],
+  ["meta", /^llama/i],
+  ["xai", /^grok/i],
 ];
 
 const CHAT_MODES = new Set(["chat", "completion"]);

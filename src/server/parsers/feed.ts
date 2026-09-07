@@ -43,9 +43,15 @@ function textOf(v: unknown): string | null {
   return null;
 }
 
+function cleanTitle(raw: string): string {
+  return stripHtml(decodeEntities(stripHtml(raw)))
+    .slice(0, MAX_TITLE_CHARS)
+    .trim();
+}
+
 function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string {
   const text = textOf(channel.title) ?? "";
-  return decodeEntities(stripHtml(text).slice(0, MAX_TITLE_CHARS)).trim() || sourceNameFrom(sourceUrl);
+  return cleanTitle(text) || sourceNameFrom(sourceUrl);
 }
 
 function linkHref(link: unknown): string | null {
@@ -100,9 +106,7 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
   if (!rawLink) return null;
   const link = rawLink.trim().slice(0, MAX_LINK_CHARS);
   const rawTitle = textOf(item.title) ?? "";
-  const title = stripHtml(decodeEntities(stripHtml(rawTitle)))
-    .slice(0, MAX_TITLE_CHARS)
-    .trim();
+  const title = cleanTitle(rawTitle);
   if (!isSuitableNewsItem(title, link)) return null;
   if (/["<>\s]/.test(link)) return null;
   return {
@@ -131,7 +135,6 @@ function parseChannel(feed: unknown, sourceUrl: string): NewsItem[] {
     throw new UpstreamError(`Unrecognized feed items at ${sourceUrl}`);
   }
   const parsed = records
-    .slice(0, MAX_ITEMS_PER_FEED * 4)
     .map((item) => toNewsItem(item, source))
     .filter((x: NewsItem | null): x is NewsItem => x !== null)
     .slice(0, MAX_ITEMS_PER_FEED);

@@ -50,55 +50,7 @@ export const numIntNonNegative = (v: unknown): number | null => {
   return n == null ? null : Math.trunc(n);
 };
 
-export const leadingNumber = (v: string): number | null => {
-  const m = /^([\d.]+)/.exec(v.replace(/,/g, ""));
-  if (!m?.[1]) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
-};
-
-export const leadingInt = (v: string): number | null => {
-  const m = /^([\d,]+)/.exec(v.trim());
-  if (!m?.[1]) return null;
-  const n = Number(m[1].replace(/,/g, ""));
-  return Number.isFinite(n) ? Math.round(n) : null;
-};
-
-export const moneyAmount = (v: string): number | null => {
-  const m = /\$([\d.]+)/.exec(v.replace(/,/g, ""));
-  if (!m?.[1]) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
-};
-
-export const priceCell = (v: string): number | null => {
-  const t = v.replace(/,/g, "").trim();
-  if (!t || t === "-") return null;
-  if (/^free$/i.test(t)) return 0;
-  return moneyAmount(t);
-};
-
-export const suffixedCount = (v: string): number | null => {
-  const m = /^([\d.]+)\s*([KMB])?/i.exec(v.replace(/,/g, ""));
-  if (!m?.[1]) return null;
-  const n = Number(m[1]);
-  if (!Number.isFinite(n)) return null;
-  const suffix = (m[2] ?? "").toUpperCase();
-  if (suffix === "B") return Math.round(n * 1_000_000_000);
-  if (suffix === "M") return Math.round(n * 1_000_000);
-  if (suffix === "K") return Math.round(n * 1_000);
-  return Math.round(n);
-};
-
 export const titleCase = (s: string): string => (s ? s[0]!.toUpperCase() + s.slice(1).toLowerCase() : s);
-
-export const slugifyName = (name: string): string =>
-  name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-export const stripParen = (name: string): string => name.replace(/\s*\(.*\)\s*$/, "").trim();
 
 export const humanizeId = (id: string, prefix = ""): string => {
   const pretty = id

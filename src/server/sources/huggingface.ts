@@ -73,6 +73,17 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
     throw new UpstreamError(
       `HuggingFace API returned non-array response (got ${items === null ? "null" : typeof items})`,
     );
+  const unknown = new Set<string>();
+  for (const m of items) {
+    if (!Array.isArray(m.tags)) continue;
+    for (const t of m.tags) {
+      if (typeof t !== "string" || !t.toLowerCase().startsWith("license:")) continue;
+      if (getOpenLicense([t]) == null) unknown.add(t);
+      if (unknown.size >= 5) break;
+    }
+    if (unknown.size >= 5) break;
+  }
+  if (unknown.size > 0) ctx.log("info", `[huggingface] unrecognized license tags: ${[...unknown].join(", ")}`);
   return items;
 }
 
@@ -81,7 +92,9 @@ export const getModels = (ctx: AppContext, p: ModelQuery): Promise<OpenSourceMod
     .withTtl(cacheKeys.openSourceModels(p.sort, p.direction, p.limit), SLOW_TTL_MS, async () => {
       const bucketLimit = normalizeModelLimit(p.limit);
       const items = await fetchHFModels(ctx, p.sort, p.direction, bucketLimit);
-      const kept = items.map(mapModel).filter((m): m is OpenSourceModelEntry => m !== null && keepOpenSourceRanking(m));
+      const kept = items
+        .map(mapModel)
+        .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m));
       const bucket = dedupeBy(kept, (m) => m.id);
       if (bucket.length === 0) {
         throw new UpstreamError(`HuggingFace returned no usable models (raw=${items.length}, kept=0)`);

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { decodeEntities } from "@/server/parsers/entities";
 import { stripHtml } from "@/server/parsers/html";
 import { parseFeed } from "@/server/parsers/feed";
-import { findNextData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc";
+import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc";
+import { balancedJsonEnd } from "@/server/parsers/balanced";
 import { getOpenLicense } from "@/server/parsers/licenses";
 import {
   isoDate,
@@ -341,5 +342,51 @@ describe("getOpenLicense", () => {
   it("resolves new families and first-wins dual licenses", () => {
     expect(getOpenLicense(["license:mistral"])).toBe("mistral");
     expect(getOpenLicense(["license:other", "license:phi-2"])).toBe("phi-2");
+  });
+  it("rejects lookalike prefixes, case variants pass, empty tags fail", () => {
+    expect(getOpenLicense(["license:mitre"])).toBeNull();
+    expect(getOpenLicense(["LICENSE:MIT"])).toBe("mit");
+    expect(getOpenLicense([])).toBeNull();
+  });
+});
+
+describe("balancedJsonEnd", () => {
+  it("finds the matching close for nested arrays and objects", () => {
+    expect(balancedJsonEnd('[{"a":[1,2]}]', 0, 100)).toBe(13);
+    expect(balancedJsonEnd('{"a":1} tail', 0, 100)).toBe(7);
+  });
+  it("ignores brackets inside strings and escape sequences", () => {
+    expect(balancedJsonEnd('{"a":"]"}', 0, 100)).toBe(9);
+    expect(balancedJsonEnd('{"a":"\\""}', 0, 100)).toBe(10);
+  });
+  it("fails closed on truncation, budget exhaustion, or non-bracket starts", () => {
+    expect(balancedJsonEnd("[1,2", 0, 100)).toBe(-1);
+    expect(balancedJsonEnd("[1,2,3]", 0, 4)).toBe(-1);
+    expect(balancedJsonEnd("abc", 1, 100)).toBe(-1);
+    expect(balancedJsonEnd("[1]", 0, 0)).toBe(-1);
+  });
+});
+
+describe("findLongestData", () => {
+  it("returns the longest array found under the key", () => {
+    const tree = { a: { initialModels: [1] }, b: { initialModels: [1, 2, 3] } };
+    expect(findLongestData(tree, "initialModels")).toEqual([1, 2, 3]);
+  });
+  it("returns null when the key is absent", () => {
+    expect(findLongestData({}, "initialModels")).toBeNull();
+  });
+});
+
+describe("parseFeed title hardening", () => {
+  it("strips tags decoded from entities instead of rendering them", () => {
+    const xml = `<rss version="2.0"><channel><title>T</title><item><title>&lt;script&gt;alert(1)&lt;/script&gt;Real News</title><link>https://y.example/a</link></item></channel></rss>`;
+    expect(parseFeed(xml, "https://y.example/feed")[0]?.title).toBe("Real News");
+  });
+});
+
+describe("isoDate edges", () => {
+  it("rejects impossible calendar dates but keeps datetimes intact", () => {
+    expect(isoDate("2026-02-30")).toBeNull();
+    expect(isoDate("2026-01-02T03:04:05Z")).toBe("2026-01-02T03:04:05Z");
   });
 });

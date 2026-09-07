@@ -6,6 +6,7 @@ export interface Env {
   CACHE?: KVNamespace;
   ASSETS?: Fetcher;
   HF_TOKEN?: string;
+  WARM_TOKEN?: string;
 }
 
 type LogLevel = "info" | "warn" | "error";
@@ -18,7 +19,7 @@ export interface AppContext {
   log(level: LogLevel, msg: string, meta?: Record<string, unknown>): void;
 }
 
-function sanitizeLogLine(line: string): string {
+export function sanitizeLogLine(line: string): string {
   const flat = line.replace(/[\r\n]+/g, " ");
   return flat.length > 2000 ? `${flat.slice(0, 2000)}…` : flat;
 }
