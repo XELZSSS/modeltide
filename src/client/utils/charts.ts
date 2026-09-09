@@ -1,35 +1,18 @@
-import {
-  Chart as ChartJS,
-  ArcElement,
-  CategoryScale,
-  LinearScale,
-  RadialLinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  Tooltip,
-  Legend,
-  Filler,
-  type TooltipOptions,
-} from "chart.js";
-import type { ChartTheme } from "@/client/ui-hooks";
+"use client";
+// Pure chart helpers. No runtime chart.js import here so helper-only imports
+// never pull chart.js elements into the bundle. Call applyChartDefaults()
+// from each charts-*/registration module after importing Chart.
+import type { Chart as ChartJS, TooltipOptions } from "chart.js";
+import type { ChartTheme } from "@/client/theme/chart-theme";
 
-ChartJS.register(
-  ArcElement,
-  CategoryScale,
-  LinearScale,
-  RadialLinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  Tooltip,
-  Legend,
-  Filler,
-);
-
-ChartJS.defaults.font.family =
+const CHART_FONT_FAMILY =
   "'Inter Variable', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif";
-ChartJS.defaults.font.size = 12;
+const CHART_FONT_SIZE = 12;
+
+export function applyChartDefaults(chart: typeof ChartJS): void {
+  chart.defaults.font.family = CHART_FONT_FAMILY;
+  chart.defaults.font.size = CHART_FONT_SIZE;
+}
 
 export const chartBase = {
   responsive: true,
@@ -43,7 +26,7 @@ export const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
 
 export const axisDashedBorderStyle = (theme: ChartTheme) => ({ color: theme.grid, dash: [3, 3] as [number, number] });
 
-export { legendStyle, seriesColor, hexToRgba, ceilToStep } from "@/client/utils/charts-theme";
+export { legendStyle, seriesColor, hexToRgba, ceilToStep } from "@/client/theme/chart-theme";
 
 export const lineSeriesStyle = {
   borderWidth: 2,

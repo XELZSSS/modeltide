@@ -1,4 +1,6 @@
-export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+import { isFiniteNumber } from "@/shared/utils";
+
+export const num = (v: unknown): number | null => (isFiniteNumber(v) ? v : null);
 
 export const numCoerce = (v: unknown): number | null => {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;

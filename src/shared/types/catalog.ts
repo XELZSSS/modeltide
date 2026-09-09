@@ -1,4 +1,4 @@
-import type { BenchmarkKey } from "@/shared/config";
+import type { BenchmarkKey } from "@/shared/config/benchmarks";
 
 export interface ModelCreators {
   name?: string;
@@ -9,17 +9,11 @@ export interface ModelPricing {
   input?: number | null;
   output?: number | null;
   cacheHit?: number | null;
+  cacheWrite?: number | null;
 }
 
 export interface ModelSpeed {
   median_output_speed?: number | null;
-}
-
-export interface ModelCost {
-  total?: number | null;
-  input?: number | null;
-  output?: number | null;
-  reasoning?: number | null;
 }
 
 export interface ModelOmniscienceBreakdown {
@@ -41,13 +35,13 @@ export interface ArtificialAnalysisModel {
   is_reasoning?: boolean;
   release_date?: string | null;
   is_open_weights?: boolean;
-  context_window_tokens?: number | null;
-  blended_price?: number | null;
-  cost?: ModelCost;
+  parameters?: number | null;
+  size_class?: string | null;
   coding_index?: number | null;
   agentic_index?: number | null;
   benchmarks?: Partial<Record<BenchmarkKey, number | null>>;
   pricing?: ModelPricing;
+  defaultMonthlyCost?: number | null;
   speed?: ModelSpeed;
   input_modality_text?: boolean;
   input_modality_image?: boolean;
@@ -68,8 +62,6 @@ export interface TextToImageModel {
   elo: number | null;
   eloLower: number | null;
   eloUpper: number | null;
-  appearances: number | null;
-  winRate: number | null;
   pricePer1kImages: number | null;
   creatorName: string | null;
 }

@@ -1,3 +1,4 @@
+"use client";
 import { formatShortNumber } from "@/client/utils/format";
 import { shortModelId } from "@/client/utils/model";
 import type { OpenSourceModelEntry } from "@/shared/types";

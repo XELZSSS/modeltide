@@ -1,9 +1,27 @@
 import type { OfficialPriceModel } from "@/shared/types";
-import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
+import { MAX_PLAUSIBLE_RATE, PER_MILLION } from "@/shared/config/limits";
+import { LITELLM_FETCH_OPTS, upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
-import { humanizeId, isRecord, numCoerce, numPositive, str } from "@/server/parsers/primitives";
-import { officialModel } from "@/server/sources/pricing/model";
+import { humanizeId, isRecord, numCoerce, str } from "@/server/parsers/primitives";
+import { isUsablePricing } from "@/server/sources/data-filter";
+
+export function officialModel(
+  provider: string,
+  id: string,
+  name: string,
+  input: number | null,
+  output: number | null,
+  cachedInput: number | null = null,
+  cacheWrite: number | null = null,
+): OfficialPriceModel | null {
+  if (!isUsablePricing(input, output)) return null;
+  if (input != null && input > MAX_PLAUSIBLE_RATE) return null;
+  if (output != null && output > MAX_PLAUSIBLE_RATE) return null;
+  if (cachedInput != null && cachedInput > MAX_PLAUSIBLE_RATE) return null;
+  if (cacheWrite != null && cacheWrite > MAX_PLAUSIBLE_RATE) return null;
+  return { id, name, provider, input, cachedInput, cacheWrite, output };
+}
 
 const PROVIDER_PREFIX_RULES: readonly (readonly [label: string, pattern: RegExp])[] = [
   ["openai", /^(gpt-|chatgpt-|o\d($|-))/i],
@@ -19,8 +37,6 @@ const PROVIDER_PREFIX_RULES: readonly (readonly [label: string, pattern: RegExp]
 
 const CHAT_MODES = new Set(["chat", "completion"]);
 
-const PER_MILLION = 1_000_000;
-
 function resolveProvider(id: string): string | null {
   for (const [label, pattern] of PROVIDER_PREFIX_RULES) {
     if (pattern.test(id)) return label;
@@ -33,7 +49,7 @@ interface LitellmEntry {
   input_cost_per_token?: unknown;
   output_cost_per_token?: unknown;
   cache_read_input_token_cost?: unknown;
-  max_input_tokens?: unknown;
+  cache_creation_input_token_cost?: unknown;
 }
 
 function toPricingModel(key: string, value: unknown, seen: Set<string>): OfficialPriceModel | null {
@@ -48,7 +64,7 @@ function toPricingModel(key: string, value: unknown, seen: Set<string>): Officia
   const input = numCoerce(entry.input_cost_per_token);
   const output = numCoerce(entry.output_cost_per_token);
   const cachedInput = numCoerce(entry.cache_read_input_token_cost);
-  const contextWindow = numPositive(entry.max_input_tokens);
+  const cacheWrite = numCoerce(entry.cache_creation_input_token_cost);
   const model = officialModel(
     provider,
     id,
@@ -56,7 +72,7 @@ function toPricingModel(key: string, value: unknown, seen: Set<string>): Officia
     input == null ? null : input * PER_MILLION,
     output == null ? null : output * PER_MILLION,
     cachedInput == null ? null : cachedInput * PER_MILLION,
-    contextWindow,
+    cacheWrite == null ? null : cacheWrite * PER_MILLION,
   );
   if (!model) return null;
   const dedupeKey = id.toLowerCase();
@@ -81,8 +97,10 @@ export function parseLitellmPricing(raw: unknown): OfficialPriceModel[] {
   return models;
 }
 
-export async function getLitellmPricing(ctx: AppContext): Promise<OfficialPriceModel[]> {
-  const raw = await ctx.http.json<unknown>(`${upstreamConfig.githubRaw}${LITELLM_PRICING_PATH}`, UPSTREAM_FETCH_OPTS);
+/** Raw fetch — no cache. The jsDelivr mirror was removed: the BerriAI/litellm
+ * package exceeds jsDelivr's 50 MB limit so it permanently answers 403. */
+export async function fetchLitellmPricing(ctx: AppContext): Promise<OfficialPriceModel[]> {
+  const raw = await ctx.http.json<unknown>(`${upstreamConfig.githubRaw}${LITELLM_PRICING_PATH}`, LITELLM_FETCH_OPTS);
   return parseLitellmPricing(raw);
 }
 

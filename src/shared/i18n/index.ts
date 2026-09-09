@@ -8,7 +8,7 @@ export type TranslationKey = keyof typeof en;
 export type TranslationParams = Record<string, string | number>;
 export type TFunction = (key: TranslationKey, params?: TranslationParams) => string;
 
-const dictionaries: Record<Lang, Partial<Record<TranslationKey, string>>> = { en, zh };
+const dictionaries: Record<Lang, Record<TranslationKey, string>> = { en, zh };
 
 export function interpolate(template: string, params?: TranslationParams): string {
   if (!params) return template;
@@ -30,5 +30,3 @@ export function createT(
     return out;
   };
 }
-
-export { zh };

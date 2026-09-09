@@ -1,28 +1,29 @@
+"use client";
 import { memo, useMemo } from "react";
 import type { ChartOptions } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
 import { Card, CardContent } from "@/client/components/ui/card";
-import { EmptyState } from "@/client/components/feedback";
-import { categoryLabel, formatShortNumber } from "@/client/utils/format";
-import "@/client/utils/charts";
-import { useChartTheme } from "@/client/ui-hooks";
-import { chartBase, defaultTooltipOptions, legendStyle, seriesColor } from "@/client/utils/charts";
-import type { OpenRouterRankEntry } from "@/shared/types";
-import { aggregateUsageByCategory } from "./usage";
+import { formatShortNumber } from "@/client/utils/format";
+import { registerDoughnut } from "@/client/utils/charts-register";
 
-export const UsageDonut = memo(function UsageDonut({ entries }: { entries: OpenRouterRankEntry[] }) {
+registerDoughnut();
+import { useChartTheme } from "@/client/theme/chart-theme";
+import { chartBase, defaultTooltipOptions, legendStyle, seriesColor } from "@/client/utils/charts";
+import { aggregateTaskShare, OTHER_TASK_KEY, taskLabel } from "./usage";
+
+export const UsageDonut = memo(function UsageDonut({ models }: { models: { task: string | null | undefined }[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();
-  const { slices, total } = useMemo(() => aggregateUsageByCategory(entries), [entries]);
+  const { slices, total } = useMemo(() => aggregateTaskShare(models), [models]);
 
   const data = useMemo(
     () => ({
-      labels: slices.map((s) => categoryLabel(s.key, t)),
+      labels: slices.map((s) => (s.key === OTHER_TASK_KEY ? t("otherTasks") : taskLabel(s.key, t))),
       datasets: [
         {
           data: slices.map((s) => s.total),
-          backgroundColor: slices.map((_, i) => seriesColor(theme, i)),
+          backgroundColor: slices.map((_, i) => theme.donut[i % theme.donut.length] ?? seriesColor(theme, i)),
           borderColor: theme.tooltipBg,
           borderWidth: 2,
           borderRadius: 0,
@@ -58,14 +59,16 @@ export const UsageDonut = memo(function UsageDonut({ entries }: { entries: OpenR
   return (
     <Card className="h-full">
       <CardContent padding="md" className="flex flex-col h-full">
-        <p className="ui-card-title mb-1">{t("usageByCategory")}</p>
-        <p className="ui-caption mb-4">{t("openRouterSource")}</p>
+        <p className="ui-card-title mb-1">{t("opensourceTaskShare")}</p>
+        <p className="ui-caption mb-4">{t("openSourceDataSource")}</p>
         {slices.length === 0 ? (
-          <EmptyState message={t("notAvailable")} />
+          <div className="flex min-h-[200px] h-[200px] sm:h-[240px] flex-1 items-center justify-center text-center ui-body-secondary" role="status">
+            {t("notAvailable")}
+          </div>
         ) : (
           <div className="w-full flex-1 min-h-[200px] h-[200px] sm:h-[240px]">
             <figure className="h-full">
-              <Doughnut data={data} options={options} aria-label={t("usageByCategory")} role="img" />
+              <Doughnut data={data} options={options} aria-label={t("opensourceTaskShare")} role="img" />
             </figure>
           </div>
         )}

@@ -1,19 +1,8 @@
-import {
-  Suspense,
-  lazy,
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { useLocation } from "react-router";
+"use client";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname } from "@/client/router";
 import { useSettingsStore, useThemeStorageSync } from "@/client/stores";
 import { useTranslation } from "@/client/providers";
-import { cn } from "@/client/utils/cn";
-import { TabContainer, type TabItem } from "@/client/components/ui/tabs";
 import { DesktopNav, MobileNav, MobileMoreSheet } from "./navigation";
 import { PwaBanners } from "@/client/pwa/banners";
 
@@ -41,7 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useThemeStorageSync();
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement>(null);
-  const location = useLocation();
+  const pathname = usePathname();
 
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeMore = useCallback(() => setMobileMoreOpen(false), []);
@@ -55,12 +44,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [themeMode]);
 
   useLayoutEffect(() => {
-    document.body.dataset.accent = accentForPath(location.pathname);
-  }, [location.pathname]);
+    document.body.dataset.accent = accentForPath(pathname);
+  }, [pathname]);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
-  }, [location.pathname]);
+  }, [pathname]);
 
   return (
     <div className="min-h-screen h-[100dvh] flex flex-col bg-bg-primary overflow-x-hidden pt-[env(safe-area-inset-top,0px)]">
@@ -92,115 +81,5 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-export function PageContainer({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5", className)}>{children}</div>;
-}
-
-export function PageHeader({
-  title,
-  description,
-  actions,
-  compact,
-}: {
-  title: string;
-  description?: string;
-  actions?: ReactNode;
-  compact?: boolean;
-}) {
-  return (
-    <header
-      className={cn(
-        "flex flex-col sm:flex-row sm:items-center justify-between gap-3",
-        compact ? "mb-4" : "mb-4 sm:mb-5",
-      )}
-    >
-      <div className="min-w-0">
-        <h1 className={cn(compact ? "text-lg sm:text-xl" : "ui-page-title")}>{title}</h1>
-        {description && <p className="ui-body-secondary mt-1.5">{description}</p>}
-      </div>
-      {actions && (
-        <div className="flex w-full sm:w-auto min-w-0 max-w-full items-center gap-2 sm:shrink-0">{actions}</div>
-      )}
-    </header>
-  );
-}
-
-export function PageSection({
-  title,
-  description,
-  children,
-  className,
-}: {
-  title?: string;
-  description?: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  const headingId = useId();
-  return (
-    <section className={cn("my-4 sm:my-6", className)} aria-labelledby={title ? headingId : undefined}>
-      {title && (
-        <div className="flex items-baseline gap-2 mb-3 sm:mb-4">
-          <h2 id={headingId} className="ui-section-title">
-            {title}
-          </h2>
-          {description && <span className="ui-meta">{description}</span>}
-        </div>
-      )}
-      {children}
-    </section>
-  );
-}
-
-interface TabbedPageProps {
-  title: string;
-  description?: string;
-  actions?: ReactNode;
-  compact?: boolean;
-  containerClassName?: string;
-  countLabel?: string;
-  tabs: TabItem[];
-  activeTab: string;
-  onTabChange: (id: string) => void;
-  tabSize?: "sm" | "md";
-  tabClassName?: string;
-  tabFill?: boolean;
-  children: ReactNode;
-}
-
-export function TabbedPage({
-  title,
-  description,
-  actions,
-  compact,
-  containerClassName,
-  countLabel,
-  tabs,
-  activeTab,
-  onTabChange,
-  tabSize = "sm",
-  tabClassName,
-  tabFill,
-  children,
-}: TabbedPageProps) {
-  return (
-    <PageContainer className={containerClassName}>
-      <PageHeader compact={compact} title={title} description={description} actions={actions} />
-      {countLabel && (
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs text-text-tertiary">{countLabel}</span>
-        </div>
-      )}
-      <TabContainer
-        tabs={tabs}
-        activeTab={activeTab}
-        tabSize={tabSize}
-        className={tabClassName}
-        fill={tabFill}
-        onTabChange={onTabChange}
-      >
-        {children}
-      </TabContainer>
-    </PageContainer>
-  );
-}
+// Re-export page layout primitives from dedicated module
+export { PageContainer, PageHeader, PageSection, TabbedPage } from "./page";

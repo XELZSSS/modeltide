@@ -7,8 +7,11 @@ import { isSuitableNewsItem } from "@/server/sources/data-filter";
 import { isRecord } from "@/server/parsers/primitives";
 import { decodeEntities } from "@/server/parsers/entities";
 import { stripHtml } from "@/server/parsers/html";
+import { SOURCE_LIMITS } from "@/shared/config";
 
-const MAX_ITEMS_PER_FEED = 50;
+const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
+// Hoisted: tested once per feed item in toNewsItem.
+const UNSAFE_LINK_CHARS_RE = /["<>\s]/;
 
 const MAX_TITLE_CHARS = 300;
 const MAX_LINK_CHARS = 2048;
@@ -33,6 +36,9 @@ function sourceNameFrom(sourceUrl: string): string {
 }
 
 function textOf(v: unknown): string | null {
+  // Malformed feeds can repeat elements: <title>A</title><title>B</title>.
+  // fast-xml-parser yields an array — take the first instead of dropping the item.
+  if (Array.isArray(v)) v = v[0];
   if (typeof v === "string") return v.trim() ? v : null;
   if (typeof v === "number" && Number.isFinite(v)) return String(v);
   if (isRecord(v)) {
@@ -43,10 +49,19 @@ function textOf(v: unknown): string | null {
   return null;
 }
 
+function truncateSafe(s: string, max: number): string {
+  if (s.length <= max) return s;
+  // Never split a UTF-16 surrogate pair (emoji etc.) at the cut point.
+  const cut = max - 1;
+  const c = s.charCodeAt(cut);
+  return c >= 0xd800 && c <= 0xdbff ? s.slice(0, cut) : s.slice(0, max);
+}
+
 function cleanTitle(raw: string): string {
-  return stripHtml(decodeEntities(stripHtml(raw)))
-    .slice(0, MAX_TITLE_CHARS)
-    .trim();
+  const stripped = stripHtml(raw);
+  const decoded = decodeEntities(stripped);
+  const clean = decoded.includes("<") ? stripHtml(decoded) : decoded;
+  return truncateSafe(clean, MAX_TITLE_CHARS).trim();
 }
 
 function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string {
@@ -55,18 +70,26 @@ function channelTitle(channel: Record<string, unknown>, sourceUrl: string): stri
 }
 
 function linkHref(link: unknown): string | null {
-  if (typeof link === "string") return link.trim() || null;
+  // XML entity decode: `processEntities` is off (XXE hardening), so raw feed
+  // text keeps `&amp;` — without this, every query-string link stays broken.
+  // Decode exactly once, BEFORE the ["<>] sanity check in toNewsItem.
+  if (typeof link === "string") return decodeEntities(link.trim()) || null;
   if (!isRecord(link)) return null;
   const href = link["@_href"] ?? link.href ?? link["#text"];
-  return typeof href === "string" ? href.trim() || null : null;
+  if (typeof href !== "string") return null;
+  return decodeEntities(href.trim()) || null;
 }
 
 function itemLink(item: Record<string, unknown>): string | null {
   const rawLink = item.link;
   if (Array.isArray(rawLink)) {
     const rel = (l: unknown) => (isRecord(l) ? l["@_rel"] : undefined);
+    const withHref = (l: unknown): boolean => linkHref(l) !== null;
     const alternate = rawLink.find((l) => rel(l) === "alternate");
-    return linkHref(alternate ?? rawLink.find((l) => linkHref(l) !== null));
+    // An alternate link with no usable href should not sink the item —
+    // fall back to the first link that actually carries an href.
+    const chosen = alternate != null && withHref(alternate) ? alternate : rawLink.find(withHref);
+    return chosen == null ? null : linkHref(chosen);
   }
   return linkHref(rawLink);
 }
@@ -108,7 +131,7 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
   const rawTitle = textOf(item.title) ?? "";
   const title = cleanTitle(rawTitle);
   if (!isSuitableNewsItem(title, link)) return null;
-  if (/["<>\s]/.test(link)) return null;
+  if (UNSAFE_LINK_CHARS_RE.test(link)) return null;
   return {
     id: itemId(item, link, title),
     title,

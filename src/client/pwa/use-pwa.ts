@@ -1,5 +1,32 @@
+"use client";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { isBeforeInstallPromptEvent, isIosDevice, isStandaloneMode, type BeforeInstallPromptEvent } from "./install";
+
+export interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
+export function isBeforeInstallPromptEvent(event: Event): event is BeforeInstallPromptEvent {
+  const candidate = event as Partial<BeforeInstallPromptEvent>;
+  return typeof candidate.prompt === "function" && candidate.userChoice instanceof Promise;
+}
+
+export function isIosDevice(userAgent: string, maxTouchPoints = 0): boolean {
+  const ua = userAgent.toLowerCase();
+  if (/iphone|ipad|ipod/.test(ua)) return true;
+  return ua.includes("macintosh") && maxTouchPoints > 1;
+}
+
+export interface StandaloneFlags {
+  navigatorStandalone?: unknown;
+  displayStandalone?: boolean;
+  displayFullscreen?: boolean;
+}
+
+export function isStandaloneMode(flags: StandaloneFlags): boolean {
+  if (flags.navigatorStandalone === true) return true;
+  return flags.displayStandalone === true || flags.displayFullscreen === true;
+}
 
 function subscribeOnline(onChange: () => void): () => void {
   window.addEventListener("online", onChange);
@@ -132,4 +159,32 @@ export function useSwUpdate(): SwUpdateState {
   }, []);
 
   return { updateAvailable, applyUpdate };
+}
+
+export function registerServiceWorker(): void {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return;
+  if (!("serviceWorker" in navigator)) return;
+  if (!window.isSecureContext) return;
+  if (process.env.NODE_ENV !== "production") return;
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.warn("[pwa] service worker registration failed:", err);
+    });
+  });
+}
+
+/**
+ * Dev safeguard: a production worker registered by an earlier `preview` run
+ * keeps controlling this origin afterwards, so drop it outside production.
+ */
+export function unregisterStaleServiceWorker(): void {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return;
+  if (!("serviceWorker" in navigator)) return;
+  if (process.env.NODE_ENV === "production") return;
+  void navigator.serviceWorker
+    .getRegistrations()
+    .then((regs) => Promise.allSettled(regs.map((reg) => reg.unregister())))
+    .catch((err) => {
+      console.warn("[pwa] service worker unregister failed:", err);
+    });
 }

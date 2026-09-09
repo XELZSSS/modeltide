@@ -1,13 +1,30 @@
+"use client";
 import { memo, type ReactNode, type KeyboardEvent } from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
 import { SegmentedGroup } from "@/client/components/ui/grids";
 
-interface TabButtonProps {
-  active?: boolean;
+export const tabButtonVariants = cva(
+  "rounded-none font-medium transition-colors duration-150 whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1",
+  {
+    variants: {
+      active: {
+        true: "bg-bg-card text-text-primary ring-1 ring-inset ring-border",
+        false: "text-text-secondary hover:text-text-primary",
+      },
+      size: {
+        sm: "px-3 py-1.5 text-xs",
+        md: "px-4 py-2 text-sm",
+      },
+    },
+    defaultVariants: { active: false, size: "md" },
+  },
+);
+
+interface TabButtonProps extends VariantProps<typeof tabButtonVariants> {
   onClick: () => void;
   children: ReactNode;
   className?: string;
-  size?: "sm" | "md";
   id?: string;
   tabIndex?: number;
   "aria-controls"?: string;
@@ -29,13 +46,13 @@ export const TabButton = memo(function TabButton({
   onClick,
   children,
   className,
-  size = "md",
+  size,
   id,
   tabIndex,
   "aria-controls": ariaControls,
   role = "tab",
 }: TabButtonProps) {
-  const checkedProps = tabAriaProps(role, active, tabIndex);
+  const checkedProps = tabAriaProps(role, active ?? undefined, tabIndex);
   return (
     <button
       type="button"
@@ -44,15 +61,7 @@ export const TabButton = memo(function TabButton({
       aria-controls={ariaControls}
       {...checkedProps}
       onClick={onClick}
-      className={cn(
-        "rounded-none font-medium transition-colors duration-150 whitespace-nowrap shrink-0",
-        size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
-        active
-          ? "bg-bg-card text-text-primary ring-1 ring-inset ring-border"
-          : "text-text-secondary hover:text-text-primary",
-        "outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1",
-        className,
-      )}
+      className={cn(tabButtonVariants({ active, size }), className)}
     >
       {children}
     </button>

@@ -105,6 +105,7 @@ const NAMED_ENTITIES: Record<string, string> = {
 const ENTITY_RE = /&(?:#x([0-9a-fA-F]+);?|#([0-9]+);?|([a-zA-Z][a-zA-Z0-9]*);)/g;
 
 export function decodeEntities(s: string): string {
+  if (!s.includes("&")) return s;
   return s.replace(ENTITY_RE, (m, hex?: string, dec?: string, name?: string) => {
     if (hex) return safeFromCodePoint(parseInt(hex, 16));
     if (dec) return safeFromCodePoint(parseInt(dec, 10));

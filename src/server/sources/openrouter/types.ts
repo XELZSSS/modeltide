@@ -6,22 +6,22 @@ export interface ModelRow {
   total_completion_tokens: number;
   total_prompt_tokens: number;
   total_native_tokens_reasoning: number;
+  total_native_tokens_cached: number;
   count: number;
-  image_output_requests: number;
-  video_output_seconds: number;
+  total_tool_calls: number;
   change: number | null;
 }
 
 export interface PricingEntry {
   input: number;
   output: number;
-  cacheHit: number;
+  cacheHit: number | null;
+  cacheWrite: number | null;
 }
 
 export type PricingRecord = Record<string, PricingEntry>;
 
 export interface ModelMetaEntry {
-  contextLength?: number;
+  intelligenceIndex?: number;
   agenticIndex?: number;
-  pricing?: { input: number; output: number; cacheHit: number };
 }

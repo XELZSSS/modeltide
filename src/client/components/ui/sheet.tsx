@@ -1,3 +1,4 @@
+"use client";
 import { memo, useEffect, useRef } from "react";
 import { cn } from "@/client/utils/cn";
 import { X } from "lucide-react";
@@ -100,7 +101,7 @@ export const Sheet = memo(function Sheet({
         aria-label={ariaLabelledBy ? undefined : ariaLabel}
         aria-labelledby={ariaLabelledBy}
         className={cn(
-          "relative z-50 w-full max-w-md rounded-none border border-border bg-bg-primary shadow-none animate-sheet-up focus:outline-none",
+          "relative z-50 w-full max-w-md rounded-none border border-border bg-bg-primary shadow-lg animate-sheet-up focus:outline-none",
           className,
         )}
         onClick={(e) => e.stopPropagation()}

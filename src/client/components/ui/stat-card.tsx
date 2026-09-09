@@ -1,3 +1,4 @@
+"use client";
 import { memo, type ComponentType, type ReactNode } from "react";
 import { Card, CardContent } from "@/client/components/ui/card";
 
@@ -23,7 +24,7 @@ export const StatCard = memo(function StatCard({
           )}
           <p className="text-xs text-text-tertiary font-medium truncate">{label}</p>
         </div>
-        <p className="text-xl font-semibold tracking-tight break-words min-w-0">{value}</p>
+        <div className="text-xl font-semibold tracking-tight break-words min-w-0">{value}</div>
       </CardContent>
     </Card>
   );

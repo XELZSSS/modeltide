@@ -1,19 +1,21 @@
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+"use client";
+import { useQuery, useSuspenseQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
-  ARENA_BOARD_IDS,
   FIVE_MINUTES,
   NEWS_CATEGORIES,
+  ONE_MINUTE,
+  PARTIAL_FAIL_TTL_MS,
   SLOW_TTL_MS,
   STATIC_TTL_MS,
   THIRTY_MINUTES,
   publicApiPaths as apiPaths,
 } from "@/shared/config";
 import { fetcher, type QueryCtx } from "@/client/api/client";
-import { queryKeys } from "@/client/api/query-keys";
+import { buildHallucinationRankings } from "@/client/utils/hallucination";
+import { queryKeys } from "@/shared/config";
 import type {
-  ArenaBoardPayload,
-  ArenaRankingsPayload,
+  AgentRankingsPayload,
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
   HallucinationRankingEntry,
@@ -23,9 +25,11 @@ import type {
   OfficialPricingPayload,
   OpenSourceModelEntry,
   OpenRouterRankingsPayload,
+  SourcePayload,
   StatusHistoryPayload,
 } from "@/shared/types";
-import { normalizePercent, dedupeBy } from "@/shared/utils";
+import { dedupeBy } from "@/shared/utils";
+import { normalizeHomeDashboard, unwrapList, unwrapListPartial } from "@/client/api/normalize";
 
 interface ApiQueryOptions<T> {
   ttl?: number;
@@ -34,22 +38,51 @@ interface ApiQueryOptions<T> {
   refetchInterval?: number | false;
   refetchIntervalInBackground?: boolean;
   queryFn?: (ctx: QueryCtx) => Promise<T>;
+  /**
+   * When the served data is partial (degraded upstream), poll on this
+   * interval instead of sitting on the full staleTime. Matches the
+   * shortened server TTLs for partial payloads (see shared/config/time).
+   */
+  partialRefetchMs?: number;
+  isPartialData?: (data: T | undefined) => boolean;
 }
 
 function createApiQuery<T>(key: readonly (string | number)[], path: string, opts?: ApiQueryOptions<T>) {
-  const { queryFn: customFn, ttl, ...rest } = opts ?? {};
+  const { queryFn: customFn, ttl, partialRefetchMs, isPartialData, ...rest } = opts ?? {};
   const queryFn = customFn ?? fetcher<T>(path);
-  const timing = { staleTime: ttl, refetchInterval: false as const, ...rest };
+  const ttlMs = ttl ?? rest.staleTime ?? THIRTY_MINUTES;
+  const partialPoll: false | ((query: unknown) => number | false) =
+    partialRefetchMs != null && isPartialData != null
+      ? // (query: unknown): keeps T inference for useQuery intact, and matches
+        // the v5 signature which passes the Query (data lives at state.data).
+        (query: unknown) => {
+          const data = (query as { state?: { data?: T } } | null)?.state?.data;
+          return isPartialData(data) ? partialRefetchMs : false;
+        }
+      : false;
+  const timing = {
+    gcTime: rest.gcTime ?? Math.min(Math.max(ttlMs, THIRTY_MINUTES), STATIC_TTL_MS),
+    refetchInterval: partialPoll,
+    ...rest,
+    staleTime: rest.staleTime ?? ttlMs,
+  };
   return {
     use: (enabled = true) => useQuery<T>({ queryKey: key, queryFn, ...timing, enabled }),
     useSuspense: () => useSuspenseQuery<T>({ queryKey: key, queryFn, ...timing }),
+    /** Warm the cache ahead of navigation; no-op while data is still fresh. */
+    prefetch: (qc: QueryClient) =>
+      qc.prefetchQuery({ queryKey: key, queryFn, staleTime: timing.staleTime, gcTime: timing.gcTime }),
   };
 }
 
-const qArtificial = createApiQuery<ArtificialAnalysisModel[]>(queryKeys.artificialIndex, apiPaths.artificialIndex, {
-  ttl: THIRTY_MINUTES,
-});
-const qOpenSourceReleases = createApiQuery<OpenSourceModelEntry[]>(
+const qArtificialRaw = createApiQuery<SourcePayload<ArtificialAnalysisModel[]>>(
+  queryKeys.artificialIndex,
+  apiPaths.artificialIndex,
+  {
+    ttl: THIRTY_MINUTES,
+  },
+);
+const qOpenSourceReleasesRaw = createApiQuery<SourcePayload<OpenSourceModelEntry[]>>(
   queryKeys.openSourceReleases,
   apiPaths.openSourceReleases,
   { ttl: SLOW_TTL_MS },
@@ -59,42 +92,61 @@ const qOpenRouter = createApiQuery<OpenRouterRankingsPayload>(
   apiPaths.openRouterRankings,
   { ttl: THIRTY_MINUTES },
 );
-const qHomeDashboard = createApiQuery<HomeDashboardData>(queryKeys.homeDashboard, apiPaths.homeDashboard, {
+const qHomeDashboardRaw = createApiQuery<HomeDashboardData>(queryKeys.homeDashboard, apiPaths.homeDashboard, {
   ttl: FIVE_MINUTES,
+  gcTime: 15 * 60_000,
+  partialRefetchMs: ONE_MINUTE,
+  isPartialData: (d) => d != null && (d.orRankings == null || d.textToImage == null || d.opensource == null),
 });
-const qOpenSourceModels = createApiQuery<OpenSourceModelEntry[]>(
+const qOpenSourceModelsRaw = createApiQuery<SourcePayload<OpenSourceModelEntry[]>>(
   queryKeys.openSourceModels,
   apiPaths.openSourceModels,
   { ttl: SLOW_TTL_MS },
 );
 
-function cachedQuery<K extends string, T>(
-  cache: Map<K, ReturnType<typeof createApiQuery<T>>>,
-  category: string,
-  valid: readonly string[],
-  build: (safe: K) => ReturnType<typeof createApiQuery<T>>,
-): ReturnType<typeof createApiQuery<T>> {
-  const safe = (valid.includes(category) ? category : valid[0]!) as K;
-  let q = cache.get(safe);
-  if (!q) {
-    q = build(safe);
-    cache.set(safe, q);
-  }
-  return q;
+function resolveNewsCategory(c: NewsCategory): NewsCategory {
+  return (NEWS_CATEGORIES.includes(c) ? c : NEWS_CATEGORIES[0]) as NewsCategory;
 }
 
-const newsQueries = new Map<NewsCategory, ReturnType<typeof createApiQuery<NewsItem[]>>>();
-const qNews = (c: NewsCategory) =>
-  cachedQuery(newsQueries, c, NEWS_CATEGORIES, (safe) =>
-    createApiQuery<NewsItem[]>(queryKeys.news(safe), apiPaths.news(safe), { ttl: THIRTY_MINUTES }),
+function getCachedQuery<K extends string, Q>(cache: Map<K, Q>, key: K, create: () => Q): Q {
+  const existing = cache.get(key);
+  if (existing) return existing;
+  const created = create();
+  cache.set(key, created);
+  return created;
+}
+
+function safeUnwrapList<T>(payload: unknown, label: string): T[] {
+  if (payload == null) return [] as T[];
+  try {
+    return unwrapList<T>(payload, label);
+  } catch (err) {
+    console.warn(`[api] dropping malformed ${label} payload:`, err);
+    return [] as T[];
+  }
+}
+
+const newsQueryCache = new Map<string, ReturnType<typeof createApiQuery<SourcePayload<NewsItem[]>>>>();
+const openSourceModelQueryCache = new Map<
+  string,
+  ReturnType<typeof createApiQuery<SourcePayload<OpenSourceModelEntry | null>>>
+>();
+
+const qNewsRaw = (c: NewsCategory) => {
+  const safe = resolveNewsCategory(c);
+  return getCachedQuery(newsQueryCache, safe, () =>
+    createApiQuery<SourcePayload<NewsItem[]>>(queryKeys.news(safe), apiPaths.news(safe), {
+      ttl: THIRTY_MINUTES,
+      partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+      isPartialData: (d) => d?.partial === true,
+    }),
   );
+};
 
 const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHistory, apiPaths.statusHistory, {
   ttl: FIVE_MINUTES,
-  refetchInterval: FIVE_MINUTES,
-  refetchIntervalInBackground: false,
 });
-const qArena = createApiQuery<ArenaRankingsPayload>(queryKeys.arenaRankings, apiPaths.arenaRankings, {
+const qAgent = createApiQuery<AgentRankingsPayload>(queryKeys.agentRankings, apiPaths.agentRankings, {
   ttl: SLOW_TTL_MS,
 });
 export const qOfficialPricing = createApiQuery<OfficialPricingPayload>(
@@ -102,28 +154,83 @@ export const qOfficialPricing = createApiQuery<OfficialPricingPayload>(
   apiPaths.officialPricing,
   { ttl: STATIC_TTL_MS, gcTime: STATIC_TTL_MS },
 );
-const qClosedReleases = createApiQuery<ClosedReleaseEntry[]>(queryKeys.closedReleases, apiPaths.closedReleases, {
-  ttl: STATIC_TTL_MS,
-  gcTime: STATIC_TTL_MS,
-});
+const qClosedReleasesRaw = createApiQuery<SourcePayload<ClosedReleaseEntry[]>>(
+  queryKeys.closedReleases,
+  apiPaths.closedReleases,
+  {
+    ttl: STATIC_TTL_MS,
+    gcTime: STATIC_TTL_MS,
+    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+    isPartialData: (d) => d?.partial === true,
+  },
+);
 
-const boardQueries = new Map<string, ReturnType<typeof createApiQuery<ArenaBoardPayload>>>();
-const qArenaBoard = (category: string) =>
-  cachedQuery(boardQueries, category, ARENA_BOARD_IDS, (safe) =>
-    createApiQuery<ArenaBoardPayload>(queryKeys.arenaBoard(safe), apiPaths.arenaBoard(safe), { ttl: SLOW_TTL_MS }),
-  );
-export const useArtificialRankings = qArtificial.use;
-export const useSuspenseArtificialRankings = qArtificial.useSuspense;
-export const useSuspenseHomeDashboard = qHomeDashboard.useSuspense;
+// ── Strict list hooks: unwrap at the boundary, components receive T[] only ──
+
+export function useArtificialRankings(enabled = true) {
+  const q = qArtificialRaw.use(enabled);
+  const data = useMemo(() => safeUnwrapList<ArtificialAnalysisModel>(q.data, "artificialIndex"), [q.data]);
+  return { ...q, data };
+}
+
+export function useSuspenseArtificialRankings(): ArtificialAnalysisModel[] {
+  const { data } = qArtificialRaw.useSuspense();
+  return unwrapList<ArtificialAnalysisModel>(data, "artificialIndex");
+}
+
+export function useSuspenseHomeDashboard() {
+  const { data } = qHomeDashboardRaw.useSuspense();
+  return normalizeHomeDashboard(data);
+}
+
 export const useOpenRouterRankings = qOpenRouter.use;
 export const useSuspenseOpenRouterRankings = qOpenRouter.useSuspense;
-export const useSuspenseOpenSourceModels = qOpenSourceModels.useSuspense;
-export const useSuspenseOpenSourceReleases = qOpenSourceReleases.useSuspense;
+
+export function useSuspenseOpenSourceModels(): OpenSourceModelEntry[] {
+  const { data } = qOpenSourceModelsRaw.useSuspense();
+  return unwrapList<OpenSourceModelEntry>(data, "openSourceModels");
+}
+
+export function useSuspenseOpenSourceReleases(): OpenSourceModelEntry[] {
+  const { data } = qOpenSourceReleasesRaw.useSuspense();
+  return unwrapList<OpenSourceModelEntry>(data, "openSourceReleases");
+}
+
+const qOpenSourceModel = (id: string) =>
+  getCachedQuery(openSourceModelQueryCache, id, () =>
+    createApiQuery<SourcePayload<OpenSourceModelEntry | null>>(
+      queryKeys.openSourceModel(id),
+      apiPaths.openSourceModel(id),
+      { ttl: SLOW_TTL_MS },
+    ),
+  );
+
+/** Single-model lookup without any list window; missing rows resolve to null. */
+export function useSuspenseOpenSourceModel(id: string): OpenSourceModelEntry | null {
+  const { data } = qOpenSourceModel(id).useSuspense();
+  if (data == null || typeof data !== "object" || !("data" in data)) return null;
+  return (data as SourcePayload<OpenSourceModelEntry | null>).data ?? null;
+}
+
+export function useSuspenseClosedReleases(): ClosedReleaseEntry[] {
+  const { data } = qClosedReleasesRaw.useSuspense();
+  return unwrapList<ClosedReleaseEntry>(data, "closedReleases");
+}
+
+export function useSuspenseClosedReleasesState(): { items: ClosedReleaseEntry[]; partial: boolean } {
+  const { data } = qClosedReleasesRaw.useSuspense();
+  const { data: items, partial } = unwrapListPartial<ClosedReleaseEntry>(data, "closedReleases");
+  return { items, partial };
+}
+
+export function useSuspenseNewsState(category: NewsCategory): { items: NewsItem[]; partial: boolean } {
+  const { data } = qNewsRaw(category).useSuspense();
+  const { data: items, partial } = unwrapListPartial<NewsItem>(data, `news:${category}`);
+  return { items, partial };
+}
+
 export const useSuspenseStatusHistory = qStatusHistory.useSuspense;
-export const useSuspenseNewsByCategory = (c: NewsCategory) => qNews(c).useSuspense();
-export const useSuspenseArenaRankings = qArena.useSuspense;
-export const useSuspenseClosedReleases = qClosedReleases.useSuspense;
-export const useSuspenseArenaBoard = (category: string) => qArenaBoard(category).useSuspense();
+export const useSuspenseAgentRankings = qAgent.useSuspense;
 
 interface OpenSourceModelsQuery {
   data: OpenSourceModelEntry[];
@@ -133,16 +240,25 @@ interface OpenSourceModelsQuery {
 }
 
 export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
-  const trending = qOpenSourceModels.use(enabled);
-  const releases = qOpenSourceReleases.use(enabled);
+  const trending = qOpenSourceModelsRaw.use(enabled);
+  const releases = qOpenSourceReleasesRaw.use(enabled);
+
+  const trendingList = useMemo(
+    () => safeUnwrapList<OpenSourceModelEntry>(trending.data, "openSourceModels"),
+    [trending.data],
+  );
+  const releasesList = useMemo(
+    () => safeUnwrapList<OpenSourceModelEntry>(releases.data, "openSourceReleases"),
+    [releases.data],
+  );
 
   const data = useMemo(
     () =>
       dedupeBy(
-        [...(trending.data ?? []), ...(releases.data ?? [])].filter((m) => m.id),
+        [...trendingList, ...releasesList].filter((m) => m.id),
         (m) => m.id,
       ),
-    [trending.data, releases.data],
+    [trendingList, releasesList],
   );
 
   const hasData = data.length > 0;
@@ -158,31 +274,39 @@ export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
   };
 }
 
-function buildHallucinationRankings(models: ArtificialAnalysisModel[]): HallucinationRankingEntry[] {
-  return models
-    .flatMap((model) => {
-      const total = model.omniscience_breakdown?.total;
-      if (total?.omniscience == null) return [];
-      return [
-        {
-          id: model.id,
-          slug: model.slug,
-          model: model.name,
-          hallucinationRate: normalizePercent(total.hallucination_rate),
-          accuracy: normalizePercent(total.accuracy),
-          attemptRate: normalizePercent(total.attempt_rate),
-          omniscienceIndex: total.omniscience,
-        },
-      ];
-    })
-    .sort((a, b) => (b.accuracy ?? -Infinity) - (a.accuracy ?? -Infinity));
-}
-
 export function useHallucinationRankings(data: ArtificialAnalysisModel[], enabled = true): HallucinationRankingEntry[] {
   return useMemo(() => (enabled && data.length > 0 ? buildHallucinationRankings(data) : []), [data, enabled]);
 }
 
 export function useSuspenseHallucinationRankings(): HallucinationRankingEntry[] {
-  const { data } = useSuspenseArtificialRankings();
-  return useHallucinationRankings(data);
+  const models = useSuspenseArtificialRankings();
+  return useHallucinationRankings(models);
 }
+
+// ── Navigation prefetch: route → queries to warm on hover/focus ──
+// Mirrors ssrJobs-style route declarations, but client-side. Hover prefetch
+// hides the API round-trip that replaced SSR hydration; staleTime reuse keeps
+// warmed entries fresh for the same window the page would consider fresh.
+
+export const prefetchQueriesForRoute = (qc: QueryClient, pathname: string): void => {
+  if (pathname === "/") {
+    void qArtificialRaw.prefetch(qc);
+    void qHomeDashboardRaw.prefetch(qc);
+    void qClosedReleasesRaw.prefetch(qc);
+    void qStatusHistory.prefetch(qc);
+  } else if (pathname === "/models") {
+    void qArtificialRaw.prefetch(qc);
+  } else if (pathname === "/releases") {
+    void qOpenSourceReleasesRaw.prefetch(qc);
+    void qClosedReleasesRaw.prefetch(qc);
+  } else if (pathname === "/status") {
+    void qStatusHistory.prefetch(qc);
+  } else if (pathname === "/price-compare") {
+    void qArtificialRaw.prefetch(qc);
+    void qOfficialPricing.prefetch(qc);
+  } else if (pathname === "/compare") {
+    void qArtificialRaw.prefetch(qc);
+  }
+  // /news, /model/* and /status/* fetch per-parameter data; the target page
+  // fetches on mount (same cost as the old SSR-less fallback).
+};

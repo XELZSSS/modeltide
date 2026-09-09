@@ -1,7 +1,7 @@
 import { BENCHMARK_LABELS, ONE_MINUTE, ONE_HOUR, ONE_DAY } from "@/shared/config";
 import type { Lang, TFunction, TranslationKey } from "@/shared/i18n";
 
-export function stripControlChars(s: string): string {
+function stripControlChars(s: string): string {
   let out = "";
   for (let i = 0; i < s.length; i++) {
     const code = s.charCodeAt(i);
@@ -20,8 +20,7 @@ export function safeHref(url: string | null | undefined): string | undefined {
   try {
     const parsed = new URL(cleaned);
     if (parsed.protocol === "https:" || parsed.protocol === "http:") return cleaned;
-  } catch (e) {
-    console.warn("[format] invalid URL:", e);
+  } catch {
     return undefined;
   }
   return undefined;
@@ -41,11 +40,6 @@ function compactParts(n: number) {
 const PROMOTE_2DEC = 999.995;
 const PROMOTE_1DEC = 999.95;
 
-const strip1Dec = (v: number, suffix: string) => {
-  const out = v.toFixed(1);
-  return `${out.endsWith(".0") ? out.slice(0, -2) : out}${suffix}`;
-};
-
 const SHORT_SCALES: { min: number; div: number; suffix: string }[] = [
   { min: PROMOTE_2DEC * 1e9, div: 1e12, suffix: "T" },
   { min: PROMOTE_2DEC * 1e6, div: 1e9, suffix: "B" },
@@ -59,20 +53,33 @@ const TOKEN_SCALES: { min: number; div: number; suffix: string }[] = [
   { min: 1e3, div: 1e3, suffix: "K" },
 ];
 
+interface ScaleEntry {
+  min: number;
+  div: number;
+  suffix: string;
+}
+
+function formatScaled(abs: number, sign: string, value: number, scales: ScaleEntry[], decimals: number): string | null {
+  for (const s of scales) {
+    if (abs >= s.min) return `${sign}${(value / s.div).toFixed(decimals)}${s.suffix}`;
+  }
+  return null;
+}
+
 export function formatShortNumber(n: number) {
   if (!Number.isFinite(n)) return "—";
   const { abs, sign } = compactParts(n);
-  for (const s of SHORT_SCALES) {
-    if (abs >= s.min) return `${sign}${(abs / s.div).toFixed(2)}${s.suffix}`;
-  }
-  return `${sign}${abs}`;
+  return formatScaled(abs, sign, abs, SHORT_SCALES, 2) ?? `${sign}${abs}`;
 }
 
 export function formatTokens(n: number | null | undefined, t?: TFunction): string {
   if (typeof n !== "number" || !Number.isFinite(n)) return t ? t("notAvailable") : "N/A";
   const { abs } = compactParts(n);
-  for (const s of TOKEN_SCALES) {
-    if (abs >= s.min) return strip1Dec(n / s.div, s.suffix);
+  const scaled = formatScaled(abs, "", n, TOKEN_SCALES, 1);
+  if (scaled) {
+    const [num, suffix] = [scaled.slice(0, -1), scaled.slice(-1)];
+    const out = Number(num).toFixed(1);
+    return `${out.endsWith(".0") ? out.slice(0, -2) : out}${suffix}`;
   }
   return String(n);
 }

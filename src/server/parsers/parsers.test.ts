@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import { decodeEntities } from "@/server/parsers/entities";
 import { stripHtml } from "@/server/parsers/html";
 import { parseFeed } from "@/server/parsers/feed";
-import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc";
-import { balancedJsonEnd } from "@/server/parsers/balanced";
+import { balancedJsonEnd, findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc";
 import { getOpenLicense } from "@/server/parsers/licenses";
 import {
   isoDate,
@@ -283,6 +282,69 @@ describe("parseFeed", () => {
     expect(items[0]?.id).toBe("12345");
   });
 
+  it("decodes XML entities in links once (processEntities is off)", () => {
+    const xml = `<?xml version="1.0"?>
+      <rss version="2.0"><channel>
+        <title>T</title>
+        <item><title>A</title><link>https://y.example/a?b=1&amp;c=2&amp;amp;d=3</link></item>
+      </channel></rss>`;
+    const items = parseFeed(xml, "https://y.example/feed");
+    // &amp; → & ; &amp;amp; → literal &amp; (single XML decode pass)
+    expect(items[0]?.link).toBe("https://y.example/a?b=1&c=2&amp;d=3");
+  });
+
+  it("decodes entities in Atom link href attributes", () => {
+    const xml = `<?xml version="1.0"?>
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <title>T</title>
+        <entry><title>A</title><link rel="alternate" href="https://x.example/p?ref=rss&amp;utm=x"/></entry>
+      </feed>`;
+    const items = parseFeed(xml, "https://x.example/feed");
+    expect(items[0]?.link).toBe("https://x.example/p?ref=rss&utm=x");
+  });
+
+  it("takes the first value when a title element is repeated", () => {
+    const xml = `<?xml version="1.0"?>
+      <rss version="2.0"><channel>
+        <title>T</title>
+        <item><title>First</title><title>Second</title><link>https://y.example/dup</link></item>
+      </channel></rss>`;
+    const items = parseFeed(xml, "https://y.example/feed");
+    expect(items[0]?.title).toBe("First");
+  });
+
+  it("falls back to a later link when the alternate link has no href", () => {
+    const xml = `<?xml version="1.0"?>
+      <rss version="2.0"><channel>
+        <title>T</title>
+        <item>
+          <title>A</title>
+          <link rel="alternate"/>
+          <link>https://y.example/fallback</link>
+        </item>
+      </channel></rss>`;
+    const items = parseFeed(xml, "https://y.example/feed");
+    expect(items[0]?.link).toBe("https://y.example/fallback");
+  });
+
+  it("does not split surrogate pairs when truncating long titles", () => {
+    const longTitle = `A${"😀".repeat(200)}`; // 401 UTF-16 units
+    const xml = `<?xml version="1.0"?>
+      <rss version="2.0"><channel>
+        <title>T</title>
+        <item><title>${longTitle}</title><link>https://y.example/surrogate</link></item>
+      </channel></rss>`;
+    const items = parseFeed(xml, "https://y.example/feed");
+    const t = items[0]?.title ?? "";
+    expect(t.length).toBeLessThanOrEqual(300);
+    // 'A' + 149 complete emoji = 150 code points; the dangling high surrogate
+    // at the old cut point is dropped instead of left invalid.
+    expect([...t].length).toBe(150);
+    expect(t.length).toBe(299);
+    const last = t.charCodeAt(t.length - 1)!;
+    expect(last >= 0xd800 && last <= 0xdbff).toBe(false); // never ends mid-pair
+  });
+
   it("strips HTML and truncates abusive titles", () => {
     const longTitle = `A${"x".repeat(500)}`;
     const xml = `<?xml version="1.0"?>
@@ -388,5 +450,19 @@ describe("isoDate edges", () => {
   it("rejects impossible calendar dates but keeps datetimes intact", () => {
     expect(isoDate("2026-02-30")).toBeNull();
     expect(isoDate("2026-01-02T03:04:05Z")).toBe("2026-01-02T03:04:05Z");
+  });
+});
+
+describe("feed guard", () => {
+  it("rejects DOCTYPE/ENTITY bombs before parsing", () => {
+    expect(() => parseFeed(`<?xml?><!DOCTYPE foo [<!ENTITY x "y">]><rss/>`, "https://x")).toThrow();
+  });
+
+  it("accepts a plain entity-free DOCTYPE (legacy WordPress-style feeds)", () => {
+    const xml =
+      '<?xml version="1.0"?><!DOCTYPE rss><rss><channel><title>T</title><item><title>A</title><link>https://x.example/a</link></item></channel></rss>';
+    const items = parseFeed(xml, "https://x");
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ title: "A", link: "https://x.example/a" });
   });
 });

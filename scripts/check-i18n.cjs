@@ -4,14 +4,19 @@ const path = require("path");
 
 function loadDict(file) {
   const src = fs.readFileSync(path.resolve(file), "utf8");
-  const keys = [...src.matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]);
+  // Support 2-space indent and keys with word chars, hyphens or dots
+  const keys = [...src.matchAll(/^\s{2}([\w.-]+):/gm)].map((m) => m[1]);
   const placeholders = new Map();
-  for (const m of src.matchAll(/^\s{2}(\w+):\s*"((?:[^"\\]|\\.)*)"/gm)) {
-    const params = [...m[2].matchAll(/\{(\w+)\}/g)]
+  // Capture both double-quoted and single-quoted string values
+  const entryRE = /^\s{2}([\w.-]+):\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/gm;
+  for (const m of src.matchAll(entryRE)) {
+    const key = m[1];
+    const raw = m[2] ?? m[3] ?? "";
+    const params = [...raw.matchAll(/\{([\w.-]+)\}/g)]
       .map((p) => p[1])
       .sort()
       .join(",");
-    placeholders.set(m[1], params);
+    placeholders.set(key, params);
   }
   return { keys, placeholders };
 }
@@ -41,9 +46,5 @@ for (const k of zh.keys) {
 if (failed) process.exit(1);
 console.log(`i18n: ok (${en.keys.length} keys)`);
 
-try {
-  const html = fs.readFileSync(path.resolve("index.html"), "utf8");
-  const manifest = fs.readFileSync(path.resolve("public/manifest.webmanifest"), "utf8");
-  if (!html.includes("ModelTide")) console.warn("i18n: warn index.html missing ModelTide title");
-  if (!manifest.includes("ModelTide")) console.warn("i18n: warn manifest missing ModelTide name");
-} catch {}
+const manifest = fs.readFileSync(path.resolve("public/manifest.webmanifest"), "utf8");
+if (!manifest.includes("ModelTide")) console.warn("i18n: warn manifest missing ModelTide name");

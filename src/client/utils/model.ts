@@ -1,4 +1,5 @@
 import type { ArtificialAnalysisModel } from "@/shared/types";
+import { isFiniteNumber } from "@/shared/utils";
 import { getOutputSpeed } from "@/client/utils/cost-estimator";
 import type { ModelSource } from "@/shared/config";
 
@@ -48,7 +49,7 @@ export interface ProviderStats {
 }
 
 export function computeProviderStats(models: ArtificialAnalysisModel[], unknownLabel = "Unknown"): ProviderStats[] {
-  const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+  const finite = isFiniteNumber;
   return groupByProvider(models, unknownLabel)
     .map(({ name, color, models: group }) => {
       const count = group.length;

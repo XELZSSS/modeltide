@@ -1,11 +1,12 @@
 import type { TextToImagePayload } from "@/shared/types/catalog";
 import type { OpenSourceModelEntry, OpenRouterRankingsPayload } from "@/shared/types/rankings";
+import type { SourcePayload } from "@/shared/types/payload";
 
 export type ThemeMode = "light" | "dark";
 
 export interface HomeDashboardData {
   orRankings: OpenRouterRankingsPayload | null;
-  opensource: OpenSourceModelEntry[] | null;
+  opensource: SourcePayload<OpenSourceModelEntry[]> | null;
   textToImage: TextToImagePayload | null;
 }
 

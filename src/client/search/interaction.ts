@@ -1,3 +1,4 @@
+"use client";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 export function useClickOutside(ref: RefObject<HTMLElement | null>, onOutside: () => void) {

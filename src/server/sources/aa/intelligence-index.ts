@@ -6,7 +6,7 @@ import { parseRscPayloads, findNextData } from "@/server/parsers/rsc";
 import { UpstreamError } from "@/server/infra/errors";
 import { hasCatalogIdentity, isValidModelIdentity } from "@/server/sources/data-filter";
 import { obj, str } from "@/server/parsers/primitives";
-import { fetchModelDirectory } from "@/server/sources/openrouter/directory";
+import { getModelDirectory } from "@/server/sources/openrouter/directory";
 import { compact, compactOmniscienceEnrich } from "@/server/sources/aa/compact";
 import { backfillFromMeta } from "@/server/sources/aa/match-meta";
 import {
@@ -54,7 +54,20 @@ export function mergeBySlug(
 
 export interface IntelligenceIndexResult {
   models: ArtificialAnalysisModel[];
+  /** Open-weights flags for the FULL pre-slice index: slug/id → flag. */
+  weights: Record<string, boolean>;
   enrichFailed: boolean;
+}
+
+/** Weights lookup covering every merged model, built before the serving cap is applied. */
+export function buildWeightsRecord(models: ArtificialAnalysisModel[]): Record<string, boolean> {
+  const record: Record<string, boolean> = {};
+  for (const m of models) {
+    if (typeof m.is_open_weights !== "boolean") continue;
+    if (m.slug) record[m.slug] = m.is_open_weights;
+    if (m.id && m.id !== m.slug) record[m.id] = m.is_open_weights;
+  }
+  return record;
 }
 
 export async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceIndexResult> {
@@ -66,7 +79,7 @@ export async function fetchIntelligenceIndex(ctx: AppContext): Promise<Intellige
       ),
       fetchAndParseEnrich<Record<string, unknown>>(
         ctx,
-        "omniscience",
+        "/omniscience",
         OMNISCIENCE_PATH,
         "initialModels",
         (tree) => {
@@ -76,7 +89,9 @@ export async function fetchIntelligenceIndex(ctx: AppContext): Promise<Intellige
         (arr) => arr.map(compactOmniscienceEnrich),
       ),
     ]),
-    fetchModelDirectory(ctx).then((d) => d.meta),
+    getModelDirectory(ctx)
+      .then((d) => d.meta)
+      .catch(() => ({}) as Record<string, import("@/server/sources/openrouter/types").ModelMetaEntry>),
   ]);
 
   const [indexModels, catalog] = parseRscPayloads(indexBody, ["intelligenceIndex", "models"], findModelArray) as [
@@ -86,15 +101,18 @@ export async function fetchIntelligenceIndex(ctx: AppContext): Promise<Intellige
 
   const enrichFailures = [modelsPageModels, omniscienceEnrich].filter((a) => a.length === 0).length;
   const [primary, secondary] = indexModels.length > 0 ? [indexModels, catalog] : [catalog, indexModels];
-  const models = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
+  const merged = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
     .map(compact)
-    .filter((m) => isValidModelIdentity(m.id, m.slug, m.name))
-    .sort((a, b) => {
-      const av = a.intelligence_index ?? Number.NEGATIVE_INFINITY;
-      const bv = b.intelligence_index ?? Number.NEGATIVE_INFINITY;
-      if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
-      return bv - av;
-    });
+    .filter((m) => isValidModelIdentity(m.id, m.slug, m.name));
+  // Served in full: detail pages, search and the weights lookup resolve
+  // against this list, so truncating it would lose content.
+  const weights = buildWeightsRecord(merged);
+  const models = merged.sort((a, b) => {
+    const av = a.intelligence_index ?? Number.NEGATIVE_INFINITY;
+    const bv = b.intelligence_index ?? Number.NEGATIVE_INFINITY;
+    if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
+    return bv - av;
+  });
   if (models.length === 0) {
     throw new UpstreamError(
       `Artificial Analysis parsing yielded 0 models (catalog=${catalog.length}, kept=0, enrichFailures=${enrichFailures})`,
@@ -102,11 +120,18 @@ export async function fetchIntelligenceIndex(ctx: AppContext): Promise<Intellige
   }
   const backfilled = backfillFromMeta(models, openRouterMeta);
   if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
-  return { models, enrichFailed: enrichFailures > 0 };
+  return { models, weights, enrichFailed: enrichFailures > 0 };
 }
 
-export const getIntelligenceIndex = (ctx: AppContext): Promise<ArtificialAnalysisModel[]> =>
+export const getIntelligenceIndexResult = (ctx: AppContext): Promise<IntelligenceIndexResult> =>
   ctx.cache.withTtl(cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async () => {
-    const { models, enrichFailed } = await fetchIntelligenceIndex(ctx);
-    return { data: models, ttl: ttlFor(enrichFailed) };
+    const { models, weights, enrichFailed } = await fetchIntelligenceIndex(ctx);
+    return { data: { models, weights, enrichFailed }, ttl: ttlFor(enrichFailed) };
   });
+
+export const getIntelligenceIndex = async (
+  ctx: AppContext,
+): Promise<import("@/server/sources/types").SourcePayload<ArtificialAnalysisModel[]>> => {
+  const { models, enrichFailed } = await getIntelligenceIndexResult(ctx);
+  return { data: models, fetchedAt: new Date().toISOString(), ...(enrichFailed ? { partial: true } : {}) };
+};

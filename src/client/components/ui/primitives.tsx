@@ -1,3 +1,4 @@
+"use client";
 import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
 
@@ -36,14 +37,16 @@ export const Dot = memo(function Dot({
   );
 });
 
+import { Card, CardContent } from "./card";
+
 export const InfoCard = memo(function InfoCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="border border-border bg-bg-card">
-      <div className="w-full min-w-0 p-4 sm:p-5">
+    <Card>
+      <CardContent>
         <p className="ui-card-title mb-4 text-text-primary">{title}</p>
         <div className="flex flex-col gap-2 min-w-0">{children}</div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 });
 

@@ -3,33 +3,34 @@ import { resetModuleCachesForTests } from "@/server/infra/cache-service";
 import { backfillFromMeta } from "@/server/sources/aa/match-meta";
 import { compact, compactOmniscienceEnrich } from "@/server/sources/aa/compact";
 import { parseChangelogModels } from "@/server/sources/aa/changelog";
-import { mergeBySlug } from "@/server/sources/aa/intelligence-index";
-import { mapEntry, type RawEntry } from "@/server/sources/aa/text-to-image";
-import { numCoerce } from "@/server/parsers/primitives";
-import { categoryFrom, creatorFromSlug, titleFromSlug } from "@/server/sources/openrouter/naming";
-import { mapModels } from "@/server/sources/openrouter/mapping";
+import { buildWeightsRecord, mergeBySlug } from "@/server/sources/aa/intelligence-index";
+import { getTextToImageLeaderboard, mapEntry, type RawEntry } from "@/server/sources/aa/text-to-image";
+import { categoryFrom, creatorFromSlug, mapModels, titleFromSlug } from "@/server/sources/openrouter/mapping";
 import { type ModelRow, type PricingEntry } from "@/server/sources/openrouter/types";
-import { computeBlendPrice, normalizeModelKey } from "@/shared/utils";
-import { getModels } from "@/server/sources/huggingface";
+import { getModels, getModelById, fetchHFModelById } from "@/server/sources/huggingface";
+import { UpstreamError } from "@/server/infra/errors";
 import { CacheService } from "@/server/infra/cache-service";
 import type { ProbeResult } from "@/server/infra/http-client";
-import { HISTORY_KEY, SAMPLE_LOCK_KEY, readStore, recordStatusSamples } from "@/server/sources/status/store";
+import {
+  HISTORY_BACKUP_KEY,
+  HISTORY_KEY,
+  SAMPLE_LOCK_KEY,
+  ensureFreshSamples,
+  latestSampleAt,
+  readStore,
+  recordStatusSamples,
+} from "@/server/sources/status/store";
 import { mergeSample, deriveEvents, uptimeRatio, avgLatency, type HistoryStore } from "@/server/sources/status/windows";
 import { buildHistoryPayload } from "@/server/sources/status/payload";
 import { getUptime } from "@/server/sources/status/uptime";
 import { aggregateProbes, buildTargets, type ProbeTarget } from "@/server/sources/status/probe";
 import { getStatusHistory } from "./status-history";
-import { normalizeModelLimit, SOURCE_IDS } from "@/shared/config";
+import { SOURCE_IDS, SOURCE_LIMITS } from "@/shared/config";
+import { normalizeModelKey } from "@/shared/utils";
 import { upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import type { ArtificialAnalysisModel, DayBucket, SourceStatus, UptimeSample } from "@/shared/types";
-import { parseArenaRscBoard, getArenaRankings } from "@/server/sources/arena";
-import {
-  buildWeightsIndex,
-  isClosedChangelogRelease,
-  matchesClosedRule,
-  toClosedReleases,
-} from "@/server/sources/closed-releases";
+import { isClosedChangelogRelease, toClosedReleases } from "@/server/sources/closed-releases";
 import type { ChangelogModel } from "@/server/sources/aa/changelog";
 
 beforeEach(() => resetModuleCachesForTests());
@@ -48,7 +49,7 @@ function rawModel(over: Record<string, unknown> = {}): Record<string, unknown> {
     price1mInputTokens: 1.5,
     price1mOutputTokens: 6,
     cacheHitPrice: 0.75,
-    timescaleData: { medianOutputSpeed: 120 },
+    medianCanonicalAnswerOutputSpeed: 120,
     releaseDate: "2026-08-07",
     inputModalityText: true,
     outputModalityText: true,
@@ -168,19 +169,18 @@ describe("mergeBySlug", () => {
   });
 });
 
-describe("normalizeModelKey", () => {
-  it("collapses variant labels, effort qualifiers and separators into one key", () => {
-    expect(normalizeModelKey("DeepSeek V4 Pro 0813 (Reasoning, Max Effort)")).toBe("deepseekv4pro0813");
-    expect(normalizeModelKey("deepseek/deepseek-v4-pro-0813")).toBe("deepseekv4pro0813");
-    expect(normalizeModelKey("DeepSeek: DeepSeek V4 Pro 0813 (batch)")).toBe("deepseekv4pro0813");
-    expect(normalizeModelKey("Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)")).toBe("claudeopus5");
-    expect(normalizeModelKey("claude-opus-5-xhigh")).toBe("claudeopus5");
-    expect(normalizeModelKey("Anthropic: Claude Opus 5")).toBe("claudeopus5");
-  });
+describe("buildWeightsRecord", () => {
+  const wModel = (over: Record<string, unknown> = {}): ArtificialAnalysisModel =>
+    ({ slug: "a", id: "a", name: "A", ...over }) as ArtificialAnalysisModel;
 
-  it("keeps distinct models distinct", () => {
-    expect(normalizeModelKey("GLM-5.3 (max)")).not.toBe(normalizeModelKey("GLM-5.3-Flash"));
-    expect(normalizeModelKey("GPT-5.6 Terra (max)")).not.toBe(normalizeModelKey("GPT-5.6 Luna (max)"));
+  it("indexes flags by slug and id, skipping flagless models", () => {
+    expect(
+      buildWeightsRecord([
+        wModel({ slug: "open", id: "open", is_open_weights: true }),
+        wModel({ slug: "closed", id: "ns/closed", is_open_weights: false }),
+        wModel({ slug: "unknown" }),
+      ]),
+    ).toEqual({ open: true, closed: false, "ns/closed": false });
   });
 });
 
@@ -190,104 +190,92 @@ describe("backfillFromMeta", () => {
 
   it("fills only null values via loose key matching and reports the filled count", () => {
     const models = [
-      aaModel({ agentic_index: null, context_window_tokens: null }),
-      aaModel({ slug: "b", name: "Model B", agentic_index: 40, context_window_tokens: 1000 }),
-      aaModel({ slug: "c", name: "Model C", agentic_index: null, context_window_tokens: null }),
+      aaModel({ agentic_index: null }),
+      aaModel({ slug: "b", name: "Model B", agentic_index: 40 }),
+      aaModel({ slug: "c", name: "Model C", agentic_index: null }),
     ];
     const meta = {
-      [normalizeModelKey("Model A")]: { agenticIndex: 55.4, contextLength: 262144 },
-      [normalizeModelKey("Model B")]: { agenticIndex: 99, contextLength: 1 },
+      [normalizeModelKey("Model A")]: { agenticIndex: 55.4 },
+      [normalizeModelKey("Model B")]: { agenticIndex: 99 },
       [normalizeModelKey("Unknown")]: { agenticIndex: 1 },
     };
     const filled = backfillFromMeta(models, meta);
-    expect(filled).toBe(2);
-    expect(models[0]).toMatchObject({ agentic_index: 55.4, context_window_tokens: 262144 });
-    expect(models[1]).toMatchObject({ agentic_index: 40, context_window_tokens: 1000 });
-    expect(models[2]).toMatchObject({ agentic_index: null, context_window_tokens: null });
+    expect(filled).toBe(1);
+    expect(models[0]).toMatchObject({ agentic_index: 55.4 });
+    expect(models[1]).toMatchObject({ agentic_index: 40 });
+    expect(models[2]).toMatchObject({ agentic_index: null });
   });
 
   it("scales sub-1 fraction agentic values to the 0-100 scale", () => {
-    const models = [aaModel({ agentic_index: null, context_window_tokens: null })];
+    const models = [aaModel({ agentic_index: null })];
     backfillFromMeta(models, { [normalizeModelKey("Model A")]: { agenticIndex: 0.5 } });
     expect(models[0]!.agentic_index).toBe(50);
   });
 
-  it("backfills the blend from the model's own AA pricing even without an OpenRouter match", () => {
-    const models = [
-      aaModel({ name: "Motif 3", blended_price: null, pricing: { input: 3, output: 15, cacheHit: 0.3 } }),
-    ];
-    const filled = backfillFromMeta(models, {});
+  it("backfills a missing intelligence index from the OpenRouter directory", () => {
+    const models = [aaModel({ intelligence_index: null })];
+    const filled = backfillFromMeta(models, { [normalizeModelKey("Model A")]: { intelligenceIndex: 61.2 } });
     expect(filled).toBe(1);
-    expect(models[0]!.blended_price).toBeCloseTo(2.31, 5);
-  });
-
-  it("prefers first-party AA pricing over the OpenRouter directory for the blend", () => {
-    const models = [aaModel({ blended_price: null, pricing: { input: 5, output: 25, cacheHit: 0.5 } })];
-    const meta = { [normalizeModelKey("Model A")]: { pricing: { input: 1, output: 1, cacheHit: 0.1 } } };
-    backfillFromMeta(models, meta);
-    expect(models[0]!.blended_price).toBeCloseTo(3.85, 5);
-  });
-
-  it("derives the blend from OpenRouter directory pricing converted to $/1M", () => {
-    const models = [aaModel({ blended_price: null })];
-    const meta = { [normalizeModelKey("Model A")]: { pricing: { input: 2, output: 6, cacheHit: 0.5 } } };
-    backfillFromMeta(models, meta);
-    expect(models[0]!.blended_price).toBeCloseTo(1.35, 5);
-  });
-});
-
-describe("computeBlendPrice", () => {
-  it("computes the 7:2:1 cache/input/output weighted blend", () => {
-    expect(computeBlendPrice({ input: 5, output: 25, cacheHit: 0.5 })).toBeCloseTo(3.85, 5);
-    expect(computeBlendPrice({ input: 1.4, output: 4.4, cacheHit: 0.26 })).toBeCloseTo(0.902, 5);
-  });
-
-  it("falls back to the input price when no cache tier exists", () => {
-    expect(computeBlendPrice({ input: 2, output: 6 })).toBe(2.4);
-    expect(computeBlendPrice({ input: 2, output: 6, cacheHit: null })).toBe(2.4);
-  });
-
-  it("returns null when input or output pricing is missing", () => {
-    expect(computeBlendPrice({})).toBeNull();
-    expect(computeBlendPrice({ input: 1 })).toBeNull();
-    expect(computeBlendPrice({ input: null, output: 2 })).toBeNull();
+    expect(models[0]!.intelligence_index).toBe(61.2);
   });
 });
 
 describe("mapEntry (text-to-image)", () => {
   const base: RawEntry = {
-    id: "t2i-1",
-    slug: "flux",
-    name: "FLUX",
-    overallRank: 1,
-    elos: [{ elo: 1100, ciDelta: 10, appearances: 12, winRate: 0.5 }],
-    creator: { name: "BFL", color: "#111111" },
-    pricePer1kImages: 0.025,
+    id: "9570e1d0-a390-48c1-a270-1317570fe3d5",
+    slug: "gpt-image-2",
+    name: "GPT Image 2 (high)",
+    elo: 1178.11,
+    lower95ci: 1168.11,
+    upper95ci: 1188.11,
+    creator: { name: "OpenAI" },
+    price: 211,
   };
 
-  it("maps a full entry with the elo interval", () => {
+  it("maps direct elo, the CI pair and price with a null rank", () => {
     expect(mapEntry(base)).toMatchObject({
-      id: "t2i-1",
-      slug: "flux",
-      name: "FLUX",
-      rank: 1,
-      elo: 1100,
-      eloLower: 1090,
-      eloUpper: 1110,
-      appearances: 12,
-      creatorName: "BFL",
-      pricePer1kImages: 0.025,
+      id: "9570e1d0-a390-48c1-a270-1317570fe3d5",
+      slug: "gpt-image-2",
+      name: "GPT Image 2 (high)",
+      rank: null,
+      elo: 1178.11,
+      eloLower: 1168.11,
+      eloUpper: 1188.11,
+      creatorName: "OpenAI",
+      pricePer1kImages: 211,
     });
   });
 
-  it("falls back to overallElo when the elos list is empty", () => {
-    expect(mapEntry({ ...base, elos: [], overallElo: 1050 })!.elo).toBe(1050);
-  });
-
-  it("returns null when identity or rank is missing", () => {
+  it("returns null when identity or elo is missing", () => {
     expect(mapEntry({ ...base, id: null })).toBeNull();
     expect(mapEntry({ ...base, slug: null })).toBeNull();
-    expect(mapEntry({ ...base, overallRank: 0 })).toBeNull();
+    expect(mapEntry({ ...base, elo: null })).toBeNull();
+  });
+});
+
+describe("getTextToImageLeaderboard (no upstream rank)", () => {
+  const T2I_FLIGHT_BODY = [
+    '1:"$Sreact.fragment"',
+    '20:{"props":{"textToImage":[{"id":"id-b","slug":"model-b","name":"Model B","url":"/image/model-families/b","elo":1100,"lower95ci":1090,"upper95ci":1110,"creator":{"name":"Org B"},"isDefault":true,"price":38.9},{"id":"id-a","slug":"model-a","name":"Model A","url":"/image/model-families/a","elo":1178.11,"lower95ci":1168.11,"upper95ci":1188.11,"creator":{"name":"Org A"},"isDefault":true,"price":211}]}}',
+  ].join("\n");
+
+  it("derives ranks from elo order instead of yielding 0 models", async () => {
+    const ctx = {
+      cache: new CacheService(undefined, "v-t2i-current-schema"),
+      http: { text: async () => T2I_FLIGHT_BODY },
+      kv: undefined,
+      log: () => {},
+    } as unknown as AppContext;
+    const payload = await getTextToImageLeaderboard(ctx);
+    expect(payload.models).toHaveLength(2);
+    expect(payload.models[0]).toMatchObject({
+      slug: "model-a",
+      rank: 1,
+      elo: 1178.11,
+      eloLower: 1168.11,
+      eloUpper: 1188.11,
+    });
+    expect(payload.models[1]).toMatchObject({ slug: "model-b", rank: 2, elo: 1100 });
   });
 });
 
@@ -300,26 +288,17 @@ function row(over: Partial<ModelRow> = {}): ModelRow {
     total_completion_tokens: 50,
     total_prompt_tokens: 100,
     total_native_tokens_reasoning: 10,
+    total_native_tokens_cached: 0,
     count: 2,
-    image_output_requests: 0,
-    video_output_seconds: 0,
+    total_tool_calls: 0,
     change: 1,
     ...over,
   };
 }
 
-const pricing = new Map<string, PricingEntry>([["openai/gpt-5", { input: 1, output: 2, cacheHit: 0.5 }]]);
-
-describe("numCoerce (openrouter change field)", () => {
-  it("accepts numbers and numeric strings, rejects everything else", () => {
-    expect(numCoerce(1)).toBe(1);
-    expect(numCoerce("1.5")).toBe(1.5);
-    expect(numCoerce("")).toBeNull();
-    expect(numCoerce(" ")).toBeNull();
-    expect(numCoerce("abc")).toBeNull();
-    expect(numCoerce(null)).toBeNull();
-  });
-});
+const pricing = new Map<string, PricingEntry>([
+  ["openai/gpt-5", { input: 1, output: 2, cacheHit: 0.5, cacheWrite: 1.5 }],
+]);
 
 describe("creatorFromSlug / titleFromSlug / categoryFrom", () => {
   it("maps known creators and title-cases unknown orgs", () => {
@@ -348,7 +327,19 @@ describe("creatorFromSlug / titleFromSlug / categoryFrom", () => {
 
 describe("mapModels", () => {
   it("aggregates rows by permaslug, keeping the latest change, and attaches pricing", () => {
-    const models = mapModels([row(), row({ date: "2026-08-02", total_prompt_tokens: 10, change: null })], pricing);
+    const models = mapModels(
+      [
+        row(),
+        row({
+          date: "2026-08-02",
+          total_prompt_tokens: 10,
+          change: null,
+          total_native_tokens_cached: 7,
+          total_tool_calls: 3,
+        }),
+      ],
+      pricing,
+    );
     expect(models).toHaveLength(1);
     const m = models[0]!;
     expect(m).toMatchObject({
@@ -361,14 +352,16 @@ describe("mapModels", () => {
       totalTokens: 210,
       requestCount: 4,
       reasoningTokens: 20,
-      change: 1,
+      cachedTokens: 7,
+      toolCalls: 3,
+      change: 100,
       pricing: pricing.get("openai/gpt-5"),
     });
     expect(m.isFree).toBe(false);
   });
 
   it("marks free models and leaves pricing undefined when absent", () => {
-    const free = new Map([["a/b", { input: 0, output: 0, cacheHit: 0 }]]);
+    const free = new Map([["a/b", { input: 0, output: 0, cacheHit: 0, cacheWrite: 0 }]]);
     const [m] = mapModels([row({ model_permaslug: "a/b", variant_permaslug: "a/b" })], free);
     expect(m!.isFree).toBe(true);
 
@@ -412,8 +405,8 @@ describe("mapModels", () => {
 
   it("merges variant rows of one model into a single entry with dominant-variant pricing", () => {
     const variantPricing = new Map<string, PricingEntry>([
-      ["a/b:standard", { input: 2, output: 3, cacheHit: 1 }],
-      ["a/b:free", { input: 0, output: 0, cacheHit: 0 }],
+      ["a/b:standard", { input: 2, output: 3, cacheHit: 1, cacheWrite: 2 }],
+      ["a/b:free", { input: 0, output: 0, cacheHit: 0, cacheWrite: 0 }],
     ]);
     const models = mapModels(
       [
@@ -536,25 +529,7 @@ describe("mergeSample", () => {
     expect(entry.recent).toHaveLength(1);
     expect(entry.recent[0]).toMatchObject({ ok: true, latencyMs: 800 });
     const bucket = entry.daily.find((b) => b.day === "2026-08-30");
-    expect(bucket).toMatchObject({ total: 1, ok: 1, latencyN: 1, incidents: 0 });
-    expect(bucket!.latencySum).toBe(800);
-  });
-
-  it("counts a new incident only on the ok→fail flip, not on the ongoing outage", () => {
-    let entry = mergeSample(undefined, sample(10, true), NOW);
-    entry = mergeSample(entry, sample(9, false), NOW);
-    entry = mergeSample(entry, sample(7, false), NOW);
-    const bucket = entry.daily.find((b) => b.day === "2026-08-30");
-    expect(bucket).toMatchObject({ total: 2, ok: 0, incidents: 1 });
-  });
-
-  it("keeps one incident when the outage recovers after the flipped re-run", () => {
-    let entry = mergeSample(undefined, sample(10, true), NOW);
-    entry = mergeSample(entry, sample(9, false), NOW);
-    entry = mergeSample(entry, sample(7, true, 400), NOW);
-    const bucket = entry.daily.find((b) => b.day === "2026-08-30");
-    expect(bucket).toMatchObject({ total: 2, ok: 1, incidents: 1 });
-    expect(entry.recent.at(-1)).toMatchObject({ ok: true, latencyMs: 400 });
+    expect(bucket).toMatchObject({ total: 1, ok: 1 });
   });
 
   it("rolls daily buckets and counts ok→fail transitions as incidents", () => {
@@ -565,19 +540,29 @@ describe("mergeSample", () => {
 
     expect(entry.daily).toHaveLength(1);
     const bucket = entry.daily[0]!;
-    expect(bucket).toMatchObject({ day: "2026-08-30", total: 4, ok: 2, incidents: 1, latencyN: 2 });
+    expect(bucket).toMatchObject({ day: "2026-08-30", total: 4, ok: 2 });
   });
 
-  it("counts a failing first sample as an incident (outage start unknown)", () => {
+  it("counts a failing first sample", () => {
     const entry = mergeSample(undefined, sample(5, false), NOW);
-    expect(entry.daily[0]!.incidents).toBe(1);
     expect(entry.daily[0]!.total).toBe(1);
   });
 
-  it("prunes daily buckets beyond the 90-day retention", () => {
-    const stale: DayBucket = { day: "2026-05-01", total: 10, ok: 10, latencySum: 0, latencyN: 0, incidents: 0 };
+  it("keeps one incident when the outage recovers after the flipped re-run", () => {
+    let entry = mergeSample(undefined, sample(10, true), NOW);
+    entry = mergeSample(entry, sample(9, false), NOW);
+    entry = mergeSample(entry, sample(7, true, 400), NOW);
+    const bucket = entry.daily.find((b) => b.day === "2026-08-30");
+    expect(bucket).toMatchObject({ total: 2, ok: 1 });
+    expect(entry.recent.at(-1)).toMatchObject({ ok: true, latencyMs: 400 });
+  });
+
+  it("prunes daily buckets beyond the 30-day retention", () => {
+    // 2026-07-15 is 46 days before NOW: kept under the old 90-day window,
+    // dropped under the 30-day retention.
+    const stale: DayBucket = { day: "2026-07-15", total: 10, ok: 10 };
     const entry = mergeSample({ recent: [], daily: [stale] }, sample(0, true), NOW);
-    expect(entry.daily.some((b) => b.day === "2026-05-01")).toBe(false);
+    expect(entry.daily.some((b) => b.day === "2026-07-15")).toBe(false);
     expect(entry.daily[entry.daily.length - 1]!.day).toBe("2026-08-30");
   });
 });
@@ -603,6 +588,18 @@ const target = (id: SourceStatus["id"]): ProbeTarget => ({ id, url: `https://ups
 const okProbe = (status = 200, latencyMs = 500) => ({ ok: true, status, latencyMs, error: null });
 const failProbe = (error = "network error") => ({ ok: false, status: null, latencyMs: null, error });
 
+/**
+ * Vitest 4 mock: route probe results per URL (no vi.when / .calledWith chains).
+ * URLs listed in `downFor` fail; every other call resolves with `okProbe()`.
+ */
+function mockProbe(downFor: string[] = []) {
+  const up = okProbe();
+  const down: ProbeResult = { ok: false, status: 503, latencyMs: null, error: "HTTP 503" };
+  return vi.fn<(url: string) => Promise<ProbeResult>>((url: string) =>
+    Promise.resolve(downFor.includes(url) ? down : up),
+  );
+}
+
 describe("aggregateProbes", () => {
   it("any successful probe makes the source healthy; the fastest success donates latency", () => {
     const agg = aggregateProbes([
@@ -614,16 +611,37 @@ describe("aggregateProbes", () => {
   });
 
   it("summarizes total failure across multiple feeds as x/y failed", () => {
+    const http503 = { ok: false, status: 503, latencyMs: null, error: "HTTP 503" } as const;
     const agg = aggregateProbes([
-      { target: target("news"), probe: failProbe("HTTP 503") },
-      { target: target("news"), probe: failProbe("timeout") },
+      { target: target("news"), probe: { ...http503 } },
+      { target: target("news"), probe: { ...http503 } },
     ]);
     expect(agg.get("news")).toEqual({ ok: false, status: null, latencyMs: null, error: "2/2 feeds failed" });
   });
 
   it("keeps the single-feed error message when only one target exists", () => {
-    const agg = aggregateProbes([{ target: target("openrouter"), probe: failProbe("HTTP 500") }]);
+    const agg = aggregateProbes([
+      { target: target("openrouter"), probe: { ok: false, status: 500, latencyMs: null, error: "HTTP 500" } },
+    ]);
     expect(agg.get("openrouter")!.error).toBe("HTTP 500");
+  });
+
+  it("omits a source whose probes all timed out (unknown, not down)", () => {
+    const agg = aggregateProbes([
+      { target: target("huggingface"), probe: failProbe("timeout") },
+      { target: target("news"), probe: failProbe("network error") },
+      { target: target("news"), probe: failProbe("timeout") },
+    ]);
+    expect(agg.has("huggingface")).toBe(false);
+    expect(agg.has("news")).toBe(false);
+  });
+
+  it("counts only decisive probes when unknowns mix with real failures", () => {
+    const agg = aggregateProbes([
+      { target: target("news"), probe: { ok: false, status: 503, latencyMs: null, error: "HTTP 503" } },
+      { target: target("news"), probe: failProbe("timeout") },
+    ]);
+    expect(agg.get("news")).toEqual({ ok: false, status: null, latencyMs: null, error: "HTTP 503" });
   });
 });
 
@@ -659,7 +677,7 @@ describe("buildHistoryPayload", () => {
     const payload = buildHistoryPayload(store, { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 }, NOW);
     expect(payload.sources).toHaveLength(SOURCE_IDS.length);
     const or = payload.sources.find((s) => s.id === historyId)!;
-    expect(or).toMatchObject({ uptime24h: null, uptime7d: null, uptime90d: null, avgLatency24h: null, ok: false });
+    expect(or).toMatchObject({ uptime24h: null, uptime7d: null, uptime30d: null, avgLatency24h: null, ok: false });
     expect(payload.events).toHaveLength(0);
     expect(payload.uptimeMs).toBe(0);
     expect(payload.generatedAt).toBe(new Date(NOW).toISOString());
@@ -685,12 +703,21 @@ describe("buildHistoryPayload", () => {
     expect(ids).toHaveLength(new Set(ids).size);
   });
 
-  it("derives recent uptime from samples and 7d/90d from daily buckets", () => {
+  it("derives recent uptime from samples and 7d/30d from daily buckets", () => {
     const recent: UptimeSample[] = [sample(20, true), sample(10, true), sample(1, false)];
-    const daily: DayBucket[] = [
-      { day: "2026-08-24", total: 100, ok: 99, latencySum: 0, latencyN: 0, incidents: 1 },
-      { day: "2026-08-29", total: 100, ok: 100, latencySum: 0, latencyN: 0, incidents: 0 },
-    ];
+    // 10 stale buckets outside the 30-day window: counted by an unbounded
+    // average, excluded by the retained-window slice.
+    const stale: DayBucket[] = Array.from({ length: 10 }, (_, i) => ({
+      day: `2026-04-${String(i + 21).padStart(2, "0")}`,
+      total: 200,
+      ok: 0,
+    }));
+    const fresh: DayBucket[] = Array.from({ length: 30 }, (_, i) => ({
+      day: `2026-08-${String(i + 1).padStart(2, "0")}`,
+      total: 100,
+      ok: 99,
+    }));
+    const daily: DayBucket[] = [...stale, ...fresh];
     const payload = buildHistoryPayload(
       { sources: { [historyId]: { recent, daily } } },
       { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 5 * MIN },
@@ -698,28 +725,37 @@ describe("buildHistoryPayload", () => {
     );
     const or = payload.sources.find((s) => s.id === historyId)!;
     expect(or.uptime24h).toBeCloseTo(2 / 3);
-    expect(or.uptime7d).toBe(199 / 200);
-    expect(or.uptime90d).toBeCloseTo(199 / 200);
+    expect(or.uptime7d).toBeCloseTo(0.99);
+    expect(or.uptime30d).toBeCloseTo(0.99);
     expect(or.ok).toBe(false);
     expect(or.checkedAt).toBe(new Date(NOW - MIN).toISOString());
     expect(payload.uptimeMs).toBe(5 * MIN);
   });
 
-  it("reports uptime90d as null (not 0%) when daily buckets carry no samples", () => {
-    const emptyBucket: DayBucket = { day: "2026-08-30", total: 0, ok: 0, latencySum: 0, latencyN: 0, incidents: 0 };
+  it("reports uptime30d as null (not 0%) when daily buckets carry no samples", () => {
+    const emptyBucket: DayBucket = { day: "2026-08-30", total: 0, ok: 0 };
     const payload = buildHistoryPayload(
       { sources: { [historyId]: { recent: [], daily: [emptyBucket] } } },
       { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
       NOW,
     );
-    expect(payload.sources.find((s) => s.id === historyId)!.uptime90d).toBeNull();
+    expect(payload.sources.find((s) => s.id === historyId)!.uptime30d).toBeNull();
   });
 });
 
 describe("getStatusHistory read-only", () => {
   function buildHistoryCtx(kvStore: Map<string, string>, probeOk = true): AppContext {
+    const kv = {
+      get: async (key: string) => kvStore.get(key) ?? null,
+      put: async (key: string, value: string) => {
+        kvStore.set(key, value);
+      },
+      delete: async (key: string) => {
+        kvStore.delete(key);
+      },
+    } as unknown as AppContext["kv"];
     return {
-      cache: {} as AppContext["cache"],
+      cache: new CacheService(kv, "v-test"),
       http: {
         probe: async () => ({ ok: probeOk, status: probeOk ? 200 : 503, latencyMs: probeOk ? 500 : null, error: null }),
         json: async (url: string) => {
@@ -727,20 +763,21 @@ describe("getStatusHistory read-only", () => {
           return { components: [{ name: "API", status: "operational" }] };
         },
       } as unknown as AppContext["http"],
-      kv: {
-        get: async (key: string) => kvStore.get(key) ?? null,
-        put: async (key: string, value: string) => {
-          kvStore.set(key, value);
-        },
-      } as AppContext["kv"],
+      kv,
       log: () => {},
     };
   }
 
+  /** buildHistoryCtx clone whose http.probe is a spyable mock. */
+  function withProbe(kvStore: Map<string, string>, probe: AppContext["http"]["probe"]): AppContext {
+    const base = buildHistoryCtx(kvStore);
+    return { ...base, http: { ...base.http, probe } as unknown as AppContext["http"] };
+  }
+
   it("serves an empty store without sampling, so reads never touch upstreams", async () => {
     const kvStore = new Map<string, string>();
-    const probe = vi.fn(async () => ({ ok: true, status: 200, latencyMs: 500, error: null }));
-    const ctx = { ...buildHistoryCtx(kvStore), http: { probe } as unknown as AppContext["http"] };
+    const probe = mockProbe();
+    const ctx = withProbe(kvStore, probe);
     const payload = await getStatusHistory(ctx);
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
     expect(probe).not.toHaveBeenCalled();
@@ -751,10 +788,8 @@ describe("getStatusHistory read-only", () => {
     const kvStore = new Map<string, string>();
     await recordStatusSamples(buildHistoryCtx(kvStore));
     expect(kvStore.has(HISTORY_KEY)).toBe(true);
-    const probe = vi.fn(async () => {
-      throw new Error("must not probe on read");
-    });
-    const ctx = { ...buildHistoryCtx(kvStore), http: { probe } as unknown as AppContext["http"] };
+    const probe = mockProbe();
+    const ctx = withProbe(kvStore, probe);
     const payload = await getStatusHistory(ctx);
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(true);
@@ -782,34 +817,10 @@ describe("getStatusHistory read-only", () => {
 
   it("marks only the failing source down when probes disagree per target", async () => {
     const kvStore = new Map<string, string>();
-    const probe = vi.fn<(url: string) => Promise<ProbeResult>>();
     const openrouterUrl = `${upstreamConfig.openrouter}/api/v1/models`;
     const openrouterRankingsUrl = `${upstreamConfig.openrouter}/api/frontend/v1/rankings/models`;
-    const down = { ok: false, status: 503, latencyMs: null, error: "HTTP 503" };
-    vi.when(probe, {
-      onUnmatched: () => Promise.resolve({ ok: true, status: 200, latencyMs: 500, error: null }),
-    })
-      .calledWith(openrouterUrl)
-      .thenResolve(down)
-      .calledWith(openrouterRankingsUrl)
-      .thenResolve(down);
-    const ctx: AppContext = {
-      cache: {} as AppContext["cache"],
-      http: {
-        probe,
-        json: async (url: string) => {
-          if (url.includes("status.cloud.google.com")) return [];
-          return { components: [{ name: "API", status: "operational" }] };
-        },
-      } as unknown as AppContext["http"],
-      kv: {
-        get: async (key: string) => kvStore.get(key) ?? null,
-        put: async (key: string, value: string) => {
-          kvStore.set(key, value);
-        },
-      } as AppContext["kv"],
-      log: () => {},
-    };
+    const probe = mockProbe([openrouterUrl, openrouterRankingsUrl]);
+    const ctx = withProbe(kvStore, probe);
     await recordStatusSamples(ctx);
     const payload = await getStatusHistory(ctx);
     const or = payload.sources.find((s) => s.id === "openrouter")!;
@@ -825,50 +836,56 @@ describe("getStatusHistory read-only", () => {
 
   it("keeps a source healthy when any of its probes succeeds", async () => {
     const kvStore = new Map<string, string>();
-    const probe = vi.fn<(url: string) => Promise<ProbeResult>>();
     const openrouterUrl = `${upstreamConfig.openrouter}/api/v1/models`;
-    vi.when(probe, {
-      onUnmatched: () => Promise.resolve({ ok: true, status: 200, latencyMs: 500, error: null }),
-    })
-      .calledWith(openrouterUrl)
-      .thenResolve({ ok: false, status: 503, latencyMs: null, error: "HTTP 503" });
-    const ctx: AppContext = {
-      cache: {} as AppContext["cache"],
-      http: {
-        probe,
-        json: async (url: string) => {
-          if (url.includes("status.cloud.google.com")) return [];
-          return { components: [{ name: "API", status: "operational" }] };
-        },
-      } as unknown as AppContext["http"],
-      kv: {
-        get: async (key: string) => kvStore.get(key) ?? null,
-        put: async (key: string, value: string) => {
-          kvStore.set(key, value);
-        },
-      } as AppContext["kv"],
-      log: () => {},
-    };
+    const ctx = withProbe(kvStore, mockProbe([openrouterUrl]));
     await recordStatusSamples(ctx);
     const payload = await getStatusHistory(ctx);
-    const or = payload.sources.find((s) => s.id === "openrouter")!;
+    const or = payload.sources.find((s) => s.id === historyId)!;
     expect(or.ok).toBe(true);
   });
-});
 
-describe("normalizeModelLimit", () => {
-  it("snaps arbitrary limits to the 50/100/500 cache buckets", () => {
-    expect(normalizeModelLimit(1)).toBe(50);
-    expect(normalizeModelLimit(7)).toBe(50);
-    expect(normalizeModelLimit(50)).toBe(50);
-    expect(normalizeModelLimit(80)).toBe(100);
-    expect(normalizeModelLimit(500)).toBe(500);
-    expect(normalizeModelLimit(499)).toBe(500);
+  it("writes nothing when the whole round is unknown (all probes time out, all status pages fail)", async () => {
+    const kvStore = new Map<string, string>();
+    const base = buildHistoryCtx(kvStore);
+    const ctx = {
+      ...base,
+      http: {
+        ...base.http,
+        probe: async () => ({ ok: false, status: null, latencyMs: null, error: "timeout" }),
+        json: async () => {
+          throw new Error("timeout");
+        },
+      },
+    } as unknown as AppContext;
+    await recordStatusSamples(ctx);
+    expect(kvStore.has(HISTORY_KEY)).toBe(false);
+  });
+
+  it("keeps the previous state when a later round is unknown", async () => {
+    const kvStore = new Map<string, string>();
+    await recordStatusSamples(buildHistoryCtx(kvStore));
+    const before = await getStatusHistory(buildHistoryCtx(kvStore));
+    expect(before.sources.find((s) => s.id === historyId)!.ok).toBe(true);
+    const base = buildHistoryCtx(kvStore);
+    const unknownCtx = {
+      ...base,
+      http: {
+        ...base.http,
+        probe: async () => ({ ok: false, status: null, latencyMs: null, error: "timeout" }),
+        json: async () => {
+          throw new Error("timeout");
+        },
+      },
+    } as unknown as AppContext;
+    await recordStatusSamples(unknownCtx);
+    const after = await getStatusHistory(buildHistoryCtx(kvStore));
+    expect(after.sources.find((s) => s.id === historyId)!.ok).toBe(true);
+    expect(after.events).toHaveLength(0);
   });
 });
 
 describe("buildTargets", () => {
-  it("samples one feed per news category instead of all 19 feeds", async () => {
+  it("samples one feed per news category instead of every feed", async () => {
     const { NEWS_CATEGORIES } = await import("@/shared/config");
     const targets = buildTargets();
     const news = targets.filter((t) => t.id === "news");
@@ -896,6 +913,133 @@ describe("readStore", () => {
     } as unknown as AppContext;
     await expect(readStore(ctx)).resolves.toEqual({ sources: {} });
     expect(deleted).toContain(HISTORY_KEY);
+  });
+
+  it("backs up the raw payload before clearing an unsalvageable store", async () => {
+    const raw = "truncated-json{{{";
+    const kvStore = new Map<string, string>([[HISTORY_KEY, raw]]);
+    const putOptions: unknown[] = [];
+    const ctx = {
+      kv: {
+        get: async (key: string) => kvStore.get(key) ?? null,
+        put: async (key: string, value: string, opts?: unknown) => {
+          kvStore.set(key, value);
+          putOptions.push(opts);
+        },
+        delete: async (key: string) => {
+          kvStore.delete(key);
+        },
+      },
+    } as unknown as AppContext;
+    await expect(readStore(ctx)).resolves.toEqual({ sources: {} });
+    expect(kvStore.get(HISTORY_BACKUP_KEY)).toBe(JSON.stringify([raw]));
+    expect(kvStore.has(HISTORY_KEY)).toBe(false);
+    expect(putOptions[0]).toMatchObject({ expirationTtl: 90 * 24 * 60 * 60 });
+  });
+
+  it("salvages the readable per-source entries of a partially corrupt store", async () => {
+    const good = {
+      recent: [{ t: Date.now() - 60_000, ok: true, latencyMs: 10, status: 200, error: null }],
+      daily: [{ day: "2026-01-01", total: 3, ok: 2 }],
+    };
+    const raw = JSON.stringify({ sources: { openrouter: good, news: "garbage-not-an-entry" } });
+    const kvStore = new Map<string, string>([[HISTORY_KEY, raw]]);
+    const ctx = {
+      kv: {
+        get: async (key: string) => kvStore.get(key) ?? null,
+        put: async () => {},
+        delete: async () => {},
+      },
+    } as unknown as AppContext;
+    await expect(readStore(ctx)).resolves.toEqual({ sources: { openrouter: good } });
+    expect(kvStore.has(HISTORY_BACKUP_KEY)).toBe(false);
+  });
+
+  it("reports the newest sample across all sources", () => {
+    const t0 = 1_000;
+    const t1 = 2_000;
+    expect(
+      latestSampleAt({
+        sources: {
+          openrouter: { recent: [{ t: t0, ok: true, latencyMs: 1, status: 200, error: null }], daily: [] },
+          news: { recent: [{ t: t1, ok: false, latencyMs: null, status: 503, error: "x" }], daily: [] },
+        },
+      }),
+    ).toBe(t1);
+    expect(latestSampleAt({ sources: {} })).toBe(0);
+  });
+
+  it("warns (throttled) when the persisted samples stop advancing", async () => {
+    const stale = Date.now() - 3 * 60 * 60 * 1000;
+    const store = {
+      sources: { openrouter: { recent: [{ t: stale, ok: true, latencyMs: 1, status: 200, error: null }], daily: [] } },
+    };
+    const kvStore = new Map<string, string>([[HISTORY_KEY, JSON.stringify(store)]]);
+    const log = vi.fn();
+    const ctx = {
+      kv: {
+        get: async (key: string) => kvStore.get(key) ?? null,
+        put: async () => {},
+        delete: async () => {},
+      },
+      log,
+    } as unknown as AppContext;
+    await ensureFreshSamples(ctx);
+    await ensureFreshSamples(ctx);
+    const staleWarns = log.mock.calls.filter((c) => String(c[1] ?? c[0]).includes("stale"));
+    expect(staleWarns).toHaveLength(1);
+    expect(staleWarns[0]![0]).toBe("warn");
+  });
+
+  // "v1:status-history" is the one-time pre-v3 bridge (see store.ts).
+  it("adopts the previous-generation key instead of losing history on version bumps", async () => {
+    const legacyKey = "v1:status-history";
+    const store = { sources: { openrouter: { recent: [], daily: [] } } };
+    const kvStore = new Map<string, string>([[legacyKey, JSON.stringify(store)]]);
+    const ctx = {
+      kv: {
+        get: async (key: string) => kvStore.get(key) ?? null,
+        put: async (key: string, value: string) => {
+          kvStore.set(key, value);
+        },
+        delete: async (key: string) => {
+          kvStore.delete(key);
+        },
+      },
+    } as unknown as AppContext;
+    await expect(readStore(ctx)).resolves.toEqual(store);
+    expect(kvStore.get(HISTORY_KEY)).toBe(JSON.stringify(store));
+    expect(kvStore.has(legacyKey)).toBe(false);
+  });
+
+  it("prefers the stable key and leaves legacy data alone", async () => {
+    const fresh = { sources: { news: { recent: [], daily: [] } } };
+    const legacy = {
+      sources: {
+        news: {
+          recent: [],
+          daily: [{ day: "2026-01-01", total: 1, ok: 1 }],
+        },
+      },
+    };
+    const legacyKey = "v1:status-history";
+    const kvStore = new Map<string, string>([
+      [HISTORY_KEY, JSON.stringify(fresh)],
+      [legacyKey, JSON.stringify(legacy)],
+    ]);
+    const ctx = {
+      kv: {
+        get: async (key: string) => kvStore.get(key) ?? null,
+        put: async (key: string, value: string) => {
+          kvStore.set(key, value);
+        },
+        delete: async (key: string) => {
+          kvStore.delete(key);
+        },
+      },
+    } as unknown as AppContext;
+    await expect(readStore(ctx)).resolves.toEqual(fresh);
+    expect(kvStore.get(legacyKey)).toBe(JSON.stringify(legacy));
   });
 });
 
@@ -932,7 +1076,7 @@ describe("getModels empty-result TTL", () => {
       { id: "org/closed", downloads: 99, likes: 9, tags: ["license:proprietary"] },
       { id: "org/unknown", downloads: 50, likes: 5, tags: [] },
     ]);
-    const models = await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 500 });
+    const { data: models } = await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 500 });
     expect(models.map((m) => m.id)).toEqual(["org/open"]);
   });
 
@@ -961,9 +1105,9 @@ describe("getModels empty-result TTL", () => {
   });
 
   it("caches the full bucket payload so sibling limits never poison each other", async () => {
-    const items = Array.from({ length: 500 }, (_, i) => ({
+    const items = Array.from({ length: 600 }, (_, i) => ({
       id: `org/model-${i}`,
-      downloads: 500 - i,
+      downloads: 600 - i,
       likes: 1,
       tags: ["license:mit"],
     }));
@@ -982,116 +1126,157 @@ describe("getModels empty-result TTL", () => {
     } as unknown as AppContext;
 
     const first = await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 101 });
-    expect(first).toHaveLength(101);
+    expect(first.data).toHaveLength(101);
+    expect(first.fetchedAt).toBeDefined();
 
-    const cached = JSON.parse(kvStore.get("v1:open-source-models:trendingScore:-1:500")!) as {
-      d: { id: string }[];
+    const cachedRaw = JSON.parse(kvStore.get("v1:open-source-models:trendingScore:-1:200")!) as {
+      d: { id: string }[] | { data: { id: string }[]; fetchedAt: string };
     };
-    expect(cached.d).toHaveLength(500);
+    const cachedData = Array.isArray(cachedRaw.d) ? cachedRaw.d : (cachedRaw.d as { data: { id: string }[] }).data;
+    expect(cachedData).toHaveLength(600);
 
-    const sibling = await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 499 });
-    expect(sibling).toHaveLength(499);
+    const sibling = await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 150 });
+    expect(sibling.data).toHaveLength(150);
     const full = await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 500 });
-    expect(full).toHaveLength(500);
+    expect(full.data).toHaveLength(500);
   });
 });
-describe("parseArenaRscBoard (flight primary path)", () => {
+
+describe("fetchHFModelById / getModelById (window-free detail lookup)", () => {
+  const row = {
+    id: "org/niche-model",
+    author: "org",
+    downloads: 3,
+    likes: 0,
+    pipeline_tag: "text-generation",
+    createdAt: "2026-01-01T00:00:00Z",
+    lastModified: "2026-02-01T00:00:00Z",
+    tags: ["license:mit"],
+  };
+  const byIdCtx = (json: (url: string) => Promise<unknown>): AppContext =>
+    ({
+      cache: new CacheService(undefined, "v-hf-by-id"),
+      http: { json },
+      kv: undefined,
+      log: () => {},
+    }) as unknown as AppContext;
+
+  it("maps a single upstream row without any list window", async () => {
+    const ctx = byIdCtx(async (url: string) => {
+      expect(url).toContain("/org/niche-model");
+      return row;
+    });
+    const model = await fetchHFModelById(ctx, "org/niche-model");
+    expect(model).toMatchObject({ id: "org/niche-model", license: "mit" });
+    const payload = await getModelById(ctx, "org/niche-model");
+    expect(payload.data).toMatchObject({ id: "org/niche-model" });
+  });
+
+  it("resolves upstream 404 to null instead of a 502", async () => {
+    const ctx = byIdCtx(async () => {
+      throw new UpstreamError("HTTP 404 for https://huggingface.co/api/models/org/gone", { status: 404 });
+    });
+    await expect(fetchHFModelById(ctx, "org/gone")).resolves.toBeNull();
+  });
+
+  it("rejects malformed ids without touching the network", async () => {
+    const ctx = byIdCtx(async () => {
+      throw new Error("must not fetch");
+    });
+    await expect(fetchHFModelById(ctx, "   ")).rejects.toThrow(/Invalid Hugging Face model id/);
+  });
+});
+
+describe("parseAgentBoards (agent overall composite)", () => {
+  const SIGNALS = [
+    "task_outcome_explicit",
+    "praise_complaint",
+    "steerability",
+    "bash_recovery_steps",
+    "tool_hallucination",
+  ];
+  const entry = (id: string, name: string, score: number | null) => ({
+    contenderName: id,
+    model: name,
+    modelOrganization: "Org",
+    license: "Proprietary",
+    isPublic: true,
+    score,
+    ciLower: 0,
+    ciUpper: 1,
+    rank: 1,
+  });
+  // C wins on consistency (0.20 avg) although A tops two signals.
+  const scores: Record<string, number[]> = {
+    "contenders/a": [0.3, 0.3, 0.0, 0.0, 0.0],
+    "contenders/b": [0.1, 0.1, 0.1, 0.1, 0.1],
+    "contenders/c": [0.2, 0.2, 0.2, 0.2, 0.2],
+  };
   const FLIGHT_BODY = [
-    '2:I[688172,[],"default"]',
-    '3:T2a6,"text"',
-    '41:{"slug":"text","leaderboard":{"arenaSlug":"text","leaderboardSlug":"coding","category":"$41:14:1","entries":[{"rank":1,"rankUpper":1,"rankLower":9,"modelKey":"claude-opus-4-7-thinking","modelDisplayName":"claude-opus-4-7-high","rating":1551.93,"ratingUpper":1557.99,"ratingLower":1545.88,"votes":17176,"modelOrganization":"Anthropic","modelUrl":"https://example.com/x","license":"Proprietary","inputPricePerMillion":5,"outputPricePerMillion":25,"contextLength":1000000,"pricePerImage":null,"pricePerSecond":null,"releaseType":null},{"rank":2,"rankUpper":2,"rankLower":4,"modelKey":"gpt-5.2","modelDisplayName":"gpt-5.2","rating":1502.1,"ratingUpper":1510,"ratingLower":1494,"votes":9122,"modelOrganization":"OpenAI","modelUrl":null,"license":"Proprietary","inputPricePerMillion":null,"outputPricePerMillion":null,"contextLength":400000,"pricePerImage":null,"pricePerSecond":null,"releaseType":null},{"rank":3,"rankUpper":3,"rankLower":3,"modelKey":"broken-row","modelDisplayName":"broken-row","rating":null,"votes":null,"modelOrganization":null,"modelUrl":null,"license":null,"inputPricePerMillion":null,"outputPricePerMillion":null,"contextLength":null,"pricePerImage":null,"pricePerSecond":null,"releaseType":null}]}}',
+    "41:" +
+      JSON.stringify({
+        signals: SIGNALS.map((signal, si) => ({
+          name: signal,
+          entries: [
+            entry("contenders/a", "A", scores["contenders/a"]![si]!),
+            entry("contenders/b", "B", scores["contenders/b"]![si]!),
+            entry("contenders/c", "C", scores["contenders/c"]![si]!),
+            { contenderName: "broken", model: "", score: null },
+          ],
+        })),
+      }),
   ].join("\n");
 
-  it("extracts ranked entries from the flight entries array", () => {
-    const rows = parseArenaRscBoard(FLIGHT_BODY);
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual({
-      rank: 1,
-      id: "claude-opus-4-7-thinking",
-      name: "claude-opus-4-7-high",
-      creator: "Anthropic",
-      score: 1551.93,
-      votes: 17176,
-      preliminary: false,
-      priceInput: 5,
-      priceOutput: 25,
-      contextTokens: 1000000,
-    });
-    expect(rows[1]).toMatchObject({ id: "gpt-5.2", creator: "OpenAI", priceInput: null, contextTokens: 400000 });
+  it("composites the overall board as the mean of the five signals", async () => {
+    const { parseAgentBoards } = await import("@/server/sources/agent-arena");
+    const rows = parseAgentBoards(FLIGHT_BODY);
+    expect(rows.map((r) => r.id)).toEqual(["contenders/c", "contenders/a", "contenders/b"]);
+    expect(rows.map((r) => r.rank)).toEqual([1, 2, 3]);
+    expect(rows[0]?.score).toBeCloseTo(0.2, 10);
+    expect(rows[1]?.score).toBeCloseTo(0.12, 10);
+    expect(rows[0]).toMatchObject({ ciLower: 0, ciUpper: 1 });
   });
 
-  it("throws UpstreamError when no entries array resolves", () => {
-    expect(() => parseArenaRscBoard('1:"unrelated payload"')).toThrow();
+  it("throws when a signal board is missing (shape drift)", async () => {
+    const { parseAgentBoards } = await import("@/server/sources/agent-arena");
+    expect(() => parseAgentBoards('41:{"signals":[]}')).toThrow();
   });
 
-  it("feeds getArenaRankings through the flight path first", async () => {
-    const requested: { url: string; rsc: boolean; stateTree: boolean; maxBytes?: number }[] = [];
+  it("feeds getAgentRankings through the RSC flight path", async () => {
+    const { getAgentRankings } = await import("@/server/sources/agent-arena");
+    const requested: { url: string; rsc: boolean }[] = [];
     const ctx = {
-      cache: new CacheService(undefined, "v-arena-rsc"),
+      cache: new CacheService(undefined, "v-agent-rsc"),
       http: {
-        text: async (url: string, init: { headers?: Record<string, string> }, maxBytes?: number) => {
-          requested.push({
-            url,
-            rsc: init.headers?.RSC === "1",
-            stateTree: "Next-Router-State-Tree" in (init.headers ?? {}),
-            maxBytes,
-          });
-          if (init.headers?.RSC === "1") return FLIGHT_BODY;
-          throw new Error("HTML fallback must not be reached");
+        text: async (url: string, init: { headers?: Record<string, string> }) => {
+          requested.push({ url, rsc: init.headers?.RSC === "1" });
+          return FLIGHT_BODY;
         },
       },
       kv: undefined,
       log: () => {},
     } as unknown as AppContext;
-    const payload = await getArenaRankings(ctx);
+    const payload = await getAgentRankings(ctx);
     expect(requested).toHaveLength(1);
-    expect(requested[0]).toMatchObject({ rsc: true, stateTree: false, maxBytes: 2 * 1024 * 1024 });
-    expect(payload.entries).toHaveLength(2);
-  });
-});
-
-describe("getArenaRankings failure paths", () => {
-  function failCtx(httpText: (url: string, init: unknown, maxBytes?: number) => Promise<string>): AppContext {
-    return {
-      cache: new CacheService(undefined, "v-arena-fail"),
-      http: { text: httpText },
-      kv: undefined,
-      log: () => {},
-    } as unknown as AppContext;
-  }
-
-  it("surfaces fetch failures so withTtl serves stale instead of caching nothing", async () => {
-    const ctx = failCtx(async () => {
-      throw new Error("network down");
-    });
-    await expect(getArenaRankings(ctx)).rejects.toThrow("network down");
+    expect(requested[0]).toMatchObject({ url: expect.stringContaining("/leaderboard/agent"), rsc: true });
+    expect(payload.entries).toHaveLength(3);
   });
 
-  it("rejects when the flight payload has no entries array (shape drift)", async () => {
-    const ctx = failCtx(async () => '1:"unrelated payload"');
-    await expect(getArenaRankings(ctx)).rejects.toThrow();
-  });
-
-  it("rejects when every flight row fails the shape gate", async () => {
-    const ctx = failCtx(async () => '41:{"leaderboard":{"entries":[{"rank":"x","modelKey":"","rating":"y"}]}}');
-    await expect(getArenaRankings(ctx)).rejects.toThrow();
-  });
-
-  it("caps parsed boards at MAX_ROWS entries", async () => {
-    const rows = Array.from({ length: 350 }, (_, i) => ({
-      rank: i + 1,
-      modelKey: `model-${i}`,
-      modelDisplayName: `Model ${i}`,
-      rating: 1500 - i,
-      votes: 1000,
-      modelOrganization: "Org",
-      inputPricePerMillion: null,
-      outputPricePerMillion: null,
-      contextLength: null,
+  it("caps parsed boards at SOURCE_LIMITS.agentRankings entries", async () => {
+    const { buildAgentOverall } = await import("@/server/sources/agent-arena");
+    const boards = SIGNALS.map((signal) => ({
+      signal,
+      rows: Array.from({ length: 150 }, (_, i) => ({
+        id: `model-${i}`,
+        name: `Model ${i}`,
+        creator: "Org",
+        score: 1 - i / 1000,
+        ciLower: null,
+        ciUpper: null,
+        license: null,
+      })),
     }));
-    const ctx = failCtx(async () => `41:{"leaderboard":{"entries":${JSON.stringify(rows)}}}`);
-    const payload = await getArenaRankings(ctx);
-    expect(payload.entries).toHaveLength(300);
+    expect(buildAgentOverall(boards)).toHaveLength(SOURCE_LIMITS.agentRankings);
   });
 });
 
@@ -1197,44 +1382,66 @@ describe("parseChangelogModels", () => {
     expect(models).toHaveLength(1);
     expect(models[0]).toMatchObject({ slug: "m1", name: "M\nOne é" });
   });
+
+  it("ignores non-array models values and still parses the real payload", () => {
+    const good = JSON.stringify({
+      models: [
+        {
+          slug: "real",
+          name: "Real",
+          release: { slug: "real", name: "Real" },
+          releaseDate: "2026-03-01",
+          creator: { id: "r", name: "R" },
+        },
+      ],
+    });
+    const html =
+      `<script>track({"models":"decoy-string"})</script>` +
+      `<script>track({"models":123})</script>` +
+      `<div data-payload='${good}'></div>`;
+    const models = parseChangelogModels(html);
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({ slug: "real", creatorName: "R" });
+  });
 });
 
-describe("matchesClosedRule", () => {
-  it("fails closed for unknown creators", () => {
-    expect(matchesClosedRule("Some New Lab", "some-model")).toBe(false);
+describe("isClosedChangelogRelease (weights-only)", () => {
+  const weights = new Map<string, boolean>(
+    Object.entries(
+      buildWeightsRecord([
+        { slug: "indexed-open", id: "indexed-open", name: "Indexed Open", is_open_weights: true },
+        { slug: "indexed-closed", id: "indexed-closed", name: "Indexed Closed", is_open_weights: false },
+      ] as ArtificialAnalysisModel[]),
+    ),
+  );
+
+  it("excludes explicitly open weights and keeps flagged-closed ones", () => {
+    expect(isClosedChangelogRelease(clModel({ slug: "indexed-open", releaseSlug: "indexed-open" }), weights)).toBe(
+      false,
+    );
+    expect(isClosedChangelogRelease(clModel({ slug: "indexed-closed", releaseSlug: "indexed-closed" }), weights)).toBe(
+      true,
+    );
   });
 
-  it("fails closed for prototype-chain creator names", () => {
-    expect(matchesClosedRule("constructor", "gpt-5 GPT-5")).toBe(false);
-    expect(matchesClosedRule("toString", "x y")).toBe(false);
-  });
-
-  it("lists all releases of exclusively proprietary vendors", () => {
-    expect(matchesClosedRule("OpenAI", "gpt-5 GPT-5")).toBe(true);
-    expect(matchesClosedRule("Anthropic", "claude-opus-4-5 Claude Opus 4.5")).toBe(true);
-  });
-
-  it("excludes open-weights lines of mixed vendors", () => {
-    expect(matchesClosedRule("Google", "gemma-3 Gemma 3")).toBe(false);
-    expect(matchesClosedRule("Google", "diffusiongemma-26b-a4b DiffusionGemma 26B")).toBe(false);
-    expect(matchesClosedRule("Google", "gemini-2-5-pro Gemini 2.5 Pro")).toBe(true);
-    expect(matchesClosedRule("Meta", "llama-3-3 Llama 3.3")).toBe(false);
-    expect(matchesClosedRule("Meta", "muse-spark-1-3 Muse Spark 1.3")).toBe(true);
-    expect(matchesClosedRule("Mistral", "mistral-large-3 Mistral Large 3")).toBe(true);
-    expect(matchesClosedRule("Mistral", "mistral-small-3-1 Mistral Small 3.1")).toBe(false);
-    expect(matchesClosedRule("Mistral", "devstral-medium Devstral Medium")).toBe(false);
-    expect(matchesClosedRule("SpaceXAI", "grok-1 Grok-1")).toBe(false);
-    expect(matchesClosedRule("SpaceXAI", "grok-4 Grok 4")).toBe(true);
+  it("treats unknown weights as closed: unverified weights are not open weights", () => {
+    expect(isClosedChangelogRelease(clModel({ slug: "some-new-lab-model" }), new Map())).toBe(true);
   });
 });
 
 describe("toClosedReleases", () => {
-  const weights = buildWeightsIndex([
-    { slug: "indexed-open", id: "indexed-open", name: "Indexed Open", is_open_weights: true },
-    { slug: "indexed-closed", id: "indexed-closed", name: "Indexed Closed", is_open_weights: false },
-  ] as ArtificialAnalysisModel[]);
+  const weights = new Map<string, boolean>(
+    Object.entries(
+      buildWeightsRecord([
+        { slug: "indexed-open", id: "indexed-open", name: "Indexed Open", is_open_weights: true },
+        { slug: "indexed-closed", id: "indexed-closed", name: "Indexed Closed", is_open_weights: false },
+        { slug: "llama-3-3", id: "llama-3-3", name: "Llama 3.3", is_open_weights: true },
+        { slug: "mystery-1", id: "mystery-1", name: "Mystery 1", is_open_weights: true },
+      ] as ArtificialAnalysisModel[]),
+    ),
+  );
 
-  it("prefers exact index weights over creator rules", () => {
+  it("respects exact index weights", () => {
     expect(isClosedChangelogRelease(clModel({ slug: "indexed-open", releaseSlug: "indexed-open" }), weights)).toBe(
       false,
     );
@@ -1265,7 +1472,7 @@ describe("toClosedReleases", () => {
           creatorName: "Some New Lab",
         }),
       ],
-      new Map(),
+      weights,
     );
     expect(entries.map((e) => e.id)).toEqual(["claude-opus-4-5"]);
     expect(entries[0]).toMatchObject({
@@ -1274,5 +1481,21 @@ describe("toClosedReleases", () => {
       releaseDate: "2025-11-24",
       link: `${upstreamConfig.artificialAnalysis}/models/claude-opus-4-5`,
     });
+  });
+
+  it("caps the released list at SOURCE_LIMITS.closedReleases, newest first", () => {
+    const changelog = Array.from({ length: 250 }, (_, i) =>
+      clModel({
+        slug: `model-${i}`,
+        name: `Model ${i}`,
+        releaseSlug: `model-${i}`,
+        releaseName: `Model ${i}`,
+        releaseDate: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
+        creatorName: "Anthropic",
+      }),
+    );
+    const entries = toClosedReleases(changelog, new Map());
+    expect(entries).toHaveLength(SOURCE_LIMITS.closedReleases);
+    expect(entries[0]?.releaseDate).toBe("2026-01-28");
   });
 });

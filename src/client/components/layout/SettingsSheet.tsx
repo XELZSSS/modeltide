@@ -1,3 +1,4 @@
+"use client";
 import { memo, type ReactNode } from "react";
 import { Download, Languages, RefreshCw, SunMoon } from "lucide-react";
 import { useTranslation } from "@/client/providers";
@@ -50,18 +51,13 @@ const SettingRow = memo(function SettingRow({
   icon,
   label,
   children,
-  onActivate,
 }: {
   icon: ReactNode;
   label: string;
   children: ReactNode;
-  onActivate?: () => void;
 }) {
   return (
-    <div
-      className={cn("flex items-center justify-between gap-3 px-4 py-3", onActivate && "cursor-pointer")}
-      onClick={onActivate}
-    >
+    <div className={cn("flex items-center justify-between gap-3 px-4 py-3")}>
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-text-secondary shrink-0">{icon}</span>
         <p className="text-sm">{label}</p>
@@ -75,8 +71,6 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   const { t, lang, setLang } = useTranslation();
   const themeMode = useSettingsStore((s) => s.themeMode);
   const setThemeMode = useSettingsStore((s) => s.setThemeMode);
-  const toggleTheme = useSettingsStore((s) => s.toggleTheme);
-  const toggleLang = useSettingsStore((s) => s.toggleLang);
   const { canInstall, isInstalled, isIos, promptInstall } = usePwaInstall();
   const { updateAvailable, applyUpdate } = useSwUpdate();
 
@@ -86,7 +80,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         <SheetHeader title={t("settings")} onClose={onClose} />
 
         <div className="divide-y divide-border">
-          <SettingRow icon={<Languages size={16} />} label={t("language")} onActivate={toggleLang}>
+          <SettingRow icon={<Languages size={16} />} label={t("language")}>
             <Segmented
               label={t("language")}
               value={lang}
@@ -99,7 +93,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               ]}
             />
           </SettingRow>
-          <SettingRow icon={<SunMoon size={16} />} label={t("themeToggle")} onActivate={toggleTheme}>
+          <SettingRow icon={<SunMoon size={16} />} label={t("themeToggle")}>
             <Segmented
               label={t("themeToggle")}
               value={themeMode}

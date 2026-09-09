@@ -1,18 +1,19 @@
+"use client";
 import { useMemo } from "react";
 import { ExternalLink, Clock, Search } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import { Pagination } from "@/client/components/ui/pagination";
-import { useSuspenseNewsByCategory } from "@/client/api/queries";
-import { SuspenseQuery, EmptyState } from "@/client/components/feedback";
+import { useSuspenseNewsState } from "@/client/api/queries";
+import { SuspenseQuery, EmptyState, PartialNotice } from "@/client/components/feedback";
 import { safeHref, formatRelativeTime, formatDate } from "@/client/utils/format";
 import { TabbedPage } from "@/client/components/layout";
-import { useUrlTab } from "@/client/ui-hooks";
+import { useClientTab } from "@/client/hooks/use-client-tab";
 import { type TabItem } from "@/client/components/ui/tabs";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import { NEWS_CATEGORIES } from "@/shared/config";
 import { useDevice } from "@/client/providers";
-import { usePagedData } from "@/client/components/data/use-paged-data";
+import { usePagedData } from "@/client/components/data/table";
 
 const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
   industry: "catIndustry",
@@ -82,13 +83,23 @@ function NewsList({ news }: { news: NewsItem[] }) {
 }
 
 function NewsCategoryContent({ categoryId }: { categoryId: NewsCategory }) {
-  const { data: news } = useSuspenseNewsByCategory(categoryId);
-  return <NewsList key={categoryId} news={news} />;
+  const { t } = useTranslation();
+  const { items: news, partial } = useSuspenseNewsState(categoryId);
+  return (
+    <>
+      {partial && (
+        <div className="mb-3">
+          <PartialNotice message={t("partialDataNotice")} />
+        </div>
+      )}
+      <NewsList key={categoryId} news={news} />
+    </>
+  );
 }
 
 export function NewsView() {
   const { t } = useTranslation();
-  const [activeCategory, setActiveCategory] = useUrlTab(NEWS_CATEGORIES, NEWS_CATEGORIES[0]!);
+  const [activeCategory, setActiveCategory] = useClientTab("tab", NEWS_CATEGORIES, NEWS_CATEGORIES[0]!);
 
   const tabs: TabItem[] = useMemo(() => NEWS_CATEGORIES.map((id) => ({ id, label: t(CATEGORY_LABELS[id]) })), [t]);
 

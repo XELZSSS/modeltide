@@ -1,3 +1,4 @@
+"use client";
 import { memo, useMemo } from "react";
 import { useTranslation } from "@/client/providers";
 import type { ArtificialAnalysisModel } from "@/shared/types";

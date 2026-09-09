@@ -1,11 +1,18 @@
 import type { AppContext } from "@/server/context";
-import { STATIC_TTL_MS } from "@/shared/config";
-import { FAST_FETCH_OPTS, cacheKeys } from "@/server/config";
+import { UPSTREAM_FETCH_OPTS } from "@/server/config";
 import { obj, str } from "@/server/parsers/primitives";
-import { UpstreamError, errMsg } from "@/server/infra/errors";
-import { runCapped } from "@/server/infra/pool";
+import { UpstreamError } from "@/server/infra/errors";
+import { errMsg, runCapped } from "@/server/infra/pool";
 
 const HEALTHY_COMPONENT_STATES = new Set(["operational"]);
+
+// Page-level verdicts reported by Statuspage (`summary.json` → `status.indicator`).
+// This is the provider's own communicated state ("All Systems Operational" vs an
+// incident banner) and the only thing that may flip a source to down.
+// Per-component states are kept as detail text for the error message, but a single
+// degraded edge component must not flip the whole provider: that produced a
+// down/up flap on nearly every sampling round.
+const HEALTHY_PAGE_INDICATORS = new Set(["none"]);
 
 export function parseStatuspageSummary(raw: unknown): { ok: boolean; degradedComponents: string[]; total: number } {
   const root = obj(raw);
@@ -29,7 +36,11 @@ export function parseStatuspageSummary(raw: unknown): { ok: boolean; degradedCom
   if (total === 0) {
     throw new UpstreamError("Statuspage summary has no readable component states");
   }
-  return { ok: degradedComponents.length === 0, degradedComponents, total };
+  // Prefer the page-level indicator when the payload carries one; fall back to the
+  // component rule for non-standard shapes so unknown payloads fail closed, not open.
+  const indicator = str(obj(root?.status)?.indicator).trim().toLowerCase();
+  const ok = indicator ? HEALTHY_PAGE_INDICATORS.has(indicator) : degradedComponents.length === 0;
+  return { ok, degradedComponents, total };
 }
 
 export interface ProviderStatusResult {
@@ -39,13 +50,21 @@ export interface ProviderStatusResult {
   error: string | null;
 }
 
-async function fetchStatuspage(ctx: AppContext, url: string, label: string): Promise<ProviderStatusResult> {
+async function fetchStatuspage(
+  ctx: AppContext,
+  url: string,
+  label: string,
+): Promise<ProviderStatusResult | null> {
   const started = Date.now();
   let raw: unknown;
   try {
-    raw = await ctx.http.json<unknown>(url, FAST_FETCH_OPTS);
+    raw = await ctx.http.json<unknown>(url, UPSTREAM_FETCH_OPTS);
   } catch (err) {
-    return { ok: false, status: null, latencyMs: Date.now() - started, error: errMsg(err) };
+    // Our fetch failing says nothing about the provider — status pages are
+    // independently hosted. Report unknown (skip this round) so our own network
+    // blip can't flip the source down and manufacture a down/up event pair.
+    ctx.log("warn", `[provider-status] ${label} fetch failed: ${errMsg(err)}`);
+    return null;
   }
   const latencyMs = Date.now() - started;
   try {
@@ -58,8 +77,10 @@ async function fetchStatuspage(ctx: AppContext, url: string, label: string): Pro
       error: `degraded: ${parsed.degradedComponents.slice(0, 3).join(", ")}`,
     };
   } catch (err) {
+    // Got a payload we can't parse: our parser is outdated, not proof the
+    // provider is down. Same unknown handling as a fetch failure.
     ctx.log("warn", `[provider-status] ${label} parse failed: ${errMsg(err)}`);
-    return { ok: false, status: 200, latencyMs, error: "unrecognized status payload" };
+    return null;
   }
 }
 
@@ -87,13 +108,14 @@ export function parseGoogleCloudIncidents(raw: unknown): { ok: boolean; openInci
   return { ok: openIncidents.length === 0, openIncidents };
 }
 
-async function fetchGoogleCloudStatus(ctx: AppContext): Promise<ProviderStatusResult> {
+async function fetchGoogleCloudStatus(ctx: AppContext): Promise<ProviderStatusResult | null> {
   const started = Date.now();
   let raw: unknown;
   try {
-    raw = await ctx.http.json<unknown>(GOOGLE_CLOUD_STATUS_URL, FAST_FETCH_OPTS);
+    raw = await ctx.http.json<unknown>(GOOGLE_CLOUD_STATUS_URL, UPSTREAM_FETCH_OPTS);
   } catch (err) {
-    return { ok: false, status: null, latencyMs: Date.now() - started, error: errMsg(err) };
+    ctx.log("warn", `[provider-status] google-cloud fetch failed: ${errMsg(err)}`);
+    return null;
   }
   const latencyMs = Date.now() - started;
   try {
@@ -107,7 +129,7 @@ async function fetchGoogleCloudStatus(ctx: AppContext): Promise<ProviderStatusRe
     };
   } catch (err) {
     ctx.log("warn", `[provider-status] google-cloud parse failed: ${errMsg(err)}`);
-    return { ok: false, status: 200, latencyMs, error: "unrecognized status payload" };
+    return null;
   }
 }
 
@@ -158,29 +180,14 @@ export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<Provid
   for (let i = 0; i < settled.length; i++) {
     const s = settled[i]!;
     const target = PROVIDER_STATUS_TARGETS[i]!;
-    if (s.status === "fulfilled") results.push(s.value);
-    else results.push([target.id, { ok: false, status: null, latencyMs: 0, error: "sampling failed" }] as const);
+    if (s.status === "fulfilled") {
+      const [id, result] = s.value;
+      // Unknown (our fetch/parse failed) is skipped, not recorded: the source keeps
+      // its previous state instead of flapping down on this round and up on the next.
+      if (result !== null) results.push([id, result] as const);
+    } else {
+      ctx.log("warn", `[provider-status] ${target.label} sampling threw, skipping round`);
+    }
   }
   return new Map(results);
 }
-
-export const getProviderStatuses = (ctx: AppContext): Promise<Record<ProviderStatusId, ProviderStatusResult>> =>
-  ctx.cache.withTtl(cacheKeys.providerStatus, STATIC_TTL_MS, async () => {
-    const map = await fetchProviderStatuses(ctx);
-    const record = {} as Record<ProviderStatusId, ProviderStatusResult>;
-    let failures = 0;
-    for (const target of PROVIDER_STATUS_TARGETS) {
-      const result = map.get(target.id);
-      if (!result) {
-        record[target.id] = { ok: false, status: null, latencyMs: 0, error: "missing from sampling round" };
-        failures += 1;
-        continue;
-      }
-      record[target.id] = result;
-      if (!result.ok) failures += 1;
-    }
-    if (failures === PROVIDER_STATUS_TARGETS.length) {
-      throw new UpstreamError(`Provider status: all ${PROVIDER_STATUS_TARGETS.length} status pages failed`);
-    }
-    return { data: record };
-  });

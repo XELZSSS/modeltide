@@ -1,3 +1,4 @@
+"use client";
 import { memo, useMemo } from "react";
 import { formatDollar } from "@/client/utils/format";
 import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseStatuspageSummary, parseGoogleCloudIncidents } from "@/server/sources/provider-status";
+import {
+  fetchProviderStatuses,
+  parseGoogleCloudIncidents,
+  parseStatuspageSummary,
+} from "@/server/sources/provider-status";
+import type { AppContext } from "@/server/context";
 import { parseDailyPapers } from "@/server/sources/hf-papers";
 import { parseLitellmPricing } from "@/server/sources/pricing/litellm";
+import { SOURCE_LIMITS } from "@/shared/config";
 
 describe("parseStatuspageSummary", () => {
   it("is healthy when every component is operational", () => {
@@ -24,6 +30,28 @@ describe("parseStatuspageSummary", () => {
     });
     expect(out.ok).toBe(false);
     expect(out.degradedComponents).toEqual(["Images", "partial_outage"]);
+  });
+
+  it("trusts the page indicator over a single degraded component", () => {
+    const out = parseStatuspageSummary({
+      status: { indicator: "none", description: "All Systems Operational" },
+      components: [
+        { name: "API", status: "operational" },
+        { name: "Edge helper", status: "degraded_performance" },
+      ],
+    });
+    expect(out.ok).toBe(true);
+    expect(out.degradedComponents).toEqual(["Edge helper"]);
+  });
+
+  it("fails on a non-none page indicator even when every component is operational", () => {
+    for (const indicator of ["minor", "major", "critical", "maintenance"]) {
+      const out = parseStatuspageSummary({
+        status: { indicator, description: "Something is off" },
+        components: [{ name: "API", status: "operational" }],
+      });
+      expect(out.ok).toBe(false);
+    }
   });
 
   it("throws on empty or unreadable component lists (fail closed)", () => {
@@ -63,6 +91,45 @@ describe("parseGoogleCloudIncidents", () => {
   });
 });
 
+describe("fetchProviderStatuses", () => {
+  const healthySummary = () => ({
+    status: { indicator: "none", description: "All Systems Operational" },
+    components: [{ name: "API", status: "operational" }],
+  });
+  const ctxWithJson = (json: (url: string) => Promise<unknown>) =>
+    ({ http: { json }, log: () => {} }) as unknown as AppContext;
+
+  it("skips providers whose status page fetch fails instead of marking them down", async () => {
+    const ctx = ctxWithJson(async (url: string) => {
+      if (url.includes("deepseek")) throw new Error("timeout");
+      if (url.includes("status.cloud.google.com")) return [];
+      return healthySummary();
+    });
+    const map = await fetchProviderStatuses(ctx);
+    expect(map.has("deepseekApi")).toBe(false);
+    expect(map.get("cerebrasApi")).toMatchObject({ ok: true });
+    expect(map.get("googleCloudApi")).toMatchObject({ ok: true });
+  });
+
+  it("returns an empty map when every fetch fails (no confident verdicts)", async () => {
+    const ctx = ctxWithJson(async () => {
+      throw new Error("network down");
+    });
+    const map = await fetchProviderStatuses(ctx);
+    expect(map.size).toBe(0);
+  });
+
+  it("skips unparseable payloads instead of marking them down", async () => {
+    const ctx = ctxWithJson(async (url: string) => {
+      if (url.includes("status.cloud.google.com")) return [];
+      return { nope: true };
+    });
+    const map = await fetchProviderStatuses(ctx);
+    expect(map.has("openaiApi")).toBe(false);
+    expect(map.get("googleCloudApi")).toMatchObject({ ok: true });
+  });
+});
+
 describe("parseDailyPapers", () => {
   const paper = (id: string, title: string, upvotes: number, publishedAt = "2026-09-05T00:00:00.000Z") => ({
     paper: { id, title, upvotes, publishedAt },
@@ -95,9 +162,9 @@ describe("parseDailyPapers", () => {
     expect(out.map((x) => x.id)).toEqual(["hf-paper-y"]);
   });
 
-  it("caps at 30 items", () => {
+  it("caps at SOURCE_LIMITS.dailyPapers items", () => {
     const many = Array.from({ length: 40 }, (_, i) => paper(`id-${i}`, `Paper ${i}`, 100 - i));
-    expect(parseDailyPapers(many)).toHaveLength(30);
+    expect(parseDailyPapers(many)).toHaveLength(SOURCE_LIMITS.dailyPapers);
   });
 
   it("throws on non-array or all-unusable payloads", () => {
@@ -136,7 +203,6 @@ describe("parseLitellmPricing", () => {
       input: 1.25,
       output: 10,
       cachedInput: 0.125,
-      contextWindow: 400000,
     });
     const opus = out.find((m) => m.id === "claude-opus-4")!;
     expect(opus).toMatchObject({ provider: "anthropic", input: 15, output: 75, cachedInput: null });

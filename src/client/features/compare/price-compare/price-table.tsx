@@ -1,3 +1,4 @@
+"use client";
 import { memo } from "react";
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/client/utils/cn";

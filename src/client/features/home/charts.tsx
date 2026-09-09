@@ -1,12 +1,14 @@
+"use client";
 import { memo, useMemo } from "react";
 import { type ChartOptions } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
 import { Card, CardContent } from "@/client/components/ui/card";
-import { EmptyState } from "@/client/components/feedback";
 import { shortModelId } from "@/client/utils/model";
-import "@/client/utils/charts";
-import { useChartTheme } from "@/client/ui-hooks";
+import { registerLine } from "@/client/utils/charts-register";
+
+registerLine();
+import { useChartTheme } from "@/client/theme/chart-theme";
 import {
   defaultTooltipOptions,
   chartBase,
@@ -104,9 +106,12 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
   return (
     <Card>
       <CardContent padding="md">
-        <p className="ui-card-title mb-4">{t("intelligenceIndex")}</p>
+        <p className="ui-card-title mb-1">{t("intelligenceIndex")}</p>
+        <p className="ui-caption mb-4">{t("artificialSource")}</p>
         {top10.length === 0 ? (
-          <EmptyState message={t("noRankingsData")} />
+          <div className="flex h-[200px] sm:h-[240px] items-center justify-center text-center ui-body-secondary" role="status">
+            {t("noRankingsData")}
+          </div>
         ) : (
           <div className="w-full h-[200px] sm:h-[240px]">
             <figure className="h-full">

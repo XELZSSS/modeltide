@@ -1,7 +1,7 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="112" fill="#090a0b"/>
-  <!-- Geometric M: bold round-capped strokes, legible down to 32px -->
-  <path d="M132 312 V184 L256 272 L380 184 V312" fill="none" stroke="#ffffff" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Tide wave: single cyan swell under the M -->
-  <path d="M96 380 q40 -38 80 0 t80 0 t80 0 t80 0" fill="none" stroke="#38bdf8" stroke-width="30" stroke-linecap="round"/>
+﻿<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#ffffff"/>
+  <!-- Geometric M: near-baseline middle vertex reads unmistakably as the letter M -->
+  <path d="M132 272 V144 L256 260 L380 144 V272" fill="none" stroke="#090a0b" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter"/>
+  <!-- Tide wave: angular zigzag kept clear of the M -->
+  <path d="M96 360 L136 328 L176 360 L216 328 L256 360 L296 328 L336 360 L376 328 L416 360" fill="none" stroke="#38bdf8" stroke-width="30" stroke-linecap="square" stroke-linejoin="miter"/>
 </svg>

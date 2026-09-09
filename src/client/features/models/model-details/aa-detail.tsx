@@ -1,3 +1,4 @@
+"use client";
 import { useMemo } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TFunction, TranslationKey } from "@/shared/i18n";
@@ -18,31 +19,37 @@ import { DetailLayout, DetailSection, InfoGrid, StatGrid } from "@/client/compon
 import { InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { useOfficialPricing } from "@/client/features/pricing/official";
+import { createDetailView } from "./detail-views";
+import { useSuspenseArtificialRankings } from "@/client/api/queries";
 
 const MODALITIES = [
   {
     key: "text",
-    className: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    className: "border-accent/30 bg-accent-light text-accent",
     labelKey: "modalityText",
   },
   {
     key: "image",
-    className: "border-indigo-500/25 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
+    className: "border-info/30 bg-info-light text-info",
     labelKey: "modalityImage",
   },
   {
     key: "speech",
-    className: "border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-300",
+    className: "border-success/30 bg-success-light text-success",
     labelKey: "modalitySpeech",
   },
   {
     key: "video",
-    className: "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+    className: "border-warning/30 bg-warning-light text-warning",
     labelKey: "modalityVideo",
   },
 ] as const satisfies readonly { key: string; className: string; labelKey: TranslationKey }[];
 
 const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["gdpval"]);
+
+function titleCaseSizeClass(s: string): string {
+  return s.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function ModalitySection({
   label,
@@ -108,12 +115,16 @@ export function ModelDetailContent({
           <InfoRow label={t("releaseDate")} value={orNA(model.release_date, t)} />
           <InfoRow label={t("openWeights")} value={formatBoolean(t, model.is_open_weights)} />
           <InfoRow label={t("reasoning")} value={formatBoolean(t, model.is_reasoning === true)} />
-          <InfoRow label={t("contextWindow")} value={formatTokens(model.context_window_tokens, t)} />
+          {model.parameters != null && <InfoRow label={t("parameters")} value={formatTokens(model.parameters, t)} />}
+          {model.size_class && <InfoRow label={t("sizeClass")} value={titleCaseSizeClass(model.size_class)} />}
         </InfoCard>
         <InfoCard title={t("pricing")}>
           <InfoRow label={t("promptPrice")} value={formatPricePerMillion(pricing.input, t)} />
           <InfoRow label={t("completionPrice")} value={formatPricePerMillion(pricing.output, t)} />
           <InfoRow label={t("cacheHitPrice")} value={formatPricePerMillion(pricing.cacheHit, t)} />
+          {pricing.cacheWrite != null && (
+            <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(pricing.cacheWrite, t)} />
+          )}
           <InfoRow label={t("blendedPrice")} value={formatPricePerMillion(blended, t)} />
         </InfoCard>
       </InfoGrid>
@@ -144,3 +155,12 @@ export function ModelDetailContent({
     </DetailLayout>
   );
 }
+
+export const AADetail = createDetailView(
+  useSuspenseArtificialRankings,
+  "aa",
+  ModelDetailContent,
+  (m) => m.name,
+  "id",
+  "slug",
+);

@@ -3,6 +3,7 @@ import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types
 
 interface CostEstimateOptions {
   cacheHitRate?: number;
+  cacheWriteRate?: number;
   reasoningTokens?: number;
 }
 
@@ -18,11 +19,18 @@ function calcCost(
   if (!pricing || typeof pricing.input !== "number" || typeof pricing.output !== "number") return null;
   if (!Number.isFinite(pricing.input) || !Number.isFinite(pricing.output)) return null;
   const cacheRaw = pricing.cacheHit;
-  if (cacheRaw !== undefined && cacheRaw !== null && !Number.isFinite(cacheRaw)) return null;
+  if (cacheRaw != null && !Number.isFinite(cacheRaw)) return null;
+  const cacheWriteRaw = pricing.cacheWrite;
+  if (cacheWriteRaw != null && !Number.isFinite(cacheWriteRaw)) return null;
   if (!Number.isFinite(promptTokens) || !Number.isFinite(completionTokens)) return null;
   const hitRate = clamp01(opts?.cacheHitRate ?? 0);
+  // The write tier exists only when the upstream interface reports a write price.
+  const hasWriteTier = typeof cacheWriteRaw === "number";
+  const writeRate = hasWriteTier ? clamp01(Math.min(opts?.cacheWriteRate ?? 0, 1 - hitRate)) : 0;
+  const freshRate = 1 - hitRate - writeRate;
   const cached = typeof cacheRaw === "number" ? cacheRaw : pricing.input;
-  const inputRate = (1 - hitRate) * pricing.input + hitRate * cached;
+  const writeLeg = hasWriteTier ? writeRate * cacheWriteRaw! : 0;
+  const inputRate = hitRate * cached + writeLeg + freshRate * pricing.input;
   const reasoning = nonNeg(opts?.reasoningTokens ?? 0);
   return (
     (nonNeg(promptTokens) / 1_000_000) * inputRate +
@@ -35,6 +43,7 @@ interface MonthlyCostOptions {
   dailyOutput: number;
   dailyReasoning?: number;
   cacheHitRate: number;
+  cacheWriteRate: number;
   daysPerMonth: number;
 }
 
@@ -46,6 +55,7 @@ export function calcMonthlyCost(
   const pricing = official ? resolveEffectivePricing(model.pricing, official) : model.pricing;
   const daily = calcCost(pricing, opts.dailyInput, opts.dailyOutput, {
     cacheHitRate: opts.cacheHitRate,
+    cacheWriteRate: opts.cacheWriteRate,
     reasoningTokens: opts.dailyReasoning,
   });
   return daily == null ? null : daily * Math.max(1, opts.daysPerMonth);

@@ -1,29 +1,19 @@
 // @ts-check
 const fs = require("fs");
 const path = require("path");
+const { stripComments, walkTs } = require("./_util.cjs");
 
 const ROOT = path.resolve("src/shared");
 
 let failed = false;
-function walk(dir) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full);
-    else if (/\.(ts|tsx)$/.test(entry.name)) check(full);
-  }
-}
 function check(file) {
   const src = fs.readFileSync(file, "utf8");
-  const code = src
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .split("\n")
-    .map((line) => line.split("//")[0])
-    .join("\n");
+  const code = stripComments(src);
   const patterns = [
-    /\btypeof\s+(document|window|navigator|localStorage|sessionStorage)\b/,
-    /\b(document|window|navigator|localStorage|sessionStorage|location)\s*\./,
-    /\b(document|window|navigator|localStorage|sessionStorage|location)\s*\[/,
-    /\bnew\s+HTMLElement\b/,
+    /\btypeof\s+(document|window|navigator|localStorage|sessionStorage|globalThis|self|caches|indexedDB)\b/,
+    /\b(document|window|navigator|localStorage|sessionStorage|location|globalThis|self|caches|indexedDB|matchMedia|customElements)\s*\./,
+    /\b(document|window|navigator|localStorage|sessionStorage|location|globalThis|self|caches|indexedDB)\s*\[/,
+    /\b(new\s+(HTMLElement|Image|Audio|XMLHttpRequest|IntersectionObserver|ResizeObserver|MutationObserver)|requestAnimationFrame|cancelAnimationFrame)\b/,
     /\bHTMLElement\b/,
   ];
   for (const re of patterns) {
@@ -38,6 +28,6 @@ if (!fs.existsSync(ROOT)) {
   console.log("check-shared-dom: no src/shared (skip)");
   process.exit(0);
 }
-walk(ROOT);
+for (const file of walkTs(ROOT)) check(file);
 if (failed) process.exit(1);
 console.log("check-shared-dom: ok (no DOM globals in src/shared)");

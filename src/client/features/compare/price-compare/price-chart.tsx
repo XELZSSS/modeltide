@@ -1,10 +1,14 @@
+"use client";
 import { memo, useMemo } from "react";
 import type { ChartOptions } from "chart.js";
 import { Bar } from "react-chartjs-2";
+import { registerBar } from "@/client/utils/charts-register";
+
+registerBar();
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
-import { useChartTheme } from "@/client/ui-hooks";
+import { useChartTheme } from "@/client/theme/chart-theme";
 import {
   axisDashedBorderStyle,
   axisGridStyle,

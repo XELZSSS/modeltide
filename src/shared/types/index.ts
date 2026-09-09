@@ -7,3 +7,5 @@ export type * from "@/shared/types/news";
 export type * from "@/shared/types/status";
 
 export type * from "@/shared/types/app";
+
+export type * from "@/shared/types/payload";

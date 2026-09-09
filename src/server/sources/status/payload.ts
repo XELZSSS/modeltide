@@ -3,6 +3,7 @@ import type { SourceHistorySummary, StatusEvent, StatusHistoryPayload } from "@/
 import type { UptimePayload } from "@/server/sources/status/uptime";
 import {
   RECENT_WINDOW_MS,
+  RETAINED_DAYS,
   avgLatency,
   deriveEvents,
   emptyEntry,
@@ -21,7 +22,8 @@ function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now: number
   const buckets = entry.daily.filter((b) => b.day >= utcDay(day7Cutoff));
   const sumOk = buckets.reduce((a, b) => a + b.ok, 0);
   const sumTotal = buckets.reduce((a, b) => a + b.total, 0);
-  const total90 = entry.daily.reduce((a, b) => a + b.total, 0);
+  const retained = entry.daily.slice(-RETAINED_DAYS);
+  const total30 = retained.reduce((a, b) => a + b.total, 0);
   return {
     id,
     ok: last ? last.ok : false,
@@ -29,7 +31,7 @@ function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now: number
     checkedAt: last ? new Date(last.t).toISOString() : null,
     uptime24h: uptimeRatio(entry.recent, now - RECENT_WINDOW_MS),
     uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
-    uptime90d: total90 > 0 ? entry.daily.reduce((a, b) => a + b.ok, 0) / total90 : null,
+    uptime30d: total30 > 0 ? retained.reduce((a, b) => a + b.ok, 0) / total30 : null,
     avgLatency24h: avgLatency(entry.recent, now - RECENT_WINDOW_MS),
   };
 }

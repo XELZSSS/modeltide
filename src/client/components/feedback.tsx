@@ -1,5 +1,6 @@
-import { useNavigate, Link, useLocation } from "react-router";
-import { ArrowLeft, type LucideIcon, Loader2 } from "lucide-react";
+"use client";
+import { SafeLink as Link, usePathname, useRouter, useSearchParams } from "@/client/router";
+import { ArrowLeft, TriangleAlert, type LucideIcon, Loader2 } from "lucide-react";
 import { Button } from "@/client/components/ui/button";
 import { Card } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
@@ -8,14 +9,14 @@ import { Component, Fragment, type ReactNode, type ErrorInfo, memo, Suspense } f
 import { PageContainer } from "@/client/components/layout";
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
 
-export function BackButton({ labelKey, to, state }: { labelKey: TranslationKey; to: string; state?: unknown }) {
-  const navigate = useNavigate();
+export function BackButton({ labelKey, to }: { labelKey: TranslationKey; to: string }) {
+  const router = useRouter();
   const { t } = useTranslation();
   const goBack = () => {
     const raw = typeof window !== "undefined" ? (window.history.state as { idx?: unknown } | null)?.idx : undefined;
     const idx = typeof raw === "number" && Number.isInteger(raw) ? raw : undefined;
-    if (idx != null && idx > 0) navigate(-1);
-    else navigate(to, { state });
+    if (idx != null && idx > 0) router.back();
+    else router.push(to);
   };
   return (
     <Button size="sm" variant="outline" onClick={goBack} className="self-start">
@@ -62,11 +63,11 @@ interface ErrorBoundaryState {
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   static displayName = "ErrorBoundary";
-  state: ErrorBoundaryState = { hasError: false, error: null, resetKey: 0 };
+  override state: ErrorBoundaryState = { hasError: false, error: null, resetKey: 0 };
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error };
   }
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary]", error, info.componentStack);
   }
   private handleRetry = () => {
@@ -74,7 +75,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.props.onReset?.();
     this.setState((s) => ({ hasError: false, error: null, resetKey: s.resetKey + 1 }));
   };
-  render() {
+  override render() {
     if (this.state.hasError) {
       const title = this.props.errorTitle ?? "Error";
       const retry = this.props.retryLabel ?? "Retry";
@@ -107,8 +108,8 @@ export function NotFound() {
         <h1 className="ui-section-title">{t("notFoundTitle")}</h1>
         <p className="ui-body-secondary">{t("notFound")}</p>
         <Link
-          to="/"
-          className="mt-2 inline-flex items-center justify-center gap-1.5 h-9 px-4 text-sm font-medium rounded-none border border-border text-text-primary hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          href="/"
+          className="mt-2 inline-flex items-center justify-center gap-1.5 h-9 px-4 text-sm font-medium rounded-none border border-border text-text-primary hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         >
           <ArrowLeft size={14} />
           {t("backToHome")}
@@ -128,10 +129,20 @@ export const Spinner = memo(function Spinner() {
   );
 });
 
+export function PartialNotice({ message }: { message: string }) {
+  return (
+    <div role="status" className="ui-caption flex items-center gap-1.5 text-text-secondary">
+      <TriangleAlert size={14} className="shrink-0" aria-hidden="true" />
+      {message}
+    </div>
+  );
+}
+
 export function SuspenseQuery({ children, resetKey: extraKey }: { children: ReactNode; resetKey?: string }) {
   const { t } = useTranslation();
-  const location = useLocation();
-  const resetKey = `${location.pathname}${location.search}${extraKey ? `:${extraKey}` : ""}`;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const resetKey = `${pathname}?${searchParams.toString()}${extraKey ? `:${extraKey}` : ""}`;
   return (
     <QueryErrorResetBoundary>
       {({ reset }) => (

@@ -1,3 +1,4 @@
+"use client";
 import { memo, useEffect, type ReactNode } from "react";
 import { ArrowLeftRight, Trash2, X } from "lucide-react";
 import { Button } from "@/client/components/ui/button";

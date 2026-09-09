@@ -1,3 +1,4 @@
+"use client";
 import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
 
@@ -99,7 +100,7 @@ export function mobilePrimaryCol<T>(
 export function rankCol<T>(rankOf: (row: T) => number | null | undefined): DataTableColumn<T> {
   return {
     id: "rank",
-    header: "#",
+    header: "",
     width: 76,
     hiddenMd: true,
     cell: (row) => {
@@ -113,4 +114,14 @@ export function rankCol<T>(rankOf: (row: T) => number | null | undefined): DataT
 
 export function indexRankMap<T>(rows: T[], getId: (row: T) => string): Map<string, number> {
   return new Map(rows.map((row, i) => [getId(row), i + 1]));
+}
+
+export interface RowListProps<T> {
+  pagedData: T[];
+  columns: DataTableColumn<T>[];
+  getRowId: (row: T) => string;
+  isExpandable: boolean;
+  expandedRowId?: string | null;
+  onToggleExpand?: (rowId: string | null) => void;
+  renderExpandedRow?: (row: T) => React.ReactNode;
 }

@@ -1,3 +1,4 @@
+"use client";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/client/utils/cn";

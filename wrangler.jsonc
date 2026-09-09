@@ -1,25 +1,34 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "modeltide",
-  "main": "src/server/worker.ts",
+  "main": "./worker/index.ts",
   "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "keep_vars": false,
   "workers_dev": true,
 
   "vars": {},
 
   "assets": {
+    // Not used with the Cloudflare Vite plugin (it points at the client build
+    // output automatically); kept for `wrangler deploy` parity.
     "directory": "./dist/client",
-    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
   },
 
   "triggers": {
-    "crons": ["*/30 * * * *"],
+    // Off-peak minutes (13/43): keep the 30-min cadence but avoid the global
+    // :00/:30 cron stampede on shared upstreams (HF, RSS, AA, ...).
+    "crons": ["13,43 * * * *"],
   },
 
   "observability": {
     "enabled": true,
+  },
+
+  "placement": {
+    "mode": "smart",
   },
 
   "kv_namespaces": [{ "binding": "CACHE", "id": "df8295997e6f42a7803a9d25b7e12f25" }],

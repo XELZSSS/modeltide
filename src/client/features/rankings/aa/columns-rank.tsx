@@ -1,6 +1,7 @@
+"use client";
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { formatScore, formatTokens } from "@/client/utils/format";
+import { formatScore } from "@/client/utils/format";
 import {
   RightAlignedText,
   rightCol,
@@ -15,7 +16,7 @@ function scoreColumn(
   header: string,
   accessor: (m: ArtificialAnalysisModel) => number | null | undefined,
   t: TFunction,
-  opts?: { mobilePrimary?: boolean },
+  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean },
 ): DataTableColumn<ArtificialAnalysisModel> {
   return rightColNA(
     id,
@@ -46,12 +47,6 @@ export function buildRankingColumns(
     )),
     { ...scoreColumn("intelligence", t("intelligenceIndex"), (m) => m.intelligence_index, t), mobilePrimary: true },
     scoreColumn("coding", t("coding"), (m) => m.coding_index, t),
-    scoreColumn("agentic", t("agentic"), (m) => m.agentic_index, t),
-    rightColNA(
-      "context",
-      t("contextWindow"),
-      (model) => (model.context_window_tokens != null ? formatTokens(model.context_window_tokens, t) : null),
-      t("notAvailable"),
-    ),
+    scoreColumn("agentic", t("agentic"), (m) => m.agentic_index, t, { hiddenMd: true }),
   ];
 }

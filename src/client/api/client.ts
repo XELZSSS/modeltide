@@ -11,9 +11,17 @@ export class ApiClientError extends Error {
   }
 }
 
-const FETCH_TIMEOUT_MS = 60_000;
+const FETCH_TIMEOUT_MS = 15_000;
 
-const apiBase = import.meta.env?.VITE_API_BASE?.replace(/\/+$/, "") ?? "";
+export function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
+}
+
+const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/+$/, "") ?? "";
+
+export function buildApiUrl(path: string): string {
+  return apiBase && path.startsWith("/") ? apiBase + path : path;
+}
 
 function timeoutSignal(ms: number): { signal: AbortSignal; cleanup: () => void } {
   if (typeof AbortSignal.timeout === "function") return { signal: AbortSignal.timeout(ms), cleanup: () => {} };
@@ -58,7 +66,7 @@ async function parseErrorMessage(res: Response): Promise<string> {
 }
 
 async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { cache?: RequestCache }): Promise<T> {
-  const url = apiBase && path.startsWith("/") ? apiBase + path : path;
+  const url = buildApiUrl(path);
   const timeout = timeoutSignal(FETCH_TIMEOUT_MS);
   const combined = signal ? combineSignals(signal, timeout.signal) : null;
   try {

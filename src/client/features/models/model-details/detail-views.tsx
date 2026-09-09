@@ -1,3 +1,4 @@
+"use client";
 import type { ComponentType, ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import { MODEL_SOURCES, type ModelSource } from "@/shared/config";
@@ -27,7 +28,9 @@ export function DetailShell({ source, title, children }: { source: ModelSource; 
 }
 
 export function createDetailView<T>(
-  useQuery: () => { data: T[] | undefined; isPending?: boolean; isError?: boolean },
+  useQuery: () =>
+    | T[]
+    | { data: T[] | { data: T[]; fetchedAt: string } | undefined; isPending?: boolean; isError?: boolean },
   source: ModelSource,
   Content: ComponentType<{ model: T }>,
   titleOf: (model: T) => string,
@@ -35,7 +38,21 @@ export function createDetailView<T>(
 ): ComponentType<{ decodedId: string }> {
   return function DetailView({ decodedId }: { decodedId: string }) {
     const { t } = useTranslation();
-    const { data, isPending, isError } = useQuery();
+    const rawResult = useQuery() as unknown;
+    let data: T[] | undefined;
+    let isPending = false;
+    let isError = false;
+    if (Array.isArray(rawResult)) {
+      data = rawResult;
+    } else if (rawResult && typeof rawResult === "object" && "data" in rawResult) {
+      const r = rawResult as { data: T[] | { data: T[]; fetchedAt: string } | undefined; isPending?: boolean; isError?: boolean };
+      const raw = r.data;
+      if (Array.isArray(raw)) data = raw;
+      else if (raw && typeof raw === "object" && "data" in raw && Array.isArray((raw as { data: T[] }).data))
+        data = (raw as { data: T[] }).data;
+      isPending = !!r.isPending;
+      isError = !!r.isError;
+    }
     const model = data ? findModel(data, decodedId, ...keys) : undefined;
     if (!model && isPending) return <Spinner />;
     if (!model && isError) {

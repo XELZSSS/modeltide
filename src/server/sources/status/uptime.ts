@@ -1,5 +1,5 @@
 import type { AppContext } from "@/server/context";
-import { errMsg } from "@/server/infra/errors";
+import { errMsg } from "@/server/infra/pool";
 
 const FIRST_LAUNCH_KEY = "uptime:first-launch";
 

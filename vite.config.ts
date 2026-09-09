@@ -7,46 +7,11 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(() => ({
-  plugins: [tailwindcss(), react(), cloudflare()],
+export default defineConfig({
+  plugins: [react(), tailwindcss(), cloudflare()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
     },
   },
-  server: {
-    port: 3000,
-    hmr: { overlay: true },
-  },
-  optimizeDeps: {
-    include: ["react", "react-dom", "react-router", "@tanstack/react-query", "zustand"],
-  },
-  build: {
-    target: "es2022",
-    chunkSizeWarningLimit: 400,
-    cssMinify: true,
-    cssCodeSplit: true,
-    reportCompressedSize: process.env.CI !== "true",
-    sourcemap: false,
-    rollupOptions: {
-      treeshake: true,
-      output: {
-        manualChunks(id: string) {
-          if (id.includes("node_modules/hono") || id.includes("node_modules/fast-xml-parser")) {
-            return "server-only-violation";
-          }
-          if (!id.includes("node_modules")) return;
-          if (/node_modules\/(react|react-dom)(\/|$)/.test(id)) return "vendor-react";
-          if (id.includes("react-router")) return "vendor-router";
-          if (id.includes("chart.js") || id.includes("react-chartjs-2")) return "charts";
-          if (id.includes("@tanstack/react-query")) return "query";
-          if (id.includes("zustand")) return "state";
-          if (id.includes("lucide-react") || id.includes("clsx") || id.includes("tailwind-merge"))
-            return "vendor-utils";
-        },
-        chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash][extname]",
-      },
-    },
-  },
-}));
+});

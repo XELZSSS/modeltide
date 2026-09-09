@@ -2,10 +2,12 @@ import { ONE_DAY, ONE_MINUTE } from "@/shared/config";
 import type { DayBucket, StatusEvent, UptimeSample } from "@/shared/types";
 import type { SourceStatus } from "@/shared/types";
 
-export const SAMPLE_INTERVAL_MS = 40 * ONE_MINUTE;
+// Samples are written by the 30-minute cron (`triggers.crons` in wrangler.jsonc);
+// the old 40-minute SAMPLE_INTERVAL_MS constant was unused and removed.
 const SAMPLE_UPSERT_WINDOW_MS = 4 * ONE_MINUTE;
 export const RECENT_WINDOW_MS = ONE_DAY;
-export const RETAINED_DAYS = 90;
+/** History retention cap (30 days): daily buckets older than this are pruned on every merge. */
+export const RETAINED_DAYS = 30;
 
 export type SourceId = SourceStatus["id"];
 
@@ -60,10 +62,6 @@ export function deriveEvents(id: SourceId, samples: UptimeSample[]): StatusEvent
   return events;
 }
 
-function isNewIncident(prev: UptimeSample | undefined, sample: UptimeSample): boolean {
-  return !sample.ok && (prev === undefined || prev.ok);
-}
-
 function pruneWindows(recent: UptimeSample[], daily: DayBucket[], now: number): HistorySourceEntry {
   const cutoffDay = utcDay(now - RETAINED_DAYS * ONE_DAY);
   return {
@@ -82,10 +80,10 @@ export function mergeSample(
   const last = recent.at(-1);
   const isUpsert = last != null && sample.t >= last.t && sample.t - last.t < SAMPLE_UPSERT_WINDOW_MS / 2;
   if (last != null && sample.t <= last.t) return prevEntry;
-  const prevOfLast = recent.at(-2);
   if (isUpsert) {
+    // Roll back the replaced sample's day-bucket contribution before overwriting it.
     const lastBucket = prevEntry.daily.find((b) => b.day === utcDay(last.t));
-    if (lastBucket) applySampleDelta(lastBucket, last, isNewIncident(prevOfLast, last), -1);
+    if (lastBucket) applySampleDelta(lastBucket, last, -1);
     recent[recent.length - 1] = sample;
   } else {
     recent.push(sample);
@@ -94,27 +92,19 @@ export function mergeSample(
 
   const daily = prevEntry.daily.map((b) => ({ ...b }));
   const day = utcDay(sample.t);
-  let prevSample: UptimeSample | undefined;
-  if (isUpsert) prevSample = prevOfLast;
-  else if (last != null && last.t < sample.t) prevSample = last;
   let bucket = daily.find((b) => b.day === day);
   if (!bucket) {
-    bucket = { day, total: 0, ok: 0, latencySum: 0, latencyN: 0, incidents: 0 };
+    bucket = { day, total: 0, ok: 0 };
     daily.push(bucket);
   }
-  applySampleDelta(bucket, sample, isNewIncident(prevSample, sample), 1);
+  applySampleDelta(bucket, sample, 1);
 
   return pruneWindows(prunedRecent, daily, now);
 }
 
-function applySampleDelta(bucket: DayBucket, sample: UptimeSample, incident: boolean, dir: 1 | -1): void {
+function applySampleDelta(bucket: DayBucket, sample: UptimeSample, dir: 1 | -1): void {
   bucket.total = Math.max(0, bucket.total + dir);
   if (sample.ok) {
     bucket.ok = Math.max(0, bucket.ok + dir);
-    if (sample.latencyMs != null) {
-      bucket.latencySum = Math.max(0, bucket.latencySum + dir * sample.latencyMs);
-      bucket.latencyN = Math.max(0, bucket.latencyN + dir);
-    }
   }
-  if (incident) bucket.incidents = Math.max(0, bucket.incidents + dir);
 }

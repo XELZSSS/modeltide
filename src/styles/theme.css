@@ -6,27 +6,40 @@
   --bg-card: #ffffff;
   --text-primary: #0b1220;
   --text-secondary: #5b6472;
-  --text-tertiary: #8f97a5;
-  --border: rgba(15, 23, 42, 0.08);
+  --text-tertiary: #6b7280;
+  --border: rgba(15, 23, 42, 0.14);
   --accent: #4f46e5;
-  --accent-light: rgba(79, 70, 229, 0.1);
+  --accent-light: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-contrast: #ffffff;
-  --hover: rgba(79, 70, 229, 0.07);
-  --selected: rgba(79, 70, 229, 0.12);
+  --hover: color-mix(in srgb, var(--accent) 7%, transparent);
+  --selected: color-mix(in srgb, var(--accent) 12%, transparent);
+  --ring: var(--accent);
   --destructive: #dc2626;
+  --destructive-contrast: #ffffff;
+  --destructive-light: color-mix(in srgb, var(--destructive) 10%, transparent);
   --success: #15803d;
-  --warning: #ffb224;
-  --nav-bg: rgba(255, 255, 255, 0.82);
-  --chart-1: #4f46e5;
+  --success-light: color-mix(in srgb, var(--success) 10%, transparent);
+  --warning: #b45309;
+  --warning-light: color-mix(in srgb, var(--warning) 10%, transparent);
+  --info: #0369a1;
+  --info-light: color-mix(in srgb, var(--info) 10%, transparent);
+  --nav-bg: rgba(255, 255, 255, 0.85);
+  --chart-1: #2563eb;
   --chart-2: #ea580c;
   --chart-3: #0d9488;
-  --chart-4: #7c3aed;
-  --chart-5: #e11d48;
-  --chart-6: #d97706;
+  --chart-4: #9333ea;
+  --chart-5: #dc2626;
+  --chart-6: #4d7c0f;
   --chart-7: #0891b2;
   --chart-8: #db2777;
   --chart-9: #059669;
-  --chart-10: #c026d3;
+  --chart-10: #64748b;
+  --donut-1: #8b5cf6;
+  --donut-2: #ec4899;
+  --donut-3: #0284c7;
+  --donut-4: #ea580c;
+  --donut-5: #059669;
+  --donut-6: #64748b;
 }
 
 .dark {
@@ -37,65 +50,90 @@
   --bg-card: #0e0e10;
   --text-primary: #e8ecf3;
   --text-secondary: #98a1b3;
-  --text-tertiary: #626b7e;
-  --border: rgba(148, 163, 184, 0.11);
+  --text-tertiary: #8b94a7;
+  --border: rgba(148, 163, 184, 0.18);
   --accent: #818cf8;
-  --accent-light: rgba(129, 140, 248, 0.1);
+  --accent-light: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-contrast: #06121c;
-  --hover: rgba(129, 140, 248, 0.07);
-  --selected: rgba(129, 140, 248, 0.12);
+  --hover: color-mix(in srgb, var(--accent) 9%, transparent);
+  --selected: color-mix(in srgb, var(--accent) 14%, transparent);
+  --ring: var(--accent);
   --destructive: #f2555a;
+  --destructive-contrast: #1c0505;
+  --destructive-light: color-mix(in srgb, var(--destructive) 14%, transparent);
   --success: #4cc38a;
+  --success-light: color-mix(in srgb, var(--success) 14%, transparent);
   --warning: #ffc53d;
-  --nav-bg: rgba(0, 0, 0, 0.82);
-  --chart-1: #818cf8;
+  --warning-light: color-mix(in srgb, var(--warning) 14%, transparent);
+  --info: #38bdf8;
+  --info-light: color-mix(in srgb, var(--info) 14%, transparent);
+  --nav-bg: rgba(0, 0, 0, 0.78);
+  --chart-1: #60a5fa;
   --chart-2: #fb923c;
   --chart-3: #2dd4bf;
-  --chart-4: #a78bfa;
+  --chart-4: #c084fc;
   --chart-5: #fb7185;
-  --chart-6: #fbbf24;
+  --chart-6: #a3e635;
   --chart-7: #22d3ee;
   --chart-8: #f472b6;
   --chart-9: #34d399;
-  --chart-10: #e879f9;
+  --chart-10: #94a3b8;
+  --donut-1: #a78bfa;
+  --donut-2: #f472b6;
+  --donut-3: #38bdf8;
+  --donut-4: #fb923c;
+  --donut-5: #34d399;
+  --donut-6: #94a3b8;
 }
 
 body[data-accent="home"] {
-  --section-accent: #4f46e5;
+  --accent: #4f46e5;
+  --accent-contrast: #ffffff;
 }
 body[data-accent="rankings"] {
-  --section-accent: #9333ea;
+  --accent: #9333ea;
+  --accent-contrast: #ffffff;
 }
 body[data-accent="releases"] {
-  --section-accent: #059669;
+  --accent: #047857;
+  --accent-contrast: #ffffff;
 }
 body[data-accent="news"] {
-  --section-accent: #ea580c;
+  --accent: #0e7490;
+  --accent-contrast: #ffffff;
 }
 body[data-accent="status"] {
-  --section-accent: #0284c7;
+  --accent: #0369a1;
+  --accent-contrast: #ffffff;
 }
 .dark body[data-accent="home"] {
-  --section-accent: #818cf8;
+  --accent: #818cf8;
+  --accent-contrast: #06121c;
 }
 .dark body[data-accent="rankings"] {
-  --section-accent: #c084fc;
+  --accent: #c084fc;
+  --accent-contrast: #06121c;
 }
 .dark body[data-accent="releases"] {
-  --section-accent: #34d399;
+  --accent: #34d399;
+  --accent-contrast: #06121c;
 }
 .dark body[data-accent="news"] {
-  --section-accent: #fb923c;
+  --accent: #22d3ee;
+  --accent-contrast: #06121c;
 }
 .dark body[data-accent="status"] {
-  --section-accent: #38bdf8;
+  --accent: #38bdf8;
+  --accent-contrast: #06121c;
 }
 body[data-accent] {
-  --color-accent: var(--section-accent);
-  --color-accent-light: var(--bg-secondary);
-  --color-hover: var(--bg-secondary);
-  --color-selected: var(--bg-tertiary);
-  --color-accent-light: color-mix(in srgb, var(--section-accent) 10%, transparent);
-  --color-hover: color-mix(in srgb, var(--section-accent) 7%, transparent);
-  --color-selected: color-mix(in srgb, var(--section-accent) 12%, transparent);
+  --accent-light: color-mix(in srgb, var(--accent) 10%, transparent);
+  --hover: color-mix(in srgb, var(--accent) 7%, transparent);
+  --selected: color-mix(in srgb, var(--accent) 12%, transparent);
+  --ring: var(--accent);
+}
+.dark body[data-accent] {
+  --accent-light: color-mix(in srgb, var(--accent) 12%, transparent);
+  --hover: color-mix(in srgb, var(--accent) 9%, transparent);
+  --selected: color-mix(in srgb, var(--accent) 14%, transparent);
 }

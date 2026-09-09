@@ -6,7 +6,8 @@ export interface Env {
   CACHE?: KVNamespace;
   ASSETS?: Fetcher;
   HF_TOKEN?: string;
-  WARM_TOKEN?: string;
+  /** Dead-man's switch: pinged by the cron handler after a successful round (e.g. Healthchecks.io). */
+  STATUS_PING_URL?: string;
 }
 
 type LogLevel = "info" | "warn" | "error";
@@ -19,22 +20,9 @@ export interface AppContext {
   log(level: LogLevel, msg: string, meta?: Record<string, unknown>): void;
 }
 
-export function sanitizeLogLine(line: string): string {
-  const flat = line.replace(/[\r\n]+/g, " ");
-  return flat.length > 2000 ? `${flat.slice(0, 2000)}…` : flat;
-}
-
 function createLogger(): AppContext["log"] {
   return (level, msg, meta) => {
-    let line = msg;
-    if (meta) {
-      try {
-        line = `${msg} ${JSON.stringify(meta)}`;
-      } catch {
-        line = `${msg} [unserializable meta]`;
-      }
-    }
-    line = sanitizeLogLine(line);
+    const line = meta ? `${msg} ${JSON.stringify(meta)}` : msg;
     if (level === "error") console.error(line);
     else if (level === "warn") console.warn(line);
     else console.log(line);
@@ -47,10 +35,7 @@ export function buildContext(env: Env, init?: { signal?: AbortSignal }): AppCont
   const log = createLogger();
   if (!env.CACHE && !warnedMissingKv) {
     warnedMissingKv = true;
-    log(
-      "warn",
-      "[context] CACHE KV not configured: rate limiting disabled (memory fallback), status history is per-isolate memory only",
-    );
+    log("warn", "[context] CACHE KV not configured: status history is per-isolate memory only");
   }
   return {
     cache: new CacheService(env.CACHE, CACHE_VERSION),

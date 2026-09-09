@@ -1,7 +1,10 @@
+"use client";
 import { type ReactNode, useMemo } from "react";
 import { Home, Award, Megaphone, Newspaper, Activity, Settings, MoreHorizontal, ChevronRight } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "@/client/providers";
-import { NavLink, useLocation } from "react-router";
+import { prefetchQueriesForRoute } from "@/client/api/queries";
+import { SafeLink as Link, usePathname } from "@/client/router";
 import { Sheet, SheetBody, SheetHeader } from "@/client/components/ui/sheet";
 import { REPO_URL } from "@/shared/config";
 
@@ -44,21 +47,37 @@ function isNavActive(pathname: string, item: NavItem): boolean {
   return false;
 }
 
+/** Warm the target route's queries on hover/focus; React Query dedupes repeats. */
+function usePrefetch(): (path: string) => void {
+  const qc = useQueryClient();
+  return useMemo(() => (path: string) => prefetchQueriesForRoute(qc, path), [qc]);
+}
+
+/**
+ * Pending route-transition feedback is a next/link useLinkStatus feature with
+ * no equivalent in the dependency-free router; the label renders statically.
+ */
+function PendingOpacity({ children }: { children: ReactNode }) {
+  return <span>{children}</span>;
+}
+
 interface DesktopNavProps {
   onSettingsOpen: () => void;
 }
 
 const DESKTOP_ICON_BUTTON =
-  "p-1.5 text-text-secondary hover:text-text-primary bg-transparent rounded-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+  "p-1.5 text-text-secondary hover:text-text-primary bg-transparent rounded-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
 
 export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
-  const { pathname } = useLocation();
+  const pathname = usePathname();
   const { all } = useNavigation();
   const { t } = useTranslation();
 
+  const prefetch = usePrefetch();
+
   return (
     <nav
-      className="hidden md:flex h-11 shrink-0 items-center border-b border-border bg-bg-primary"
+      className="hidden md:flex h-11 shrink-0 items-center border-b border-border bg-nav-bg backdrop-blur-md sticky top-0 z-30"
       aria-label={t("navPrimary")}
     >
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex items-center">
@@ -66,17 +85,19 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
           {all.map((item) => {
             const active = isNavActive(pathname, item);
             return (
-              <NavLink
+              <Link
                 key={item.path}
-                to={item.path}
+                href={item.path}
                 aria-label={item.label}
                 aria-current={active ? "page" : undefined}
-                className={`relative px-3 py-1 text-sm font-medium rounded-none transition-colors whitespace-nowrap active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 ${
+                onMouseEnter={() => prefetch(item.path)}
+                onFocus={() => prefetch(item.path)}
+                className={`relative px-3 py-1 text-sm font-medium rounded-none transition-colors whitespace-nowrap active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 ${
                   active ? "text-accent bg-accent-light" : "text-text-secondary hover:text-text-primary hover:bg-hover"
                 }`}
               >
-                {item.label}
-              </NavLink>
+                <PendingOpacity>{item.label}</PendingOpacity>
+              </Link>
             );
           })}
         </div>
@@ -107,7 +128,7 @@ interface MobileNavProps {
 }
 
 const MOBILE_BAR_BUTTON =
-  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 rounded-none";
+  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50 rounded-none";
 
 function MobileBarButton({
   active,
@@ -133,30 +154,34 @@ function MobileBarButton({
 }
 
 export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
-  const { pathname } = useLocation();
+  const pathname = usePathname();
   const { t } = useTranslation();
   const { mobilePrimary, mobileMore } = useNavigation();
+  const prefetch = usePrefetch();
 
   const isMoreActive = mobileMore.some((n) => isNavActive(pathname, n));
 
   return (
     <nav
-      className="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch rounded-none border-t border-border bg-bg-primary pb-[env(safe-area-inset-bottom,0px)]"
+      className="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch rounded-none border-t border-border bg-nav-bg backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)]"
       aria-label={t("navPrimaryMobile")}
     >
       {mobilePrimary.map((item) => {
         const active = isNavActive(pathname, item);
         return (
-          <NavLink
+          <Link
             key={item.path}
-            to={item.path}
+            href={item.path}
             aria-label={item.label}
             aria-current={active ? "page" : undefined}
+            onTouchStart={() => prefetch(item.path)}
             className={`${MOBILE_BAR_BUTTON} ${active ? "text-accent" : "text-text-secondary"}`}
           >
             {item.icon}
-            <span>{item.label}</span>
-          </NavLink>
+            <span>
+              <PendingOpacity>{item.label}</PendingOpacity>
+            </span>
+          </Link>
         );
       })}
       <MobileBarButton active={isMoreActive} onClick={onMoreOpen} label={t("more")}>
@@ -177,9 +202,10 @@ interface MobileMoreSheetProps {
 }
 
 export function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps) {
-  const { pathname } = useLocation();
+  const pathname = usePathname();
   const { mobileMore } = useNavigation();
   const { t } = useTranslation();
+  const prefetch = usePrefetch();
 
   return (
     <Sheet open={open} onClose={onClose} ariaLabel={t("navMore")}>
@@ -189,7 +215,7 @@ export function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps) {
         <nav className="divide-y divide-border" aria-label={t("navSecondary")}>
           {mobileMore.map((item) => {
             const active = isNavActive(pathname, item);
-            return <NavRow key={item.path} item={item} active={active} onClose={onClose} />;
+            return <NavRow key={item.path} item={item} active={active} onClose={onClose} onHover={prefetch} />;
           })}
         </nav>
       </SheetBody>
@@ -197,21 +223,34 @@ export function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps) {
   );
 }
 
-function NavRow({ item, active, onClose }: { item: NavItem; active: boolean; onClose: () => void }) {
+function NavRow({
+  item,
+  active,
+  onClose,
+  onHover,
+}: {
+  item: NavItem;
+  active: boolean;
+  onClose: () => void;
+  onHover: (path: string) => void;
+}) {
   return (
-    <NavLink
-      to={item.path}
+    <Link
+      href={item.path}
       onClick={onClose}
       aria-current={active ? "page" : undefined}
+      onTouchStart={() => onHover(item.path)}
       className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors ${
         active ? "text-accent" : "text-text-primary hover:bg-hover"
       }`}
     >
       <span className="flex items-center gap-2 min-w-0">
         <span className={active ? "text-accent shrink-0" : "text-text-secondary shrink-0"}>{item.icon}</span>
-        <span className="text-sm">{item.label}</span>
+        <span className="text-sm">
+          <PendingOpacity>{item.label}</PendingOpacity>
+        </span>
       </span>
       <ChevronRight size={16} className="text-text-tertiary shrink-0" aria-hidden="true" />
-    </NavLink>
+    </Link>
   );
 }

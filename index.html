@@ -2,51 +2,34 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#ffffff" />
-    <title>ModelTide</title>
-
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" />
+    <meta
+      name="description"
+      content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析"
+    />
+    <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="ModelTide" />
-    <meta property="og:description" content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析" />
+    <meta
+      property="og:description"
+      content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析"
+    />
     <meta property="og:locale" content="zh_CN" />
     <meta property="og:locale:alternate" content="en_US" />
-    <meta
-      property="og:image"
-      content="https://raw.githubusercontent.com/XELZSSS/modeltide/main/public/icons/apple-touch-icon.png"
-    />
-
+    <meta property="og:image" content="/icons/apple-touch-icon.png" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="ModelTide" />
     <meta
       name="twitter:description"
       content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析"
     />
-    <meta
-      name="twitter:image"
-      content="https://raw.githubusercontent.com/XELZSSS/modeltide/main/public/icons/apple-touch-icon.png"
-    />
-    <link rel="canonical" href="https://github.com/XELZSSS/modeltide" />
-
-    <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />
-    <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="ModelTide" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin fetchpriority="high" />
-    <link
-      rel="preload"
-      href="/fonts/jetbrains-mono-latin.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-      fetchpriority="high"
-    />
+    <title>ModelTide</title>
     <style>
       html {
         background: #ffffff;
@@ -56,34 +39,27 @@
       }
     </style>
     <script>
+      // Theme/lang init before first paint (read the zustand persist shape),
+      // avoiding a flash of the wrong color scheme. Mirrors the settings store.
       (function () {
-        var stored = null;
-        var lang = null;
         try {
           var raw = localStorage.getItem("settings");
+          var stored = null,
+            lang = null;
           if (raw) {
-            var parsed = JSON.parse(raw);
-            if (parsed && (parsed.state.themeMode === "dark" || parsed.state.themeMode === "light")) {
-              stored = parsed.state.themeMode;
-            }
-            if (parsed && (parsed.state.lang === "zh" || parsed.state.lang === "en")) {
-              lang = parsed.state.lang;
-            }
+            var p = JSON.parse(raw);
+            var st = p && p.state;
+            if (st && (st.themeMode === "dark" || st.themeMode === "light")) stored = st.themeMode;
+            if (st && (st.lang === "zh" || st.lang === "en")) lang = st.lang;
           }
+          var dark =
+            stored === "dark" ||
+            (stored == null && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+          var m = document.querySelector("meta[name='theme-color']");
+          if (m) m.setAttribute("content", dark ? "#000000" : "#ffffff");
+          if (lang) document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
         } catch (e) {}
-        var dark =
-          stored === "dark" ||
-          (stored == null && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-        if (dark) {
-          document.documentElement.classList.add("dark");
-        }
-        var meta = document.querySelector("meta[name='theme-color']");
-        if (meta) {
-          meta.setAttribute("content", dark ? "#000000" : "#ffffff");
-        }
-        if (lang) {
-          document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-        }
       })();
     </script>
   </head>

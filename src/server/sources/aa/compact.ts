@@ -1,5 +1,5 @@
 import { BENCHMARK_KEYS, type BenchmarkKey } from "@/shared/config";
-import type { ArtificialAnalysisModel, ModelCost, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
+import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
 import {
   bool,
   isoDate,
@@ -17,7 +17,10 @@ const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   mmlu_pro: "mmluPro",
   tau_banking: "tauBanking",
   terminalbench_v2_1: "terminalbenchV21",
+  terminalbench_v4_0: "terminalbenchV40",
   apex_agents: "apexAgents",
+  mmmu_pro: "mmmuPro",
+  automation_bench: "automationBenchPartialScore",
 };
 
 function compactBenchmarks(m: Record<string, unknown>): Partial<Record<BenchmarkKey, number | null>> {
@@ -39,29 +42,32 @@ function compactCodingIndex(m: Record<string, unknown>): number | null {
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-function compactCost(raw: Record<string, unknown> | undefined): ModelCost | undefined {
-  if (!raw) return undefined;
-  const cost: ModelCost = {};
-  const total = num(raw.total);
-  const input = num(raw.input);
-  const output = num(raw.output);
-  const reasoning = num(raw.reasoning);
-  if (total != null) cost.total = total;
-  if (input != null) cost.input = input;
-  if (output != null) cost.output = output;
-  if (reasoning != null) cost.reasoning = reasoning;
-  return Object.keys(cost).length > 0 ? cost : undefined;
-}
-
 function compactPricing(m: Record<string, unknown>): ModelPricing | undefined {
   const pricing: ModelPricing = {};
   const input = numNonNegative(m.price1mInputTokens);
   const output = numNonNegative(m.price1mOutputTokens);
   const cacheHit = numNonNegative(m.cacheHitPrice);
+  const cacheWrite = numNonNegative(m.cacheWritePrice);
   if (input != null) pricing.input = input;
   if (output != null) pricing.output = output;
   if (cacheHit != null) pricing.cacheHit = cacheHit;
+  if (cacheWrite != null) pricing.cacheWrite = cacheWrite;
   return Object.keys(pricing).length > 0 ? pricing : undefined;
+}
+
+function defaultMonthlyCost(pricing: ModelPricing | undefined): number | null {
+  if (!pricing || typeof pricing.input !== "number" || typeof pricing.output !== "number") return null;
+  if (!Number.isFinite(pricing.input) || !Number.isFinite(pricing.output)) return null;
+  const hitRate = 0.5;
+  const hasWrite = typeof pricing.cacheWrite === "number" && Number.isFinite(pricing.cacheWrite);
+  const writeRate = hasWrite ? Math.min(0.05, 1 - hitRate) : 0;
+  const freshRate = 1 - hitRate - writeRate;
+  const cached = typeof pricing.cacheHit === "number" && Number.isFinite(pricing.cacheHit) ? pricing.cacheHit! : pricing.input;
+  const writeLeg = hasWrite ? writeRate * pricing.cacheWrite! : 0;
+  const inputRate = hitRate * cached + writeLeg + freshRate * pricing.input;
+  const daily = 2 * inputRate + 3 * pricing.output;
+  const monthly = daily * 22;
+  return Number.isFinite(monthly) ? Math.round(monthly * 100) / 100 : null;
 }
 
 function compactOmniscience(
@@ -93,7 +99,6 @@ function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unkn
 
 export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
   const creator = obj(m.creator);
-  const timescale = obj(m.timescaleData);
   const omniscienceBreakdown = obj(m.omniscienceBreakdown);
 
   const creatorName = creator ? str(creator.name).trim() : "";
@@ -118,17 +123,19 @@ export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
   if (releaseDate != null) model.release_date = releaseDate;
   const isOpenWeights = bool(m.isOpenWeights);
   if (isOpenWeights !== undefined) model.is_open_weights = isOpenWeights;
-  const contextWindow = numPositive(m.contextWindowTokens);
-  if (contextWindow != null) model.context_window_tokens = contextWindow;
-  const blended = numNonNegative(m.price1mBlended7To2To1);
-  if (blended != null) model.blended_price = blended;
+  const parameters = numPositive(m.parameters);
+  if (parameters != null) model.parameters = parameters;
+  const sizeClass = strOr(m.sizeClass);
+  if (sizeClass != null) model.size_class = sizeClass;
 
-  const cost = compactCost(obj(m.intelligenceIndexCost));
-  if (cost) model.cost = cost;
   model.benchmarks = compactBenchmarks(m);
   const pricing = compactPricing(m);
-  if (pricing) model.pricing = pricing;
-  const speed = num(timescale?.medianOutputSpeed) ?? num(m.medianCanonicalAnswerOutputSpeed);
+  if (pricing) {
+    model.pricing = pricing;
+    const defCost = defaultMonthlyCost(pricing);
+    if (defCost != null) model.defaultMonthlyCost = defCost;
+  }
+  const speed = num(m.medianCanonicalAnswerOutputSpeed);
   if (speed != null) model.speed = { median_output_speed: speed };
   const breakdown = compactOmniscience(omniscienceBreakdown, num(m.omniscience));
   if (breakdown) model.omniscience_breakdown = breakdown;

@@ -1,7 +1,9 @@
+"use client";
 import { useMemo } from "react";
 import type { TranslationKey } from "@/shared/i18n";
-import { BarChart3, Image, Lightbulb, Rocket, type LucideIcon } from "lucide-react";
-import type { ArtificialAnalysisModel, HallucinationRankingEntry, HomeDashboardData } from "@/shared/types";
+import { BarChart3, Brain, Image, Rocket, type LucideIcon } from "lucide-react";
+import type { ArtificialAnalysisModel, ClosedReleaseEntry, HallucinationRankingEntry } from "@/shared/types";
+import type { NormalizedHomeDashboard } from "@/client/api/normalize";
 import { computeProviderStats, shortModelId } from "@/client/utils/model";
 import { formatShortNumber } from "@/client/utils/format";
 import type { HomeBarStat } from "./statistics-section";
@@ -20,26 +22,49 @@ export interface HomeProviderStat {
   count: number;
 }
 
+const top7 = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, 7).map(map);
+
+function finiteTs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const ts = Date.parse(value);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+/**
+ * Newest release name from the same feed as the releases page 模型发布 tab,
+ * so the home KPI always matches its head. (The intelligence index carries
+ * its own release_date per model, which lags the changelog and must not be
+ * used here.)
+ */
+export function pickLatestReleaseName(closedReleases: ClosedReleaseEntry[]): string | null {
+  for (const entry of closedReleases) {
+    if (entry && finiteTs(entry.releaseDate) != null) return entry.model;
+  }
+  return null;
+}
+
 export function useHomeStats(
   artificialData: ArtificialAnalysisModel[],
   hallucinationRankings: HallucinationRankingEntry[],
-  dashboardData: HomeDashboardData,
+  dashboardData: NormalizedHomeDashboard,
   t: (key: TranslationKey, params?: Record<string, string | number>) => string,
+  closedReleases?: ClosedReleaseEntry[],
 ) {
-  const openSourceRankings = dashboardData.opensource ?? [];
+  const openSourceRankings = dashboardData.opensource;
+  // Trending order inherited from the upstream pool, mirroring the official
+  // models page (Sort: Trending). Download counts are shown as reference.
+  const trendingPool = openSourceRankings;
   const t2iModels = useMemo(() => dashboardData.textToImage?.models ?? [], [dashboardData.textToImage?.models]);
   const latestOpenRouterModel = dashboardData.orRankings?.tokenUsageRankings?.[0] ?? null;
 
-  const top7 = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, 7).map(map);
-
-  const downloadStats = useMemo<HomeBarStat[]>(
+  const trendingStats = useMemo<HomeBarStat[]>(
     () =>
-      top7(openSourceRankings, (model) => ({
+      top7(trendingPool, (model) => ({
         label: shortModelId(model.id),
         value: model.downloads,
         valueLabel: formatShortNumber(model.downloads),
       })),
-    [openSourceRankings],
+    [trendingPool],
   );
 
   const hallucinationStats = useMemo<HomeBarStat[]>(
@@ -57,24 +82,18 @@ export function useHomeStats(
     [hallucinationRankings],
   );
 
-  const { latestRelease, bestReasoningModel } = useMemo(() => {
-    let latest: ArtificialAnalysisModel | null = null;
-    let latestTs = -Infinity;
+  const { latestReleaseName, bestReasoningModel } = useMemo(() => {
+    const latestName = closedReleases ? pickLatestReleaseName(closedReleases) : null;
     let bestReasoning: ArtificialAnalysisModel | null = null;
     for (const m of artificialData) {
-      const ts = m.release_date ? Date.parse(m.release_date) : NaN;
-      if (Number.isFinite(ts) && ts > latestTs) {
-        latestTs = ts;
-        latest = m;
-      }
       if (
         m.is_reasoning === true &&
         (!bestReasoning || (m.intelligence_index ?? -Infinity) > (bestReasoning.intelligence_index ?? -Infinity))
       )
         bestReasoning = m;
     }
-    return { latestRelease: latest, bestReasoningModel: bestReasoning };
-  }, [artificialData]);
+    return { latestReleaseName: latestName, bestReasoningModel: bestReasoning };
+  }, [artificialData, closedReleases]);
 
   const kpiStrip = useMemo<HomeKpi[]>(
     () => [
@@ -88,17 +107,17 @@ export function useHomeStats(
       {
         id: "latest",
         label: t("latestRelease"),
-        value: latestRelease?.short_name || latestRelease?.name || t("notAvailable"),
+        value: latestReleaseName || t("notAvailable"),
         Icon: Rocket,
       },
       {
         id: "reasoning",
         label: t("bestReasoningModel"),
         value: bestReasoningModel?.short_name || bestReasoningModel?.name || t("notAvailable"),
-        Icon: Lightbulb,
+        Icon: Brain,
       },
     ],
-    [t, latestOpenRouterModel?.name, t2iModels, latestRelease, bestReasoningModel],
+    [t, latestOpenRouterModel?.name, t2iModels, latestReleaseName, bestReasoningModel],
   );
 
   const providerStats = useMemo<HomeProviderStat[]>(
@@ -110,5 +129,5 @@ export function useHomeStats(
     [artificialData, t],
   );
 
-  return { downloadStats, hallucinationStats, kpiStrip, providerStats, t2iModels };
+  return { trendingStats, hallucinationStats, kpiStrip, providerStats, t2iModels };
 }

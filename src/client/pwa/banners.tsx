@@ -1,3 +1,4 @@
+"use client";
 import { RefreshCw, WifiOff } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { Button } from "@/client/components/ui/button";
@@ -23,7 +24,7 @@ export function PwaBanners() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-20 md:bottom-6 right-4 z-40 flex items-center gap-2 border border-border bg-bg-card px-3 py-2 shadow-none"
+          className="fixed bottom-20 md:bottom-6 right-4 z-40 flex items-center gap-2 border border-border bg-bg-card px-3 py-2 shadow-lg"
         >
           <RefreshCw size={14} className="text-text-secondary shrink-0" aria-hidden="true" />
           <span className="text-xs text-text-primary">{t("pwaUpdateAvailable")}</span>

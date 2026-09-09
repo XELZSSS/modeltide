@@ -1,3 +1,4 @@
+"use client";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import type { OpenRouterRankEntry } from "@/shared/types";
@@ -5,6 +6,8 @@ import { categoryLabel, formatPricePerMillion, formatShortNumber, formatTrend } 
 import { DetailLayout, InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
+import { useSuspenseOpenRouterRankings } from "@/client/api/queries";
+import { createDetailView } from "./detail-views";
 
 export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry }) {
   const { t } = useTranslation();
@@ -40,11 +43,18 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
           <InfoRow label={t("category")} value={categoryLabel(model.category, t)} />
           <InfoRow label={t("trend")} value={formatTrend(model.change, t)} />
           <InfoRow label={t("totalTokens")} value={formatShortNumber(model.totalTokens ?? 0)} />
+          {model.cachedTokens ? (
+            <InfoRow label={t("cachedTokens")} value={formatShortNumber(model.cachedTokens)} />
+          ) : null}
+          {model.toolCalls ? <InfoRow label={t("toolCalls")} value={formatShortNumber(model.toolCalls)} /> : null}
         </InfoCard>
         <InfoCard title={t("pricing")}>
           {priceRows.map(([labelKey, value]) => (
             <InfoRow key={labelKey} label={t(labelKey)} value={formatPricePerMillion(value, t)} />
           ))}
+          {model.pricing?.cacheWrite != null && (
+            <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(model.pricing.cacheWrite, t)} />
+          )}
         </InfoCard>
       </InfoGrid>
       {(showVariantBadge || model.isFree) && (
@@ -56,3 +66,17 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
     </DetailLayout>
   );
 }
+
+export const OrDetail = createDetailView(
+  () => {
+    const { data } = useSuspenseOpenRouterRankings();
+    if (data && !Array.isArray(data.tokenUsageRankings)) {
+      return { data: undefined, isPending: false, isError: true };
+    }
+    return { data: data?.tokenUsageRankings };
+  },
+  "or",
+  OpenRouterModelDetail,
+  (m) => m.name,
+  "id",
+);

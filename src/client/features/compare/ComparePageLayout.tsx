@@ -1,7 +1,8 @@
+"use client";
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useRouter } from "@/client/router";
 import { Button } from "@/client/components/ui/button";
-import { BackButton, Spinner } from "@/client/components/feedback";
+import { BackButton, EmptyState, Spinner } from "@/client/components/feedback";
 import { CompareChipBar } from "@/client/components/compare-tray";
 import { useTranslation } from "@/client/providers";
 import { useCompareStore, useCompareModels } from "@/client/stores";
@@ -12,12 +13,12 @@ import { PageContainer, PageHeader } from "@/client/components/layout";
 
 function useComparedModelsOrNull(): ArtificialAnalysisModel[] | null {
   const rankingsQ = useArtificialRankings();
-  const models = useCompareModels(rankingsQ.data ?? []);
+  const models = useCompareModels(rankingsQ.data);
   return useMemo(() => {
     if (rankingsQ.isError) return [];
-    if (rankingsQ.isPending || !rankingsQ.data) return null;
+    if (rankingsQ.isPending) return null;
     return models;
-  }, [rankingsQ.isPending, rankingsQ.isError, rankingsQ.data, models]);
+  }, [rankingsQ.isPending, rankingsQ.isError, models]);
 }
 
 interface ComparePageLayoutProps {
@@ -28,12 +29,14 @@ interface ComparePageLayoutProps {
 }
 
 export function ComparePageLayout({ backLabelKey, backTo, title, children }: ComparePageLayoutProps) {
-  const navigate = useNavigate();
+  const router = useRouter();
+  const navigate = (to: string) => router.push(to);
   const { t } = useTranslation();
   const removeCompareModel = useCompareStore((s) => s.removeCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
   const compareIds = useCompareStore((s) => s.compareIds);
   const models = useComparedModelsOrNull();
+  const { isError: rankingsFailed, refetch: refetchRankings } = useArtificialRankings();
   const pruned = compareIds.length > (models?.length ?? 0);
   const handleClearAndBack = useCallback(() => {
     clearCompare();
@@ -42,6 +45,24 @@ export function ComparePageLayout({ backLabelKey, backTo, title, children }: Com
   const handleBack = useCallback(() => navigate(backTo), [navigate, backTo]);
 
   if (models === null) return <Spinner />;
+
+  if (rankingsFailed) {
+    return (
+      <PageContainer>
+        <div className="flex flex-col gap-4 items-center py-16">
+          <EmptyState variant="error" title={t("errorBoundaryTitle")} message={t("loadFailed")} />
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => refetchRankings()}>
+              {t("errorBoundaryRetry")}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleBack}>
+              {t("backToList")}
+            </Button>
+          </div>
+        </div>
+      </PageContainer>
+    );
+  }
 
   if (models.length < 2) {
     return (

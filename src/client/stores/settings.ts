@@ -1,3 +1,4 @@
+"use client";
 import { persist } from "zustand/middleware";
 import { create } from "zustand";
 import { useEffect } from "react";
@@ -11,6 +12,25 @@ const toggleLang: LangToggle = (lang) => (lang === "en" ? "zh" : "en");
 type ThemeToggle = (s: ThemeMode) => ThemeMode;
 const toggleThemeMode: ThemeToggle = (mode) => (mode === "light" ? "dark" : "light");
 
+/**
+ * First-render theme, resolved from the same source as the pre-hydration
+ * inline script in `app/layout.tsx` (stored value → system preference).
+ * Reading storage synchronously keeps the store, the painted `<html>` class
+ * and the later persist rehydration on the same value, so there is no
+ * SSR/client divergence and no dark↔light flash for returning visitors.
+ */
+function initialThemeMode(): ThemeMode {
+  if (typeof window === "undefined") return "light";
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.settings);
+    const stored = raw ? (JSON.parse(raw) as { state?: Partial<SettingsState> }).state?.themeMode : undefined;
+    if (stored === "dark" || stored === "light") return stored;
+  } catch {
+    // Corrupt storage falls through to the system preference below.
+  }
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 interface SettingsState {
   themeMode: ThemeMode;
   lang: Lang;
@@ -23,8 +43,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      themeMode:
-        typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+      themeMode: initialThemeMode(),
       lang: "zh",
       toggleTheme: () => set((s) => ({ themeMode: toggleThemeMode(s.themeMode) })),
       toggleLang: () => set((s) => ({ lang: toggleLang(s.lang) })),
@@ -33,7 +52,9 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: STORAGE_KEYS.settings,
+      version: 1,
       storage: localJsonStorage,
+      migrate: (persisted) => persisted as SettingsState,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn("[settings] rehydrate failed", error);
       },

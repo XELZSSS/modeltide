@@ -1,16 +1,52 @@
 import type { OpenRouterRankEntry } from "@/shared/types";
-import { numCoerce, numOr } from "@/server/parsers/primitives";
+import { numCoerce, numOr, titleCase } from "@/server/parsers/primitives";
 import { isValidOpenRouterRowId } from "@/server/sources/data-filter";
-import { categoryFrom, creatorFromSlug, titleFromSlug } from "@/server/sources/openrouter/naming";
 import type { ModelRow, PricingEntry } from "@/server/sources/openrouter/types";
+
+const CREATORS: Record<string, string> = {
+  anthropic: "Anthropic",
+  cohere: "Cohere",
+  deepseek: "DeepSeek",
+  google: "Google",
+  mistralai: "Mistral",
+  "meta-llama": "Meta",
+  minimax: "MiniMax",
+  openai: "OpenAI",
+  qwen: "Qwen",
+  xiaomi: "Xiaomi",
+};
+export function creatorFromSlug(slug: string): string {
+  const p = slug.split("/")[0]?.trim() || "Unknown";
+  const lower = p.toLowerCase();
+  if (Object.hasOwn(CREATORS, lower)) return CREATORS[lower]!;
+  return p.split(/[-_]/).filter(Boolean).map(titleCase).join(" ");
+}
+const CODING_RE = /\b(?:coder|coding|code|codex)\b/;
+const REASONING_RE = /\b(?:reasoning|thought)\b/;
+const REASONING_SUFFIX_RE = /-(?:r1|o1)\b/;
+export function categoryFrom(slug: string, name: string): OpenRouterRankEntry["category"] {
+  const v = `${slug} ${name}`.toLowerCase();
+  if (CODING_RE.test(v)) return "coding";
+  if (REASONING_RE.test(v) || REASONING_SUFFIX_RE.test(v)) return "reasoning";
+  return "general";
+}
+export function titleFromSlug(permaslug: string): string {
+  const raw = permaslug.split("/").slice(1).join("/") || permaslug;
+  return raw
+    .replace(/[:/_.]/g, " ")
+    .split(/[-\s]+/)
+    .filter(Boolean)
+    .map((p) => (/^\d/.test(p) ? p.toLowerCase() : p.length <= 3 ? p.toUpperCase() : titleCase(p)))
+    .join(" ");
+}
 
 const SUM_KEYS = [
   "total_prompt_tokens",
   "total_completion_tokens",
   "total_native_tokens_reasoning",
+  "total_native_tokens_cached",
   "count",
-  "image_output_requests",
-  "video_output_seconds",
+  "total_tool_calls",
 ] as const;
 
 function usageTotal(row: ModelRow): number {
@@ -43,6 +79,11 @@ function trackLatestChange(group: Group, row: ModelRow): void {
     const parsedChange = numCoerce(row.change);
     if (parsedChange != null && group.agg.change == null) group.agg.change = parsedChange;
   }
+}
+
+function changePercent(value: unknown): number | null {
+  const n = numCoerce(value);
+  return n == null ? null : n * 100;
 }
 
 function resolvePricing(
@@ -94,7 +135,9 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
     const name = titleFromSlug(id) || id;
     const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
     const pricing = resolvePricing(pricingMap, id, variantKey);
-    const isFree = pricing ? pricing.input === 0 && pricing.output === 0 && pricing.cacheHit === 0 : undefined;
+    const isFree = pricing
+      ? pricing.input === 0 && pricing.output === 0 && !pricing.cacheHit && !pricing.cacheWrite
+      : undefined;
     out.push({
       rank: i + 1,
       id,
@@ -106,10 +149,10 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
       promptTokens: numOr(row.total_prompt_tokens, 0),
       completionTokens: numOr(row.total_completion_tokens, 0),
       reasoningTokens: numOr(row.total_native_tokens_reasoning, 0),
+      cachedTokens: numOr(row.total_native_tokens_cached, 0),
+      toolCalls: numOr(row.total_tool_calls, 0),
       requestCount: numOr(row.count, 0),
-      imageOutputRequests: numOr(row.image_output_requests, 0),
-      videoOutputSeconds: numOr(row.video_output_seconds, 0),
-      change: numCoerce(row.change),
+      change: changePercent(row.change),
       pricing,
       isFree,
     });

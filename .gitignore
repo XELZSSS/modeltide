@@ -3,6 +3,13 @@ node_modules/
 
 # Build output
 dist/
+coverage/
+
+# Generated cache version (npm run gen:cache-version)
+src/shared/config/cache-version.gen.ts
+
+# Cloudflare generated types (kept out; `npm run cf-typegen` regenerates)
+worker-configuration.d.ts
 
 # IDE
 .vscode/
@@ -14,9 +21,6 @@ Thumbs.db
 
 # Logs
 *.log
-
-# Vitest 5 unified artifact dir (html/json/junit reports, attachments, traces)
-.vitest/
 
 # Environment
 .env

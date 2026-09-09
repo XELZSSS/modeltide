@@ -3,15 +3,18 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"]
   },
   "include": [
     "src/client/**/*.ts",
     "src/client/**/*.tsx",
+    "src/server/**/*.ts",
     "src/shared/**/*.ts",
     "src/shared/**/*.tsx",
     "vite.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "worker-configuration.d.ts",
+    "cloudflare-env.d.ts"
   ],
   "exclude": ["dist", "node_modules"]
 }

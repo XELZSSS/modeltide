@@ -1,9 +1,13 @@
+"use client";
 import { memo, useMemo } from "react";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import type { ChartOptions } from "chart.js";
 import { Radar } from "react-chartjs-2";
+import { registerRadar } from "@/client/utils/charts-register";
+
+registerRadar();
 import { useTranslation } from "@/client/providers";
-import { useChartTheme } from "@/client/ui-hooks";
+import { useChartTheme } from "@/client/theme/chart-theme";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { cn } from "@/client/utils/cn";
 import {

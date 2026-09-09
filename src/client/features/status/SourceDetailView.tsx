@@ -1,5 +1,6 @@
+"use client";
 import { memo, useMemo, type ReactNode } from "react";
-import { useParams } from "react-router";
+import { useParams } from "@/client/router";
 import { type ChartOptions } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
@@ -10,8 +11,10 @@ import { Card, CardContent } from "@/client/components/ui/card";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { StatGrid } from "@/client/components/ui/grids";
 import { formatUptimePct } from "@/client/utils/format";
-import "@/client/utils/charts";
-import { useChartTheme } from "@/client/ui-hooks";
+import { registerLine } from "@/client/utils/charts-register";
+
+registerLine();
+import { useChartTheme } from "@/client/theme/chart-theme";
 import {
   defaultTooltipOptions,
   chartBase,
@@ -21,7 +24,8 @@ import {
 } from "@/client/utils/charts";
 import { SOURCE_LABELS, SOURCE_IDS, ONE_HOUR } from "@/shared/config";
 import type { SourceStatus } from "@/shared/types";
-import { UptimeStrip, StatusEventList } from "./StatusParts";
+import { UptimeStrip } from "./StatusParts";
+import { StatusEventList } from "@/client/components/status-events";
 
 function isSourceId(value: string | undefined): value is SourceStatus["id"] {
   return value != null && (SOURCE_IDS as readonly string[]).includes(value);
@@ -160,7 +164,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
         )}
       </SectionCard>
 
-      <SectionCard title={t("last90Days")}>
+      <SectionCard title={t("last30Days")}>
         <UptimeStrip buckets={buckets} />
       </SectionCard>
 
@@ -172,7 +176,8 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
 });
 
 export function SourceDetailView() {
-  const { source } = useParams<{ source: SourceStatus["id"] }>();
+  const params = useParams<{ source: string }>("/status/:source");
+  const source = params.source;
   if (!isSourceId(source)) return <NotFound />;
   return (
     <SuspenseQuery key={source}>

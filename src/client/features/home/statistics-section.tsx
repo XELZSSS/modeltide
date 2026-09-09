@@ -1,3 +1,4 @@
+"use client";
 import { memo } from "react";
 import { useTranslation } from "@/client/providers";
 import { Card, CardContent } from "@/client/components/ui/card";
@@ -10,17 +11,17 @@ export interface HomeBarStat {
 }
 
 export const StatisticsSection = memo(function StatisticsSection({
-  downloadStats,
+  trendingStats,
   hallucinationStats,
 }: {
-  downloadStats: HomeBarStat[];
+  trendingStats: HomeBarStat[];
   hallucinationStats: HomeBarStat[];
 }) {
   const { t } = useTranslation();
   return (
     <PageSection title={t("statistics")}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <RankedStatCard title={t("openSourceDownloadsStats")} source={t("huggingFaceSource")} rows={downloadStats} />
+        <RankedStatCard title={t("openSourceTrendingStats")} source={t("huggingFaceSource")} rows={trendingStats} />
         <RankedStatCard title={t("hallucinationStats")} source={t("hallucinationSource")} rows={hallucinationStats} />
       </div>
     </PageSection>

@@ -1,11 +1,10 @@
 import type { NewsItem } from "@/shared/types";
+import { SOURCE_LIMITS } from "@/shared/config";
 import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
 import { isRecord } from "@/server/parsers/primitives";
 import { isSuitableNewsItem } from "@/server/sources/data-filter";
-
-const MAX_PAPERS = 30;
 
 interface DailyPaperEntry {
   paper?: {
@@ -21,14 +20,17 @@ function toNewsItem(entry: DailyPaperEntry): NewsItem | null {
   const paper = isRecord(entry.paper) ? entry.paper : undefined;
   const id = typeof paper?.id === "string" ? paper.id.trim() : "";
   const title = typeof paper?.title === "string" ? paper.title.replace(/\s+/g, " ").trim() : "";
-  if (!id || !title) return null;
+  const publishedAt = typeof paper?.publishedAt === "string" ? paper.publishedAt : "";
+  // No sentinel fallback: an undated paper would sink to the bottom of the
+  // date-sorted research feed and render as a bogus ancient date in the UI.
+  if (!id || !title || !Number.isFinite(Date.parse(publishedAt))) return null;
   const link = `${upstreamConfig.huggingfaceSite}/papers/${encodeURIComponent(id)}`;
   if (!isSuitableNewsItem(title, link)) return null;
   return {
     id: `hf-paper-${id}`,
     title,
     link,
-    pubDate: typeof paper?.publishedAt === "string" ? paper.publishedAt : "1970-01-01T00:00:00Z",
+    pubDate: publishedAt,
     source: "Hugging Face Papers",
   };
 }
@@ -47,7 +49,7 @@ export function parseDailyPapers(raw: unknown): NewsItem[] {
   if (unique.length === 0) {
     throw new UpstreamError(`HuggingFace daily papers yielded 0 usable items (raw=${raw.length})`);
   }
-  return unique.slice(0, MAX_PAPERS);
+  return unique.slice(0, SOURCE_LIMITS.dailyPapers);
 }
 
 function upvotesOf(entry: DailyPaperEntry): number {

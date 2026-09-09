@@ -1,5 +1,18 @@
-import { createContext, use, useCallback, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
+"use client";
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSettingsStore } from "@/client/stores";
+import { ApiClientError, isAbortError } from "@/client/api/client";
+import { FIVE_MINUTES, THIRTY_MINUTES } from "@/shared/config";
 import type { Lang, TFunction } from "@/shared/i18n";
 import { createT } from "@/shared/i18n";
 
@@ -19,6 +32,7 @@ export function useTranslation() {
 }
 
 function syncDocumentMeta(lang: Lang) {
+  if (typeof document === "undefined") return;
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
   const desc = document.querySelector('meta[name="description"]');
   if (desc) {
@@ -55,9 +69,10 @@ const MOBILE_BREAKPOINT = 768;
 
 function useIsMobile(breakpoint = 768): boolean {
   const query = `(max-width: ${breakpoint - 1}px)`;
-  const mq = useMemo(() => window.matchMedia(query), [query]);
+  const mq = useMemo(() => (typeof window !== "undefined" ? window.matchMedia(query) : null), [query]);
   const subscribe = useCallback(
     (onChange: () => void) => {
+      if (!mq) return () => {};
       mq.addEventListener("change", onChange);
       return () => mq.removeEventListener("change", onChange);
     },
@@ -65,7 +80,7 @@ function useIsMobile(breakpoint = 768): boolean {
   );
   return useSyncExternalStore(
     subscribe,
-    () => mq.matches,
+    () => mq?.matches ?? false,
     () => false,
   );
 }
@@ -86,4 +101,35 @@ export function useDevice(): DeviceContextValue {
   const ctx = use(DeviceContext);
   if (!ctx) throw new Error("useDevice must be used within a DeviceProvider");
   return ctx;
+}
+
+function createQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: (count, err) => {
+          if (isAbortError(err)) return false;
+          if (err instanceof ApiClientError && err.status >= 400 && err.status < 500 && err.status !== 429) {
+            return false;
+          }
+          return count < 2;
+        },
+        retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+        refetchOnWindowFocus: false,
+        staleTime: FIVE_MINUTES,
+        gcTime: THIRTY_MINUTES,
+      },
+    },
+  });
+}
+
+export function Providers({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(createQueryClient);
+  return (
+    <I18nProvider>
+      <DeviceProvider>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </DeviceProvider>
+    </I18nProvider>
+  );
 }

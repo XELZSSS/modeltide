@@ -1,3 +1,4 @@
+"use client";
 import { memo } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TextToImageModel } from "@/shared/types";
@@ -41,7 +42,8 @@ export const ProviderSpeedCard = memo(function ProviderSpeedCard({
   return (
     <Card className="h-full">
       <CardContent padding="md" className="flex flex-col h-full">
-        <p className="ui-caption font-medium mb-3">{t("providerSpeed")}</p>
+        <p className="ui-caption font-medium mb-1">{t("providerSpeed")}</p>
+        <p className="ui-meta mb-3">{t("artificialSource")}</p>
         <div className="flex flex-col gap-3 flex-1 justify-between">
           {providerStats.slice(0, 6).map((p) => (
             <div key={p.name} className="flex items-center justify-between gap-3 min-w-0">
@@ -61,8 +63,7 @@ export const ProviderSpeedCard = memo(function ProviderSpeedCard({
 });
 
 const TextToImageCard = memo(function TextToImageCard({ entry }: { entry: TextToImageModel }) {
-  const { t, lang } = useTranslation();
-  const locale = lang === "zh" ? "zh-CN" : "en-US";
+  const { t } = useTranslation();
   return (
     <Card>
       <CardContent padding="md" className="flex flex-col gap-3 w-full">
@@ -77,17 +78,11 @@ const TextToImageCard = memo(function TextToImageCard({ entry }: { entry: TextTo
           <T2IMetric label={t("elo")}>
             {entry.elo != null ? `${entry.elo.toFixed(0)}${formatRatingInterval(entry)}` : t("notAvailable")}
           </T2IMetric>
-          <T2IMetric label={t("votes")}>
-            {entry.appearances != null ? entry.appearances.toLocaleString(locale) : t("notAvailable")}
-          </T2IMetric>
           {entry.pricePer1kImages != null ? (
             <T2IMetric label={t("price")}>
               {formatDollar(entry.pricePer1kImages, t)}
               {t("per1kImages")}
             </T2IMetric>
-          ) : null}
-          {entry.winRate != null ? (
-            <T2IMetric label={t("winRateShort")}>{(entry.winRate * 100).toFixed(1)}%</T2IMetric>
           ) : null}
         </div>
       </CardContent>

@@ -1,7 +1,7 @@
-# Hashed Vite output: cache forever.
-# NOTE: fonts/icons below are content-hashed or versioned static assets kept in
+# Next.js immutable build output: cache forever.
+# NOTE: fonts/icons below are versioned static assets kept in
 # sync with the service worker's immutable set (public/sw.js isImmutableAsset).
-/assets/*
+/_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 
 /fonts/*
@@ -11,36 +11,19 @@
   Cache-Control: public, max-age=31536000, immutable
 
 /manifest.webmanifest
-  Cache-Control: public, max-age=86400
+  Cache-Control: public, max-age=3600
 
 # Service worker: must revalidate so updates activate promptly.
 /sw.js
   Cache-Control: no-cache, must-revalidate
   Service-Worker-Allowed: /
 
-# SPA entry: revalidate so deploys reach clients immediately.
-/index.html
-  Cache-Control: no-cache, must-revalidate
-/
-  Cache-Control: no-cache, must-revalidate
-
-# Security headers for static responses. /api/* headers are set in code;
-# the /api/* block below is edge-level backup. connect-src 'self': a separate
-# VITE_API_BASE origin must be added here.
+# Security headers for static responses. /api/* headers are set in code
+# (custom-worker fetch wrapper + route handlers).
+# connect-src 'self': a separate NEXT_PUBLIC_API_BASE origin must be added here.
 /*
   X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
-  # sha256 allowlists the inline theme script in index.html; regenerate: npm run hash:csp
-  # worker-src/manifest-src explicit (no workers/manifests today; fail closed).
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-5rwIFZdyN4Mj3QDyC5HZNMwxP9pEoJjJKV/ZShHyXBc='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
-
-# Backup headers for same-Worker API responses. Authoritative headers live in
-# src/server/api.ts (Referrer-Policy: no-referrer); this block only covers
-# edge-cached fallbacks and must stay in sync.
-/api/*
-  X-Content-Type-Options: nosniff
-  Strict-Transport-Security: max-age=31536000; includeSubDomains
-  X-Frame-Options: DENY
-  Referrer-Policy: no-referrer
+  # CSP for HTML is set by next.config.ts headers (Next.js emits inline hydration scripts,
+  # so no static script-src allowlist here); keep this file to static caching.
+  Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests

@@ -2,7 +2,7 @@
  *
  * Strategy:
  * - Precache the app shell + icons on install.
- * - Navigations: network-first, fall back to cached "/" (SPA shell) offline.
+ * - Navigations: network-first, fall back to cached "/" (app shell) offline.
  * - Hashed build output (/assets/*) + fonts/icons: cache-first with
  *   background revalidation (filenames are content-hashed, so stale risk is nil).
  * - /api/*: never cached, always network (server + React Query own the policy).
@@ -21,7 +21,6 @@ const OTHER_CACHE_MAX = 100;
 
 const PRECACHE_URLS = [
   "/",
-  "/index.html",
   "/manifest.webmanifest",
   "/icons/app-icon.svg",
   "/icons/icon-192.png",
@@ -87,8 +86,7 @@ async function handleNavigation(request) {
     }
     return res;
   } catch {
-    const cached =
-      (await caches.match("/index.html", { ignoreSearch: true })) || (await caches.match("/", { ignoreSearch: true }));
+    const cached = await caches.match("/", { ignoreSearch: true });
     if (cached) return cached;
     return new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
   }

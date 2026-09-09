@@ -81,8 +81,15 @@ export function isValidModelIdentity(id: unknown, slug: unknown, name: unknown):
   return true;
 }
 
-function isValidTextToImageRank(n: number | null | undefined): n is number {
-  return typeof n === "number" && Number.isInteger(n) && n > 0;
+export function isValidTextToImageEntry(entry: {
+  id: unknown;
+  slug: unknown;
+  name: unknown;
+  elo: number | null | undefined;
+}): boolean {
+  if (!isValidModelIdentity(entry.id, entry.slug, entry.name)) return false;
+  if (entry.elo == null || !Number.isFinite(entry.elo)) return false;
+  return true;
 }
 
 export function isUsablePricing(input: number | null | undefined, output: number | null | undefined): boolean {
@@ -95,19 +102,6 @@ export function isUsablePricing(input: number | null | undefined, output: number
 export function isUsableOpenRouterPricing(input: number, output: number): boolean {
   if (!Number.isFinite(input) || input < 0) return false;
   if (!Number.isFinite(output) || output < 0) return false;
-  return true;
-}
-
-export function isValidTextToImageEntry(entry: {
-  id: unknown;
-  slug: unknown;
-  name: unknown;
-  rank: number | null | undefined;
-  elo: number | null | undefined;
-}): boolean {
-  if (!isValidModelIdentity(entry.id, entry.slug, entry.name)) return false;
-  if (!isValidTextToImageRank(entry.rank)) return false;
-  if (entry.elo == null || !Number.isFinite(entry.elo)) return false;
   return true;
 }
 

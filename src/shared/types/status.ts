@@ -33,9 +33,6 @@ export interface DayBucket {
   day: string;
   total: number;
   ok: number;
-  latencySum: number;
-  latencyN: number;
-  incidents: number;
 }
 
 export interface StatusEvent {
@@ -52,7 +49,7 @@ export interface SourceHistorySummary {
   checkedAt: string | null;
   uptime24h: number | null;
   uptime7d: number | null;
-  uptime90d: number | null;
+  uptime30d: number | null;
   avgLatency24h: number | null;
 }
 

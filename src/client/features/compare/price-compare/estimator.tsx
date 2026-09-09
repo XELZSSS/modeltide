@@ -1,3 +1,4 @@
+"use client";
 import { memo, useMemo } from "react";
 import { approxEq } from "@/shared/utils";
 import { modelId } from "@/client/utils/model";
@@ -6,8 +7,7 @@ import { cn } from "@/client/utils/cn";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
-import { useChartTheme } from "@/client/ui-hooks";
-import { seriesColor } from "@/client/utils/charts";
+import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
 import { useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
 import { CostEstimatorInputs } from "@/client/features/pricing/inputs";
 import { useOfficialPricing } from "@/client/features/pricing/official";

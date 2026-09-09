@@ -1,5 +1,6 @@
+"use client";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { usePathname, useRouter, useSearchParams } from "@/client/router";
 import { Loader2, Search, X } from "lucide-react";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/providers";
@@ -7,12 +8,14 @@ import { useSearchStore } from "@/client/stores";
 import type { SearchResult } from "@/shared/types";
 import { useSearchAllRankings } from "@/client/search/use-search";
 import { useClickOutside, useListKeyboard } from "@/client/search/interaction";
+import { useDebouncedCallback } from "@/client/hooks/use-debounced-callback";
 
 const DEBOUNCE_MS = 200;
 
-export function SearchInput() {
+export function SearchInput({ className }: { className?: string }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const router = useRouter();
+  const navigate = (to: string) => router.push(to);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -22,48 +25,26 @@ export function SearchInput() {
 
   const searchTerm = useSearchStore((s) => s.searchTerm);
   const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
-  const location = useLocation();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [inputValue, setInputValue] = useState(searchTerm);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { flush: debouncedSetTerm, cancel: cancelDebounce } = useDebouncedCallback(setSearchTerm, DEBOUNCE_MS);
   useEffect(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    cancelDebounce();
     setInputValue("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, location.search]);
+  }, [pathname, searchParams, cancelDebounce]);
   useEffect(() => {
-    if (inputValue === searchTerm) return;
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      setSearchTerm(inputValue);
-    }, DEBOUNCE_MS);
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [inputValue, searchTerm, setSearchTerm]);
+    if (inputValue !== searchTerm) debouncedSetTerm(inputValue);
+  }, [inputValue, searchTerm, debouncedSetTerm]);
   useEffect(() => setInputValue(searchTerm), [searchTerm]);
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    [],
-  );
 
   const { results, isPending, isError } = useSearchAllRankings(searchTerm, { suspended: !isOpen });
 
   const clearSearch = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    cancelDebounce();
     setSearchTerm("");
     setInputValue("");
-  }, [setSearchTerm]);
+  }, [setSearchTerm, cancelDebounce]);
 
   const goToResult = useCallback(
     (result: SearchResult | undefined) => {
@@ -137,28 +118,28 @@ export function SearchInput() {
         role="option"
         aria-selected={clampedIndex === index}
         className={cn(
-          "w-full text-left p-2.5 rounded-none transition-colors active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
+          "w-full text-left p-2.5 rounded-none transition-colors active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
           clampedIndex === index ? "bg-hover" : "hover:bg-hover",
         )}
         onMouseEnter={() => setActiveIndex(index)}
         onClick={() => goToResult(result)}
       >
-        <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-text-primary truncate">{result.name}</span>
           {typeof result.score === "number" && Number.isFinite(result.score) && (
             <span className="text-xs text-text-secondary ml-2 shrink-0 font-mono">{result.score.toFixed(1)}</span>
           )}
-        </div>
-        <div className="flex items-center gap-2 mt-1">
+        </span>
+        <span className="flex items-center gap-2 mt-1">
           <span className="text-xs text-text-secondary">{t(result.source)}</span>
           {result.provider && <span className="text-xs text-text-tertiary">{result.provider}</span>}
-        </div>
+        </span>
       </button>
     ));
   }
 
   return (
-    <div ref={containerRef} className="relative w-full sm:w-72 min-w-0 max-w-full">
+    <div ref={containerRef} className={cn("relative w-full sm:w-72 min-w-0 max-w-full", className)}>
       <label htmlFor={inputId} className="sr-only">
         {t("searchPlaceholder")}
       </label>
@@ -213,7 +194,7 @@ export function SearchInput() {
           id={listboxId}
           ref={listRef}
           role="listbox"
-          className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-none shadow-none z-50 animate-fade-in"
+          className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-none shadow-lg z-50 animate-fade-in"
         >
           <div className="p-1.5">{dropdownBody}</div>
         </div>

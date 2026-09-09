@@ -15,25 +15,13 @@ export class ValidationError extends ApiError {
 }
 
 export class UpstreamError extends ApiError {
-  constructor(msg: string) {
-    super(msg, 502);
+  readonly causedByTimeout: boolean;
+  /** Origin HTTP status when the failure came from an upstream response. */
+  readonly statusCode?: number;
+  constructor(msg: string, opts?: { timeout?: boolean; status?: number }) {
+    super(msg, opts?.timeout ? 504 : 502);
     this.name = "UpstreamError";
+    this.causedByTimeout = opts?.timeout === true;
+    if (opts?.status != null) this.statusCode = opts.status;
   }
 }
-
-export class RateLimitError extends ApiError {
-  readonly retryAfterSec?: number;
-  constructor(msg: string = "Too many requests, please retry later", retryAfterSec?: number) {
-    super(msg, 429);
-    this.name = "RateLimitError";
-    this.retryAfterSec = retryAfterSec;
-  }
-}
-
-export const settled = <T>(r: PromiseSettledResult<T>, f: T): T => (r.status === "fulfilled" ? r.value : f);
-export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-export const formatSettleErrors = (rs: readonly PromiseSettledResult<unknown>[], ls: readonly string[]): string =>
-  rs
-    .map((r, i) => (r.status === "rejected" ? `${ls[i] ?? i}: ${errMsg(r.reason)}` : null))
-    .filter(Boolean)
-    .join("; ");

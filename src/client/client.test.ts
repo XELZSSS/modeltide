@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   formatTokens,
   formatScore,
@@ -15,7 +15,6 @@ import {
   safeHref,
 } from "@/client/utils/format";
 import { calcMonthlyCost } from "@/client/utils/cost-estimator";
-import { computeBlendPrice } from "@/shared/utils";
 import {
   indexOfficialPricing,
   matchOfficialPricing,
@@ -23,6 +22,7 @@ import {
   resolveEffectivePricing,
 } from "@/client/utils/pricing-merge";
 import { matchTerm } from "@/shared/utils";
+import { fuzzyMatch } from "@/client/utils/fuzzy";
 import {
   buildCompareRows,
   buildRadarData,
@@ -30,9 +30,11 @@ import {
   radarMaxFor,
   type CompareRow,
 } from "@/client/features/compare/logic";
-import { aggregateUsageByCategory } from "@/client/features/home/usage";
-import { createT, interpolate } from "@/shared/i18n";
-import type { ArtificialAnalysisModel, OfficialPriceModel, OpenRouterRankEntry } from "@/shared/types";
+import { aggregateTaskShare, formatTaskLabel, taskLabel } from "@/client/features/home/usage";
+import { pickLatestReleaseName } from "@/client/features/home/use-home-stats";
+import { resolveInitialTab } from "@/client/hooks/use-client-tab";
+import { isIosDevice, isStandaloneMode, unregisterStaleServiceWorker } from "@/client/pwa/use-pwa";
+import type { ArtificialAnalysisModel, ClosedReleaseEntry, OfficialPriceModel } from "@/shared/types";
 import type { TFunction } from "@/shared/i18n";
 
 const t = (overrides: Record<string, string> = {}): TFunction => {
@@ -244,6 +246,7 @@ function dailyCost(
     dailyOutput,
     dailyReasoning: opts?.dailyReasoning,
     cacheHitRate: opts?.cacheHitRate ?? 0,
+    cacheWriteRate: 0,
     daysPerMonth: 1,
   });
 }
@@ -255,6 +258,7 @@ describe("calcMonthlyCost", () => {
       dailyInput: 1_000_000,
       dailyOutput: 1_000_000,
       cacheHitRate: 0,
+      cacheWriteRate: 0,
       daysPerMonth: 22,
     });
     expect(cost).toBe(3 * 22);
@@ -267,6 +271,7 @@ describe("calcMonthlyCost", () => {
       dailyOutput: 0,
       dailyReasoning: 1_000_000,
       cacheHitRate: 0.5,
+      cacheWriteRate: 0,
       daysPerMonth: 22,
     });
     expect(cost).toBe(13 * 22);
@@ -278,6 +283,7 @@ describe("calcMonthlyCost", () => {
       dailyInput: 1_000_000,
       dailyOutput: 1_000_000,
       cacheHitRate: 0,
+      cacheWriteRate: 0,
       daysPerMonth: 0,
     });
     expect(cost).toBe(3);
@@ -328,28 +334,23 @@ describe("calcMonthlyCost", () => {
   });
 });
 
-describe("matchTerm", () => {
-  it("scores exact matches highest", () => {
-    const { matched, score } = matchTerm(["gpt-5"], "gpt-5");
-    expect(matched).toBe(true);
-    expect(score).toBe(4);
+describe("fuzzyMatch", () => {
+  const items = [{ name: "claude-opus-4" }, { name: "gpt-5" }, { name: "deepseek-r1" }];
+  const fields = (m: { name: string }) => [m.name];
+
+  it("rescues typo queries the tiered matcher misses", () => {
+    expect(matchTerm(["claude-opus-4"], "calude").matched).toBe(false);
+    expect(fuzzyMatch(items, "calude", fields).map((m) => m.name)).toContain("claude-opus-4");
   });
 
-  it("scores prefix matches above substring matches", () => {
-    expect(matchTerm(["gpt-5", "claude"], "gpt").score).toBe(3);
-    expect(matchTerm(["my-gpt-5", "claude"], "gpt").score).toBe(2);
+  it("returns empty for short terms and empty input", () => {
+    expect(fuzzyMatch(items, "gp", fields)).toEqual([]);
+    expect(fuzzyMatch([], "claude", fields)).toEqual([]);
+    expect(fuzzyMatch(items, "   ", fields)).toEqual([]);
   });
 
-  it("matches any field", () => {
-    expect(matchTerm(["openai", "gpt-5-mini"], "mini").matched).toBe(true);
-  });
-
-  it("returns unmatched for empty fields", () => {
-    expect(matchTerm(["", " "], "gpt").matched).toBe(false);
-  });
-
-  it("requires a non-empty term to match", () => {
-    expect(matchTerm(["gpt-5"], "zzz").matched).toBe(false);
+  it("returns empty when nothing is close", () => {
+    expect(fuzzyMatch(items, "zzzqqq", fields)).toEqual([]);
   });
 });
 
@@ -537,42 +538,6 @@ describe("buildCompareRows", () => {
   });
 });
 
-describe("interpolate", () => {
-  it("replaces named placeholders with provided params", () => {
-    expect(interpolate("{value} min ago", { value: 5 })).toBe("5 min ago");
-    expect(interpolate("{a} + {b}", { a: 1, b: "x" })).toBe("1 + x");
-  });
-
-  it("leaves placeholders untouched when their param is missing or null", () => {
-    expect(interpolate("hello {name}")).toBe("hello {name}");
-    expect(interpolate("hello {name}", {})).toBe("hello {name}");
-    expect(interpolate("hello {name}", { name: null as unknown as string })).toBe("hello {name}");
-  });
-
-  it("returns the template as-is when no params are given", () => {
-    expect(interpolate("plain {text}")).toBe("plain {text}");
-  });
-});
-
-describe("createT", () => {
-  it("translates with the requested language dictionary", () => {
-    const zh = createT("zh");
-    expect(zh("compareLimit")).toBe("请至少选择 2 个模型进行对比。");
-    const en = createT("en");
-    expect(en("compareLimit")).toBe("Select at least 2 models to compare.");
-  });
-
-  it("interpolates params into translated templates", () => {
-    const en = createT("en");
-    expect(en("timeMinutesAgo", { value: 3 })).toMatch(/^3/);
-  });
-
-  it("falls back to the key name for unknown keys", () => {
-    const zh = createT("zh");
-    expect(zh("definitelyNotAKey" as never)).toBe("definitelyNotAKey");
-  });
-});
-
 function makeOfficial(over: Partial<OfficialPriceModel>): OfficialPriceModel {
   return {
     id: "gpt-5",
@@ -581,25 +546,10 @@ function makeOfficial(over: Partial<OfficialPriceModel>): OfficialPriceModel {
     input: 5,
     output: 25,
     cachedInput: 0.5,
-    contextWindow: null,
+    cacheWrite: 6.25,
     ...over,
   };
 }
-
-describe("computeBlendPrice", () => {
-  it("mixes cache/input/output 7:2:1", () => {
-    expect(computeBlendPrice({ input: 5, output: 25, cacheHit: 0.5 })).toBeCloseTo(3.85, 5);
-  });
-  it("falls back to input when the model has no cache tier", () => {
-    expect(computeBlendPrice({ input: 2, output: 6 })).toBe(2.4);
-    expect(computeBlendPrice({ input: 2, output: 6, cacheHit: null })).toBe(2.4);
-  });
-  it("returns null without both input and output legs", () => {
-    expect(computeBlendPrice({})).toBeNull();
-    expect(computeBlendPrice({ input: 1 })).toBeNull();
-    expect(computeBlendPrice(null)).toBeNull();
-  });
-});
 
 describe("official price resolution", () => {
   const official = makeOfficial({});
@@ -613,50 +563,177 @@ describe("official price resolution", () => {
   });
   it("official legs win per-leg, catalog fills the gaps", () => {
     const eff = resolveEffectivePricing({ input: 10, output: 50, cacheHit: 1 }, makeOfficial({ output: null }));
-    expect(eff).toEqual({ input: 5, output: 50, cacheHit: 0.5, source: "official" });
+    expect(eff).toEqual({ input: 5, output: 50, cacheHit: 0.5, cacheWrite: 6.25, source: "official" });
   });
   it("falls back to catalog without an official match", () => {
     const eff = resolveEffectivePricing({ input: 10, output: 50, cacheHit: 1 });
-    expect(eff).toEqual({ input: 10, output: 50, cacheHit: 1, source: "catalog" });
+    expect(eff).toEqual({ input: 10, output: 50, cacheHit: 1, cacheWrite: null, source: "catalog" });
+  });
+  it("fills the write leg from the catalog when the official match lacks one", () => {
+    const eff = resolveEffectivePricing(
+      { input: 10, output: 50, cacheHit: 1, cacheWrite: 12.5 },
+      makeOfficial({ cacheWrite: null }),
+    );
+    expect(eff).toEqual({ input: 5, output: 25, cacheHit: 0.5, cacheWrite: 12.5, source: "official" });
   });
   it("reports a null source when no leg resolves", () => {
     expect(resolveEffectivePricing(undefined, null).source).toBeNull();
   });
   it("recomputes blended from official legs", () => {
-    const model = makeModel({ pricing: { input: 10, output: 50, cacheHit: 1 }, blended_price: 99 });
+    const model = makeModel({ pricing: { input: 10, output: 50, cacheHit: 1 } });
     expect(resolveBlendedPrice(model, official)).toBeCloseTo(3.85, 5);
   });
-  it("passes the catalog blended figure through without an official match", () => {
-    const model = makeModel({ pricing: { input: 10, output: 50, cacheHit: 1 }, blended_price: 99 });
-    expect(resolveBlendedPrice(model)).toBe(99);
+  it("computes blended from catalog legs without an official match", () => {
+    const model = makeModel({ pricing: { input: 5, output: 25, cacheHit: 0.5 } });
+    expect(resolveBlendedPrice(model)).toBeCloseTo(3.85, 5);
   });
   it("monthly cost uses official legs when matched", () => {
     const model = makeModel({ pricing: { input: 10, output: 50, cacheHit: null } });
-    const opts = { dailyInput: 1_000_000, dailyOutput: 1_000_000, cacheHitRate: 0, daysPerMonth: 1 };
+    const opts = {
+      dailyInput: 1_000_000,
+      dailyOutput: 1_000_000,
+      cacheHitRate: 0,
+      cacheWriteRate: 0,
+      daysPerMonth: 1,
+    };
     expect(calcMonthlyCost(model, opts)).toBe(60);
     expect(calcMonthlyCost(model, opts, official)).toBe(30);
   });
+  it("monthly cost bills cache-write tokens at the write tier", () => {
+    const model = makeModel({ pricing: { input: 10, output: 0, cacheHit: 1, cacheWrite: 30 } });
+    const opts = {
+      dailyInput: 1_000_000,
+      dailyOutput: 0,
+      cacheHitRate: 0.5,
+      cacheWriteRate: 0.2,
+      daysPerMonth: 1,
+    };
+    expect(calcMonthlyCost(model, opts)).toBeCloseTo(0.5 * 1 + 0.2 * 30 + 0.3 * 10, 5);
+  });
+  it("monthly cost ignores the write rate when the interface has no write price", () => {
+    const model = makeModel({ pricing: { input: 10, output: 0, cacheHit: 1 } });
+    const opts = {
+      dailyInput: 1_000_000,
+      dailyOutput: 0,
+      cacheHitRate: 0.5,
+      cacheWriteRate: 0.2,
+      daysPerMonth: 1,
+    };
+    expect(calcMonthlyCost(model, opts)).toBeCloseTo(0.5 * 1 + 0.5 * 10, 5);
+  });
 });
 
-describe("aggregateUsageByCategory", () => {
-  const entry = (category: OpenRouterRankEntry["category"]) => ({ category });
-  it("counts models per category in fixed order", () => {
-    const { slices, total } = aggregateUsageByCategory([
-      entry("general"),
-      entry("coding"),
-      entry("reasoning"),
-      entry("coding"),
+describe("aggregateTaskShare", () => {
+  const task = (value: string | null) => ({ task: value });
+  it("counts models per task sorted descending, tail folded into other", () => {
+    const { slices, total } = aggregateTaskShare([
+      task("text-generation"),
+      task("text-to-image"),
+      task("text-generation"),
+      task(null),
     ]);
-    expect(slices.map((s) => s.key)).toEqual(["coding", "reasoning", "general"]);
-    expect(slices.map((s) => s.total)).toEqual([2, 1, 1]);
+    expect(slices).toEqual([
+      { key: "text-generation", total: 2 },
+      { key: "text-to-image", total: 1 },
+      { key: "__other__", total: 1 },
+    ]);
     expect(total).toBe(4);
   });
-  it("drops empty categories so small slices stay visible", () => {
-    const { slices, total } = aggregateUsageByCategory([entry("reasoning"), entry("reasoning")]);
-    expect(slices).toEqual([{ key: "reasoning", total: 2 }]);
-    expect(total).toBe(2);
+  it("folds the long tail beyond the slice limit into other", () => {
+    const models = ["a", "b", "c", "d", "e", "f", "g"].map((t) => task(t));
+    const { slices, total } = aggregateTaskShare(models);
+    expect(slices).toHaveLength(6);
+    expect(slices[5]).toEqual({ key: "__other__", total: 2 });
+    expect(total).toBe(7);
   });
   it("returns empty slices for empty input", () => {
-    expect(aggregateUsageByCategory([])).toEqual({ slices: [], total: 0 });
+    expect(aggregateTaskShare([])).toEqual({ slices: [], total: 0 });
+  });
+  it("resolves localized labels with English fallback", () => {
+    const t = (key: string) => (key === "taskTextGeneration" ? "文本生成" : key);
+    expect(taskLabel("text-generation", t)).toBe("文本生成");
+    expect(taskLabel("some-new-task", t)).toBe("Some New Task");
+    expect(formatTaskLabel("automatic_speech_recognition")).toBe("Automatic Speech Recognition");
+  });
+});
+
+describe("pickLatestReleaseName", () => {
+  const closed = (releaseDate: string, model = "Closed Model"): ClosedReleaseEntry => ({
+    id: model,
+    model,
+    provider: "Lab",
+    releaseDate,
+    link: "https://example.com",
+  });
+  it("returns the head of the 模型发布 feed", () => {
+    expect(pickLatestReleaseName([closed("2026-09-05"), closed("2026-09-01")])).toBe("Closed Model");
+  });
+  it("returns null when the feed is empty or dateless", () => {
+    expect(pickLatestReleaseName([])).toBeNull();
+    expect(pickLatestReleaseName([closed("not-a-date")])).toBeNull();
+  });
+});
+
+describe("resolveInitialTab", () => {
+  const tabs = ["feed", "closed"] as const;
+  it("accepts a valid deep-link param", () => {
+    expect(resolveInitialTab(tabs, "closed", "feed")).toBe("closed");
+  });
+  it("falls back for missing or unknown params", () => {
+    expect(resolveInitialTab(tabs, null, "feed")).toBe("feed");
+    expect(resolveInitialTab(tabs, "nope", "feed")).toBe("feed");
+  });
+});
+
+describe("isIosDevice", () => {
+  it("detects iPhone and iPad user agents", () => {
+    expect(isIosDevice("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)")).toBe(true);
+    expect(isIosDevice("Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X)")).toBe(true);
+  });
+  it("detects iPadOS 13+ masquerading as Macintosh with touch", () => {
+    expect(isIosDevice("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)", 5)).toBe(true);
+  });
+  it("rejects desktop Macs without touch and Android devices", () => {
+    expect(isIosDevice("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)", 0)).toBe(false);
+    expect(isIosDevice("Mozilla/5.0 (Linux; Android 14; Pixel 8)")).toBe(false);
+    expect(isIosDevice("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe(false);
+  });
+});
+
+describe("isStandaloneMode", () => {
+  it("is true for iOS standalone or any display-mode match", () => {
+    expect(isStandaloneMode({ navigatorStandalone: true })).toBe(true);
+    expect(isStandaloneMode({ displayStandalone: true })).toBe(true);
+    expect(isStandaloneMode({ displayFullscreen: true })).toBe(true);
+  });
+  it("is false for regular browser tabs", () => {
+    expect(isStandaloneMode({})).toBe(false);
+    expect(isStandaloneMode({ navigatorStandalone: false, displayStandalone: false, displayFullscreen: false })).toBe(
+      false,
+    );
+  });
+});
+
+describe("unregisterStaleServiceWorker", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("unregisters every registration outside production", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const unregister = vi.fn(async () => true);
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", {
+      serviceWorker: { getRegistrations: async () => [{ unregister }, { unregister }] },
+    });
+    unregisterStaleServiceWorker();
+    await vi.waitFor(() => {
+      expect(unregister).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("is a no-op without a window", () => {
+    expect(() => unregisterStaleServiceWorker()).not.toThrow();
   });
 });

@@ -1,3 +1,4 @@
+"use client";
 import type { ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
@@ -49,7 +50,7 @@ function HallDetailContent({
 }
 
 export function HallDetail({ decodedId }: { decodedId: string }) {
-  const { data: aaData } = useSuspenseArtificialRankings();
+  const aaData = useSuspenseArtificialRankings();
   const hallucinationRankings = useSuspenseHallucinationRankings();
   const entry = findModel(hallucinationRankings, decodedId, "id", "slug");
   const aaModel =

@@ -31,6 +31,12 @@ function tagNameOf(tagInner: string): string {
   return (m?.[0] ?? "").toLowerCase().replace(/^\//, "");
 }
 
+// Hoisted module constants: stripHtml runs over every feed description and
+// title; allocating a fresh regex per script/style tag is pure GC pressure.
+// Single-threaded + lastIndex reset before each exec keeps reuse safe.
+const SCRIPT_CLOSE_RE = /<\/script\s*>/gi;
+const STYLE_CLOSE_RE = /<\/style\s*>/gi;
+
 export function stripHtml(s: string): string {
   const parts: string[] = [];
   let i = 0;
@@ -73,7 +79,7 @@ export function stripHtml(s: string): string {
     const inner = s.slice(i + 1, end);
     const name = tagNameOf(inner);
     if (name === "script" || name === "style") {
-      const closeRe = name === "script" ? /<\/script\s*>/gi : /<\/style\s*>/gi;
+      const closeRe = name === "script" ? SCRIPT_CLOSE_RE : STYLE_CLOSE_RE;
       closeRe.lastIndex = end + 1;
       const m = closeRe.exec(s);
       parts.push(" ");

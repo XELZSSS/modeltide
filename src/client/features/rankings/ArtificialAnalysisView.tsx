@@ -1,13 +1,14 @@
+"use client";
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useRouter } from "@/client/router";
 import { useTranslation } from "@/client/providers";
-import { useUrlParam } from "@/client/ui-hooks";
+import { useClientTab } from "@/client/hooks/use-client-tab";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelId } from "@/client/utils/model";
 import { indexRankMap, rankCol } from "@/client/components/data/columns";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { useCompareModels, useCompareStore } from "@/client/stores";
-import { useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
+import { useEffectivePricingMap, useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
 import { CostEstimatorInputs } from "@/client/features/pricing/inputs";
 import { useOfficialPricing } from "@/client/features/pricing/official";
 import { CompareChipBar } from "@/client/components/compare-tray";
@@ -32,13 +33,18 @@ const renderModelDetail = (model: ArtificialAnalysisModel) => <ModelExpandedDeta
 const renderPricingDetail = (row: PricingRow) => <ModelExpandedDetail model={row.model} />;
 
 export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnalysisModel[] }) {
-  const navigate = useNavigate();
+  const router = useRouter();
+  const navigate = (to: string) => router.push(to);
   const { t } = useTranslation();
   const toggleCompareModel = useCompareStore((s) => s.toggleCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
-  const [viewMode, setViewMode] = useUrlParam("view", VIEW_MODES, VIEW_MODES[0]);
+  const [viewMode, setViewMode] = useClientTab("view", VIEW_MODES, VIEW_MODES[0]);
 
   const { getOfficial } = useOfficialPricing(viewMode === "pricing");
+  const effectivePricingMap = useEffectivePricingMap(
+    viewMode === "pricing" ? rankings : [],
+    viewMode === "pricing" ? getOfficial : undefined,
+  );
   const { monthlyCosts, ...costInputs } = useMonthlyCosts(
     viewMode === "pricing" ? rankings : [],
     viewMode === "pricing" ? getOfficial : undefined,
@@ -46,8 +52,9 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const comparedModels = useCompareModels(rankings);
 
   const avgCost = useMemo(() => {
+    // Prefer server precomputed default when calc is default and pricing unchanged
     const valid = monthlyCosts.filter((v): v is number => v != null);
-    return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+    return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
   }, [monthlyCosts]);
 
   const compareIds = useCompareStore((s) => s.compareIds);
@@ -63,9 +70,9 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const pricingColumns = useMemo(
     () => [
       rankCol((row: PricingRow) => rankMap.get(modelId(row.model)) ?? null),
-      ...buildPricingColumns(t, compareSet, toggleCompareModel, getOfficial),
+      ...buildPricingColumns(t, compareSet, toggleCompareModel, effectivePricingMap, getOfficial),
     ],
-    [t, compareSet, toggleCompareModel, rankMap, getOfficial],
+    [t, compareSet, toggleCompareModel, rankMap, effectivePricingMap, getOfficial],
   );
 
   const pricingRows = useMemo(

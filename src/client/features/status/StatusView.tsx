@@ -1,5 +1,6 @@
+"use client";
 import { memo } from "react";
-import { Link } from "react-router";
+import { SafeLink as Link } from "@/client/router";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { useSuspenseStatusHistory } from "@/client/api/queries";
@@ -11,7 +12,8 @@ import { cn } from "@/client/utils/cn";
 import { formatUptime, formatUptimePct } from "@/client/utils/format";
 import { SOURCE_LABELS } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary } from "@/shared/types";
-import { UptimeStrip, StatusEventList } from "./StatusParts";
+import { UptimeStrip } from "./StatusParts";
+import { StatusEventList } from "@/client/components/status-events";
 
 const EMPTY_BUCKETS: DayBucket[] = [];
 
@@ -31,7 +33,7 @@ const SourceCard = memo(function SourceCard({
   const unprobed = summary.checkedAt == null;
   return (
     <Link
-      to={`/status/${summary.id}`}
+      href={`/status/${summary.id}`}
       className="block border border-border bg-bg-card p-4 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -70,6 +72,9 @@ function StatusContent() {
   const { data } = useSuspenseStatusHistory();
   const failing = data.sources.filter((s) => s.ok === false && s.checkedAt);
   const hasData = data.sources.some((s) => s.checkedAt != null);
+  // Unprobed sources must not read as healthy: with 1 probed-OK + 13 silent
+  // the header would otherwise claim "all operational".
+  const unprobed = data.sources.filter((s) => s.checkedAt == null).length;
 
   return (
     <PageContainer>
@@ -89,14 +94,20 @@ function StatusContent() {
             <Dot
               size="md"
               color={
-                hasData ? (failing.length === 0 ? "var(--success)" : "var(--destructive)") : "var(--text-tertiary)"
+                !hasData || unprobed > 0
+                  ? "var(--text-tertiary)"
+                  : failing.length === 0
+                    ? "var(--success)"
+                    : "var(--destructive)"
               }
             />
             <p className="text-sm font-medium">
               {!hasData
                 ? t("historyAccumulating")
                 : failing.length === 0
-                  ? t("statusAllOk")
+                  ? unprobed > 0
+                    ? t("statusProbing", { probed: data.sources.length - unprobed, total: data.sources.length })
+                    : t("statusAllOk")
                   : t("statusDegraded", { down: failing.length, total: data.sources.length })}
             </p>
           </div>

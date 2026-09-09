@@ -1,13 +1,20 @@
 import { UpstreamError } from "@/server/infra/errors";
-import { balancedJsonEnd } from "@/server/parsers/balanced";
-import { fnv1aHash, utf8ByteLength } from "@/shared/utils";
+import { utf8ByteLength } from "@/shared/utils";
+import {
+  isMarkerBoundary,
+  iterateLines,
+  rscNotFound,
+  scanOversizedMarkers,
+  STREAM_LINE_RE,
+  MAX_RSC_BYTES,
+  MAX_RSC_LINE_CHARS,
+} from "@/server/parsers/rsc-scan";
 
-export const MAX_RSC_BYTES = 5 * 1024 * 1024;
-const MAX_RSC_NODES = 50_000;
-const MAX_RSC_LINE_CHARS = 2 * 1024 * 1024;
-export const MAX_SCAN_CHARS = 8_000_000;
+export { balancedJsonEnd, MAX_RSC_BYTES, MAX_RSC_LINE_CHARS, MAX_SCAN_CHARS } from "@/server/parsers/rsc-scan";
 
-function* traverse(root: unknown): Generator<unknown> {
+export const MAX_RSC_NODES = 50_000;
+
+export function* traverse(root: unknown): Generator<unknown> {
   const seen = new Set<object>();
   const queue: unknown[] = [root];
   let visited = 0;
@@ -61,159 +68,6 @@ export function findLongestData<T>(root: unknown, key: string): T[] | null {
   return best && best.length > 0 ? best : null;
 }
 
-function isMarkerBoundary(line: string, marker: string): boolean {
-  const q = `"${marker}"`;
-  let idx = line.indexOf(q);
-  while (idx !== -1) {
-    const after = line.slice(idx + q.length);
-    const trimmed = after.trimStart();
-    if (!trimmed) {
-      idx = line.indexOf(q, idx + 1);
-      continue;
-    }
-    const c = trimmed[0]!;
-    if (c === ":" || c === "[" || c === '"' || c === "," || c === "}" || c === "]") return true;
-    idx = line.indexOf(q, idx + 1);
-  }
-  return false;
-}
-
-const STREAM_LINE_RE = /^[0-9a-fA-F]+:(.*)$/;
-
-function* iterateLines(body: string): Generator<string> {
-  let start = 0;
-  while (start <= body.length) {
-    const nl = body.indexOf("\n", start);
-    if (nl === -1) {
-      yield body.slice(start);
-      return;
-    }
-    let end = nl;
-    if (end > start && body[end - 1] === "\r") end--;
-    yield body.slice(start, end);
-    start = nl + 1;
-  }
-}
-
-function rscNotFound(marker: string, body: string, maxLineLen = 0): UpstreamError {
-  return new UpstreamError(
-    `RSC marker "${marker}" not found or payload empty. body length=${body.length}` +
-      (maxLineLen > 0 ? ` maxLine=${maxLineLen}` : "") +
-      ` hash=${fnv1aHash(body.slice(0, 1024))}`,
-  );
-}
-
-const MAX_OVERSIZED_WORK_CHARS = MAX_SCAN_CHARS;
-
-function scanOversizedMarkers<T>(
-  line: string,
-  markers: readonly string[],
-  results: (T[] | null)[],
-  extract: (data: unknown) => T[] | null,
-): number {
-  const positions = collectNeedlePositions(line, markers, results);
-  positions.sort((a, b) => a.idx - b.idx);
-  const before = results.filter(Boolean).length;
-  let workLeft = MAX_OVERSIZED_WORK_CHARS;
-  for (const { idx, mi } of positions) {
-    if (workLeft <= 0) break;
-    const marker = markers[mi];
-    if (results[mi] || marker == null) continue;
-    const { trees, spent } = parseWindowCandidates(line, idx, marker, workLeft);
-    workLeft -= spent;
-    for (const tree of trees) {
-      if (offerTreeToMarkers(tree, markers, results, extract, mi)) break;
-    }
-  }
-  return results.filter(Boolean).length - before;
-}
-
-function collectNeedlePositions(
-  line: string,
-  markers: readonly string[],
-  results: readonly (unknown[] | null)[],
-): { idx: number; mi: number }[] {
-  const positions: { idx: number; mi: number }[] = [];
-  for (let mi = 0; mi < markers.length; mi++) {
-    if (results[mi]) continue;
-    const needle = `"${markers[mi]}"`;
-    let from = 0;
-    while (from <= line.length) {
-      const idx = line.indexOf(needle, from);
-      if (idx === -1) break;
-      positions.push({ idx, mi });
-      from = idx + 1;
-      if (from > MAX_RSC_BYTES) break;
-    }
-  }
-  return positions;
-}
-
-const OVERSIZED_WINDOW_STEPS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
-
-function parseWindowCandidates(
-  line: string,
-  idx: number,
-  marker: string,
-  budgetChars: number,
-): { trees: unknown[]; spent: number } {
-  const start = Math.max(0, idx - 4096);
-  let spent = 0;
-  for (const step of OVERSIZED_WINDOW_STEPS) {
-    const chunk = line.slice(start, Math.min(line.length, idx + step));
-    const prefixed = STREAM_LINE_RE.exec(chunk)?.[1];
-    for (const raw of [prefixed, chunk]) {
-      if (!raw || raw.length > MAX_RSC_BYTES) continue;
-      if (budgetChars - spent <= 0) return { trees: [], spent };
-      spent += raw.length;
-      try {
-        return { trees: [JSON.parse(raw)], spent };
-      } catch {}
-    }
-  }
-  const slice = parseBalancedMarkerValue(line, idx, marker, budgetChars - spent);
-  if (slice == null) return { trees: [], spent };
-  spent += slice.length;
-  try {
-    return { trees: [{ [marker]: JSON.parse(slice) }], spent };
-  } catch {
-    return { trees: [], spent };
-  }
-}
-
-function parseBalancedMarkerValue(line: string, idx: number, marker: string, budgetChars: number): string | null {
-  if (budgetChars <= 0) return null;
-  const needle = `"${marker}"`;
-  const colonAt = line.indexOf(":", idx + needle.length);
-  if (colonAt === -1 || colonAt > idx + needle.length + 64) return null;
-  let v = colonAt + 1;
-  while (v < line.length && " \t\r\n".includes(line.charAt(v))) v++;
-  const open = line.charAt(v);
-  if (open !== "[" && open !== "{") return null;
-  const maxEnd = Math.min(line.length, v + MAX_SCAN_CHARS, v + budgetChars);
-  const end = balancedJsonEnd(line, v, maxEnd - v);
-  return end === -1 ? null : line.slice(v, end);
-}
-
-function offerTreeToMarkers<T>(
-  tree: unknown,
-  markers: readonly string[],
-  results: (T[] | null)[],
-  extract: (data: unknown) => T[] | null,
-  anchorMi: number,
-): boolean {
-  let anchored = false;
-  for (let mj = 0; mj < markers.length; mj++) {
-    if (results[mj]) continue;
-    const res = extract(tree);
-    if (res && res.length > 0) {
-      results[mj] = res;
-      if (mj === anchorMi) anchored = true;
-    }
-  }
-  return anchored;
-}
-
 export function parseRscPayloads<T>(
   body: string,
   markers: readonly string[],
@@ -235,6 +89,16 @@ export function parseRscPayloads<T>(
       unresolved -= scanOversizedMarkers(line, markers, results, extract);
       continue;
     }
+    // Fast path: most flight lines carry no marker at all - skip the raws
+    // array + parse-cache allocation unless a marker boundary is present.
+    let anyMarker = false;
+    for (let mi = 0; mi < markers.length; mi++) {
+      if (!results[mi] && isMarkerBoundary(line, markers[mi]!)) {
+        anyMarker = true;
+        break;
+      }
+    }
+    if (!anyMarker) continue;
     const raws: string[] = [];
     const prefixed = STREAM_LINE_RE.exec(line)?.[1];
     if (prefixed && prefixed.length <= MAX_RSC_BYTES) raws.push(prefixed);

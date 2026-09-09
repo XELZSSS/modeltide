@@ -1,3 +1,4 @@
+"use client";
 import { useTranslation } from "@/client/providers";
 import { MODEL_SOURCES } from "@/shared/config";
 import { ComparePageLayout } from "./ComparePageLayout";

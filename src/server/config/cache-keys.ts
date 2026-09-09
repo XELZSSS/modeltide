@@ -1,20 +1,21 @@
-import { API_DOMAINS } from "@/shared/config/paths";
 import { normalizeModelLimit } from "@/shared/config/limits";
+import { cacheKey } from "@/shared/config/paths";
 import type { NewsCategory } from "@/shared/types/news";
 
 export const cacheKeys = {
-  intelligenceIndex: API_DOMAINS.artificialIndex,
+  intelligenceIndex: cacheKey("artificialIndex"),
+  homeDashboard: cacheKey("homeDashboard"),
   openSourceModels: (sort: string, direction: string, limit: number) =>
-    `${API_DOMAINS.openSourceModels}:${sort}:${direction}:${normalizeModelLimit(limit)}`,
-  openSourceReleases: API_DOMAINS.openSourceReleases,
-  news: (category: NewsCategory) => `${API_DOMAINS.news}:${category}`,
-  openRouterRankings: API_DOMAINS.openRouterRankings,
+    cacheKey("openSourceModels", sort, direction, normalizeModelLimit(limit)),
+  openSourceModel: (id: string) => cacheKey("openSourceModels", "by-id", id),
+  openSourceReleases: cacheKey("openSourceReleases"),
+  news: (category: NewsCategory) => cacheKey("news", category),
+  openRouterRankings: cacheKey("openRouterRankings"),
   openRouterPricing: "openrouter-pricing-map:per-million",
-  closedReleases: API_DOMAINS.closedReleases,
-  arenaBoard: (category: string) => `${API_DOMAINS.arenaBoard}:${category}`,
-  arenaRankings: API_DOMAINS.arenaRankings,
-  officialPricing: API_DOMAINS.officialPricing,
+  closedReleases: cacheKey("closedReleases"),
+  agentRankings: cacheKey("agentRankings"),
+  officialPricing: cacheKey("officialPricing"),
+  statusHistoryPayload: cacheKey("statusHistory", "payload"),
   textToImage: "aa-text-to-image",
   changelog: "aa-changelog",
-  providerStatus: "provider-status",
 } as const;

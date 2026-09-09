@@ -1,21 +1,12 @@
+"use client";
 import { memo, useDeferredValue, useMemo } from "react";
 import { useSearchStore } from "@/client/stores";
-import { matchTerm } from "@/shared/utils";
+import { filterByTerm } from "@/shared/utils";
 import { DataTable, type DataTableProps } from "@/client/components/data/table";
 
 function useFilteredData<T>(data: T[], getFields: (x: T) => (string | null | undefined)[], term: string): T[] {
   const deferredTerm = useDeferredValue(term);
-  const normalized = deferredTerm.toLowerCase().trim();
-  return useMemo(() => {
-    if (!normalized) return data;
-    return data.filter(
-      (x) =>
-        matchTerm(
-          getFields(x).map((f) => (f ?? "").toLowerCase().trim()),
-          normalized,
-        ).matched,
-    );
-  }, [data, normalized, getFields]);
+  return useMemo(() => filterByTerm(data, deferredTerm, getFields), [data, deferredTerm, getFields]);
 }
 
 interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {

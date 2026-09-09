@@ -1,3 +1,4 @@
+"use client";
 import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
 

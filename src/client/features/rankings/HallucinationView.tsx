@@ -1,3 +1,4 @@
+"use client";
 import { formatIndex, formatPercent } from "@/client/utils/format";
 import type { HallucinationRankingEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/features/rankings/rank-shared";

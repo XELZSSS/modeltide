@@ -1,3 +1,4 @@
+"use client";
 import { memo, useMemo } from "react";
 import { formatDollar } from "@/client/utils/format";
 import type { TFunction } from "@/shared/i18n";
@@ -26,7 +27,7 @@ function getCostFields(state: CostInputState, t: TFunction): CostFieldDef[] {
 interface CostEstimatorInputsProps {
   state: CostInputState;
   layout?: "input-label" | "label-input-unit";
-  avgCost?: number;
+  avgCost?: number | null;
 }
 
 function CostFieldInput({
@@ -91,10 +92,12 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
           </div>
         ),
       )}
-      {layout === "input-label" && typeof avgCost === "number" && (
+      {layout === "input-label" && avgCost !== undefined && (
         <div className="flex items-center gap-2">
           <span className="text-sm text-text-secondary">{t("estimatedMonthlyCost")}:</span>
-          <span className="text-lg font-semibold font-mono tabular-nums">{formatDollar(avgCost, t)}</span>
+          <span className="text-lg font-semibold font-mono tabular-nums">
+            {avgCost == null ? t("notAvailable") : formatDollar(avgCost, t)}
+          </span>
           <span className="ui-caption">{t("perModelAvg")}</span>
         </div>
       )}

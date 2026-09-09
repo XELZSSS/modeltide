@@ -12,7 +12,12 @@ interface EnumSpec<V extends string = string> {
   values: readonly V[];
   default?: V;
 }
-type QuerySpec = NumberSpec | EnumSpec;
+interface StringSpec {
+  type: "string";
+  default?: string;
+  maxLength?: number;
+}
+type QuerySpec = NumberSpec | EnumSpec | StringSpec;
 export type QuerySchema = Record<string, QuerySpec>;
 
 export const qEnum = <const V extends string>(values: readonly V[], d?: V): EnumSpec<V> => ({
@@ -24,8 +29,12 @@ export const qNum = (o: { default?: string; min?: number; max?: number; integer?
   type: "number",
   ...o,
 });
+export const qStr = (o: { default?: string; maxLength?: number } = {}): StringSpec => ({
+  type: "string",
+  ...o,
+});
 
-type SpecValue<S extends QuerySpec> = S extends EnumSpec<infer V> ? V : number;
+type SpecValue<S extends QuerySpec> = S extends EnumSpec<infer V> ? V : S extends NumberSpec ? number : string;
 export type ValidatedQuery<S extends QuerySchema> = { [K in keyof S]: SpecValue<S[K]> };
 
 export function validateQuery<S extends QuerySchema>(
@@ -40,9 +49,17 @@ export function validateQuery<S extends QuerySchema>(
     if (!v) v = spec.default;
     if (v === undefined) continue;
     if (v.length > 500) throw new ValidationError(`Query param "${name}" is too long`);
-    if (spec.type === "number") {
+    if (spec.type === "string") {
+      if (spec.maxLength != null && v.length > spec.maxLength) {
+        throw new ValidationError(`Query param "${name}" must be <= ${spec.maxLength} chars`);
+      }
+      out[name] = v;
+    } else if (spec.type === "number") {
       if (!/^[+-]?(\d+(\.\d+)?)$/.test(v)) {
         throw new ValidationError(`Query param "${name}" must be a number`);
+      }
+      if (spec.integer && /[.eE]/.test(v)) {
+        throw new ValidationError(`Query param "${name}" must be an integer`);
       }
       const n = Number(v);
       if (!Number.isFinite(n)) throw new ValidationError(`Query param "${name}" must be a number`);

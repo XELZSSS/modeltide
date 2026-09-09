@@ -1,3 +1,4 @@
+"use client";
 import { lazy, memo, useMemo, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
@@ -12,12 +13,12 @@ import { SearchInput } from "@/client/search/SearchInput";
 import { Dot } from "@/client/components/ui/primitives";
 import { type TabItem } from "@/client/components/ui/tabs";
 import { TabbedPage } from "@/client/components/layout";
-import { useUrlTab } from "@/client/ui-hooks";
+import { useClientTab } from "@/client/hooks/use-client-tab";
 import { indexRankMap, rankCol, type DataTableColumn } from "@/client/components/data/columns";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { formatScore, formatPricePerMillion, formatSpeed } from "@/client/utils/format";
 import { computeProviderStats, type ProviderStats } from "@/client/utils/model";
-import { RANKING_TABS, type RankingTabId } from "@/client/features/rankings/ranking-tabs";
+import { RANKING_TABS, type RankingTabId } from "@/shared/config";
 import { MODEL_SOURCES } from "@/shared/config";
 
 const ArtificialAnalysisView = lazy(() =>
@@ -29,8 +30,7 @@ const OpenRouterRankingsView = lazy(() =>
 const RankingViewsModule = {
   OpenSource: lazy(() => import("./OpenSourceView").then((m) => ({ default: m.OpenSourceRankingsView }))),
   Hallucination: lazy(() => import("./HallucinationView").then((m) => ({ default: m.HallucinationRankingsView }))),
-  Benchmark: lazy(() => import("./BenchmarkView").then((m) => ({ default: m.BenchmarkBoardView }))),
-  Arena: lazy(() => import("./ArenaView").then((m) => ({ default: m.ArenaRankingsView }))),
+  Agent: lazy(() => import("./AgentView").then((m) => ({ default: m.AgentRankingsView }))),
 };
 
 const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
@@ -38,14 +38,13 @@ const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   openRouterRankings: MODEL_SOURCES.or.sourceLabelKey,
   openSourceRankings: MODEL_SOURCES.os.sourceLabelKey,
   hallucinationRankings: MODEL_SOURCES.hall.sourceLabelKey,
-  benchmarkRankings: "arenaSource",
-  arenaRankings: "arenaSource",
+  agentRankings: "agentSource",
   providerCompare: MODEL_SOURCES.aa.sourceLabelKey,
 };
 
 const ModelRankingsTab = memo(function ModelRankingsTab() {
-  const { data } = useSuspenseArtificialRankings();
-  return <ArtificialAnalysisView rankings={data} />;
+  const rankings = useSuspenseArtificialRankings();
+  return <ArtificialAnalysisView rankings={rankings} />;
 });
 
 const OpenRouterTab = memo(function OpenRouterTab() {
@@ -54,9 +53,9 @@ const OpenRouterTab = memo(function OpenRouterTab() {
 });
 
 const OpenSourceTab = memo(function OpenSourceTab() {
-  const { data } = useSuspenseOpenSourceModels();
+  const rankings = useSuspenseOpenSourceModels();
   const View = RankingViewsModule.OpenSource;
-  return <View rankings={data} />;
+  return <View rankings={rankings} />;
 });
 
 const HallucinationRankingsTab = memo(function HallucinationRankingsTab() {
@@ -65,13 +64,8 @@ const HallucinationRankingsTab = memo(function HallucinationRankingsTab() {
   return <View rankings={hallucinationRankings} />;
 });
 
-const BenchmarkRankingsTab = memo(function BenchmarkRankingsTab() {
-  const View = RankingViewsModule.Benchmark;
-  return <View />;
-});
-
-const ArenaRankingsTab = memo(function ArenaRankingsTab() {
-  const View = RankingViewsModule.Arena;
+const AgentRankingsTab = memo(function AgentRankingsTab() {
+  const View = RankingViewsModule.Agent;
   return <View />;
 });
 
@@ -88,7 +82,7 @@ function providerMonoCol(
 }
 
 const ProviderCompareTab = memo(function ProviderCompareTab() {
-  const { data } = useSuspenseArtificialRankings();
+  const data = useSuspenseArtificialRankings();
   const { t } = useTranslation();
   const providerStats = useMemo(() => computeProviderStats(data, t("unknown")), [data, t]);
   const rankMap = useMemo(() => indexRankMap(providerStats, getProviderRowId), [providerStats]);
@@ -139,14 +133,13 @@ const TAB_COMPONENTS: Record<RankingTabId, ComponentType> = {
   openRouterRankings: OpenRouterTab,
   openSourceRankings: OpenSourceTab,
   hallucinationRankings: HallucinationRankingsTab,
-  benchmarkRankings: BenchmarkRankingsTab,
-  arenaRankings: ArenaRankingsTab,
+  agentRankings: AgentRankingsTab,
   providerCompare: ProviderCompareTab,
 };
 
 function RankingsContent() {
   const { t } = useTranslation();
-  const [activeTabId, handleTabChange] = useUrlTab(RANKING_TABS, RANKING_TABS[0]);
+  const [activeTabId, handleTabChange] = useClientTab("tab", RANKING_TABS, RANKING_TABS[0]);
   const tabs: TabItem[] = useMemo(() => RANKING_TABS.map((id) => ({ id, label: t(id) })), [t]);
   const ActiveContent = TAB_COMPONENTS[activeTabId];
 

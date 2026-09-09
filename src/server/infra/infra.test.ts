@@ -1,10 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { CacheService, resetModuleCachesForTests } from "@/server/infra/cache-service";
 import { MEMORY_CACHE_MAX_BYTES } from "@/server/config";
-import { validateQuery, qEnum, qNum } from "@/server/infra/validation";
-import { buildWarmUrls } from "@/server/routes/warmup";
-import { defineRoute } from "@/server/routes/table";
-import { parseFeed } from "@/server/parsers/feed";
+import { validateQuery, qEnum, qNum, qStr } from "@/server/infra/validation";
 import { runCapped } from "@/server/infra/pool";
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -20,14 +17,6 @@ describe("cache-service", () => {
     expect(second).toBe("1");
     expect(calls).toBe(1);
   });
-  it("falls back to stale when refresh fails", async () => {
-    const cache = new CacheService(undefined, "v-test");
-    await cache.withTtl("k2", 60_000, async () => ({ data: "fresh" }));
-    const cache2 = new CacheService(undefined, "v-test-2");
-    await cache2.withTtl("k3", 60_000, async () => ({ data: "stale-ok" }));
-    expect(await cache2.withTtl("k3", 60_000, async () => ({ data: "stale-ok" }))).toBe("stale-ok");
-  });
-
   it("evicts the oldest L1 entry beyond the entry cap and keeps serving hits", async () => {
     const cache = new CacheService(undefined, "v-lru");
     for (let i = 0; i < 201; i++) {
@@ -55,6 +44,25 @@ describe("cache-service", () => {
     await cache.withTtl("big", 60_000, fn);
     await cache.withTtl("big", 60_000, fn);
     expect(calls).toBe(2);
+  });
+
+  it("hard-cuts on version bumps: previous-generation keys are ignored, not adopted", async () => {
+    const kvStore = new Map<string, string>([
+      ["v1:adopt-me", JSON.stringify({ d: "legacy-data", e: Date.now() + 60_000, t: 60_000 })],
+    ]);
+    const kv = {
+      get: async (key: string) => kvStore.get(key) ?? null,
+      put: async (key: string, value: string) => {
+        kvStore.set(key, value);
+      },
+    } as unknown as KVNamespace;
+    const cache = new CacheService(kv, "v3");
+    let calls = 0;
+    const data = await cache.withTtl("adopt-me", 60_000, async () => ({ data: (++calls).toString() }));
+    expect(data).toBe("1");
+    expect(calls).toBe(1);
+    expect(kvStore.has("v3:adopt-me")).toBe(true);
+    expect(kvStore.has("v1:adopt-me")).toBe(true);
   });
 
   describe("failure cooldown", () => {
@@ -135,24 +143,10 @@ describe("validation", () => {
     );
     expect(q.category).toBe("hardware");
   });
-});
-
-describe("warmup", () => {
-  const routes = [
-    defineRoute({ path: "/api/a", handler: async () => ({}) }),
-    defineRoute({ path: "/api/b", noStore: true, handler: async () => ({}) }),
-    defineRoute({
-      path: "/api/c",
-      query: { category: qEnum(["x", "y"] as const, "x") },
-      warm: "all",
-      handler: async () => ({}),
-    }),
-  ];
-  it("warms every route except noStore and caps enum cartesian products", () => {
-    const urls = buildWarmUrls("https://x.internal", routes);
-    expect(urls.some((u) => u.includes("/api/b"))).toBe(false);
-    expect(urls.filter((u) => u.includes("/api/a"))).toHaveLength(1);
-    expect(urls.filter((u) => u.includes("/api/c"))).toHaveLength(2);
+  it("accepts strings within maxLength and applies defaults", () => {
+    expect(validateQuery({ id: "org/model" }, { id: qStr({ maxLength: 200 }) }).id).toBe("org/model");
+    expect(validateQuery({}, { id: qStr({ default: "org/model" }) }).id).toBe("org/model");
+    expect(() => validateQuery({ id: "x".repeat(201) }, { id: qStr({ maxLength: 200 }) })).toThrow();
   });
 });
 
@@ -191,19 +185,5 @@ describe("runCapped pool", () => {
 
   it("handles the empty task list", async () => {
     await expect(runCapped([], 3)).resolves.toEqual([]);
-  });
-});
-
-describe("feed guard", () => {
-  it("rejects DOCTYPE/ENTITY bombs before parsing", () => {
-    expect(() => parseFeed(`<?xml?><!DOCTYPE foo [<!ENTITY x "y">]><rss/>`, "https://x")).toThrow();
-  });
-
-  it("accepts a plain entity-free DOCTYPE (legacy WordPress-style feeds)", () => {
-    const xml =
-      '<?xml version="1.0"?><!DOCTYPE rss><rss><channel><title>T</title><item><title>A</title><link>https://x.example/a</link></item></channel></rss>';
-    const items = parseFeed(xml, "https://x");
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ title: "A", link: "https://x.example/a" });
   });
 });

@@ -1,4 +1,4 @@
-import { computeBlendPrice, normalizeModelKey } from "@/shared/utils";
+import { computeBlendPrice, isFiniteNumber, normalizeModelKey } from "@/shared/utils";
 import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 
 export type PriceAuthority = "official" | "catalog";
@@ -7,12 +7,13 @@ export interface EffectivePricing {
   input: number | null;
   output: number | null;
   cacheHit: number | null;
+  cacheWrite: number | null;
   source: PriceAuthority | null;
 }
 
 export type OfficialGetter = (model: ArtificialAnalysisModel) => OfficialPriceModel | undefined;
 
-const finiteOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const finiteOrNull = (v: unknown): number | null => (isFiniteNumber(v) ? v : null);
 
 export function indexOfficialPricing(models: OfficialPriceModel[]): Map<string, OfficialPriceModel> {
   const map = new Map<string, OfficialPriceModel>();
@@ -45,20 +46,23 @@ export function resolveEffectivePricing(
   const officialInput = finiteOrNull(official?.input);
   const officialOutput = finiteOrNull(official?.output);
   const officialCache = finiteOrNull(official?.cachedInput);
+  const officialCacheWrite = finiteOrNull(official?.cacheWrite);
   const input = officialInput ?? finiteOrNull(catalog?.input);
   const output = officialOutput ?? finiteOrNull(catalog?.output);
   const cacheHit = officialCache ?? finiteOrNull(catalog?.cacheHit);
-  if (input == null && output == null) return { input, output, cacheHit, source: null };
+  const cacheWrite = officialCacheWrite ?? finiteOrNull(catalog?.cacheWrite);
+  if (input == null && output == null) {
+    return { input, output, cacheHit, cacheWrite, source: null };
+  }
   const usedOfficial = officialInput != null || officialOutput != null;
-  return { input, output, cacheHit, source: usedOfficial ? "official" : "catalog" };
+  return { input, output, cacheHit, cacheWrite, source: usedOfficial ? "official" : "catalog" };
 }
 
 export function resolveBlendedPrice(
   model: ArtificialAnalysisModel,
   official?: OfficialPriceModel | null,
 ): number | null {
-  if (!official) return model.blended_price ?? null;
-  return computeBlendPrice(resolveEffectivePricing(model.pricing, official)) ?? model.blended_price ?? null;
+  return computeBlendPrice(resolveEffectivePricing(model.pricing, official));
 }
 
 export function makeOfficialGetter(models: OfficialPriceModel[]): OfficialGetter {

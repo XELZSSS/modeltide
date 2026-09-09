@@ -1,3 +1,4 @@
+"use client";
 import { useMemo } from "react";
 import { qOfficialPricing } from "@/client/api/queries";
 import { makeOfficialGetter, type OfficialGetter } from "@/client/utils/pricing-merge";

@@ -11,14 +11,15 @@ export interface OpenRouterRankEntry {
   promptTokens?: number;
   completionTokens?: number;
   reasoningTokens?: number;
+  cachedTokens?: number;
+  toolCalls?: number;
   requestCount?: number;
-  imageOutputRequests?: number;
-  videoOutputSeconds?: number;
   change?: number | null;
   pricing?: {
     input: number;
     output: number;
-    cacheHit?: number;
+    cacheHit?: number | null;
+    cacheWrite?: number | null;
   };
   isFree?: boolean;
 }
@@ -40,27 +41,19 @@ export interface OpenSourceModelEntry {
   tags: string[];
 }
 
-export interface ArenaRankEntry {
+export interface AgentRankEntry {
   rank: number;
   id: string;
   name: string;
   creator: string;
   score: number | null;
-  votes: number | null;
-  preliminary: boolean;
-  priceInput: number | null;
-  priceOutput: number | null;
-  contextTokens: number | null;
+  ciLower: number | null;
+  ciUpper: number | null;
+  license: string | null;
 }
 
-export interface ArenaRankingsPayload {
-  entries: ArenaRankEntry[];
-  fetchedAt: string;
-}
-
-export interface ArenaBoardPayload {
-  category: string;
-  entries: ArenaRankEntry[];
+export interface AgentRankingsPayload {
+  entries: AgentRankEntry[];
   fetchedAt: string;
 }
 
@@ -69,7 +62,6 @@ export interface ClosedReleaseEntry {
   model: string;
   provider: string;
   releaseDate: string;
-  notes: string;
   link: string | null;
 }
 
@@ -79,8 +71,8 @@ export interface OfficialPriceModel {
   provider: string;
   input: number | null;
   cachedInput: number | null;
+  cacheWrite: number | null;
   output: number | null;
-  contextWindow: number | null;
 }
 
 export interface OfficialPricingPayload {

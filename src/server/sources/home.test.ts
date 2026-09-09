@@ -45,22 +45,25 @@ describe("getHomeDashboard", () => {
       tokenUsageRankings: [{ rank: 1, id: "a/b", name: "B", creator: "A", category: "general" }],
       fetchedAt: "2026-01-01T00:00:00.000Z",
     });
-    vi.mocked(getModels).mockResolvedValue([
-      {
-        id: "a/b",
-        author: "a",
-        downloads: 1,
-        likes: 1,
-        license: null,
-        task: null,
-        createdAt: null,
-        lastModified: null,
-        tags: [],
-      },
-    ]);
+    vi.mocked(getModels).mockResolvedValue({
+      data: [
+        {
+          id: "a/b",
+          author: "a",
+          downloads: 1,
+          likes: 1,
+          license: null,
+          task: null,
+          createdAt: null,
+          lastModified: null,
+          tags: [],
+        },
+      ],
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+    });
   }
 
-  it("composes the inner sources without writing an outer snapshot", async () => {
+  it("composes the inner sources and caches the outer snapshot", async () => {
     mockHealthyOthers();
     vi.mocked(getTextToImageLeaderboard).mockResolvedValue({
       models: [],
@@ -71,8 +74,10 @@ describe("getHomeDashboard", () => {
     const data = await getHomeDashboard(ctx);
     expect(data.textToImage?.models).toEqual([]);
     expect(data.orRankings?.tokenUsageRankings).toHaveLength(1);
-    expect(data.opensource).toHaveLength(1);
-    expect(kvStore.size).toBe(0);
+    expect(data.opensource?.data).toHaveLength(1);
+    expect(kvStore.size).toBe(1);
+    const second = await getHomeDashboard(ctx);
+    expect(second).toEqual(data);
   });
 
   it("nulls the failed leg when an inner source rejects", async () => {

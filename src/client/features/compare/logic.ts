@@ -3,7 +3,7 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq, normalizePercent } from "@/shared/utils";
 import { formatBoolean, formatScore, formatPercent, formatSpeed } from "@/client/utils/format";
 import { getOutputSpeed } from "@/client/utils/cost-estimator";
-import { ceilToStep } from "@/client/utils/charts-theme";
+import { ceilToStep } from "@/client/theme/chart-theme";
 export interface CompareRow<T> {
   id?: string;
   label: string;
@@ -100,10 +100,12 @@ export function radarMaxFor(data: Record<string, string | number | null>[], fall
 
 export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
   const cacheOf = (m: ArtificialAnalysisModel) => m.pricing?.cacheHit;
+  const cacheWriteOf = (m: ArtificialAnalysisModel) => m.pricing?.cacheWrite;
   return [
     { label: t("promptPrice"), getNumeric: (m) => m.pricing?.input, bestIs: "min" },
     { label: t("completionPrice"), getNumeric: (m) => m.pricing?.output, bestIs: "min" },
     { label: t("cacheHitPrice"), getNumeric: cacheOf, bestIs: "min" },
+    { label: t("cacheWritePrice"), getNumeric: cacheWriteOf, bestIs: "min" },
   ];
 }
 

@@ -1,11 +1,11 @@
+"use client";
 import { memo, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation, useDevice } from "@/client/providers";
-import { useChartTheme } from "@/client/ui-hooks";
+import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { Dot } from "@/client/components/ui/primitives";
 import { cn } from "@/client/utils/cn";
 import { modelId } from "@/client/utils/model";
-import { seriesColor } from "@/client/utils/charts-theme";
 import { computeWinners, type CompareRow, type Winner } from "./logic";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 

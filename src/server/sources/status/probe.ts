@@ -28,7 +28,7 @@ export function buildTargets(): ProbeTarget[] {
       url: `${upstreamConfig.artificialAnalysis}${TEXT_TO_IMAGE_PATH}`,
     },
     { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
-    { id: "arena", url: `${upstreamConfig.arena}/leaderboard/text` },
+    { id: "arena", url: `${upstreamConfig.arena}/leaderboard/agent` },
     ...newsSample.map((url): ProbeTarget => ({ id: "news", url })),
   ];
 }
@@ -56,6 +56,13 @@ export function aggregateProbes(
   const grouped = new Map<SourceStatus["id"], Mutable>();
 
   for (const { target, probe } of probed) {
+    // Unreachable (timeout / DNS / reset: no HTTP status at all) means WE failed to
+    // reach the target, not that the target is down — same unknown-skip rule as the
+    // provider status pages. The probe is excluded from the verdict entirely, so our
+    // own network blip can't flip the source. An id with no decisive probes at all is
+    // omitted from the result and keeps its previous sample/state downstream.
+    // Only a completed HTTP exchange with an error status counts as a failure.
+    if (!probe.ok && probe.status == null) continue;
     let g = grouped.get(target.id);
     if (!g) {
       g = { ok: false, status: null, latencyMs: null, error: null, total: 0, failures: 0, firstError: null };
