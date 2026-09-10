@@ -203,6 +203,7 @@ export const zh = {
 
   sourceStatus: "数据源状态",
   statusOnline: "正常",
+  statusWarn: "警告",
   statusOffline: "异常",
   sourceNameArtificial: "Artificial Analysis",
   sourceNameHuggingFace: "Hugging Face",
@@ -245,6 +246,7 @@ export const zh = {
   statusPageTitle: "服务状态",
   statusAllOk: "全部数据源运行正常",
   statusDegraded: "{total} 个数据源中 {down} 个异常",
+  statusWarnBanner: "{total} 个数据源中 {warn} 个降级",
   statusProbing: "数据源上报中（{probed}/{total}）",
   uptime24h: "24 小时可用率",
   uptime7d: "7 天可用率",
@@ -254,6 +256,7 @@ export const zh = {
   historyAccumulating: "历史数据积累中",
   recentEvents: "最近事件",
   eventDown: "故障",
+  eventDegraded: "降级",
   eventUp: "恢复",
   eventOngoing: "进行中",
   eventDurationMin: "{value} 分钟",

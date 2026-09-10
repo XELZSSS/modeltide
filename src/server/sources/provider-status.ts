@@ -2,25 +2,28 @@ import type { AppContext } from "@/server/context";
 import { UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
 import { errMsg, runCapped } from "@/server/infra/pool";
 import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/provider-status";
+import type { SourceLevel } from "@/shared/types";
 
 export interface ProviderStatusResult {
   ok: boolean;
+  /** True when the provider is up but degraded (minor incident) — a warning, not an outage. */
+  warn: boolean;
   status: number | null;
   latencyMs: number;
   error: string | null;
 }
 
 /** Adapter turning a provider-specific parser into a uniform health verdict. */
-type HealthParse = (raw: unknown) => { ok: boolean; error: string };
+type HealthParse = (raw: unknown) => { level: SourceLevel; error: string };
 
 const parseStatuspageHealth: HealthParse = (raw) => {
   const parsed = parseStatuspageSummary(raw);
-  return { ok: parsed.ok, error: `degraded: ${parsed.degradedComponents.slice(0, 3).join(", ")}` };
+  return { level: parsed.level, error: `degraded: ${parsed.degradedComponents.slice(0, 3).join(", ")}` };
 };
 
 const parseGoogleCloudHealth: HealthParse = (raw) => {
   const parsed = parseGoogleCloudIncidents(raw);
-  return { ok: parsed.ok, error: `open incidents: ${parsed.openIncidents.slice(0, 3).join("; ")}` };
+  return { level: parsed.level, error: `open incidents: ${parsed.openIncidents.slice(0, 3).join("; ")}` };
 };
 
 async function fetchProviderHealth(
@@ -43,8 +46,8 @@ async function fetchProviderHealth(
   const latencyMs = Date.now() - started;
   try {
     const parsed = parse(raw);
-    if (parsed.ok) return { ok: true, status: 200, latencyMs, error: null };
-    return { ok: false, status: 200, latencyMs, error: parsed.error };
+    if (parsed.level === "error") return { ok: false, warn: false, status: 200, latencyMs, error: parsed.error };
+    return { ok: true, warn: parsed.level === "warn", status: 200, latencyMs, error: null };
   } catch (err) {
     // Got a payload we can't parse: our parser is outdated, not proof the
     // provider is down. Same unknown handling as a fetch failure.

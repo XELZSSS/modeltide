@@ -41,6 +41,8 @@ export async function probeTargets(ctx: AppContext): Promise<{ target: ProbeTarg
 
 export interface SourceAggregate {
   ok: boolean;
+  /** Set only by provider status pages when up but degraded; direct probes are binary. */
+  warn?: boolean;
   status: number | null;
   latencyMs: number | null;
   error: string | null;

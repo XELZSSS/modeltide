@@ -42,6 +42,13 @@ export const SOURCE_LIMITS = {
 
 export const PER_MILLION = 1_000_000;
 
+/**
+ * Uptime-ratio bands shared by the 30-day strip and the per-source health
+ * level: >= warn band renders green/ok, >= error band yellow/warn, below red.
+ */
+export const UPTIME_WARN_RATIO = 0.995;
+export const UPTIME_ERROR_RATIO = 0.95;
+
 export const MAX_PLAUSIBLE_RATE = 1000;
 
 export function normalizeModelLimit(limit: number): number {

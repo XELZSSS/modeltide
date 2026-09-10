@@ -1,5 +1,5 @@
 import { ONE_DAY, ONE_MINUTE } from "@/shared/config";
-import type { DayBucket, StatusEvent, UptimeSample } from "@/shared/types";
+import type { DayBucket, SourceLevel, StatusEvent, UptimeSample } from "@/shared/types";
 import type { SourceStatus } from "@/shared/types";
 
 // Samples are written by the 30-minute cron (`triggers.crons` in wrangler.jsonc);
@@ -42,21 +42,46 @@ export function avgLatency(samples: UptimeSample[], windowStartMs: number): numb
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
+interface OpenIncident {
+  type: "down" | "degraded";
+  at: number;
+  index: number;
+}
+
+/**
+ * Derives events from a sample series with three levels: ok / warn (up but
+ * degraded) / error. "down" opens on the first failing sample, "degraded" on
+ * the first warn sample, and "up" closes either. A degraded episode that
+ * escalates to an outage closes without an "up" (it never recovered); an
+ * outage easing back to degraded still emits "up" before the new "degraded".
+ */
 export function deriveEvents(id: SourceId, samples: UptimeSample[]): StatusEvent[] {
   const events: StatusEvent[] = [];
-  let downAt: number | null = null;
-  let openDownIndex = -1;
+  let open: OpenIncident | null = null;
+  const close = (at: number, pushUp: boolean): void => {
+    if (open) {
+      const ev = events[open.index];
+      if (ev) ev.durationMin = Math.round((at - open.at) / ONE_MINUTE);
+    }
+    if (pushUp) events.push({ id, type: "up", at: new Date(at).toISOString(), durationMin: null });
+    open = null;
+  };
   for (const sample of samples) {
-    if (!sample.ok && downAt == null) {
-      downAt = sample.t;
-      openDownIndex = events.length;
-      events.push({ id, type: "down", at: new Date(sample.t).toISOString(), durationMin: null });
-    } else if (sample.ok && downAt != null) {
-      const down = events[openDownIndex];
-      if (down) down.durationMin = Math.round((sample.t - downAt) / ONE_MINUTE);
-      events.push({ id, type: "up", at: new Date(sample.t).toISOString(), durationMin: null });
-      downAt = null;
-      openDownIndex = -1;
+    const level: SourceLevel = !sample.ok ? "error" : sample.warn === true ? "warn" : "ok";
+    if (level === "error") {
+      if (open?.type === "degraded") close(sample.t, false);
+      if (!open) {
+        open = { type: "down", at: sample.t, index: events.length };
+        events.push({ id, type: "down", at: new Date(sample.t).toISOString(), durationMin: null });
+      }
+    } else if (level === "warn") {
+      if (open?.type === "down") close(sample.t, true);
+      if (!open) {
+        open = { type: "degraded", at: sample.t, index: events.length };
+        events.push({ id, type: "degraded", at: new Date(sample.t).toISOString(), durationMin: null });
+      }
+    } else if (open) {
+      close(sample.t, true);
     }
   }
   return events;

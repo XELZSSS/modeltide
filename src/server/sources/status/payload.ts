@@ -1,5 +1,5 @@
-import { ONE_DAY, SOURCE_IDS } from "@/shared/config";
-import type { SourceHistorySummary, StatusEvent, StatusHistoryPayload } from "@/shared/types";
+import { ONE_DAY, SOURCE_IDS, UPTIME_WARN_RATIO } from "@/shared/config";
+import type { SourceHealthLevel, SourceHistorySummary, StatusEvent, StatusHistoryPayload } from "@/shared/types";
 import type { UptimePayload } from "@/server/sources/status/uptime";
 import {
   RECENT_WINDOW_MS,
@@ -24,12 +24,22 @@ function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now: number
   const sumTotal = buckets.reduce((a, b) => a + b.total, 0);
   const retained = entry.daily.slice(-RETAINED_DAYS);
   const total30 = retained.reduce((a, b) => a + b.total, 0);
+  const uptime24h = uptimeRatio(entry.recent, now - RECENT_WINDOW_MS);
+  // Tri-level health: error = last sample failed; warn = currently up but degraded
+  // (provider page) or flaky — any outage in the last 24h drops a 48-sample day
+  // below the 99.5% green band shared with the uptime strip.
+  let level: SourceHealthLevel;
+  if (!last) level = "unknown";
+  else if (!last.ok) level = "error";
+  else if (last.warn === true || (uptime24h != null && uptime24h < UPTIME_WARN_RATIO)) level = "warn";
+  else level = "ok";
   return {
     id,
     ok: last ? last.ok : false,
+    level,
     latencyMs: last ? last.latencyMs : null,
     checkedAt: last ? new Date(last.t).toISOString() : null,
-    uptime24h: uptimeRatio(entry.recent, now - RECENT_WINDOW_MS),
+    uptime24h,
     uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
     uptime30d: total30 > 0 ? retained.reduce((a, b) => a + b.ok, 0) / total30 : null,
     avgLatency24h: avgLatency(entry.recent, now - RECENT_WINDOW_MS),

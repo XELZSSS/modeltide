@@ -12,14 +12,11 @@ import { cn } from "@/client/utils/cn";
 import { formatUptime, formatUptimePct } from "@/client/utils/format";
 import { SOURCE_LABELS } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary } from "@/shared/types";
+import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./StatusParts";
 import { StatusEventList } from "@/client/components/status-events";
 
 const EMPTY_BUCKETS: DayBucket[] = [];
-
-function statusTextClass(ok: boolean): string {
-  return ok ? "text-success" : "text-destructive";
-}
 
 const SourceCard = memo(function SourceCard({
   summary,
@@ -30,7 +27,8 @@ const SourceCard = memo(function SourceCard({
 }) {
   const { t } = useTranslation();
   const label = t(SOURCE_LABELS[summary.id]);
-  const unprobed = summary.checkedAt == null;
+  const level = resolveLevel(summary);
+  const style = LEVEL_STYLES[level];
   return (
     <Link
       href={`/status/${summary.id}`}
@@ -38,15 +36,10 @@ const SourceCard = memo(function SourceCard({
     >
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 min-w-0">
-          <Dot
-            size="sm"
-            color={unprobed ? "var(--text-tertiary)" : summary.ok ? "var(--success)" : "var(--destructive)"}
-          />
+          <Dot size="sm" color={style.dot} />
           <span className="text-sm font-medium truncate">{label}</span>
         </div>
-        <span className={cn("text-xs font-medium shrink-0", !unprobed && statusTextClass(summary.ok))}>
-          {unprobed ? t("uptimeNoData") : t(summary.ok ? "statusOnline" : "statusOffline")}
-        </span>
+        <span className={cn("text-xs font-medium shrink-0", style.text)}>{t(style.labelKey)}</span>
       </div>
       <UptimeStrip buckets={buckets} />
       <div className="flex items-center justify-between gap-3 mt-3 ui-caption">
@@ -70,11 +63,13 @@ const SourceCard = memo(function SourceCard({
 function StatusContent() {
   const { t } = useTranslation();
   const { data } = useSuspenseStatusHistory();
-  const failing = data.sources.filter((s) => s.ok === false && s.checkedAt);
+  const levels = data.sources.map((s) => resolveLevel(s));
+  const erroring = levels.filter((l) => l === "error").length;
+  const warning = levels.filter((l) => l === "warn").length;
   const hasData = data.sources.some((s) => s.checkedAt != null);
   // Unprobed sources must not read as healthy: with 1 probed-OK + 13 silent
   // the header would otherwise claim "all operational".
-  const unprobed = data.sources.filter((s) => s.checkedAt == null).length;
+  const unprobed = levels.filter((l) => l === "unknown").length;
 
   return (
     <PageContainer>
@@ -94,21 +89,27 @@ function StatusContent() {
             <Dot
               size="md"
               color={
-                !hasData || unprobed > 0
+                !hasData
                   ? "var(--text-tertiary)"
-                  : failing.length === 0
-                    ? "var(--success)"
-                    : "var(--destructive)"
+                  : erroring > 0
+                    ? "var(--destructive)"
+                    : warning > 0
+                      ? "var(--warning)"
+                      : unprobed > 0
+                        ? "var(--text-tertiary)"
+                        : "var(--success)"
               }
             />
             <p className="text-sm font-medium">
               {!hasData
                 ? t("historyAccumulating")
-                : failing.length === 0
-                  ? unprobed > 0
-                    ? t("statusProbing", { probed: data.sources.length - unprobed, total: data.sources.length })
-                    : t("statusAllOk")
-                  : t("statusDegraded", { down: failing.length, total: data.sources.length })}
+                : erroring > 0
+                  ? t("statusDegraded", { down: erroring, total: data.sources.length })
+                  : warning > 0
+                    ? t("statusWarnBanner", { warn: warning, total: data.sources.length })
+                    : unprobed > 0
+                      ? t("statusProbing", { probed: data.sources.length - unprobed, total: data.sources.length })
+                      : t("statusAllOk")}
             </p>
           </div>
           <span className="text-xs text-text-secondary shrink-0">

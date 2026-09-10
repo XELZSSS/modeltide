@@ -3,11 +3,11 @@ import { memo, useMemo } from "react";
 import { useTranslation } from "@/client/providers";
 import type { DayBucket } from "@/shared/types";
 import { cn } from "@/client/utils/cn";
-import { ONE_DAY } from "@/shared/config";
+import { ONE_DAY, UPTIME_ERROR_RATIO, UPTIME_WARN_RATIO } from "@/shared/config";
 
 const BAR_THRESHOLDS = [
-  { min: 0.995, className: "bg-success" },
-  { min: 0.95, className: "bg-warning" },
+  { min: UPTIME_WARN_RATIO, className: "bg-success" },
+  { min: UPTIME_ERROR_RATIO, className: "bg-warning" },
 ] as const;
 
 function barClass(ratio: number | null): string {

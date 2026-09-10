@@ -202,6 +202,7 @@ export const en = {
 
   sourceStatus: "Data Source Status",
   statusOnline: "Online",
+  statusWarn: "Degraded",
   statusOffline: "Offline",
   sourceNameArtificial: "Artificial Analysis",
   sourceNameHuggingFace: "Hugging Face",
@@ -244,6 +245,7 @@ export const en = {
   statusPageTitle: "Service Status",
   statusAllOk: "All data sources operational",
   statusDegraded: "{down} of {total} data sources failing",
+  statusWarnBanner: "{warn} of {total} data sources degraded",
   statusProbing: "{probed} of {total} sources reporting",
   uptime24h: "24h uptime",
   uptime7d: "7d uptime",
@@ -253,6 +255,7 @@ export const en = {
   historyAccumulating: "History is building up",
   recentEvents: "Recent events",
   eventDown: "Failure",
+  eventDegraded: "Degraded",
   eventUp: "Recovered",
   eventOngoing: "ongoing",
   eventDurationMin: "{value} min",

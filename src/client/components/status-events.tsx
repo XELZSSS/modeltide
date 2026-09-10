@@ -7,6 +7,12 @@ import { formatRelativeTime } from "@/client/utils/format";
 import { SOURCE_LABELS } from "@/shared/config";
 import { Dot } from "@/client/components/ui/primitives";
 
+const EVENT_STYLES = {
+  down: { color: "var(--destructive)", text: "text-destructive", labelKey: "eventDown" },
+  degraded: { color: "var(--warning)", text: "text-warning", labelKey: "eventDegraded" },
+  up: { color: "var(--success)", text: "text-success", labelKey: "eventUp" },
+} as const;
+
 const StatusEventRow = memo(function StatusEventRow({
   event,
   showSource = false,
@@ -17,7 +23,7 @@ const StatusEventRow = memo(function StatusEventRow({
   showTime?: boolean;
 }) {
   const { t, lang } = useTranslation();
-  const down = event.type === "down";
+  const style = EVENT_STYLES[event.type];
   const labelKey = Object.hasOwn(SOURCE_LABELS, event.id)
     ? (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[event.id]
     : undefined;
@@ -25,11 +31,9 @@ const StatusEventRow = memo(function StatusEventRow({
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
       <div className="flex items-center gap-2 min-w-0">
-        <Dot size="sm" color={down ? "var(--destructive)" : "var(--success)"} />
+        <Dot size="sm" color={style.color} />
         <span className="text-sm">
-          <span className={cn("font-medium", down ? "text-destructive" : "text-success")}>
-            {t(down ? "eventDown" : "eventUp")}
-          </span>
+          <span className={cn("font-medium", style.text)}>{t(style.labelKey)}</span>
           {showSource && (
             <>
               <span className="text-text-secondary mx-1.5">·</span>
@@ -39,7 +43,7 @@ const StatusEventRow = memo(function StatusEventRow({
         </span>
       </div>
       <div className="flex items-center gap-2 shrink-0 text-xs text-text-secondary">
-        {down && (
+        {event.type !== "up" && (
           <span className="font-mono">
             {event.durationMin == null ? t("eventOngoing") : t("eventDurationMin", { value: event.durationMin })}
           </span>

@@ -727,6 +727,34 @@ describe("deriveEvents", () => {
   it("emits nothing for a fully healthy window", () => {
     expect(deriveEvents(historyId, [sample(10, true), sample(0, true)])).toHaveLength(0);
   });
+
+  it("emits a degraded event for warn samples and closes it with up", () => {
+    const warn = (minAgo: number): UptimeSample => ({ ...sample(minAgo, true), warn: true });
+    const events = deriveEvents(historyId, [sample(30, true), warn(20), warn(10), sample(0, true)]);
+    expect(events).toEqual([
+      { id: historyId, type: "degraded", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: 20 },
+      { id: historyId, type: "up", at: new Date(NOW).toISOString(), durationMin: null },
+    ]);
+  });
+
+  it("escalates an ongoing degraded episode straight to down without an up in between", () => {
+    const warn = (minAgo: number): UptimeSample => ({ ...sample(minAgo, true), warn: true });
+    const events = deriveEvents(historyId, [sample(30, true), warn(20), sample(10, false)]);
+    expect(events).toEqual([
+      { id: historyId, type: "degraded", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: 10 },
+      { id: historyId, type: "down", at: new Date(NOW - 10 * MIN).toISOString(), durationMin: null },
+    ]);
+  });
+
+  it("eases an outage back to degraded: up is emitted before the new degraded event", () => {
+    const warn = (minAgo: number): UptimeSample => ({ ...sample(minAgo, true), warn: true });
+    const events = deriveEvents(historyId, [sample(40, true), sample(30, false), warn(20)]);
+    expect(events).toEqual([
+      { id: historyId, type: "down", at: new Date(NOW - 30 * MIN).toISOString(), durationMin: 10 },
+      { id: historyId, type: "up", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: null },
+      { id: historyId, type: "degraded", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: null },
+    ]);
+  });
 });
 
 describe("buildHistoryPayload", () => {
@@ -735,7 +763,14 @@ describe("buildHistoryPayload", () => {
     const payload = buildHistoryPayload(store, { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 }, NOW);
     expect(payload.sources).toHaveLength(SOURCE_IDS.length);
     const or = payload.sources.find((s) => s.id === historyId)!;
-    expect(or).toMatchObject({ uptime24h: null, uptime7d: null, uptime30d: null, avgLatency24h: null, ok: false });
+    expect(or).toMatchObject({
+      uptime24h: null,
+      uptime7d: null,
+      uptime30d: null,
+      avgLatency24h: null,
+      ok: false,
+      level: "unknown",
+    });
     expect(payload.events).toHaveLength(0);
     expect(payload.uptimeMs).toBe(0);
     expect(payload.generatedAt).toBe(new Date(NOW).toISOString());
@@ -786,8 +821,34 @@ describe("buildHistoryPayload", () => {
     expect(or.uptime7d).toBeCloseTo(0.99);
     expect(or.uptime30d).toBeCloseTo(0.99);
     expect(or.ok).toBe(false);
+    expect(or.level).toBe("error");
     expect(or.checkedAt).toBe(new Date(NOW - MIN).toISOString());
     expect(payload.uptimeMs).toBe(5 * MIN);
+  });
+
+  it("warns when currently up but an outage hit the last 24h", () => {
+    const recent: UptimeSample[] = [sample(30, true), sample(20, false), sample(10, true)];
+    const payload = buildHistoryPayload(
+      { sources: { [historyId]: { recent, daily: [] } } },
+      { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
+      NOW,
+    );
+    const or = payload.sources.find((s) => s.id === historyId)!;
+    expect(or.ok).toBe(true);
+    expect(or.level).toBe("warn");
+  });
+
+  it("warns on a degraded provider sample even with a perfect ratio", () => {
+    const recent: UptimeSample[] = [sample(30, true), { ...sample(10, true), warn: true }];
+    const payload = buildHistoryPayload(
+      { sources: { [historyId]: { recent, daily: [] } } },
+      { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
+      NOW,
+    );
+    const or = payload.sources.find((s) => s.id === historyId)!;
+    expect(or.ok).toBe(true);
+    expect(or.uptime24h).toBe(1);
+    expect(or.level).toBe("warn");
   });
 
   it("reports uptime30d as null (not 0%) when daily buckets carry no samples", () => {

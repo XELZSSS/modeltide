@@ -24,6 +24,7 @@ import {
 } from "@/client/utils/charts";
 import { SOURCE_LABELS, SOURCE_IDS, ONE_HOUR } from "@/shared/config";
 import type { SourceStatus } from "@/shared/types";
+import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./StatusParts";
 import { StatusEventList } from "@/client/components/status-events";
 
@@ -139,14 +140,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
       <PageHeader title={t(SOURCE_LABELS[id])} description={t("statusPageTitle")} />
 
       <StatGrid columns={4}>
-        <StatCard
-          label={t("statusCurrent")}
-          value={
-            summary == null || summary.checkedAt == null
-              ? t("uptimeNoData")
-              : t(summary.ok ? "statusOnline" : "statusOffline")
-          }
-        />
+        <StatCard label={t("statusCurrent")} value={t(LEVEL_STYLES[resolveLevel(summary)].labelKey)} />
         {uptimeStats.map(({ id, value }) => (
           <StatCard key={id} label={t(id)} value={value} />
         ))}

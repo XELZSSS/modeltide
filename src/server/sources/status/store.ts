@@ -149,6 +149,7 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
     for (const [id, result] of providerResults) {
       aggregates.set(id, {
         ok: result.ok,
+        ...(result.warn ? { warn: true } : {}),
         status: result.status,
         latencyMs: result.ok ? result.latencyMs : null,
         error: result.error,
@@ -176,7 +177,14 @@ async function mergeSamplesIntoStore(
   for (const [id, agg] of aggregates) {
     store.sources[id] = mergeSample(
       store.sources[id],
-      { t: now, ok: agg.ok, latencyMs: agg.latencyMs, status: agg.status, error: agg.error },
+      {
+        t: now,
+        ok: agg.ok,
+        latencyMs: agg.latencyMs,
+        status: agg.status,
+        error: agg.error,
+        ...(agg.warn ? { warn: true } : {}),
+      },
       now,
     );
   }

@@ -14,10 +14,10 @@ describe("parseStatuspageSummary", () => {
         { name: "Chat", status: "operational" },
       ],
     });
-    expect(out).toMatchObject({ ok: true, total: 2 });
+    expect(out).toMatchObject({ level: "ok", total: 2 });
   });
 
-  it("fails when any component is degraded/partial/major", () => {
+  it("errors on an outage-state component when no page indicator exists (fail closed)", () => {
     const out = parseStatuspageSummary({
       components: [
         { name: "API", status: "operational" },
@@ -25,8 +25,18 @@ describe("parseStatuspageSummary", () => {
         { name: "", status: "partial_outage" },
       ],
     });
-    expect(out.ok).toBe(false);
+    expect(out.level).toBe("error");
     expect(out.degradedComponents).toEqual(["Images", "partial_outage"]);
+  });
+
+  it("warns on degradation-only components when no page indicator exists", () => {
+    const out = parseStatuspageSummary({
+      components: [
+        { name: "API", status: "operational" },
+        { name: "Images", status: "degraded_performance" },
+      ],
+    });
+    expect(out.level).toBe("warn");
   });
 
   it("trusts the page indicator over a single degraded component", () => {
@@ -37,17 +47,19 @@ describe("parseStatuspageSummary", () => {
         { name: "Edge helper", status: "degraded_performance" },
       ],
     });
-    expect(out.ok).toBe(true);
+    expect(out.level).toBe("ok");
     expect(out.degradedComponents).toEqual(["Edge helper"]);
   });
 
-  it("fails on a non-none page indicator even when every component is operational", () => {
-    for (const indicator of ["minor", "major", "critical", "maintenance"]) {
-      const out = parseStatuspageSummary({
+  it("maps a minor page indicator to warn and worse indicators to error", () => {
+    const parse = (indicator: string) =>
+      parseStatuspageSummary({
         status: { indicator, description: "Something is off" },
         components: [{ name: "API", status: "operational" }],
       });
-      expect(out.ok).toBe(false);
+    expect(parse("minor").level).toBe("warn");
+    for (const indicator of ["major", "critical", "maintenance"]) {
+      expect(parse(indicator).level).toBe("error");
     }
   });
 
@@ -64,22 +76,31 @@ describe("parseGoogleCloudIncidents", () => {
       { external_desc: "Network degradation", end: "2026-09-01T18:52:00+00:00", severity: "medium" },
       { external_desc: "Compute issue", end: null, severity: "low" },
     ]);
-    expect(out).toMatchObject({ ok: true, openIncidents: [] });
+    expect(out).toMatchObject({ level: "ok", openIncidents: [] });
   });
 
-  it("reports open incidents above routine severity", () => {
+  it("warns on open medium-severity incidents (degraded, not down)", () => {
+    const out = parseGoogleCloudIncidents([
+      { external_desc: "Open degradation", end: null, severity: "medium" },
+      { external_desc: "Routine", end: null, severity: "low" },
+    ]);
+    expect(out.level).toBe("warn");
+    expect(out.openIncidents).toEqual(["Open degradation"]);
+  });
+
+  it("errors on open incidents above warn severity", () => {
     const out = parseGoogleCloudIncidents([
       { external_desc: "Closed", end: "2026-09-01T18:52:00+00:00", severity: "high" },
       { external_desc: "Open outage", end: null, severity: "high" },
       { external_desc: "Routine", end: null, severity: "low" },
     ]);
-    expect(out.ok).toBe(false);
+    expect(out.level).toBe("error");
     expect(out.openIncidents).toEqual(["Open outage"]);
   });
 
   it("treats an open incident without severity as failing", () => {
     const out = parseGoogleCloudIncidents([{ external_desc: "Mystery", end: null }]);
-    expect(out.ok).toBe(false);
+    expect(out.level).toBe("error");
     expect(out.openIncidents).toEqual(["Mystery"]);
   });
 
@@ -124,6 +145,15 @@ describe("fetchProviderStatuses", () => {
     const map = await fetchProviderStatuses(ctx);
     expect(map.has("openaiApi")).toBe(false);
     expect(map.get("googleCloudApi")).toMatchObject({ ok: true });
+  });
+
+  it("maps a minor incident to ok+warn instead of an outage", async () => {
+    const ctx = ctxWithJson(async () => ({
+      status: { indicator: "minor", description: "Degraded" },
+      components: [{ name: "API", status: "operational" }],
+    }));
+    const map = await fetchProviderStatuses(ctx);
+    expect(map.get("openaiApi")).toMatchObject({ ok: true, warn: true, error: null });
   });
 });
 

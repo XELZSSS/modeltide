@@ -21,12 +21,19 @@ export interface SourceStatus {
   checkedAt: string;
 }
 
+/** Decisive health verdict: fully working (ok), degraded but up (warn), or failing (error). */
+export type SourceLevel = "ok" | "warn" | "error";
+/** SourceLevel plus the "never probed" state shown as grey in the UI. */
+export type SourceHealthLevel = SourceLevel | "unknown";
+
 export interface UptimeSample {
   t: number;
   ok: boolean;
   latencyMs: number | null;
   status?: number | null;
   error?: string | null;
+  /** True when the source is up but degraded (provider page reports a minor incident). */
+  warn?: boolean;
 }
 
 export interface DayBucket {
@@ -37,7 +44,7 @@ export interface DayBucket {
 
 export interface StatusEvent {
   id: SourceStatus["id"];
-  type: "down" | "up";
+  type: "down" | "up" | "degraded";
   at: string;
   durationMin: number | null;
 }
@@ -45,6 +52,8 @@ export interface StatusEvent {
 export interface SourceHistorySummary {
   id: SourceStatus["id"];
   ok: boolean;
+  /** Tri-level health derived server-side; absent in payloads cached before it existed. */
+  level?: SourceHealthLevel;
   latencyMs: number | null;
   checkedAt: string | null;
   uptime24h: number | null;

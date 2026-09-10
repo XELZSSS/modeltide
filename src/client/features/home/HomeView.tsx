@@ -16,6 +16,7 @@ import { PageContainer, PageSection } from "@/client/components/layout";
 import { Dot } from "@/client/components/ui/primitives";
 import { SOURCE_LABELS } from "@/shared/config";
 import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
+import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { useHomeStats } from "./use-home-stats";
 import { KpiStrip, ProviderSpeedCard, TextToImageSection } from "./cards";
 
@@ -23,11 +24,17 @@ const IndexLineChart = lazy(() => import("./charts").then((m) => ({ default: m.I
 const UsageDonut = lazy(() => import("./UsageDonut").then((m) => ({ default: m.UsageDonut })));
 const StatisticsSection = lazy(() => import("./statistics-section").then((m) => ({ default: m.StatisticsSection })));
 
+const EVENT_STYLES = {
+  down: { color: "var(--destructive)", text: "text-destructive", labelKey: "eventDown" },
+  degraded: { color: "var(--warning)", text: "text-warning", labelKey: "eventDegraded" },
+  up: { color: "var(--success)", text: "text-success", labelKey: "eventUp" },
+} as const;
+
 function HomeLatestEvents() {
   const { t, lang } = useTranslation();
   const { data } = useSuspenseStatusHistory();
   const latest = (data.events ?? [])[0] ?? null;
-  const down = latest?.type === "down";
+  const eventStyle = latest ? EVENT_STYLES[latest.type] : null;
   const labelKey =
     latest && Object.hasOwn(SOURCE_LABELS, latest.id)
       ? (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[latest.id]
@@ -45,30 +52,23 @@ function HomeLatestEvents() {
   const summary = data.sources.find((s) => s.id === latest.id);
   const samples = data.recent?.[latest.id] ?? [];
   const lastSample = samples.length > 0 ? samples[samples.length - 1] : undefined;
-  const unprobed = summary == null || summary.checkedAt == null;
-  const online = !unprobed && summary.ok;
+  const level = resolveLevel(summary);
   const latencyMs = summary?.avgLatency24h ?? summary?.latencyMs ?? lastSample?.latencyMs ?? null;
   const errorText = lastSample?.error ?? null;
   const statusCode = lastSample?.status ?? null;
-  const detailText = errorText ?? (statusCode != null && !online ? `HTTP ${statusCode}` : null);
+  const detailText = errorText ?? (statusCode != null && level === "error" ? `HTTP ${statusCode}` : null);
   return (
     <Link
       href="/status"
       className="flex h-10 items-center gap-2 min-w-0 w-full overflow-hidden border border-border rounded-none bg-bg-card px-3.5 hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
-      <Dot size="sm" color={down ? "var(--destructive)" : "var(--success)"} aria-hidden="true" />
+      <Dot size="sm" color={eventStyle!.color} aria-hidden="true" />
       <span className="text-sm truncate min-w-0 flex-1 whitespace-nowrap">
-        <span className={`font-medium ${down ? "text-destructive" : "text-success"}`}>
-          {t(down ? "eventDown" : "eventUp")}
-        </span>
+        <span className={`font-medium ${eventStyle!.text}`}>{t(eventStyle!.labelKey)}</span>
         <span className="text-text-secondary mx-1.5">·</span>
         <span className="text-text-secondary">{labelKey ? t(labelKey) : latest.id}</span>
         <span className="text-text-secondary mx-1.5">·</span>
-        <span
-          className={`font-medium ${unprobed ? "text-text-secondary" : online ? "text-success" : "text-destructive"}`}
-        >
-          {unprobed ? t("uptimeNoData") : t(online ? "statusOnline" : "statusOffline")}
-        </span>
+        <span className={`font-medium ${LEVEL_STYLES[level].text}`}>{t(LEVEL_STYLES[level].labelKey)}</span>
         <span className="text-text-secondary mx-1.5">·</span>
         <span className="text-text-secondary font-mono" title={t("uptime24h")}>
           {formatUptimePct(t, summary?.uptime24h ?? null)}
@@ -90,7 +90,7 @@ function HomeLatestEvents() {
         )}
       </span>
       <span className="flex items-center gap-2 text-xs text-text-secondary shrink-0">
-        {down && (
+        {latest.type !== "up" && (
           <span className="font-mono whitespace-nowrap">
             {latest.durationMin == null ? t("eventOngoing") : t("eventDurationMin", { value: latest.durationMin })}
           </span>
