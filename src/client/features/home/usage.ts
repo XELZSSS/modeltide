@@ -1,6 +1,6 @@
 import type { TranslationKey } from "@/shared/i18n";
 
-export const TASK_SLICE_LIMIT = 5;
+const TASK_SLICE_LIMIT = 5;
 export const OTHER_TASK_KEY = "__other__";
 
 export interface TaskSlice {

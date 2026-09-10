@@ -1,6 +1,5 @@
 import type { OpenRouterRankEntry } from "@/shared/types";
 import { numCoerce, numOr, titleCase } from "@/server/parsers/primitives";
-import { isValidOpenRouterRowId } from "@/server/sources/data-filter";
 import type { ModelRow, PricingEntry } from "@/server/sources/openrouter/types";
 
 const CREATORS: Record<string, string> = {
@@ -50,10 +49,10 @@ const SUM_KEYS = [
 ] as const;
 
 function usageTotal(row: ModelRow): number {
-  const p = numOr(row.total_prompt_tokens, NaN);
-  const c = numOr(row.total_completion_tokens, NaN);
-  if (!Number.isFinite(p) && !Number.isFinite(c)) return -1;
-  return (Number.isFinite(p) ? p : 0) + (Number.isFinite(c) ? c : 0);
+  const p = numCoerce(row.total_prompt_tokens);
+  const c = numCoerce(row.total_completion_tokens);
+  if (p == null && c == null) return -1;
+  return (p ?? 0) + (c ?? 0);
 }
 
 interface Group {
@@ -102,7 +101,7 @@ function resolvePricing(
 export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry>): OpenRouterRankEntry[] {
   const grouped = new Map<string, Group>();
   for (const row of rows) {
-    if (!isValidOpenRouterRowId(row.model_permaslug)) continue;
+    // Caller (openrouter.ts) has already filtered rows by valid model_permaslug.
     const id = row.model_permaslug.trim();
     const tokens = usageTotal(row);
     const group = grouped.get(id);

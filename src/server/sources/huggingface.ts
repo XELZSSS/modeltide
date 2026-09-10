@@ -2,10 +2,10 @@ import { SLOW_TTL_MS, SOURCE_LIMITS, normalizeModelLimit, sliceToLimit } from "@
 import { upstreamConfig, UPSTREAM_FETCH_OPTS, cacheKeys } from "@/server/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError, ValidationError } from "@/server/infra/errors";
+import { UpstreamError, ValidationError, zeroUpstream } from "@/server/infra/errors";
 import { getOpenLicense } from "@/server/parsers/licenses";
-import { isoDate, numIntNonNegative } from "@/server/parsers/primitives";
-import { dedupeBy, toStringOrNull } from "@/shared/utils";
+import { isoDate, numIntNonNegative, strOrNull } from "@/server/parsers/primitives";
+import { dedupeBy } from "@/shared/utils";
 import {
   filterMapDedupe,
   isOpenReleaseEntry,
@@ -32,7 +32,7 @@ export interface ModelQuery {
 }
 
 function resolveAuthor(m: HFModel, id: string): string | null {
-  return toStringOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
+  return strOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
 }
 
 function mapModel(m: HFModel): OpenSourceModelEntry | null {
@@ -48,7 +48,7 @@ function mapModel(m: HFModel): OpenSourceModelEntry | null {
     downloads,
     likes,
     license,
-    task: toStringOrNull(m.pipeline_tag),
+    task: strOrNull(m.pipeline_tag),
     createdAt: isoDate(m.createdAt),
     lastModified: isoDate(m.lastModified),
     tags,
@@ -58,12 +58,7 @@ function mapModel(m: HFModel): OpenSourceModelEntry | null {
 const HF_API = upstreamConfig.huggingface;
 
 // ── Raw fetch (no cache) ──────────────────────────────────────────
-export async function fetchHFModels(
-  ctx: AppContext,
-  sort: string,
-  direction: string,
-  limit: number,
-): Promise<HFModel[]> {
+async function fetchHFModels(ctx: AppContext, sort: string, direction: string, limit: number): Promise<HFModel[]> {
   const params = new URLSearchParams({ sort, direction, limit: String(limit), full: "true" });
   const url = `${HF_API}?${params.toString()}`;
   const headers = ctx.hfToken ? { authorization: `Bearer ${ctx.hfToken}` } : undefined;
@@ -102,8 +97,7 @@ export const getModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload
           .map(mapModel)
           .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m));
         const bucket = dedupeBy(kept, (m) => m.id);
-        if (bucket.length === 0)
-          throw new UpstreamError(`HuggingFace returned no usable models (raw=${items.length}, kept=0)`);
+        if (bucket.length === 0) throw zeroUpstream("HuggingFace", "usable models", `raw=${items.length}, kept=0`);
         if (kept.length < items.length)
           ctx.log("info", `[huggingface] filtered ${items.length - kept.length}/${items.length} rows`);
         return { data: { data: bucket, fetchedAt: nowIso() } };
@@ -122,8 +116,7 @@ export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceMo
         `[huggingface] releases kept ${mapped.length}/${deduped.length} (raw=${items.length}, incl. other-licensed drops)`,
       );
     const sorted = mapped.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
-    if (sorted.length === 0)
-      throw new UpstreamError(`HuggingFace returned no usable releases (raw=${items.length}, kept=0)`);
+    if (sorted.length === 0) throw zeroUpstream("HuggingFace", "usable releases", `raw=${items.length}, kept=0`);
     return { data: { data: sorted, fetchedAt: nowIso() } };
   });
 

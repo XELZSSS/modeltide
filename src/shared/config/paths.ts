@@ -14,7 +14,7 @@ export const API_DOMAINS = {
   homeDashboard: "home-dashboard",
 } as const;
 
-export function apiPath(domain: keyof typeof API_DOMAINS): string {
+function apiPath(domain: keyof typeof API_DOMAINS): string {
   return `/api/${API_DOMAINS[domain]}`;
 }
 
@@ -22,7 +22,7 @@ export function cacheKey(domain: keyof typeof API_DOMAINS, ...parts: (string | n
   return [API_DOMAINS[domain], ...parts].join(":");
 }
 
-export function queryKey(domain: keyof typeof API_DOMAINS, ...parts: (string | number)[]): readonly string[] {
+function queryKey(domain: keyof typeof API_DOMAINS, ...parts: (string | number)[]): readonly string[] {
   return ["api", "v2", API_DOMAINS[domain], ...parts.map(String)] as const;
 }
 

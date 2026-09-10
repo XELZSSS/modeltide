@@ -6,22 +6,22 @@ import { mergeSample, type HistoryStore, type SourceId } from "@/server/sources/
 import { aggregateProbes, probeTargets, type SourceAggregate } from "@/server/sources/status/probe";
 import { fetchProviderStatuses } from "@/server/sources/provider-status";
 
-export const SAMPLE_LOCK_TTL_S = 120;
+const SAMPLE_LOCK_TTL_S = 120;
 // Stable across deploys by design: locks are ephemeral, versions must not orphan them.
 export const SAMPLE_LOCK_KEY = `${API_DOMAINS.statusHistory}:lock`;
 
-export function isValidSample(s: unknown): s is UptimeSample {
+function isValidSample(s: unknown): s is UptimeSample {
   if (!s || typeof s !== "object" || Array.isArray(s)) return false;
   const r = s as Record<string, unknown>;
   return typeof r.t === "number" && Number.isFinite(r.t) && typeof r.ok === "boolean";
 }
-export function isValidBucket(b: unknown): b is DayBucket {
+function isValidBucket(b: unknown): b is DayBucket {
   if (!b || typeof b !== "object" || Array.isArray(b)) return false;
   const r = b as Record<string, unknown>;
   return typeof r.day === "string" && typeof r.total === "number" && typeof r.ok === "number";
 }
 
-export async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
+async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
   if (!ctx.kv) return "memory";
   const rand = crypto.getRandomValues(new Uint32Array(1))[0]!;
   const token = `${Date.now()}:${rand.toString(36)}`;
@@ -41,7 +41,7 @@ export async function acquireSampleLock(ctx: AppContext): Promise<string | null>
   }
 }
 
-export async function releaseSampleLock(ctx: AppContext, token: string | null): Promise<void> {
+async function releaseSampleLock(ctx: AppContext, token: string | null): Promise<void> {
   if (!ctx.kv || !token || token === "memory") return;
   try {
     const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
@@ -157,7 +157,7 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
   }
 }
 
-export async function mergeSamplesIntoStore(
+async function mergeSamplesIntoStore(
   ctx: AppContext,
   aggregates: Map<SourceId, SourceAggregate>,
   now = Date.now(),
@@ -202,7 +202,7 @@ export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore>
 
 // Two missed 30-minute cron rounds is already anomalous; throttle so the read
 // path (30s payload cache) doesn't spam the log while the outage persists.
-export const STALE_SAMPLE_WARN_MS = 2 * 60 * 60 * 1000;
+const STALE_SAMPLE_WARN_MS = 2 * 60 * 60 * 1000;
 const STALE_WARN_THROTTLE_MS = 30 * 60 * 1000;
 let lastStaleWarnAt = 0;
 

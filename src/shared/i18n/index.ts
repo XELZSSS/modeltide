@@ -1,8 +1,6 @@
 import { en } from "./en";
 import { zh } from "./zh";
 
-export type { EnDict } from "./en";
-
 export type Lang = "en" | "zh";
 export type TranslationKey = keyof typeof en;
 export type TranslationParams = Record<string, string | number>;

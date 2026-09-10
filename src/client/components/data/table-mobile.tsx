@@ -19,7 +19,15 @@ function resolveMobileColumns<T>(columns: DataTableColumn<T>[]): MobileColumnLay
   return { primaryCol, mainStatCol, secondaryCols };
 }
 
-function MobileTableBodyInner<T>({ pagedData, columns, getRowId, isExpandable, expandedRowId, onToggleExpand, renderExpandedRow }: RowListProps<T>) {
+function MobileTableBodyInner<T>({
+  pagedData,
+  columns,
+  getRowId,
+  isExpandable,
+  expandedRowId,
+  onToggleExpand,
+  renderExpandedRow,
+}: RowListProps<T>) {
   const layout = resolveMobileColumns(columns);
   if (!layout) return null;
   const { primaryCol, mainStatCol, secondaryCols } = layout;
@@ -29,13 +37,21 @@ function MobileTableBodyInner<T>({ pagedData, columns, getRowId, isExpandable, e
         const { rowId, isExpanded, toggle } = getRowExpandState(row, getRowId, expandedRowId, onToggleExpand);
         return (
           <Fragment key={rowId}>
-            <div className={cn("border border-border bg-bg-card p-3 sm:p-4 transition-colors", "hover:bg-hover", isExpanded && "bg-accent-light")}>
+            <div
+              className={cn(
+                "border border-border bg-bg-card p-3 sm:p-4 transition-colors",
+                "hover:bg-hover",
+                isExpanded && "bg-accent-light",
+              )}
+            >
               <div className="flex items-center gap-2 min-w-0">
                 {isExpandable ? <ExpandToggle isExpanded={isExpanded} onToggle={toggle} size={16} /> : null}
                 <div className="min-w-0 flex-1">{primaryCol?.cell(row)}</div>
                 {mainStatCol && (
                   <div className="shrink-0 text-right min-w-0 max-w-[40%]">
-                    {mainStatCol.header && <span className="text-xs text-text-secondary mr-1.5 truncate">{mainStatCol.header}</span>}
+                    {mainStatCol.header && (
+                      <span className="text-xs text-text-secondary mr-1.5 truncate">{mainStatCol.header}</span>
+                    )}
                     <div className="text-sm font-semibold">{mainStatCol.cell(row)}</div>
                   </div>
                 )}
@@ -43,7 +59,10 @@ function MobileTableBodyInner<T>({ pagedData, columns, getRowId, isExpandable, e
               {secondaryCols.length > 0 && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1.5 sm:gap-y-2 mt-2 sm:mt-3">
                   {secondaryCols.map((col) => (
-                    <div key={col.id} className={cn("flex items-baseline gap-1.5 min-w-0", col.align === "right" && "ml-auto")}>
+                    <div
+                      key={col.id}
+                      className={cn("flex items-baseline gap-1.5 min-w-0", col.align === "right" && "ml-auto")}
+                    >
                       {col.header && <span className="text-xs text-text-secondary shrink-0">{col.header}</span>}
                       <div className="text-sm min-w-0">{col.cell(row)}</div>
                     </div>
@@ -52,7 +71,9 @@ function MobileTableBodyInner<T>({ pagedData, columns, getRowId, isExpandable, e
               )}
             </div>
             {isExpanded && renderExpandedRow && (
-              <div className="border border-border bg-bg-secondary/50 overflow-hidden animate-slide-up">{renderExpandedRow(row)}</div>
+              <div className="border border-border bg-bg-secondary/50 overflow-hidden animate-slide-up">
+                {renderExpandedRow(row)}
+              </div>
             )}
           </Fragment>
         );

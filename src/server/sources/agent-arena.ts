@@ -2,10 +2,11 @@ import { SLOW_TTL_MS, SOURCE_LIMITS } from "@/shared/config";
 import { MAX_FEED_BYTES, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig } from "@/server/config";
 import type { AgentRankEntry, AgentRankingsPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError } from "@/server/infra/errors";
-import { num, isRecord } from "@/server/parsers/primitives";
+import { zeroUpstream } from "@/server/infra/errors";
+import { num, isRecord, strOrNull } from "@/server/parsers/primitives";
 import { parseRscPayload, traverse } from "@/server/parsers/rsc";
-import { dedupeBy, toStringOrNull } from "@/shared/utils";
+import { byNumberDesc } from "@/server/parsers/shaping";
+import { fetchRscText } from "@/server/sources/rsc-fetch";
 import { isUnsuitableContent } from "@/server/sources/data-filter";
 
 const AGENT_PATH = "/leaderboard/agent";
@@ -36,8 +37,8 @@ interface AgentSignalRow {
 
 function toAgentSignalRow(e: unknown): AgentSignalRow | null {
   if (!isRecord(e)) return null;
-  const id = toStringOrNull(e.contenderName);
-  const name = toStringOrNull(e.model);
+  const id = strOrNull(e.contenderName);
+  const name = strOrNull(e.model);
   if (id == null || name == null) return null;
   if (isUnsuitableContent(id) || isUnsuitableContent(name)) return null;
   const score = num(e.score);
@@ -45,11 +46,11 @@ function toAgentSignalRow(e: unknown): AgentSignalRow | null {
   return {
     id,
     name,
-    creator: toStringOrNull(e.modelOrganization) ?? "Unknown",
+    creator: strOrNull(e.modelOrganization) ?? "Unknown",
     score,
     ciLower: num(e.ciLower),
     ciUpper: num(e.ciUpper),
-    license: toStringOrNull(e.license),
+    license: strOrNull(e.license),
   };
 }
 
@@ -98,11 +99,9 @@ export function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow
     ciLower: mean(v.ciLower),
     ciUpper: mean(v.ciUpper),
   }));
-  ranked.sort((a, b) => (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY));
-  return dedupeBy(
-    ranked.map((r, i) => ({ rank: i + 1, ...r })),
-    (entry) => entry.id,
-  ).slice(0, SOURCE_LIMITS.agentRankings);
+  ranked.sort(byNumberDesc((r) => r.score));
+  // ids come from the acc Map keys, so they are already unique.
+  return ranked.map((r, i) => ({ rank: i + 1, ...r })).slice(0, SOURCE_LIMITS.agentRankings);
 }
 
 export function parseAgentBoards(body: string): AgentRankEntry[] {
@@ -110,7 +109,7 @@ export function parseAgentBoards(body: string): AgentRankEntry[] {
     const raw = parseRscPayload<Record<string, unknown>>(body, signal, extractSignalEntries(signal));
     const rows = raw.map(toAgentSignalRow).filter((r): r is AgentSignalRow => r !== null);
     if (rows.length === 0) {
-      throw new UpstreamError(`Agent board "${signal}" yielded 0 usable rows (markup changed?)`);
+      throw zeroUpstream(`Agent board "${signal}"`, "usable rows", "markup changed?");
     }
     return { signal, rows };
   });
@@ -118,14 +117,14 @@ export function parseAgentBoards(body: string): AgentRankEntry[] {
 }
 
 async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
-  const body = await ctx.http.text(
-    `${upstreamConfig.arena}${AGENT_PATH}`,
-    { headers: { RSC: "1", accept: "*/*" }, ...UPSTREAM_FETCH_OPTS },
-    MAX_FEED_BYTES,
-  );
+  const body = await fetchRscText(ctx, upstreamConfig.arena, AGENT_PATH, {
+    headers: { RSC: "1", accept: "*/*" },
+    maxBytes: MAX_FEED_BYTES,
+    retries: UPSTREAM_FETCH_OPTS.retries,
+  });
   const entries = parseAgentBoards(body);
   if (entries.length === 0) {
-    throw new UpstreamError(`Agent board yielded 0 rows from the flight payload (body=${body.length}B, markup changed?)`);
+    throw zeroUpstream("Agent board", "rows from the flight payload", `body=${body.length}B, markup changed?`);
   }
   return entries;
 }

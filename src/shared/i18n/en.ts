@@ -108,8 +108,6 @@ export const en = {
   tokensPerSecond: "tok/s",
   unknown: "Unknown",
 
-  votes: "Votes",
-
   textToImage: "Text-to-Image",
   bestT2IModel: "Best Text-to-Image",
   bestReasoningModel: "Best Reasoning",
@@ -265,7 +263,6 @@ export const en = {
   agentRankings: "Agent",
   agentSource: "Data Source: Arena",
 
-  preliminary: "Preliminary",
   score: "Score",
   officialPricing: "LiteLLM Pricing",
   officialVsRouter: "LiteLLM vs OpenRouter",

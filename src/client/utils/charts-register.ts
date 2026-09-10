@@ -1,8 +1,20 @@
 "use client";
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Filler, RadialLinearScale, Tooltip, Legend } from "chart.js";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  PointElement,
+  LineElement,
+  Filler,
+  RadialLinearScale,
+  Tooltip,
+  Legend,
+} from "chart.js";
 import { applyChartDefaults } from "./charts";
 
-export function registerChart(...elements: Parameters<(typeof ChartJS)["register"]>[number][]): void {
+function registerChart(...elements: Parameters<(typeof ChartJS)["register"]>[number][]): void {
   (ChartJS.register as (...args: unknown[]) => void)(...elements);
   applyChartDefaults(ChartJS);
 }

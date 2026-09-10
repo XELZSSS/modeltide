@@ -235,7 +235,11 @@ function ReleasesContent() {
       activeTab={mode}
       onTabChange={setMode}
     >
-      {mode === "feed" ? <FeedTab allEntries={allEntries} /> : <ClosedReleasesTab releases={closedReleases} partial={closedPartial} />}
+      {mode === "feed" ? (
+        <FeedTab allEntries={allEntries} />
+      ) : (
+        <ClosedReleasesTab releases={closedReleases} partial={closedPartial} />
+      )}
     </TabbedPage>
   );
 }

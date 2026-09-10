@@ -10,9 +10,9 @@ import {
   MAX_RSC_LINE_CHARS,
 } from "@/server/parsers/rsc-scan";
 
-export { balancedJsonEnd, MAX_RSC_BYTES, MAX_RSC_LINE_CHARS, MAX_SCAN_CHARS } from "@/server/parsers/rsc-scan";
+export { balancedJsonEnd, MAX_SCAN_CHARS } from "@/server/parsers/rsc-scan";
 
-export const MAX_RSC_NODES = 50_000;
+const MAX_RSC_NODES = 50_000;
 
 export function* traverse(root: unknown): Generator<unknown> {
   const seen = new Set<object>();

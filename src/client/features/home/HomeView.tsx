@@ -50,8 +50,7 @@ function HomeLatestEvents() {
   const latencyMs = summary?.avgLatency24h ?? summary?.latencyMs ?? lastSample?.latencyMs ?? null;
   const errorText = lastSample?.error ?? null;
   const statusCode = lastSample?.status ?? null;
-  const detailText =
-    errorText ?? (statusCode != null && !online ? `HTTP ${statusCode}` : null);
+  const detailText = errorText ?? (statusCode != null && !online ? `HTTP ${statusCode}` : null);
   return (
     <Link
       href="/status"
@@ -65,7 +64,9 @@ function HomeLatestEvents() {
         <span className="text-text-secondary mx-1.5">·</span>
         <span className="text-text-secondary">{labelKey ? t(labelKey) : latest.id}</span>
         <span className="text-text-secondary mx-1.5">·</span>
-        <span className={`font-medium ${unprobed ? "text-text-secondary" : online ? "text-success" : "text-destructive"}`}>
+        <span
+          className={`font-medium ${unprobed ? "text-text-secondary" : online ? "text-success" : "text-destructive"}`}
+        >
           {unprobed ? t("uptimeNoData") : t(online ? "statusOnline" : "statusOffline")}
         </span>
         <span className="text-text-secondary mx-1.5">·</span>

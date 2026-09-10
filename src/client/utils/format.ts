@@ -33,8 +33,7 @@ export function formatBoolean(t: TFunction, value?: boolean | null) {
 }
 
 function compactParts(n: number) {
-  const abs = Math.abs(n);
-  return { abs, k: abs / 1e3, m: abs / 1e6, b: abs / 1e9, t: abs / 1e12, sign: n < 0 ? "-" : "" };
+  return { abs: Math.abs(n), sign: n < 0 ? "-" : "" };
 }
 
 const PROMOTE_2DEC = 999.995;
@@ -78,8 +77,7 @@ export function formatTokens(n: number | null | undefined, t?: TFunction): strin
   const scaled = formatScaled(abs, "", n, TOKEN_SCALES, 1);
   if (scaled) {
     const [num, suffix] = [scaled.slice(0, -1), scaled.slice(-1)];
-    const out = Number(num).toFixed(1);
-    return `${out.endsWith(".0") ? out.slice(0, -2) : out}${suffix}`;
+    return `${num.endsWith(".0") ? num.slice(0, -2) : num}${suffix}`;
   }
   return String(n);
 }

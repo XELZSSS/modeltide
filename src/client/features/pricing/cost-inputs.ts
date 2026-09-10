@@ -27,7 +27,7 @@ export interface CostInputState {
   setField: (id: CostFieldId, v: string) => void;
 }
 
-export const DEFAULT_COST_INPUTS: Record<CostFieldId, string> = {
+const DEFAULT_COST_INPUTS: Record<CostFieldId, string> = {
   dailyInput: "2",
   dailyOutput: "1",
   dailyReasoning: "2",
@@ -107,7 +107,12 @@ export function getCachedMonthlyCost(
   // defaultMonthlyCost is computed from catalog pricing only, so it is valid
   // only when no official price overrides this model.
   const isDefaultCalc =
-    calc.input === 2 && calc.output === 1 && calc.reasoning === 2 && calc.cache === 0.5 && calc.cacheWrite === 0.05 && calc.days === 22;
+    calc.input === 2 &&
+    calc.output === 1 &&
+    calc.reasoning === 2 &&
+    calc.cache === 0.5 &&
+    calc.cacheWrite === 0.05 &&
+    calc.days === 22;
   if (isDefaultCalc && official == null) {
     const v = model.defaultMonthlyCost;
     if (v != null && Number.isFinite(v)) return v;

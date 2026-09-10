@@ -1,12 +1,13 @@
 "use client";
 import { memo, useCallback, useMemo, type ReactNode } from "react";
+import { TrendingDown, TrendingUp } from "lucide-react";
 import { useTranslation, useDevice } from "@/client/providers";
 import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { Dot } from "@/client/components/ui/primitives";
 import { cn } from "@/client/utils/cn";
 import { modelId } from "@/client/utils/model";
-import { computeWinners, type CompareRow, type Winner } from "./logic";
+import { computeWinners, rowKey, type CompareRow, type Winner } from "./logic";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 interface ThProps {
@@ -65,29 +66,54 @@ const Tr = memo(function Tr({ className, children, ...props }: React.HTMLAttribu
   );
 });
 
-interface CompareTableProps<T> {
-  rows: CompareRow<T>[];
-  models: T[];
-  getKey: (m: T, index: number) => string;
-  getName: (m: T) => string;
-  getColor: (index: number) => string;
-  renderValue: (row: CompareRow<T>, model: T, winner: Winner | null) => ReactNode;
+interface CompareTableProps {
+  rows: CompareRow<ArtificialAnalysisModel>[];
+  models: ArtificialAnalysisModel[];
+  renderValue: (
+    row: CompareRow<ArtificialAnalysisModel>,
+    model: ArtificialAnalysisModel,
+    winner: Winner | null,
+  ) => ReactNode;
   mobileLayout?: "metric-rows" | "model-cards";
 }
 
-interface TablePartsProps<T> extends Omit<CompareTableProps<T>, "mobileLayout"> {
+interface TablePartsProps extends Omit<CompareTableProps, "mobileLayout"> {
   winners: Map<string, Map<string, Winner>>;
+  getKey: (m: ArtificialAnalysisModel, index: number) => string;
+  getName: (m: ArtificialAnalysisModel) => string;
+  getColor: (index: number) => string;
 }
 
-export const modelKeyOf = (m: ArtificialAnalysisModel, index: number) => modelId(m) || `idx-${index}`;
-export const modelNameOf = (m: ArtificialAnalysisModel) => m.short_name || m.name;
+const modelKeyOf = (m: ArtificialAnalysisModel, index: number) => modelId(m) || `idx-${index}`;
+const modelNameOf = (m: ArtificialAnalysisModel) => m.short_name || m.name;
 
-export function useModelColorOf(): (index: number) => string {
+function useModelColorOf(): (index: number) => string {
   const theme = useChartTheme();
   return useCallback((index: number) => seriesColor(theme, index), [theme]);
 }
 
-function DesktopTable<T>({ rows, models, getKey, getName, getColor, renderValue, winners }: TablePartsProps<T>) {
+export const WinnerMark = memo(function WinnerMark() {
+  return <TrendingUp size={12} className="inline ml-0.5 text-success" aria-hidden="true" />;
+});
+
+/** Shared value cell: applies the win/loss styling and marks in one place. */
+export const WinnerValue = memo(function WinnerValue({ value, winner }: { value: string; winner: Winner | null }) {
+  return (
+    <span
+      className={cn(
+        "font-mono tabular-nums",
+        winner === "win" && "font-semibold text-success",
+        winner === "loss" && "text-destructive",
+      )}
+    >
+      {value}
+      {winner === "win" && <WinnerMark />}
+      {winner === "loss" && <TrendingDown size={12} className="inline ml-0.5 text-destructive" aria-hidden="true" />}
+    </span>
+  );
+});
+
+function DesktopTable({ rows, models, getKey, getName, getColor, renderValue, winners }: TablePartsProps) {
   const { t } = useTranslation();
   return (
     <Card>
@@ -111,13 +137,13 @@ function DesktopTable<T>({ rows, models, getKey, getName, getColor, renderValue,
             </thead>
             <tbody>
               {rows.map((row) => (
-                <Tr key={row.id ?? row.label} className="hover:bg-hover transition-colors">
+                <Tr key={rowKey(row)} className="hover:bg-hover transition-colors">
                   <Th scope="row" className="text-text-secondary sticky left-0 bg-bg-card z-10">
                     {row.label}
                   </Th>
                   {models.map((model, index) => (
                     <Td key={getKey(model, index)} align="right">
-                      {renderValue(row, model, winners.get(row.id ?? row.label)?.get(getKey(model, index)) ?? null)}
+                      {renderValue(row, model, winners.get(rowKey(row))?.get(getKey(model, index)) ?? null)}
                     </Td>
                   ))}
                 </Tr>
@@ -130,7 +156,7 @@ function DesktopTable<T>({ rows, models, getKey, getName, getColor, renderValue,
   );
 }
 
-function MobileTable<T>({
+function MobileTable({
   rows,
   models,
   getKey,
@@ -139,7 +165,7 @@ function MobileTable<T>({
   renderValue,
   winners,
   layout,
-}: TablePartsProps<T> & { layout: "metric-rows" | "model-cards" }) {
+}: TablePartsProps & { layout: "metric-rows" | "model-cards" }) {
   if (layout === "model-cards") {
     return (
       <div className="flex flex-col gap-3">
@@ -152,9 +178,9 @@ function MobileTable<T>({
               </p>
               <div className="flex flex-col gap-2">
                 {rows.map((row) => (
-                  <div key={row.id ?? row.label} className="flex items-center justify-between gap-3">
+                  <div key={rowKey(row)} className="flex items-center justify-between gap-3">
                     <span className="ui-caption">{row.label}</span>
-                    {renderValue(row, model, winners.get(row.id ?? row.label)?.get(getKey(model, index)) ?? null)}
+                    {renderValue(row, model, winners.get(rowKey(row))?.get(getKey(model, index)) ?? null)}
                   </div>
                 ))}
               </div>
@@ -170,12 +196,9 @@ function MobileTable<T>({
       <CardContent padding="sm">
         <div className="flex flex-col divide-y divide-border">
           {rows.map((row) => {
-            const perModel = winners.get(row.id ?? row.label);
+            const perModel = winners.get(rowKey(row));
             return (
-              <div
-                key={row.id ?? row.label}
-                className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-              >
+              <div key={rowKey(row)} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="text-xs font-medium text-text-secondary shrink-0">{row.label}</span>
                 <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
                   {models.map((model, index) => (
@@ -194,21 +217,14 @@ function MobileTable<T>({
   );
 }
 
-function CompareTableInner<T>({
-  rows,
-  models,
-  getKey,
-  getName,
-  getColor,
-  renderValue,
-  mobileLayout = "metric-rows",
-}: CompareTableProps<T>) {
+function CompareTableInner({ rows, models, renderValue, mobileLayout = "metric-rows" }: CompareTableProps) {
   const { isMobile } = useDevice();
-  const winners = useMemo(() => computeWinners(rows, models, getKey), [rows, models, getKey]);
+  const getColor = useModelColorOf();
+  const winners = useMemo(() => computeWinners(rows, models, modelKeyOf), [rows, models]);
 
   const parts = useMemo(
-    () => ({ rows, models, getKey, getName, getColor, renderValue, winners }),
-    [rows, models, getKey, getName, getColor, renderValue, winners],
+    () => ({ rows, models, getKey: modelKeyOf, getName: modelNameOf, getColor, renderValue, winners }),
+    [rows, models, getColor, renderValue, winners],
   );
   if (isMobile) {
     return <MobileTable {...parts} layout={mobileLayout} />;

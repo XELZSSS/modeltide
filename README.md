@@ -22,13 +22,13 @@
 
 ## Features
 
-| Feature          | Description                                |
-| ---------------- | ------------------------------------------ |
-| Model Rankings   | Multi-dimensional rankings and benchmarks  |
-| Release Tracking | Latest and open-source releases            |
-| News Aggregation | Industry news across categories            |
-| Model Comparison | Side-by-side model and price comparison    |
-| Source Status    | Availability and latency monitoring        |
+| Feature          | Description                               |
+| ---------------- | ----------------------------------------- |
+| Model Rankings   | Multi-dimensional rankings and benchmarks |
+| Release Tracking | Latest and open-source releases           |
+| News Aggregation | Industry news across categories           |
+| Model Comparison | Side-by-side model and price comparison   |
+| Source Status    | Availability and latency monitoring       |
 
 ## Architecture
 

@@ -6,27 +6,16 @@ import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError } from "@/server/infra/errors";
 import { formatSettleErrors } from "@/server/infra/pool";
 import { FEED_ACCEPT, parseFeed } from "@/server/parsers/feed";
+import { parseTs } from "@/server/parsers/shaping";
 import { fetchDailyPapersItems } from "@/server/sources/hf-papers";
 import { dedupeBy } from "@/shared/utils";
 import { isSuitableNewsItem } from "@/server/sources/data-filter";
 import { nowIso, type SourcePayload } from "@/server/sources/types";
 
+// Dedupe key only (never served): collapse to a canonical origin+path+query
+// form. Inputs are pre-validated by isSuitableNewsItem -> isValidHttpUrl.
 function normalizeNewsLink(link: string): string {
   const trimmed = link.trim();
-  const lower = trimmed.toLowerCase();
-  if (lower.startsWith("http://") || lower.startsWith("https://")) {
-    const schemeEnd = trimmed.indexOf("://") + 3;
-    const rest = trimmed.slice(schemeEnd);
-    const slash = rest.indexOf("/");
-    const host = (slash === -1 ? rest : rest.slice(0, slash)).toLowerCase();
-    let path = slash === -1 ? "/" : rest.slice(slash);
-    const q = path.indexOf("?");
-    const h = path.indexOf("#");
-    const cut = q === -1 ? h : h === -1 ? q : Math.min(q, h);
-    const suffix = cut === -1 ? "" : path.slice(cut);
-    path = (cut === -1 ? path : path.slice(0, cut)).replace(/\/+$/, "") || "/";
-    return `${lower.startsWith("https") ? "https" : "http"}://${host}${path}${suffix}`;
-  }
   try {
     const u = new URL(trimmed);
     return `${u.protocol}//${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}${u.hash}`;
@@ -35,7 +24,7 @@ function normalizeNewsLink(link: string): string {
   }
 }
 
-export async function fetchNews(
+async function fetchNews(
   ctx: AppContext,
   category: NewsCategory,
 ): Promise<{ items: NewsItem[]; failCount: number; total: number }> {
@@ -71,8 +60,7 @@ export async function fetchNews(
   const dated = allItems
     .filter((i) => !isPaper(i))
     .map((item) => {
-      const t = Date.parse(item.pubDate);
-      const ts = Number.isFinite(t) && t > 0 ? t : Number.NEGATIVE_INFINITY;
+      const ts = parseTs(item.pubDate, true);
       if (ts === Number.NEGATIVE_INFINITY) invalidDateCount++;
       return { item, ts };
     });

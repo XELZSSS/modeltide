@@ -4,9 +4,6 @@ import { ENVELOPE_VERSION, isEnvelope, maxStaleMs, type StaleEnvelope } from "@/
 import { L1_MAX_TTL_MS, MAX_KV_RETENTION_TTL_S } from "@/server/config";
 import { MemoryL1 } from "@/server/infra/cache/memory-l1";
 
-export { MemoryL1 } from "@/server/infra/cache/memory-l1";
-export { ENVELOPE_VERSION, isEnvelope, maxStaleMs, type StaleEnvelope } from "@/server/infra/cache/envelope";
-
 export class InflightRegistry {
   private map = new Map<string, Promise<unknown>>();
   get<T>(vk: string): Promise<T> | undefined {
@@ -24,7 +21,7 @@ export class InflightRegistry {
   }
 }
 
-export function jitteredTtl(vk: string, ttl: number): number {
+function jitteredTtl(vk: string, ttl: number): number {
   const h1 = (parseInt(fnv1aHash(vk), 36) % 50) / 1000;
   const h2 = (parseInt(fnv1aHash(`${vk}:salt`), 36) % 50) / 1000;
   const factor = 0.95 + h1 + h2;
@@ -32,7 +29,7 @@ export function jitteredTtl(vk: string, ttl: number): number {
   return Math.max(60_000, Math.round(ttl * factor));
 }
 
-export function l1TtlFor(effective: number): number {
+function l1TtlFor(effective: number): number {
   if (!Number.isFinite(effective) || effective <= 0) return L1_MAX_TTL_MS;
   const scaled = Math.floor(effective / 10);
   return Math.min(effective, Math.max(L1_MAX_TTL_MS, Math.min(15 * 60_000, scaled)));

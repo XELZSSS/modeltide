@@ -109,7 +109,10 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
         <p className="ui-card-title mb-1">{t("intelligenceIndex")}</p>
         <p className="ui-caption mb-4">{t("artificialSource")}</p>
         {top10.length === 0 ? (
-          <div className="flex h-[200px] sm:h-[240px] items-center justify-center text-center ui-body-secondary" role="status">
+          <div
+            className="flex h-[200px] sm:h-[240px] items-center justify-center text-center ui-body-secondary"
+            role="status"
+          >
             {t("noRankingsData")}
           </div>
         ) : (

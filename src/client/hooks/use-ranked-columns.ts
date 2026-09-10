@@ -22,8 +22,5 @@ export function useRankFieldColumns<T>(
   rankOf: (row: T) => number | null | undefined,
 ): DataTableColumn<T>[] {
   const { t } = useTranslation();
-  return useMemo<DataTableColumn<T>[]>(
-    () => [rankCol(rankOf), ...buildBodyColumns(t)],
-    [t, buildBodyColumns, rankOf],
-  );
+  return useMemo<DataTableColumn<T>[]>(() => [rankCol(rankOf), ...buildBodyColumns(t)], [t, buildBodyColumns, rankOf]);
 }

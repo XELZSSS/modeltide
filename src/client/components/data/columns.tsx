@@ -1,26 +1,17 @@
 "use client";
 import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
+import type { TFunction } from "@/shared/i18n";
 
 interface RankingNameCellProps {
   name: string;
-  prefix?: React.ReactNode;
   suffix?: React.ReactNode;
-  nameClassName?: string;
-  gapClassName?: string;
 }
 
-export const RankingNameCell = memo(function RankingNameCell({
-  name,
-  prefix,
-  suffix,
-  nameClassName = "text-sm font-semibold",
-  gapClassName = "gap-2",
-}: RankingNameCellProps) {
+export const RankingNameCell = memo(function RankingNameCell({ name, suffix }: RankingNameCellProps) {
   return (
-    <div className={cn("flex items-center min-w-0", gapClassName)}>
-      {prefix}
-      <p className={cn("truncate flex-1 min-w-0", nameClassName)} title={name}>
+    <div className="flex items-center min-w-0 gap-2">
+      <p className="truncate flex-1 min-w-0 text-sm font-semibold" title={name}>
         {name || "—"}
       </p>
       {suffix}
@@ -69,7 +60,7 @@ export function rightColNA<T>(
   id: string,
   header: string,
   render: (row: T) => ReactNode | null,
-  notAvailableLabel: string,
+  t: TFunction,
   opts?: { hiddenMd?: boolean; width?: number | string; mobilePrimary?: boolean },
 ): DataTableColumn<T> {
   return rightCol(
@@ -80,7 +71,7 @@ export function rightColNA<T>(
       const missing = value == null;
       return (
         <RightAlignedText className={missing ? "text-text-tertiary" : undefined}>
-          {missing ? notAvailableLabel : value}
+          {missing ? t("notAvailable") : value}
         </RightAlignedText>
       );
     },

@@ -5,6 +5,7 @@ import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
 import { settled } from "@/server/infra/pool";
 import { isoDate } from "@/server/parsers/primitives";
+import { byDateDesc } from "@/server/parsers/shaping";
 import { getChangelogModels, type ChangelogModel } from "@/server/sources/aa/changelog";
 import { getIntelligenceIndexResult } from "@/server/sources/aa/intelligence-index";
 import { dedupeBy } from "@/shared/utils";
@@ -19,29 +20,25 @@ export function isClosedChangelogRelease(e: ChangelogModel, weights: Map<string,
   return (weights.get(e.slug) ?? weights.get(e.releaseSlug)) !== true;
 }
 
-function toClosedRelease(e: ChangelogModel): ClosedReleaseEntry | null {
-  const raw = e.releaseDate.length > 10 ? e.releaseDate.slice(0, 10) : e.releaseDate;
-  if (!isoDate(raw)) return null;
+function toClosedEntry(id: string, model: string, provider: string, rawDate: string): ClosedReleaseEntry | null {
+  const date = rawDate.length > 10 ? rawDate.slice(0, 10) : rawDate;
+  if (!isoDate(date)) return null;
   return {
-    id: e.releaseSlug,
-    model: e.releaseName,
-    provider: e.creatorName,
-    releaseDate: raw,
-    link: `${upstreamConfig.artificialAnalysis}/models/${encodeURIComponent(e.releaseSlug)}`,
+    id,
+    model,
+    provider,
+    releaseDate: date,
+    link: `${upstreamConfig.artificialAnalysis}/models/${encodeURIComponent(id)}`,
   };
 }
 
+function toClosedRelease(e: ChangelogModel): ClosedReleaseEntry | null {
+  return toClosedEntry(e.releaseSlug, e.releaseName, e.creatorName, e.releaseDate);
+}
+
 function toClosedReleaseFromIndex(m: ArtificialAnalysisModel): ClosedReleaseEntry | null {
-  const raw = (m.release_date ?? "").length > 10 ? (m.release_date ?? "").slice(0, 10) : (m.release_date ?? "");
-  if (!raw || !isoDate(raw)) return null;
   if (m.is_open_weights === true) return null;
-  return {
-    id: m.slug || m.id,
-    model: m.name,
-    provider: m.model_creators?.name ?? "Unknown",
-    releaseDate: raw,
-    link: `${upstreamConfig.artificialAnalysis}/models/${encodeURIComponent(m.slug || m.id)}`,
-  };
+  return toClosedEntry(m.slug || m.id, m.name, m.model_creators?.name ?? "Unknown", m.release_date ?? "");
 }
 
 function toClosedReleasesFromIndex(models: ArtificialAnalysisModel[]): ClosedReleaseEntry[] {
@@ -54,23 +51,16 @@ function toClosedReleasesFromIndex(models: ArtificialAnalysisModel[]): ClosedRel
 export function toClosedReleases(changelog: ChangelogModel[], weights: Map<string, boolean>): ClosedReleaseEntry[] {
   const sorted = [...changelog]
     .filter((e) => isClosedChangelogRelease(e, weights))
-    .sort((a, b) => {
-      const ta = Date.parse(a.releaseDate);
-      const tb = Date.parse(b.releaseDate);
-      const na = Number.isFinite(ta) ? ta : -Infinity;
-      const nb = Number.isFinite(tb) ? tb : -Infinity;
-      return nb - na;
-    });
+    .sort(byDateDesc((e) => e.releaseDate));
   const entries = dedupeBy(sorted, (e) => e.releaseSlug)
     .map(toClosedRelease)
     .filter((e): e is ClosedReleaseEntry => e !== null);
-  entries.sort((a, b) => b.releaseDate.localeCompare(a.releaseDate));
+  // releaseDate is a validated zero-padded ISO date, so the pre-dedupe
+  // Date.parse sort already is lexicographic order; no re-sort needed.
   return entries.slice(0, SOURCE_LIMITS.closedReleases);
 }
 
-export async function fetchClosedReleases(
-  ctx: AppContext,
-): Promise<{ entries: ClosedReleaseEntry[]; partial: boolean }> {
+async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedReleaseEntry[]; partial: boolean }> {
   const [indexRes, changelogRes] = await Promise.allSettled([getIntelligenceIndexResult(ctx), getChangelogModels(ctx)]);
   const index = settled(indexRes, { models: [], weights: {}, enrichFailed: true });
   const models = index.models;

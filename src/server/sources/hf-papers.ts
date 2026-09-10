@@ -2,8 +2,8 @@ import type { NewsItem } from "@/shared/types";
 import { SOURCE_LIMITS } from "@/shared/config";
 import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
-import { UpstreamError } from "@/server/infra/errors";
-import { isRecord } from "@/server/parsers/primitives";
+import { UpstreamError, zeroUpstream } from "@/server/infra/errors";
+import { isRecord, str } from "@/server/parsers/primitives";
 import { isSuitableNewsItem } from "@/server/sources/data-filter";
 
 interface DailyPaperEntry {
@@ -18,9 +18,9 @@ interface DailyPaperEntry {
 
 function toNewsItem(entry: DailyPaperEntry): NewsItem | null {
   const paper = isRecord(entry.paper) ? entry.paper : undefined;
-  const id = typeof paper?.id === "string" ? paper.id.trim() : "";
-  const title = typeof paper?.title === "string" ? paper.title.replace(/\s+/g, " ").trim() : "";
-  const publishedAt = typeof paper?.publishedAt === "string" ? paper.publishedAt : "";
+  const id = str(paper?.id).trim();
+  const title = str(paper?.title).replace(/\s+/g, " ").trim();
+  const publishedAt = str(paper?.publishedAt);
   // No sentinel fallback: an undated paper would sink to the bottom of the
   // date-sorted research feed and render as a bogus ancient date in the UI.
   if (!id || !title || !Number.isFinite(Date.parse(publishedAt))) return null;
@@ -47,7 +47,7 @@ export function parseDailyPapers(raw: unknown): NewsItem[] {
   const seen = new Set<string>();
   const unique = items.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));
   if (unique.length === 0) {
-    throw new UpstreamError(`HuggingFace daily papers yielded 0 usable items (raw=${raw.length})`);
+    throw zeroUpstream("HuggingFace daily papers", "usable items", `raw=${raw.length}`);
   }
   return unique.slice(0, SOURCE_LIMITS.dailyPapers);
 }

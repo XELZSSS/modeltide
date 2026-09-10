@@ -2,11 +2,11 @@ import type { OfficialPriceModel } from "@/shared/types";
 import { MAX_PLAUSIBLE_RATE, PER_MILLION } from "@/shared/config/limits";
 import { LITELLM_FETCH_OPTS, upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
-import { UpstreamError } from "@/server/infra/errors";
+import { UpstreamError, zeroUpstream } from "@/server/infra/errors";
 import { humanizeId, isRecord, numCoerce, str } from "@/server/parsers/primitives";
 import { isUsablePricing } from "@/server/sources/data-filter";
 
-export function officialModel(
+function officialModel(
   provider: string,
   id: string,
   name: string,
@@ -92,7 +92,7 @@ export function parseLitellmPricing(raw: unknown): OfficialPriceModel[] {
     if (model) models.push(model);
   }
   if (models.length === 0) {
-    throw new UpstreamError("LiteLLM pricing yielded 0 usable rows (schema drift?)");
+    throw zeroUpstream("LiteLLM pricing", "usable rows", "schema drift?");
   }
   return models;
 }

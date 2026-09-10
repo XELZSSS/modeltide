@@ -25,3 +25,12 @@ export class UpstreamError extends ApiError {
     if (opts?.status != null) this.statusCode = opts.status;
   }
 }
+
+/**
+ * Canonical shape for "upstream parsed but kept nothing" failures:
+ * `${label} yielded 0 ${unit} (${detail})`. `detail` is verbatim so callers
+ * keep their source-specific counts (raw/kept/body/...).
+ */
+export function zeroUpstream(label: string, unit: string, detail?: string): UpstreamError {
+  return new UpstreamError(`${label} yielded 0 ${unit}${detail ? ` (${detail})` : ""}`);
+}

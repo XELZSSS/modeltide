@@ -36,5 +36,3 @@ export function RankedTableView<T>({
   const columns = useRankedColumns(rows, getRowId, buildBodyColumns);
   return <SearchableDataTable data={rows} columns={columns} getRowId={getRowId} getSearchFields={getSearchFields} />;
 }
-
-

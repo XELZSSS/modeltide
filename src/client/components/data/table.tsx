@@ -8,7 +8,7 @@ import { dedupeBy } from "@/shared/utils";
 import { MobileTableBody } from "./table-mobile";
 import { TableBody, TableHeader } from "./table-desktop";
 
-export const DEFAULT_PAGE_SIZE = 8;
+const DEFAULT_PAGE_SIZE = 8;
 
 export function usePagedData<T>(data: T[], getRowId: (row: T) => string, pageSize = 8, resetKey?: string | number) {
   const dedupedData = useMemo(() => dedupeBy(data, getRowId), [data, getRowId]);
@@ -17,7 +17,9 @@ export function usePagedData<T>(data: T[], getRowId: (row: T) => string, pageSiz
   const totalPages = Math.ceil(dedupedData.length / safeSize);
   const safeTotal = Math.max(1, totalPages);
   useEffect(() => setPage((p) => Math.min(p, safeTotal)), [safeTotal]);
-  useEffect(() => { setPage(1); }, [resetKey, safeSize]);
+  useEffect(() => {
+    setPage(1);
+  }, [resetKey, safeSize]);
   const cur = totalPages === 0 ? 1 : Math.min(page, totalPages);
   const paged = dedupedData.length > safeSize ? dedupedData.slice((cur - 1) * safeSize, cur * safeSize) : dedupedData;
   const goToPage = useCallback((p: number) => setPage(Math.max(1, Math.min(p, safeTotal))), [safeTotal]);
@@ -37,7 +39,12 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
   const { t } = useTranslation();
   const [ownExpandedId, setOwnExpandedId] = useState<string | null>(null);
   const isExpandable = !!renderExpandedRow;
-  const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(data, getRowId, DEFAULT_PAGE_SIZE, resetKey);
+  const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(
+    data,
+    getRowId,
+    DEFAULT_PAGE_SIZE,
+    resetKey,
+  );
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,8 +59,18 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
   };
 
   const pagination =
-    totalPages > 1 ? <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} className="pt-2 self-center" /> : null;
-  const listProps: RowListProps<T> = { pagedData, columns, getRowId, isExpandable, expandedRowId: ownExpandedId, onToggleExpand: setOwnExpandedId, renderExpandedRow };
+    totalPages > 1 ? (
+      <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} className="pt-2 self-center" />
+    ) : null;
+  const listProps: RowListProps<T> = {
+    pagedData,
+    columns,
+    getRowId,
+    isExpandable,
+    expandedRowId: ownExpandedId,
+    onToggleExpand: setOwnExpandedId,
+    renderExpandedRow,
+  };
 
   return (
     <div ref={rootRef} className="flex flex-col gap-4">
@@ -81,4 +98,3 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
 }
 
 export const DataTable = memo(DataTableInner) as typeof DataTableInner;
-export type { RowListProps };

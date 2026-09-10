@@ -52,7 +52,6 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const comparedModels = useCompareModels(rankings);
 
   const avgCost = useMemo(() => {
-    // Prefer server precomputed default when calc is default and pricing unchanged
     const valid = monthlyCosts.filter((v): v is number => v != null);
     return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
   }, [monthlyCosts]);

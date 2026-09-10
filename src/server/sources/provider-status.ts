@@ -50,10 +50,24 @@ export interface ProviderStatusResult {
   error: string | null;
 }
 
-async function fetchStatuspage(
+/** Adapter turning a provider-specific parser into a uniform health verdict. */
+type HealthParse = (raw: unknown) => { ok: boolean; error: string };
+
+const parseStatuspageHealth: HealthParse = (raw) => {
+  const parsed = parseStatuspageSummary(raw);
+  return { ok: parsed.ok, error: `degraded: ${parsed.degradedComponents.slice(0, 3).join(", ")}` };
+};
+
+const parseGoogleCloudHealth: HealthParse = (raw) => {
+  const parsed = parseGoogleCloudIncidents(raw);
+  return { ok: parsed.ok, error: `open incidents: ${parsed.openIncidents.slice(0, 3).join("; ")}` };
+};
+
+async function fetchProviderHealth(
   ctx: AppContext,
   url: string,
   label: string,
+  parse: HealthParse,
 ): Promise<ProviderStatusResult | null> {
   const started = Date.now();
   let raw: unknown;
@@ -68,14 +82,9 @@ async function fetchStatuspage(
   }
   const latencyMs = Date.now() - started;
   try {
-    const parsed = parseStatuspageSummary(raw);
+    const parsed = parse(raw);
     if (parsed.ok) return { ok: true, status: 200, latencyMs, error: null };
-    return {
-      ok: false,
-      status: 200,
-      latencyMs,
-      error: `degraded: ${parsed.degradedComponents.slice(0, 3).join(", ")}`,
-    };
+    return { ok: false, status: 200, latencyMs, error: parsed.error };
   } catch (err) {
     // Got a payload we can't parse: our parser is outdated, not proof the
     // provider is down. Same unknown handling as a fetch failure.
@@ -108,31 +117,6 @@ export function parseGoogleCloudIncidents(raw: unknown): { ok: boolean; openInci
   return { ok: openIncidents.length === 0, openIncidents };
 }
 
-async function fetchGoogleCloudStatus(ctx: AppContext): Promise<ProviderStatusResult | null> {
-  const started = Date.now();
-  let raw: unknown;
-  try {
-    raw = await ctx.http.json<unknown>(GOOGLE_CLOUD_STATUS_URL, UPSTREAM_FETCH_OPTS);
-  } catch (err) {
-    ctx.log("warn", `[provider-status] google-cloud fetch failed: ${errMsg(err)}`);
-    return null;
-  }
-  const latencyMs = Date.now() - started;
-  try {
-    const parsed = parseGoogleCloudIncidents(raw);
-    if (parsed.ok) return { ok: true, status: 200, latencyMs, error: null };
-    return {
-      ok: false,
-      status: 200,
-      latencyMs,
-      error: `open incidents: ${parsed.openIncidents.slice(0, 3).join("; ")}`,
-    };
-  } catch (err) {
-    ctx.log("warn", `[provider-status] google-cloud parse failed: ${errMsg(err)}`);
-    return null;
-  }
-}
-
 const OPENAI_STATUS_URL = "https://status.openai.com/api/v2/summary.json";
 const CLAUDE_STATUS_URL = "https://status.claude.com/api/v2/summary.json";
 const GOOGLE_CLOUD_STATUS_URL = "https://status.cloud.google.com/incidents.json";
@@ -154,25 +138,28 @@ export type ProviderStatusId =
   | "deepseekApi"
   | "moonshotApi";
 
-export const PROVIDER_STATUS_TARGETS: readonly { id: ProviderStatusId; url: string; label: string }[] = [
-  { id: "openaiApi", url: OPENAI_STATUS_URL, label: "openai" },
-  { id: "anthropicApi", url: CLAUDE_STATUS_URL, label: "anthropic" },
-  { id: "googleCloudApi", url: GOOGLE_CLOUD_STATUS_URL, label: "google-cloud" },
-  { id: "groqApi", url: GROQ_STATUS_URL, label: "groq" },
-  { id: "cohereApi", url: COHERE_STATUS_URL, label: "cohere" },
-  { id: "fireworksApi", url: FIREWORKS_STATUS_URL, label: "fireworks" },
-  { id: "cerebrasApi", url: CEREBRAS_STATUS_URL, label: "cerebras" },
-  { id: "deepseekApi", url: DEEPSEEK_STATUS_URL, label: "deepseek" },
-  { id: "moonshotApi", url: MOONSHOT_STATUS_URL, label: "moonshot" },
+const PROVIDER_STATUS_TARGETS: readonly {
+  id: ProviderStatusId;
+  url: string;
+  label: string;
+  parse: HealthParse;
+}[] = [
+  { id: "openaiApi", url: OPENAI_STATUS_URL, label: "openai", parse: parseStatuspageHealth },
+  { id: "anthropicApi", url: CLAUDE_STATUS_URL, label: "anthropic", parse: parseStatuspageHealth },
+  { id: "googleCloudApi", url: GOOGLE_CLOUD_STATUS_URL, label: "google-cloud", parse: parseGoogleCloudHealth },
+  { id: "groqApi", url: GROQ_STATUS_URL, label: "groq", parse: parseStatuspageHealth },
+  { id: "cohereApi", url: COHERE_STATUS_URL, label: "cohere", parse: parseStatuspageHealth },
+  { id: "fireworksApi", url: FIREWORKS_STATUS_URL, label: "fireworks", parse: parseStatuspageHealth },
+  { id: "cerebrasApi", url: CEREBRAS_STATUS_URL, label: "cerebras", parse: parseStatuspageHealth },
+  { id: "deepseekApi", url: DEEPSEEK_STATUS_URL, label: "deepseek", parse: parseStatuspageHealth },
+  { id: "moonshotApi", url: MOONSHOT_STATUS_URL, label: "moonshot", parse: parseStatuspageHealth },
 ];
 
 export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<ProviderStatusId, ProviderStatusResult>> {
   const settled = await runCapped(
     PROVIDER_STATUS_TARGETS.map(
       (target) => () =>
-        target.id === "googleCloudApi"
-          ? fetchGoogleCloudStatus(ctx).then((result) => [target.id, result] as const)
-          : fetchStatuspage(ctx, target.url, target.label).then((result) => [target.id, result] as const),
+        fetchProviderHealth(ctx, target.url, target.label, target.parse).then((result) => [target.id, result] as const),
     ),
     3,
   );

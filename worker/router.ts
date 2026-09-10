@@ -1,7 +1,6 @@
 import type { Env } from "@/server/context";
-import { handleApiRoute } from "@/server/routes/define-route";
-import type { QuerySchema, ValidatedQuery } from "@/server/infra/validation";
-import type { AppContext } from "@/server/context";
+import { handleApiRoute, type ApiRouteDef } from "@/server/routes/define-route";
+import type { QuerySchema } from "@/server/infra/validation";
 import { apiPaths, MAX_MODEL_LIMIT, OPEN_SOURCE_MODELS_DEFAULTS, NEWS_CATEGORIES } from "@/shared/config";
 import { qEnum, qNum, qStr } from "@/server/infra/validation";
 import { ValidationError } from "@/server/infra/errors";
@@ -14,13 +13,6 @@ import { getOfficialPricing } from "@/server/sources/pricing";
 import { getModelById, getModels, getReleases } from "@/server/sources/huggingface";
 import { getOpenRouterRankings } from "@/server/sources/openrouter";
 import { getStatusHistory } from "@/server/sources/status-history";
-
-export interface ApiRouteDef<S extends QuerySchema = QuerySchema> {
-  query?: S;
-  noStore?: boolean;
-  cache?: { browser: string; cdn: string };
-  handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<unknown>;
-}
 
 interface ApiRoute {
   path: string;

@@ -3,7 +3,7 @@ import { memo, type Ref } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
 
-export const buttonVariants = cva(
+const buttonVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary",
   {
     variants: {

@@ -3,7 +3,8 @@ import { DEFAULT_TTL_MS, ttlFor } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { parseRscPayloads, findNextData } from "@/server/parsers/rsc";
-import { UpstreamError } from "@/server/infra/errors";
+import { zeroUpstream } from "@/server/infra/errors";
+import { byNumberDesc } from "@/server/parsers/shaping";
 import { hasCatalogIdentity, isValidModelIdentity } from "@/server/sources/data-filter";
 import { obj, str } from "@/server/parsers/primitives";
 import { getModelDirectory } from "@/server/sources/openrouter/directory";
@@ -70,7 +71,7 @@ export function buildWeightsRecord(models: ArtificialAnalysisModel[]): Record<st
   return record;
 }
 
-export async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceIndexResult> {
+async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceIndexResult> {
   const [indexBody, [modelsPageModels, omniscienceEnrich], openRouterMeta] = await Promise.all([
     fetchAaRsc(ctx, INDEX_PATH),
     Promise.all([
@@ -107,15 +108,12 @@ export async function fetchIntelligenceIndex(ctx: AppContext): Promise<Intellige
   // Served in full: detail pages, search and the weights lookup resolve
   // against this list, so truncating it would lose content.
   const weights = buildWeightsRecord(merged);
-  const models = merged.sort((a, b) => {
-    const av = a.intelligence_index ?? Number.NEGATIVE_INFINITY;
-    const bv = b.intelligence_index ?? Number.NEGATIVE_INFINITY;
-    if (!Number.isFinite(av) && !Number.isFinite(bv)) return 0;
-    return bv - av;
-  });
+  const models = merged.sort(byNumberDesc((m) => m.intelligence_index));
   if (models.length === 0) {
-    throw new UpstreamError(
-      `Artificial Analysis parsing yielded 0 models (catalog=${catalog.length}, kept=0, enrichFailures=${enrichFailures})`,
+    throw zeroUpstream(
+      "Artificial Analysis parsing",
+      "models",
+      `catalog=${catalog.length}, kept=0, enrichFailures=${enrichFailures}`,
     );
   }
   const backfilled = backfillFromMeta(models, openRouterMeta);

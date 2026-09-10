@@ -26,16 +26,29 @@ export function TableHeader<T>({ columns, isExpandable }: { columns: DataTableCo
     </thead>
   );
 }
-export { cellClasses, cellInnerClasses };
 
-function TableBodyInner<T>({ pagedData, columns, getRowId, isExpandable, expandedRowId, onToggleExpand, renderExpandedRow }: RowListProps<T>) {
+function TableBodyInner<T>({
+  pagedData,
+  columns,
+  getRowId,
+  isExpandable,
+  expandedRowId,
+  onToggleExpand,
+  renderExpandedRow,
+}: RowListProps<T>) {
   return (
     <tbody>
       {pagedData.map((row) => {
         const { rowId, isExpanded, toggle } = getRowExpandState(row, getRowId, expandedRowId, onToggleExpand);
         return (
           <Fragment key={rowId}>
-            <tr className={cn("border-b border-border last:border-b-0 transition-colors bg-bg-card", "hover:bg-hover", isExpanded && "bg-accent-light")}>
+            <tr
+              className={cn(
+                "border-b border-border last:border-b-0 transition-colors bg-bg-card",
+                "hover:bg-hover",
+                isExpanded && "bg-accent-light",
+              )}
+            >
               {columns.map((col, colIdx) => (
                 <td key={col.id} className={cellClasses(col)} style={{ width: col.width }}>
                   <div className={cellInnerClasses(col)}>

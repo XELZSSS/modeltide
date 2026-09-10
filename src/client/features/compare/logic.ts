@@ -15,6 +15,9 @@ export interface CompareRow<T> {
 
 export type Winner = "win" | "loss";
 
+/** Row identity used by both winner computation and table keys — keep in one place. */
+export const rowKey = <T>(row: CompareRow<T>): string => row.id ?? row.label;
+
 export function computeWinners<T>(
   rows: CompareRow<T>[],
   models: T[],
@@ -25,7 +28,7 @@ export function computeWinners<T>(
   for (const row of rows) {
     const accessor = row.getNumeric;
     if (!accessor || !row.bestIs) continue;
-    const rowKey = row.id ?? row.label;
+    const rowKeyStr = rowKey(row);
     const values = models
       .map((model, index) => ({ key: getKey(model, index), val: accessor(model) }))
       .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val))
@@ -40,7 +43,7 @@ export function computeWinners<T>(
         row.worstIs === "min" ? Math.min(...values.map((v) => v.val)) : Math.max(...values.map((v) => v.val));
       for (const v of values) if (!perModel.has(v.key) && approxEq(v.val, worst)) perModel.set(v.key, "loss");
     }
-    winners.set(rowKey, perModel);
+    winners.set(rowKeyStr, perModel);
   }
   return winners;
 }

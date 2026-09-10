@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { decodeEntities } from "@/server/parsers/entities";
 import { stripHtml } from "@/server/parsers/html";
 import { parseFeed } from "@/server/parsers/feed";
-import { balancedJsonEnd, findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc";
+import {
+  balancedJsonEnd,
+  findNextData,
+  findLongestData,
+  parseRscPayload,
+  parseRscPayloads,
+} from "@/server/parsers/rsc";
 import { getOpenLicense } from "@/server/parsers/licenses";
 import {
   isoDate,

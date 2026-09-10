@@ -11,14 +11,19 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { PageContainer, PageHeader } from "@/client/components/layout";
 
-function useComparedModelsOrNull(): ArtificialAnalysisModel[] | null {
+function useComparedRankings(): {
+  compared: ArtificialAnalysisModel[] | null;
+  isError: boolean;
+  refetch: () => void;
+} {
   const rankingsQ = useArtificialRankings();
   const models = useCompareModels(rankingsQ.data);
-  return useMemo(() => {
+  const compared = useMemo(() => {
     if (rankingsQ.isError) return [];
     if (rankingsQ.isPending) return null;
     return models;
   }, [rankingsQ.isPending, rankingsQ.isError, models]);
+  return { compared, isError: rankingsQ.isError, refetch: rankingsQ.refetch };
 }
 
 interface ComparePageLayoutProps {
@@ -30,19 +35,17 @@ interface ComparePageLayoutProps {
 
 export function ComparePageLayout({ backLabelKey, backTo, title, children }: ComparePageLayoutProps) {
   const router = useRouter();
-  const navigate = (to: string) => router.push(to);
   const { t } = useTranslation();
   const removeCompareModel = useCompareStore((s) => s.removeCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
   const compareIds = useCompareStore((s) => s.compareIds);
-  const models = useComparedModelsOrNull();
-  const { isError: rankingsFailed, refetch: refetchRankings } = useArtificialRankings();
+  const { compared: models, isError: rankingsFailed, refetch: refetchRankings } = useComparedRankings();
   const pruned = compareIds.length > (models?.length ?? 0);
   const handleClearAndBack = useCallback(() => {
     clearCompare();
-    navigate(backTo);
-  }, [clearCompare, navigate, backTo]);
-  const handleBack = useCallback(() => navigate(backTo), [navigate, backTo]);
+    router.push(backTo);
+  }, [clearCompare, router, backTo]);
+  const handleBack = useCallback(() => router.push(backTo), [router, backTo]);
 
   if (models === null) return <Spinner />;
 

@@ -35,7 +35,7 @@ export const MAX_RSC_BYTES = 5 * 1024 * 1024;
 export const MAX_RSC_LINE_CHARS = 2 * 1024 * 1024;
 export const MAX_SCAN_CHARS = 8_000_000;
 const MAX_OVERSIZED_WORK_CHARS = MAX_SCAN_CHARS;
-export const MAX_OVERSIZED_WINDOWS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
+const MAX_OVERSIZED_WINDOWS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
 export const STREAM_LINE_RE = /^[0-9a-fA-F]+:(.*)$/;
 
 export function isMarkerBoundary(line: string, marker: string): boolean {
@@ -99,12 +99,7 @@ function collectNeedlePositions(
   return positions;
 }
 
-function parseBalancedMarkerValue(
-  line: string,
-  idx: number,
-  marker: string,
-  budgetChars: number,
-): string | null {
+function parseBalancedMarkerValue(line: string, idx: number, marker: string, budgetChars: number): string | null {
   if (budgetChars <= 0) return null;
   const needle = `"${marker}"`;
   const colonAt = line.indexOf(":", idx + needle.length);
@@ -188,4 +183,114 @@ export function scanOversizedMarkers<T>(
     }
   }
   return results.filter(Boolean).length - before;
+}
+
+// ── Needle-window JSON array extraction (HTML pages with embedded payloads) ──
+
+export interface NeedleScanOptions {
+  /** Context kept before each needle hit when building a scan window. */
+  prefixChars: number;
+  /** First-attempt suffix window; covers typical payload sizes cheaply. */
+  smallSuffixChars: number;
+  /** Fallback suffix window when the array does not close inside the small one. */
+  maxSuffixChars: number;
+  /** Unescape `\"`/`\\` before scanning (flight-embedded JSON-in-JSON strings). */
+  unescape?: boolean;
+}
+
+interface NeedleCandidate {
+  start: number;
+  valueAt: number;
+}
+
+function unescapeEmbedded(window: string): string {
+  // Skip the regex pass entirely when the window has no escapes at all
+  // (the common case for non-embedded payloads).
+  if (!window.includes("\\")) return window;
+  return window.replace(/\\(.)/g, (m, c: string) => (c === '"' ? '"' : c === "\\" ? "\\" : m));
+}
+
+function collectNeedleCandidates(text: string, locators: readonly string[]): NeedleCandidate[] {
+  const candidates: NeedleCandidate[] = [];
+  for (const locator of locators) {
+    let from = 0;
+    for (;;) {
+      const at = text.indexOf(locator, from);
+      if (at === -1) break;
+      from = at + 1;
+      let c = at + locator.length;
+      while (c < text.length && /\s/.test(text[c]!)) c++;
+      if (text[c] !== ":") continue;
+      c++;
+      while (c < text.length && /\s/.test(text[c]!)) c++;
+      candidates.push({ start: at, valueAt: c });
+    }
+  }
+  return candidates.sort((a, b) => a.start - b.start);
+}
+
+function parseJsonArrayAt(window: string, openAt: number, found: unknown[]): boolean {
+  const end = balancedJsonEnd(window, openAt, MAX_SCAN_CHARS);
+  if (end === -1) return false;
+  try {
+    found.push(JSON.parse(window.slice(openAt, end)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function scanNeedleWindow(window: string, needle: string, unescape: boolean, found: unknown[]): boolean {
+  const haystack = unescape ? unescapeEmbedded(window) : window;
+  // Try every needle occurrence inside the window, not just the first: decoy
+  // keys (non-array values) may precede the real payload, and a first-hit-only
+  // scan would bail before reaching it.
+  let parsed = false;
+  let at = haystack.indexOf(needle);
+  while (at !== -1) {
+    let c = at + needle.length;
+    while (c < haystack.length && /\s/.test(haystack[c]!)) c++;
+    if (haystack[c] === ":") {
+      c++;
+      while (c < haystack.length && /\s/.test(haystack[c]!)) c++;
+      if (haystack[c] === "[" && parseJsonArrayAt(haystack, c, found)) parsed = true;
+    }
+    at = haystack.indexOf(needle, at + needle.length);
+  }
+  return parsed;
+}
+
+/**
+ * Extract every JSON array that sits at `<needle> : [...]` inside a text page,
+ * in both plain and flight-escaped (`\"needle\"`) forms. Two-stage windows:
+ * try a small suffix first (typical payloads), fall back to the full window
+ * only when the array does not close inside it. Raw-text rejects non-`[` values
+ * before any window slicing; JSON.parse failures are swallowed per candidate.
+ */
+export function extractNeedleJsonArrays(text: string, needle: string, opts: NeedleScanOptions): unknown[] {
+  const found: unknown[] = [];
+  const escaped = needle.replace(/"/g, '\\"');
+  const locators = escaped === needle ? [needle] : [needle, escaped];
+  for (const { start, valueAt } of collectNeedleCandidates(text, locators)) {
+    // Cheap raw-text reject: in both plain and flight-escaped forms the array
+    // bracket is never escaped, so a non-`[` value can be skipped first.
+    if (text[valueAt] !== "[") continue;
+    const windowStart = Math.max(0, start - opts.prefixChars);
+    if (
+      !scanNeedleWindow(
+        text.slice(windowStart, Math.min(text.length, start + opts.smallSuffixChars)),
+        needle,
+        opts.unescape === true,
+        found,
+      )
+    ) {
+      scanNeedleWindow(
+        text.slice(windowStart, Math.min(text.length, start + opts.maxSuffixChars)),
+        needle,
+        opts.unescape === true,
+        found,
+      );
+    }
+  }
+  return found;
 }

@@ -57,12 +57,11 @@ function compactPricing(m: Record<string, unknown>): ModelPricing | undefined {
 
 function defaultMonthlyCost(pricing: ModelPricing | undefined): number | null {
   if (!pricing || typeof pricing.input !== "number" || typeof pricing.output !== "number") return null;
-  if (!Number.isFinite(pricing.input) || !Number.isFinite(pricing.output)) return null;
   const hitRate = 0.5;
-  const hasWrite = typeof pricing.cacheWrite === "number" && Number.isFinite(pricing.cacheWrite);
+  const hasWrite = typeof pricing.cacheWrite === "number";
   const writeRate = hasWrite ? Math.min(0.05, 1 - hitRate) : 0;
   const freshRate = 1 - hitRate - writeRate;
-  const cached = typeof pricing.cacheHit === "number" && Number.isFinite(pricing.cacheHit) ? pricing.cacheHit! : pricing.input;
+  const cached = typeof pricing.cacheHit === "number" ? pricing.cacheHit : pricing.input;
   const writeLeg = hasWrite ? writeRate * pricing.cacheWrite! : 0;
   const inputRate = hitRate * cached + writeLeg + freshRate * pricing.input;
   const daily = 2 * inputRate + 3 * pricing.output;

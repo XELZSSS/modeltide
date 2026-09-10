@@ -1,6 +1,6 @@
 import type { BenchmarkKey } from "@/shared/config/benchmarks";
 
-export interface ModelCreators {
+interface ModelCreators {
   name?: string;
   color?: string;
 }
@@ -12,7 +12,7 @@ export interface ModelPricing {
   cacheWrite?: number | null;
 }
 
-export interface ModelSpeed {
+interface ModelSpeed {
   median_output_speed?: number | null;
 }
 

@@ -24,7 +24,7 @@ export function normalizeModelKey(raw: string): string {
     .join("");
 }
 
-export function foldSearchStr(raw: string): string {
+function foldSearchStr(raw: string): string {
   return raw.toLowerCase().trim().replace(/\s+/g, " ");
 }
 

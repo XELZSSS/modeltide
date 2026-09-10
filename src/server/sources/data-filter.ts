@@ -129,14 +129,17 @@ export function isOpenReleaseEntry(m: { license: string | null; createdAt: strin
   return true;
 }
 
+// Titles are truncated to feed.ts's MAX_TITLE_CHARS (300) after this gate; the
+// gate admits up to 500 so pre-truncation titles aren't dropped outright.
 const MAX_NEWS_TITLE_CHARS = 300;
+const MAX_NEWS_TITLE_INPUT_CHARS = MAX_NEWS_TITLE_CHARS + 200;
 
 export function isSuitableNewsItem(title: unknown, link: unknown): boolean {
   if (typeof title !== "string" || typeof link !== "string") return false;
   const t = title.trim();
   const l = link.trim();
   if (!t || !l) return false;
-  if (t.length > MAX_NEWS_TITLE_CHARS + 200) return false;
+  if (t.length > MAX_NEWS_TITLE_INPUT_CHARS) return false;
   if (isPlaceholderText(t) || hasGarbageChars(t)) return false;
   if (NEWS_TITLE_BAD_RE.test(t)) return false;
   if (!isValidHttpUrl(l)) return false;
@@ -147,8 +150,9 @@ export function filterMapDedupe<T, R>(
   items: T[],
   mapFn: (item: T) => R | null,
   keyFn: (item: R) => string | null | undefined,
-  compare?: (a: R, b: R) => number,
 ): R[] {
-  const mapped = items.map(mapFn).filter((m): m is R => m !== null);
-  return dedupeBy(compare ? [...mapped].sort(compare) : mapped, keyFn);
+  return dedupeBy(
+    items.map(mapFn).filter((m): m is R => m !== null),
+    keyFn,
+  );
 }

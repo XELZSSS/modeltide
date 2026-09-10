@@ -1,12 +1,12 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-export interface BeforeInstallPromptEvent extends Event {
+interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 }
 
-export function isBeforeInstallPromptEvent(event: Event): event is BeforeInstallPromptEvent {
+function isBeforeInstallPromptEvent(event: Event): event is BeforeInstallPromptEvent {
   const candidate = event as Partial<BeforeInstallPromptEvent>;
   return typeof candidate.prompt === "function" && candidate.userChoice instanceof Promise;
 }
@@ -45,7 +45,7 @@ export function useOnlineStatus(): boolean {
   );
 }
 
-export type InstallOutcome = "accepted" | "dismissed" | "unavailable";
+type InstallOutcome = "accepted" | "dismissed" | "unavailable";
 
 export interface PwaInstallState {
   canInstall: boolean;

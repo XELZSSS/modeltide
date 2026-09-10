@@ -106,9 +106,3 @@ export async function handleApiRoute<S extends QuerySchema>(
     return mapApiError(err, req.method, path);
   }
 }
-
-export function handleOptions(): Response {
-  const headers = new Headers();
-  applyApiHeaders(headers);
-  return new Response(null, { status: 204, headers });
-}

@@ -40,7 +40,7 @@ function syncDocumentMeta(lang: Lang) {
   }
 }
 
-export function I18nProvider({ children }: { children: ReactNode }) {
+function I18nProvider({ children }: { children: ReactNode }) {
   const lang = useSettingsStore((s) => s.lang);
   const toggleLang = useSettingsStore((s) => s.toggleLang);
   const setLang = useSettingsStore((s) => s.setLang);
@@ -91,7 +91,7 @@ interface DeviceContextValue {
 
 const DeviceContext = createContext<DeviceContextValue | null>(null);
 
-export function DeviceProvider({ children }: { children: ReactNode }) {
+function DeviceProvider({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile(MOBILE_BREAKPOINT);
   const value = useMemo(() => ({ isMobile }), [isMobile]);
   return <DeviceContext.Provider value={value}>{children}</DeviceContext.Provider>;

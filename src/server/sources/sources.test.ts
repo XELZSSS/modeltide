@@ -233,12 +233,11 @@ describe("mapEntry (text-to-image)", () => {
     price: 211,
   };
 
-  it("maps direct elo, the CI pair and price with a null rank", () => {
+  it("maps direct elo, the CI pair and price", () => {
     expect(mapEntry(base)).toMatchObject({
       id: "9570e1d0-a390-48c1-a270-1317570fe3d5",
       slug: "gpt-image-2",
       name: "GPT Image 2 (high)",
-      rank: null,
       elo: 1178.11,
       eloLower: 1168.11,
       eloUpper: 1188.11,
@@ -1124,7 +1123,7 @@ describe("getModels empty-result TTL", () => {
   it("throws on empty results so stale cache is served instead of poisoning the key", async () => {
     const { ctx } = hfCtx([]);
     await expect(getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 500 })).rejects.toThrow(
-      "no usable models",
+      "0 usable models",
     );
   });
 

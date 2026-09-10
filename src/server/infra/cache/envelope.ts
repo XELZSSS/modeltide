@@ -1,7 +1,7 @@
 import { ONE_DAY } from "@/shared/config";
 
-export const STALE_WINDOW_MS = ONE_DAY;
-export const MAX_STALE_EXTRA_MS = 60 * 60_000;
+const STALE_WINDOW_MS = ONE_DAY;
+const MAX_STALE_EXTRA_MS = 60 * 60_000;
 
 export function maxStaleMs(ttl: number): number {
   if (!Number.isFinite(ttl) || ttl <= 0) return MAX_STALE_EXTRA_MS;

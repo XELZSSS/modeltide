@@ -109,8 +109,6 @@ export const zh = {
   tokensPerSecond: "tok/秒",
   unknown: "未知",
 
-  votes: "票数",
-
   textToImage: "文生图排行",
   bestT2IModel: "最佳文生图模型",
   bestReasoningModel: "最佳推理模型",
@@ -266,7 +264,6 @@ export const zh = {
   agentRankings: "智能体",
   agentSource: "数据来源：Arena",
 
-  preliminary: "初步结果",
   score: "分数",
   officialPricing: "LiteLLM 定价",
   officialVsRouter: "LiteLLM vs OpenRouter",

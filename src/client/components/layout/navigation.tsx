@@ -15,7 +15,7 @@ interface NavItem {
   matchPrefix?: string[];
 }
 
-export function useNavigation() {
+function useNavigation() {
   const { t } = useTranslation();
   return useMemo(() => {
     const primary: NavItem[] = [
@@ -57,10 +57,6 @@ function usePrefetch(): (path: string) => void {
  * Pending route-transition feedback is a next/link useLinkStatus feature with
  * no equivalent in the dependency-free router; the label renders statically.
  */
-function PendingOpacity({ children }: { children: ReactNode }) {
-  return <span>{children}</span>;
-}
-
 interface DesktopNavProps {
   onSettingsOpen: () => void;
 }
@@ -96,7 +92,7 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
                   active ? "text-accent bg-accent-light" : "text-text-secondary hover:text-text-primary hover:bg-hover"
                 }`}
               >
-                <PendingOpacity>{item.label}</PendingOpacity>
+                {item.label}
               </Link>
             );
           })}
@@ -178,9 +174,7 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
             className={`${MOBILE_BAR_BUTTON} ${active ? "text-accent" : "text-text-secondary"}`}
           >
             {item.icon}
-            <span>
-              <PendingOpacity>{item.label}</PendingOpacity>
-            </span>
+            <span>{item.label}</span>
           </Link>
         );
       })}
@@ -246,9 +240,7 @@ function NavRow({
     >
       <span className="flex items-center gap-2 min-w-0">
         <span className={active ? "text-accent shrink-0" : "text-text-secondary shrink-0"}>{item.icon}</span>
-        <span className="text-sm">
-          <PendingOpacity>{item.label}</PendingOpacity>
-        </span>
+        <span className="text-sm">{item.label}</span>
       </span>
       <ChevronRight size={16} className="text-text-tertiary shrink-0" aria-hidden="true" />
     </Link>

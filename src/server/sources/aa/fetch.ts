@@ -1,21 +1,16 @@
 import type { AppContext } from "@/server/context";
-import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
+import { upstreamConfig } from "@/server/config";
 import { findNextData, parseRscPayload } from "@/server/parsers/rsc";
 import { isNonEmptyString } from "@/server/sources/data-filter";
 import { errMsg } from "@/server/infra/pool";
-
-export const RSC_HEADERS = { RSC: "1", "Next-Router-State-Tree": "%5B%5D" } as const;
+import { fetchRscText } from "@/server/sources/rsc-fetch";
 
 export const INDEX_PATH = "/evaluations/artificial-analysis-intelligence-index";
 export const MODELS_PATH = "/models";
 export const OMNISCIENCE_PATH = "/evaluations/omniscience";
 
 export async function fetchAaRsc(ctx: AppContext, path: string, retries = 1): Promise<string> {
-  return ctx.http.text(`${upstreamConfig.artificialAnalysis}${path}`, {
-    headers: { ...RSC_HEADERS },
-    retries,
-    timeoutMs: UPSTREAM_FETCH_OPTS.timeoutMs,
-  });
+  return fetchRscText(ctx, upstreamConfig.artificialAnalysis, path, { retries });
 }
 
 function isModelArray(arr: unknown): arr is Record<string, unknown>[] {

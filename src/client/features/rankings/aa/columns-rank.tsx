@@ -25,7 +25,7 @@ function scoreColumn(
       const value = accessor(model);
       return value == null ? null : formatScore(t, value);
     },
-    t("notAvailable"),
+    t,
     opts,
   );
 }

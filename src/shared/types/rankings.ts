@@ -1,4 +1,4 @@
-export type OpenRouterCategory = "coding" | "reasoning" | "general";
+type OpenRouterCategory = "coding" | "reasoning" | "general";
 
 export interface OpenRouterRankEntry {
   rank: number;

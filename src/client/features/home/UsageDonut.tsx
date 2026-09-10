@@ -62,7 +62,10 @@ export const UsageDonut = memo(function UsageDonut({ models }: { models: { task:
         <p className="ui-card-title mb-1">{t("opensourceTaskShare")}</p>
         <p className="ui-caption mb-4">{t("openSourceDataSource")}</p>
         {slices.length === 0 ? (
-          <div className="flex min-h-[200px] h-[200px] sm:h-[240px] flex-1 items-center justify-center text-center ui-body-secondary" role="status">
+          <div
+            className="flex min-h-[200px] h-[200px] sm:h-[240px] flex-1 items-center justify-center text-center ui-body-secondary"
+            role="status"
+          >
             {t("notAvailable")}
           </div>
         ) : (

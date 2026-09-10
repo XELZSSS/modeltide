@@ -11,7 +11,7 @@ import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
 import { useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
 import { CostEstimatorInputs } from "@/client/features/pricing/inputs";
 import { useOfficialPricing } from "@/client/features/pricing/official";
-import { WinnerMark } from "@/client/features/compare/price-compare/price-table";
+import { WinnerMark } from "@/client/features/compare/CompareTable";
 
 export const CostEstimator = memo(function CostEstimator({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();

@@ -14,7 +14,7 @@ import {
   type SourceId,
 } from "@/server/sources/status/windows";
 
-export const MAX_EVENTS = 50;
+const MAX_EVENTS = 50;
 
 function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now: number): SourceHistorySummary {
   const last = entry.recent[entry.recent.length - 1];

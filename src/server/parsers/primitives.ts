@@ -1,4 +1,4 @@
-import { isFiniteNumber } from "@/shared/utils";
+import { isFiniteNumber, toStringOrNull } from "@/shared/utils";
 
 export const num = (v: unknown): number | null => (isFiniteNumber(v) ? v : null);
 
@@ -8,10 +8,6 @@ export const numCoerce = (v: unknown): number | null => {
     const trimmed = v.trim();
     if (!trimmed) return null;
     const n = Number(trimmed);
-    return Number.isFinite(n) ? n : null;
-  }
-  if (typeof v === "bigint") {
-    const n = Number(v);
     return Number.isFinite(n) ? n : null;
   }
   return null;
@@ -32,9 +28,14 @@ export const isoDate = (v: unknown): string | null => {
   return trimmed;
 };
 
+// String accessors: `str` keeps the raw value (" for non-strings, no trim) for
+// display-ish fields; `strOrNull` trims and nulls out empty/non-strings — use
+// it for identity fields (ids, slugs, names) where "" must not masquerade as a
+// value.
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 export const strOr = (v: unknown): string | null | undefined => (v == null ? v : typeof v === "string" ? v : undefined);
+export const strOrNull = toStringOrNull;
 export const bool = (v: unknown): boolean | undefined => (typeof v === "boolean" ? v : undefined);
 export const obj = (v: unknown): Record<string, unknown> | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;

@@ -9,10 +9,10 @@ export const upstreamConfig = {
   githubRaw: "https://raw.githubusercontent.com",
 } as const satisfies Record<string, string>;
 
-export const UPSTREAM_TIMEOUT_MS = 10_000;
 export const PROBE_TIMEOUT_MS = 8_000;
-export const RSS_TIMEOUT_MS = 7_000;
-export const LITELLM_TIMEOUT_MS = 15_000;
+const UPSTREAM_TIMEOUT_MS = 10_000;
+const RSS_TIMEOUT_MS = 7_000;
+const LITELLM_TIMEOUT_MS = 15_000;
 
 export const UPSTREAM_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
 

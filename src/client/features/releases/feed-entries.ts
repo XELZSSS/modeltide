@@ -16,7 +16,7 @@ export function parseReleaseTs(value: string): number | null {
   return Number.isFinite(ts) ? ts : null;
 }
 
-export function toReleaseDateStr(ts: number): string {
+function toReleaseDateStr(ts: number): string {
   const d = new Date(ts);
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");

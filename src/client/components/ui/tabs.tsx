@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
 import { SegmentedGroup } from "@/client/components/ui/grids";
 
-export const tabButtonVariants = cva(
+const tabButtonVariants = cva(
   "rounded-none font-medium transition-colors duration-150 whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1",
   {
     variants: {
@@ -41,7 +41,7 @@ function tabAriaProps(
   return { ...checked, tabIndex: tabIndex ?? 0 };
 }
 
-export const TabButton = memo(function TabButton({
+const TabButton = memo(function TabButton({
   active,
   onClick,
   children,

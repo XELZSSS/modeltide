@@ -7,6 +7,7 @@ import { isSuitableNewsItem } from "@/server/sources/data-filter";
 import { isRecord } from "@/server/parsers/primitives";
 import { decodeEntities } from "@/server/parsers/entities";
 import { stripHtml } from "@/server/parsers/html";
+import { zeroUpstream } from "@/server/infra/errors";
 import { SOURCE_LIMITS } from "@/shared/config";
 
 const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
@@ -104,8 +105,12 @@ export function parseFeed(xml: string, sourceUrl: string): NewsItem[] {
   if (bytes > MAX_FEED_BYTES) {
     throw new UpstreamError(`Feed too large at ${sourceUrl} (${bytes} bytes)`);
   }
-  const doctypeMatch = /<!DOCTYPE[^>[]*(\[[\s\S]{0,4096}?\])?/i.exec(xml.slice(0, 8192));
-  if (doctypeMatch && /<!ENTITY/i.test(doctypeMatch[0])) {
+  // Belt-and-suspenders: the parser runs with processEntities:false so entities
+  // are never expanded, but refuse entity-bearing DOCTYPEs outright. Bounded to
+  // the head because the entity path itself is inert.
+  const head = xml.slice(0, 8192);
+  const doctypeAt = head.search(/<!DOCTYPE/i);
+  if (doctypeAt !== -1 && /<!ENTITY/i.test(head.slice(doctypeAt))) {
     throw new UpstreamError(`Feed with entity-bearing DOCTYPE rejected at ${sourceUrl}`);
   }
   let parsed: unknown;
@@ -162,7 +167,7 @@ function parseChannel(feed: unknown, sourceUrl: string): NewsItem[] {
     .filter((x: NewsItem | null): x is NewsItem => x !== null)
     .slice(0, MAX_ITEMS_PER_FEED);
   if (parsed.length === 0) {
-    throw new UpstreamError(`Feed at ${sourceUrl} yielded 0 usable items (raw=${records.length}, kept=0)`);
+    throw zeroUpstream(`Feed at ${sourceUrl}`, "usable items", `raw=${records.length}, kept=0`);
   }
   return parsed;
 }

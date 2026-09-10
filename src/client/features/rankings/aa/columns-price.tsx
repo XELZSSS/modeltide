@@ -45,10 +45,8 @@ export function buildPricingColumns(
       <RightAlignedText>{row.model.model_creators?.name || t("notAvailable")}</RightAlignedText>
     )),
     pricingLegCol("cacheHitPrice", t("cacheHitPrice"), (eff) => eff.cacheHit, { hiddenMd: true }),
-    rightCol(
-      "blendedPrice",
-      t("blendedPrice"),
-      (row: PricingRow) => formatDollar(computeBlendPrice(getEff(row.model)), t),
+    rightCol("blendedPrice", t("blendedPrice"), (row: PricingRow) =>
+      formatDollar(computeBlendPrice(getEff(row.model)), t),
     ),
     pricingLegCol("promptPrice", t("promptPrice"), (eff) => eff.input, { hiddenMd: true }),
     pricingLegCol("completionPrice", t("completionPrice"), (eff) => eff.output, { hiddenMd: true }),

@@ -19,7 +19,7 @@ export function isAbortError(err: unknown): boolean {
 
 const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/+$/, "") ?? "";
 
-export function buildApiUrl(path: string): string {
+function buildApiUrl(path: string): string {
   return apiBase && path.startsWith("/") ? apiBase + path : path;
 }
 

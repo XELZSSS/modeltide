@@ -1,7 +1,7 @@
 import { computeBlendPrice, isFiniteNumber, normalizeModelKey } from "@/shared/utils";
 import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 
-export type PriceAuthority = "official" | "catalog";
+type PriceAuthority = "official" | "catalog";
 
 export interface EffectivePricing {
   input: number | null;

@@ -1,6 +1,5 @@
 "use client";
 import { memo, useMemo } from "react";
-import { TrendingDown, TrendingUp } from "lucide-react";
 import type { ChartOptions } from "chart.js";
 import { Radar } from "react-chartjs-2";
 import { registerRadar } from "@/client/utils/charts-register";
@@ -9,7 +8,6 @@ registerRadar();
 import { useTranslation } from "@/client/providers";
 import { useChartTheme } from "@/client/theme/chart-theme";
 import { Card, CardContent } from "@/client/components/ui/card";
-import { cn } from "@/client/utils/cn";
 import {
   axisTickStyle,
   chartBase,
@@ -20,38 +18,14 @@ import {
 } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { buildCompareRows, buildRadarData, radarMaxFor, type CompareRow } from "./logic";
-import { CompareTable, modelKeyOf, modelNameOf, useModelColorOf } from "./CompareTable";
-
-const WINNER_STYLE = {
-  win: { color: "var(--success)", Icon: TrendingUp },
-  loss: { color: "var(--destructive)", Icon: TrendingDown },
-} as const;
-
-const MetricValueDisplay = memo(function MetricValueDisplay({
-  value,
-  winner,
-}: {
-  value: string;
-  winner: "win" | "loss" | null;
-}) {
-  const style = winner ? WINNER_STYLE[winner] : undefined;
-  return (
-    <span
-      className={cn("font-mono tabular-nums", winner === "win" && "font-semibold")}
-      style={style && { color: style.color }}
-    >
-      {value}
-      {style && <style.Icon size={12} className="inline ml-0.5" style={{ color: style.color }} />}
-    </span>
-  );
-});
+import { CompareTable, WinnerValue } from "./CompareTable";
 
 function renderMetricValue(
   row: CompareRow<ArtificialAnalysisModel>,
   model: ArtificialAnalysisModel,
   winner: "win" | "loss" | null,
 ) {
-  return <MetricValueDisplay value={row.getValue?.(model) ?? ""} winner={winner} />;
+  return <WinnerValue value={row.getValue?.(model) ?? ""} winner={winner} />;
 }
 
 const MetricCompareTable = memo(function MetricCompareTable({
@@ -61,17 +35,7 @@ const MetricCompareTable = memo(function MetricCompareTable({
   rows: CompareRow<ArtificialAnalysisModel>[];
   models: ArtificialAnalysisModel[];
 }) {
-  const getColor = useModelColorOf();
-  return (
-    <CompareTable
-      rows={rows}
-      models={models}
-      getKey={modelKeyOf}
-      getName={modelNameOf}
-      getColor={getColor}
-      renderValue={renderMetricValue}
-    />
-  );
+  return <CompareTable rows={rows} models={models} renderValue={renderMetricValue} />;
 });
 
 export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }) {

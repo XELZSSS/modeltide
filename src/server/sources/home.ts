@@ -9,17 +9,23 @@ import { cacheKeys } from "@/server/config";
 import type { HomeDashboardData } from "@/shared/types";
 import type { SourcePayload } from "@/server/sources/types";
 
-export async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
+async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
   const [orRankingsRes, textToImageRes, opensourceRes] = await Promise.allSettled([
     getOpenRouterRankings(ctx),
     getTextToImageLeaderboard(ctx),
     getModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS }),
   ]);
-  const reasons = formatSettleErrors([orRankingsRes, textToImageRes, opensourceRes], ["openrouter", "textToImage", "opensource"]);
+  const reasons = formatSettleErrors(
+    [orRankingsRes, textToImageRes, opensourceRes],
+    ["openrouter", "textToImage", "opensource"],
+  );
   const orRankings = settled(orRankingsRes, null);
   const textToImage = settled(textToImageRes, null);
-  const opensource = settled(opensourceRes, null) as SourcePayload<import("@/shared/types").OpenSourceModelEntry[]> | null;
-  if (!orRankings && !textToImage && !opensource) throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`);
+  const opensource = settled(opensourceRes, null) as SourcePayload<
+    import("@/shared/types").OpenSourceModelEntry[]
+  > | null;
+  if (!orRankings && !textToImage && !opensource)
+    throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`);
   const partial = orRankings == null || textToImage == null || opensource == null;
   if (partial) ctx.log("warn", `[home] partial failure: ${reasons}`);
   return { orRankings, textToImage, opensource };
