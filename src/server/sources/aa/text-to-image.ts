@@ -1,55 +1,21 @@
 import type { AppContext } from "@/server/context";
 import { DEFAULT_TTL_MS } from "@/shared/config";
-import { cacheKeys } from "@/server/config";
+import { cacheKeys, upstreamEndpoints } from "@/server/config";
 import type { TextToImageModel, TextToImagePayload } from "@/shared/types";
 import { findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc";
 import { UpstreamError, zeroUpstream } from "@/server/infra/errors";
 import { errMsg } from "@/server/infra/pool";
 import { dedupeBy } from "@/shared/utils";
-import { num, numNonNegative, strOrNull } from "@/server/parsers/primitives";
-import { byNumberDesc, withRanks } from "@/server/parsers/shaping";
-import { isValidTextToImageEntry } from "@/server/sources/data-filter";
+import { byNumberDesc } from "@/server/parsers/shaping";
+import type { RawEntry } from "@/server/parsers/aa-text-to-image";
+import { mapEntry } from "@/server/parsers/aa-text-to-image";
 import { fetchAaRsc } from "@/server/sources/aa/fetch";
-
-export interface RawEntry {
-  id?: unknown;
-  slug?: unknown;
-  name?: unknown;
-  elo?: unknown;
-  lower95ci?: unknown;
-  upper95ci?: unknown;
-  price?: unknown;
-  creator?: unknown;
-}
-
-/** Parsed entry; `rank` is assigned from elo order in `getTextToImageLeaderboard`. */
-export function mapEntry(raw: RawEntry): Omit<TextToImageModel, "rank"> | null {
-  const id = strOrNull(raw.id);
-  const slug = strOrNull(raw.slug);
-  const name = strOrNull(raw.name);
-  const elo = num(raw.elo);
-  if (!isValidTextToImageEntry({ id, slug, name, elo })) return null;
-  const creator = raw.creator as Record<string, unknown> | null | undefined;
-
-  return {
-    id: id as string,
-    slug: slug as string,
-    name: (name as string).trim(),
-    elo: elo as number,
-    eloLower: num(raw.lower95ci),
-    eloUpper: num(raw.upper95ci),
-    pricePer1kImages: numNonNegative(raw.price),
-    creatorName: creator ? strOrNull(creator.name) : null,
-  };
-}
-
-export const TEXT_TO_IMAGE_PATH = "/image/models";
 
 export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImagePayload> =>
   ctx.cache.withTtl(cacheKeys.textToImage, DEFAULT_TTL_MS, async () => {
     let body: string;
     try {
-      body = await fetchAaRsc(ctx, TEXT_TO_IMAGE_PATH);
+      body = await fetchAaRsc(ctx, upstreamEndpoints.aaTextToImage);
     } catch (err) {
       throw new UpstreamError(`Text-to-image fetch failed: ${errMsg(err)}`);
     }
@@ -74,7 +40,7 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
       .filter((m): m is Omit<TextToImageModel, "rank"> => m !== null);
     const ranked = dedupeBy([...mapped].sort(byNumberDesc((m) => m.elo)), (m) => m.slug);
     // Upstream sends no rank: derive it from elo order.
-    const models: TextToImageModel[] = withRanks(ranked);
+    const models: TextToImageModel[] = ranked.map((m, i) => ({ ...m, rank: i + 1 }));
     if (models.length === 0) {
       throw zeroUpstream("Text-to-image", "models", `raw=${rawModels.length}, kept=0`);
     }

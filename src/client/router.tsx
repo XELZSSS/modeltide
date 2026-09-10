@@ -34,11 +34,12 @@ function subscribe(onChange: () => void): () => void {
   };
 }
 
-/** useRouter(): push/back are the only navigation APIs the app consumes. */
-export function useRouter(): { push: (to: string) => void; back: () => void } {
+/** useRouter(): push/replace/back cover every navigation the app consumes. */
+export function useRouter(): { push: (to: string) => void; replace: (to: string) => void; back: () => void } {
   return useMemo(
     () => ({
       push: (to: string) => navigate(to),
+      replace: (to: string) => navigate(to, true),
       back: () => window.history.back(),
     }),
     [],
@@ -85,6 +86,11 @@ export function useParams<T extends Record<string, string>>(pattern: string): T 
     const params: Record<string, string> = {};
     const patternParts = pattern.split("/").filter(Boolean);
     const pathParts = pathname.split("/").filter(Boolean);
+    // Lenient by design: static segments are NOT validated here. Callers are
+    // only rendered behind a pathname guard in main.tsx (startsWith), so a
+    // cross-route match (e.g. /status/x against /model/:source/*) can't occur
+    // in practice. Strict validation broke the "/" -> { wildcard: "" } case
+    // codified in client.test.ts.
     patternParts.forEach((seg, i) => {
       if (seg.startsWith(":")) {
         const value = pathParts[i];
@@ -118,6 +124,9 @@ export function SafeLink({
       onClick?.(e);
       if (e.defaultPrevented) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      const anchor = e.currentTarget as HTMLAnchorElement;
+      if (anchor.target && anchor.target !== "_self") return;
+      if (anchor.hasAttribute("download")) return;
       if (!href || href.startsWith("#") || href.startsWith("//")) return;
       const url = new URL(href, window.location.href);
       if (url.origin !== window.location.origin) return;

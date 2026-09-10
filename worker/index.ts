@@ -20,39 +20,55 @@ const SAMPLE_TIMEOUT_MS = 25_000;
 const WARM_CALL_TIMEOUT_MS = 45_000;
 const WARM_CONCURRENCY = 6;
 const PING_TIMEOUT_MS = 5_000;
+// Mirrors normalizeModelLimit buckets (shared/config/limits): one warmed KV
+// key per limit so the client's limit switcher never cold-starts on HF.
+const OPEN_SOURCE_MODEL_LIMIT_BUCKETS = [50, 100, 200, 500];
 
 // Dead-man's switch: Healthchecks.io (or compatible) alerts when pings stop
 // arriving. Covers the blind spot of never firing at all (config lost,
 // account issue) rather than firing and failing.
-async function pingCronMonitor(env: Env): Promise<void> {
+// On top of that, a firing-but-failing cron pings the /fail endpoint so a
+// fully-broken sampling/warmup round pages immediately instead of looking
+// healthy. Convention: success URL + "/fail" (Healthchecks-compatible).
+async function pingCronMonitor(env: Env, healthy: boolean): Promise<void> {
   const url = env.STATUS_PING_URL;
   if (!url) return;
+  const target = healthy ? url : url.endsWith("/") ? `${url}fail` : `${url}/fail`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(PING_TIMEOUT_MS) });
-    if (!res.ok) console.warn(`[cron-monitor] ping responded ${res.status}`);
+    const res = await fetch(target, { signal: AbortSignal.timeout(PING_TIMEOUT_MS) });
+    if (!res.ok) console.warn(`[cron-monitor] ping responded ${res.status} (healthy=${healthy})`);
   } catch (err) {
     console.warn(`[cron-monitor] ping failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
-async function scheduledTask(env: Env, fireMinuteUtc: number): Promise<void> {
-  if (!env.CACHE) return;
-  const sampleJob = (async (): Promise<void> => {
+interface ScheduledResult {
+  sampled: boolean | null;
+  warmFailed: number;
+  warmTotal: number;
+  healthy: boolean;
+}
+
+async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: number): Promise<ScheduledResult> {
+  if (!env.CACHE) return { sampled: null, warmFailed: 0, warmTotal: 0, healthy: true };
+  const sampleJob = (async (): Promise<boolean | null> => {
     try {
-      await recordStatusSamples(buildContext(env, { signal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
+      return await recordStatusSamples(buildContext(env, { signal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
     } catch (err) {
       console.warn(`[status-history] sampling failed: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
     }
   })();
   // Warmup: directly invoke data sources (no HTTP self-fetch).
-  // Split by KV write pressure: the first cron pass of each hour warms
-  // everything; the second pass warms only the short-TTL keys (30-min data)
-  // and skips the long-TTL lists (2h/6h), halving their write frequency —
-  // KV writes are the free-plan bottleneck (1000/day) and a 2h-TTL key gains
-  // nothing from being rewritten every 30 minutes. status-history is noStore
-  // and intentionally skipped. Sampling and warmup run concurrently; warmup
-  // is concurrency-capped so one slow upstream doesn't abort the batch.
-  const warmJob = (async (): Promise<void> => {
+  // Split by KV write pressure (free-plan bottleneck: 1000 writes/day):
+  // - every pass warms the short-TTL core (30-min data);
+  // - the first pass of each hour additionally warms the 2h lists;
+  // - the 6h static archives (official pricing, closed releases) warm on the
+  //   first pass every 6h only — rewriting a 6h-TTL key hourly wastes 4x writes.
+  // status-history is noStore and intentionally skipped. Sampling and warmup
+  // run concurrently; warmup is concurrency-capped so one slow upstream
+  // doesn't abort the batch.
+  const warmJob = (async (): Promise<{ failed: number; total: number }> => {
     try {
       const warmSignal = AbortSignal.timeout(WARM_CALL_TIMEOUT_MS);
       const ctx = buildContext(env, { signal: warmSignal });
@@ -63,31 +79,43 @@ async function scheduledTask(env: Env, fireMinuteUtc: number): Promise<void> {
         () => getHomeDashboard(ctx),
         ...NEWS_CATEGORIES.map((category) => () => getNews(ctx, category)),
       ];
-      // Long-TTL lists (2h/6h): warmed once an hour. Parameters must mirror
-      // the client's default queries (queryKeys.openSourceModels) or the
-      // warmed KV key is never read.
-      const slowTasks: (() => Promise<unknown>)[] = [
+      // 2h lists, warmed once an hour. Open-source models warm every limit
+      // bucket of the client's default sort/direction (normalizeModelLimit
+      // buckets: 50/100/200/500) so limit switches hit KV instead of HF.
+      // Non-default sorts stay cold by design (5 sorts x 2 dirs = 40 keys).
+      const hourlyTasks: (() => Promise<unknown>)[] = [
         () => getAgentRankings(ctx),
-        () => getOfficialPricing(ctx),
-        () => getClosedReleases(ctx),
         () => getReleases(ctx),
-        () => getModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS }),
+        ...OPEN_SOURCE_MODEL_LIMIT_BUCKETS.map(
+          (limit) => () => getModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS, limit }),
+        ),
       ];
-      const tasks = fireMinuteUtc < 30 ? [...coreTasks, ...slowTasks] : coreTasks;
+      // 6h static archives: warmed on the first pass every 6 hours.
+      const staticTasks: (() => Promise<unknown>)[] = [() => getOfficialPricing(ctx), () => getClosedReleases(ctx)];
+      const tasks =
+        fireMinuteUtc < 30 ? [...coreTasks, ...hourlyTasks, ...(fireHourUtc % 6 === 0 ? staticTasks : [])] : coreTasks;
       const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: warmSignal });
       const failed = results.filter((r) => r.status === "rejected").length;
       if (failed > 0) {
         console.warn(`[warm] ${failed}/${results.length} warmup calls failed`);
       }
+      return { failed, total: results.length };
     } catch (err) {
       console.warn(`[warm] warmup failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { failed: Number.MAX_SAFE_INTEGER, total: Number.MAX_SAFE_INTEGER };
     }
   })();
-  await Promise.allSettled([sampleJob, warmJob]);
+  const [sampled, warm] = await Promise.all([sampleJob, warmJob]);
+  // Healthy = sampling wrote (or was skipped due to lock contention) AND warmup
+  // didn't totally fail. Partial warmup failures are normal upstream flakiness
+  // and stay green; total failure or an empty sampling round pages via /fail.
+  const warmOk = warm.total === 0 || warm.failed < warm.total;
+  const healthy = sampled !== false && warmOk;
+  return { sampled, warmFailed: warm.failed, warmTotal: warm.total, healthy };
 }
 
 function isApiRequest(url: URL): boolean {
-  return url.pathname.startsWith("/api");
+  return url.pathname === "/api" || url.pathname.startsWith("/api/");
 }
 
 // The Worker only ever sees /api/* (run_worker_first in wrangler.jsonc) plus
@@ -104,7 +132,7 @@ async function fetchHandler(req: Request, env: Env): Promise<Response> {
     applyApiHeaders(res.headers);
     return res;
   }
-  if (req.method !== "GET") {
+  if (req.method !== "GET" && req.method !== "HEAD") {
     const res = Response.json(
       { error: { code: 405, message: "Method not allowed" } },
       { status: 405, headers: { "content-type": "application/json" } },
@@ -112,14 +140,15 @@ async function fetchHandler(req: Request, env: Env): Promise<Response> {
     applyApiHeaders(res.headers);
     return res;
   }
+  const isHead = req.method === "HEAD";
   const res = await handleApi(req, env, url);
-  if (res) return res;
+  if (res) return isHead ? new Response(null, { status: res.status, headers: res.headers }) : res;
   const notFound = Response.json(
     { error: { code: 404, message: "Not found" } },
     { status: 404, headers: { "content-type": "application/json" } },
   );
   applyApiHeaders(notFound.headers);
-  return notFound;
+  return isHead ? new Response(null, { status: notFound.status, headers: notFound.headers }) : notFound;
 }
 
 export default {
@@ -127,8 +156,11 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(
-      scheduledTask(env, new Date(controller.scheduledTime).getUTCMinutes())
-        .then(() => pingCronMonitor(env))
+      (() => {
+        const at = new Date(controller.scheduledTime);
+        return scheduledTask(env, at.getUTCMinutes(), at.getUTCHours());
+      })()
+        .then((result) => pingCronMonitor(env, result.healthy))
         .catch((err) => {
           console.error(`[scheduled] ${err instanceof Error ? err.message : String(err)}`);
           throw err;

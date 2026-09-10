@@ -15,7 +15,7 @@ export const StatCard = memo(function StatCard({
 }) {
   return (
     <Card className={className}>
-      <CardContent padding="sm" className="text-center">
+      <CardContent className="text-center sm:p-4">
         <div className="flex items-center justify-center gap-1.5 mb-2 min-w-0">
           {Icon && (
             <span className="text-text-tertiary shrink-0">

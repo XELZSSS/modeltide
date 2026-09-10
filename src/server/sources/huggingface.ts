@@ -1,29 +1,13 @@
-import { SLOW_TTL_MS, SOURCE_LIMITS, normalizeModelLimit, sliceToLimit } from "@/shared/config";
+import { ONE_MINUTE, SLOW_TTL_MS, SOURCE_LIMITS, normalizeModelLimit, sliceToLimit } from "@/shared/config";
 import { upstreamConfig, UPSTREAM_FETCH_OPTS, cacheKeys } from "@/server/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError, zeroUpstream } from "@/server/infra/errors";
-import { getOpenLicense } from "@/server/parsers/licenses";
-import { isoDate, numIntNonNegative, strOrNull } from "@/server/parsers/primitives";
 import { dedupeBy } from "@/shared/utils";
-import {
-  filterMapDedupe,
-  isOpenReleaseEntry,
-  isValidHuggingFaceId,
-  keepOpenSourceRanking,
-} from "@/server/sources/data-filter";
+import type { HFModel } from "@/server/parsers/hf-models";
+import { findUnknownLicenseTags, mapModel } from "@/server/parsers/hf-models";
+import { isOpenReleaseEntry, isValidRowId, keepOpenSourceRanking } from "@/server/parsers/data-filter";
 import { nowIso, type SourcePayload } from "@/server/sources/types";
-
-interface HFModel {
-  id?: string;
-  author?: string;
-  downloads?: number;
-  likes?: number;
-  pipeline_tag?: string | null;
-  createdAt?: string | null;
-  lastModified?: string | null;
-  tags?: string[];
-}
 
 export interface ModelQuery {
   sort: string;
@@ -31,33 +15,8 @@ export interface ModelQuery {
   limit: number;
 }
 
-function resolveAuthor(m: HFModel, id: string): string | null {
-  return strOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
-}
-
-function mapModel(m: HFModel): OpenSourceModelEntry | null {
-  if (!isValidHuggingFaceId(m.id)) return null;
-  const id = (m.id as string).trim();
-  const downloads = numIntNonNegative(m.downloads) ?? 0;
-  const likes = numIntNonNegative(m.likes) ?? 0;
-  const tags = Array.isArray(m.tags) ? m.tags.filter((t): t is string => typeof t === "string") : [];
-  const license = getOpenLicense(tags);
-  return {
-    id,
-    author: resolveAuthor(m, id),
-    downloads,
-    likes,
-    license,
-    task: strOrNull(m.pipeline_tag),
-    createdAt: isoDate(m.createdAt),
-    lastModified: isoDate(m.lastModified),
-    tags,
-  };
-}
-
 const HF_API = upstreamConfig.huggingface;
 
-// ── Raw fetch (no cache) ──────────────────────────────────────────
 async function fetchHFModels(ctx: AppContext, sort: string, direction: string, limit: number): Promise<HFModel[]> {
   const params = new URLSearchParams({ sort, direction, limit: String(limit), full: "true" });
   const url = `${HF_API}?${params.toString()}`;
@@ -70,21 +29,11 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
     throw new UpstreamError(
       `HuggingFace API returned non-array response (got ${items === null ? "null" : typeof items})`,
     );
-  const unknown = new Set<string>();
-  for (const m of items) {
-    if (!Array.isArray(m.tags)) continue;
-    for (const t of m.tags) {
-      if (typeof t !== "string" || !t.toLowerCase().startsWith("license:")) continue;
-      if (getOpenLicense([t]) == null) unknown.add(t);
-      if (unknown.size >= 5) break;
-    }
-    if (unknown.size >= 5) break;
-  }
-  if (unknown.size > 0) ctx.log("info", `[huggingface] unrecognized license tags: ${[...unknown].join(", ")}`);
+  const unknown = findUnknownLicenseTags(items);
+  if (unknown.length > 0) ctx.log("info", `[huggingface] unrecognized license tags: ${unknown.join(", ")}`);
   return items;
 }
 
-// ── Cached payload API (unified) ──────────────────────────────────
 export const getModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
   ctx.cache
     .withTtl<SourcePayload<OpenSourceModelEntry[]>>(
@@ -93,6 +42,11 @@ export const getModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload
       async () => {
         const bucketLimit = normalizeModelLimit(p.limit);
         const items = await fetchHFModels(ctx, p.sort, p.direction, bucketLimit);
+        // HF may cap `limit` server-side; log the shortfall so a silent
+        // truncation is visible in cron/worker logs instead of looking full.
+        if (items.length < bucketLimit) {
+          ctx.log("info", `[huggingface] short response: got ${items.length}/${bucketLimit} rows`);
+        }
         const kept = items
           .map(mapModel)
           .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m));
@@ -108,7 +62,10 @@ export const getModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload
 export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
   ctx.cache.withTtl<SourcePayload<OpenSourceModelEntry[]>>(cacheKeys.openSourceReleases, SLOW_TTL_MS, async () => {
     const items = await fetchHFModels(ctx, "createdAt", "-1", normalizeModelLimit(SOURCE_LIMITS.openSourceReleases));
-    const deduped = filterMapDedupe(items, mapModel, (m) => m.id);
+    const deduped = dedupeBy(
+      items.map(mapModel).filter((m): m is OpenSourceModelEntry => m !== null),
+      (m) => m.id,
+    );
     const mapped = deduped.filter(isOpenReleaseEntry);
     if (mapped.length < deduped.length)
       ctx.log(
@@ -123,7 +80,7 @@ export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceMo
 // ── Single-model fetch (no list window): detail pages resolve any id ──
 export async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
   const trimmed = id.trim();
-  if (!isValidHuggingFaceId(trimmed)) throw new ValidationError(`Invalid Hugging Face model id "${id}"`);
+  if (!isValidRowId(trimmed)) throw new ValidationError(`Invalid Hugging Face model id "${id}"`);
   const encoded = trimmed
     .split("/")
     .map((seg) => encodeURIComponent(seg))
@@ -149,6 +106,10 @@ export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload
     SLOW_TTL_MS,
     async () => {
       const model = await fetchHFModelById(ctx, id);
+      // 404 (null) is a lookup miss, not data: cache it for 60s only so a
+      // newly-published model becomes visible quickly instead of sticking to
+      // NotFound for the full 2h slow TTL.
+      if (model == null) return { data: { data: model, fetchedAt: nowIso() }, ttl: ONE_MINUTE };
       return { data: { data: model, fetchedAt: nowIso() } };
     },
   );

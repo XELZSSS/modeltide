@@ -28,7 +28,7 @@ interface TabButtonProps extends VariantProps<typeof tabButtonVariants> {
   id?: string;
   tabIndex?: number;
   "aria-controls"?: string;
-  role?: "tab" | "radio" | "button";
+  role?: "tab" | "radio";
 }
 
 function tabAriaProps(
@@ -37,11 +37,10 @@ function tabAriaProps(
   tabIndex: number | undefined,
 ) {
   if (role === "tab") return { "aria-selected": active, tabIndex: tabIndex ?? (active ? 0 : -1) };
-  const checked = role === "radio" ? { "aria-checked": active } : { "aria-pressed": active };
-  return { ...checked, tabIndex: tabIndex ?? 0 };
+  return { "aria-checked": active, tabIndex: tabIndex ?? 0 };
 }
 
-const TabButton = memo(function TabButton({
+export const TabButton = memo(function TabButton({
   active,
   onClick,
   children,
@@ -72,30 +71,6 @@ export interface TabItem {
   id: string;
   label: string;
 }
-
-export const RadioToolbar = memo(function RadioToolbar({
-  label,
-  items,
-  value,
-  onChange,
-}: {
-  label: string;
-  items: readonly TabItem[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2 min-w-0">
-      <SegmentedGroup className="overflow-x-auto no-scrollbar" role="radiogroup" aria-label={label}>
-        {items.map((item) => (
-          <TabButton key={item.id} role="radio" active={value === item.id} onClick={() => onChange(item.id)}>
-            {item.label}
-          </TabButton>
-        ))}
-      </SegmentedGroup>
-    </div>
-  );
-});
 
 interface TabContainerProps {
   tabs: TabItem[];
@@ -147,14 +122,14 @@ export const TabContainer = memo(function TabContainer({
             onClick={() => onTabChange(tab.id)}
             size={tabSize}
             tabIndex={activeTab === tab.id ? 0 : -1}
-            aria-controls={activeTab === tab.id ? `panel-${tab.id}` : undefined}
+            aria-controls={`panel-${tab.id}`}
             id={`tab-${tab.id}`}
           >
             {tab.label}
           </TabButton>
         ))}
       </SegmentedGroup>
-      <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+      <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} tabIndex={0}>
         {children}
       </div>
     </div>

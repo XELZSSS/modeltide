@@ -9,7 +9,7 @@ import { useTranslation } from "@/client/providers";
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-let sheetLockCount = 0;
+let sheetLocked = false;
 let sheetPrevOverflow = "";
 let sheetPrevPaddingRight = "";
 
@@ -20,11 +20,15 @@ function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.Ref
   useEffect(() => {
     if (!open) return;
     const trigger = document.activeElement;
-    if (sheetLockCount === 0) {
+    const main = document.getElementById("main-content");
+    if (!sheetLocked) {
       sheetPrevOverflow = document.body.style.overflow;
       sheetPrevPaddingRight = document.body.style.paddingRight;
+      // Hide the page behind the modal dialog from assistive tech while any
+      // sheet is open (pairs with the Tab focus trap below).
+      main?.setAttribute("inert", "");
     }
-    sheetLockCount++;
+    sheetLocked = true;
     const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (scrollbarW > 0) document.body.style.paddingRight = `${scrollbarW}px`;
@@ -59,11 +63,10 @@ function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.Ref
     return () => {
       document.removeEventListener("keydown", handler);
       clearTimeout(timer);
-      sheetLockCount = Math.max(0, sheetLockCount - 1);
-      if (sheetLockCount === 0) {
-        document.body.style.overflow = sheetPrevOverflow;
-        document.body.style.paddingRight = sheetPrevPaddingRight;
-      }
+      sheetLocked = false;
+      document.body.style.overflow = sheetPrevOverflow;
+      document.body.style.paddingRight = sheetPrevPaddingRight;
+      document.getElementById("main-content")?.removeAttribute("inert");
       if (trigger instanceof HTMLElement) trigger.focus();
     };
   }, [open, panelRef]);
@@ -75,17 +78,9 @@ interface SheetProps {
   children: React.ReactNode;
   className?: string;
   ariaLabel?: string;
-  ariaLabelledBy?: string;
 }
 
-export const Sheet = memo(function Sheet({
-  open,
-  onClose,
-  children,
-  className,
-  ariaLabel,
-  ariaLabelledBy,
-}: SheetProps) {
+export const Sheet = memo(function Sheet({ open, onClose, children, className, ariaLabel }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   useSheetEffects(open, onClose, panelRef);
 
@@ -98,8 +93,7 @@ export const Sheet = memo(function Sheet({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={ariaLabelledBy ? undefined : ariaLabel}
-        aria-labelledby={ariaLabelledBy}
+        aria-label={ariaLabel}
         className={cn(
           "relative z-50 w-full max-w-md rounded-none border border-border bg-bg-primary shadow-lg animate-sheet-up focus:outline-none",
           className,

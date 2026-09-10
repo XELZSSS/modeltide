@@ -5,7 +5,6 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelId } from "@/client/utils/model";
 import { RankingNameCell } from "@/client/components/data/columns";
 import { Button } from "@/client/components/ui/button";
-import { ExpandedRow } from "@/client/components/ui/card";
 import { ModelDetailContent } from "@/client/features/models/model-details/aa-detail";
 
 function CompareButton({
@@ -37,9 +36,9 @@ function CompareButton({
 
 export function ModelExpandedDetail({ model }: { model: ArtificialAnalysisModel }) {
   return (
-    <ExpandedRow>
+    <div className="p-4 sm:p-5">
       <ModelDetailContent model={model} showBenchmarks={false} />
-    </ExpandedRow>
+    </div>
   );
 }
 

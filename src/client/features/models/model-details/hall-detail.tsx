@@ -5,7 +5,7 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel, HallucinationRankingEntry } from "@/shared/types";
 import { formatIndex, formatPercent } from "@/client/utils/format";
 import { normalizeModelKey } from "@/shared/utils";
-import { DetailLayout, DetailSection, StatGrid } from "@/client/components/ui/grids";
+import { DetailSection, StatGrid } from "@/client/components/ui/grids";
 import { InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { NotFound } from "@/client/components/feedback";
@@ -28,7 +28,7 @@ function HallDetailContent({
     ["attemptRate", formatPercent(t, model.attemptRate)],
   ];
   return (
-    <DetailLayout>
+    <div className="flex flex-col gap-4">
       <StatGrid columns={4}>
         {hallStats.map(([labelKey, value]) => (
           <StatCard key={labelKey} label={t(labelKey)} value={value} />
@@ -45,7 +45,7 @@ function HallDetailContent({
           <ModelDetailContent model={aaModel} />
         </DetailSection>
       )}
-    </DetailLayout>
+    </div>
   );
 }
 

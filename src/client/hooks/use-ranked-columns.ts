@@ -16,7 +16,6 @@ export function useRankedColumns<T>(
   );
 }
 
-// Rank-aware column builder that already includes rank based on row rank field
 export function useRankFieldColumns<T>(
   buildBodyColumns: (t: ReturnType<typeof useTranslation>["t"]) => DataTableColumn<T>[],
   rankOf: (row: T) => number | null | undefined,

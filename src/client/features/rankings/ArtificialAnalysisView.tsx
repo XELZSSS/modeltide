@@ -15,7 +15,8 @@ import { CompareChipBar } from "@/client/components/compare-tray";
 import { ModelExpandedDetail } from "@/client/features/rankings/aa/cells";
 import { buildRankingColumns } from "@/client/features/rankings/aa/columns-rank";
 import { buildPricingColumns, type PricingRow } from "@/client/features/rankings/aa/columns-price";
-import { RadioToolbar } from "@/client/components/ui/tabs";
+import { SegmentedGroup } from "@/client/components/ui/grids";
+import { TabButton } from "@/client/components/ui/tabs";
 
 const VIEW_MODES = ["rankings", "pricing"] as const;
 
@@ -90,15 +91,20 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
 
   return (
     <div className="flex flex-col gap-4">
-      <RadioToolbar
-        label={t("viewMode")}
-        items={[
-          { id: "rankings", label: t("modelRankings") },
-          { id: "pricing", label: t("pricing") },
-        ]}
-        value={viewMode}
-        onChange={setViewMode}
-      />
+      <div className="flex flex-wrap items-center gap-2 min-w-0">
+        <SegmentedGroup className="overflow-x-auto no-scrollbar" role="radiogroup" aria-label={t("viewMode")}>
+          {(
+            [
+              { id: "rankings", label: t("modelRankings") },
+              { id: "pricing", label: t("pricing") },
+            ] as const
+          ).map((item) => (
+            <TabButton key={item.id} role="radio" active={viewMode === item.id} onClick={() => setViewMode(item.id)}>
+              {item.label}
+            </TabButton>
+          ))}
+        </SegmentedGroup>
+      </div>
 
       {viewMode === "pricing" && (
         <div className="flex gap-4 flex-wrap items-center">

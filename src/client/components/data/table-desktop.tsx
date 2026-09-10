@@ -52,7 +52,9 @@ function TableBodyInner<T>({
               {columns.map((col, colIdx) => (
                 <td key={col.id} className={cellClasses(col)} style={{ width: col.width }}>
                   <div className={cellInnerClasses(col)}>
-                    {isExpandable && colIdx === 0 ? <ExpandToggle isExpanded={isExpanded} onToggle={toggle} /> : null}
+                    {isExpandable && colIdx === 0 ? (
+                      <ExpandToggle isExpanded={isExpanded} onToggle={toggle} controlsId={`${rowId}-panel`} />
+                    ) : null}
                     {col.cell(row)}
                   </div>
                 </td>
@@ -61,7 +63,9 @@ function TableBodyInner<T>({
             {isExpanded && renderExpandedRow && (
               <tr className="border-b border-border last:border-b-0 bg-bg-secondary/50">
                 <td colSpan={columns.length} className="p-0">
-                  <div className="animate-fade-in">{renderExpandedRow(row)}</div>
+                  <div id={`${rowId}-panel`} role="region" className="animate-fade-in">
+                    {renderExpandedRow(row)}
+                  </div>
                 </td>
               </tr>
             )}

@@ -58,7 +58,7 @@ export const UsageDonut = memo(function UsageDonut({ models }: { models: { task:
 
   return (
     <Card className="h-full">
-      <CardContent padding="md" className="flex flex-col h-full">
+      <CardContent className="flex flex-col h-full">
         <p className="ui-card-title mb-1">{t("opensourceTaskShare")}</p>
         <p className="ui-caption mb-4">{t("openSourceDataSource")}</p>
         {slices.length === 0 ? (
@@ -72,6 +72,13 @@ export const UsageDonut = memo(function UsageDonut({ models }: { models: { task:
           <div className="w-full flex-1 min-h-[200px] h-[200px] sm:h-[240px]">
             <figure className="h-full">
               <Doughnut data={data} options={options} aria-label={t("opensourceTaskShare")} role="img" />
+              <figcaption className="sr-only">
+                {slices.map((s) => {
+                  const label = s.key === OTHER_TASK_KEY ? t("otherTasks") : taskLabel(s.key, t);
+                  const pct = total > 0 ? ((s.total / total) * 100).toFixed(1) : "0.0";
+                  return `${label}: ${formatShortNumber(s.total)} (${pct}%)`;
+                })}
+              </figcaption>
             </figure>
           </div>
         )}

@@ -3,16 +3,16 @@ import type { Env } from "@/server/context";
 import { ApiError } from "@/server/infra/errors";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/validation";
 import type { AppContext } from "@/server/context";
-import { BROWSER_CACHE_HEADER, BROWSER_NO_STORE_HEADER, CDN_CACHE_HEADER, CDN_NO_STORE_HEADER } from "@/server/config";
+import { BROWSER_CACHE_HEADER, CDN_CACHE_HEADER } from "@/server/config";
 import { applyApiHeaders } from "@/shared/config/security";
 
-function applyCacheHeaders(h: Headers, noStore: boolean, override?: { browser: string; cdn: string }): void {
+function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string }): void {
   if (override) {
     h.set("Cache-Control", override.browser);
     h.set("CDN-Cache-Control", override.cdn);
   } else {
-    h.set("Cache-Control", noStore ? BROWSER_NO_STORE_HEADER : BROWSER_CACHE_HEADER);
-    h.set("CDN-Cache-Control", noStore ? CDN_NO_STORE_HEADER : CDN_CACHE_HEADER);
+    h.set("Cache-Control", BROWSER_CACHE_HEADER);
+    h.set("CDN-Cache-Control", CDN_CACHE_HEADER);
   }
   h.set("Vary", "Accept-Encoding");
 }
@@ -39,7 +39,11 @@ function collectQueryParams(url: URL): Record<string, string | string[]> {
 }
 
 function isTimeoutLike(err: unknown): boolean {
-  return err instanceof Error && (err.name === "TimeoutError" || /timeout/i.test(err.message));
+  // Narrow: only TimeoutError (AbortSignal.timeout from our own fetches) maps
+  // to 504 here. UpstreamError with causedByTimeout is handled in mapApiError
+  // below; anything else — including AbortError from client disconnects or an
+  // upstream message that merely mentions "timeout" — must not become a 504.
+  return err instanceof Error && err.name === "TimeoutError";
 }
 
 function timeoutResponse(): Response {
@@ -76,7 +80,6 @@ function mapApiError(err: unknown, method: string, path: string): Response {
 
 export interface ApiRouteDef<S extends QuerySchema = QuerySchema> {
   query?: S;
-  noStore?: boolean;
   cache?: { browser: string; cdn: string };
   handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<unknown>;
 }
@@ -99,7 +102,7 @@ export async function handleApiRoute<S extends QuerySchema>(
     const params = validateQuery(collectQueryParams(url), (def.query ?? {}) as S);
     const data = await def.handler(context, params);
     const headers = new Headers({ "content-type": "application/json" });
-    applyCacheHeaders(headers, def.noStore === true, def.cache);
+    applyCacheHeaders(headers, def.cache);
     applyApiHeaders(headers);
     return Response.json({ data }, { headers });
   } catch (err) {

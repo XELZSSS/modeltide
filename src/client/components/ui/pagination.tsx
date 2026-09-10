@@ -30,18 +30,12 @@ function PageButton({
   );
 }
 
-export const Pagination = memo(function Pagination({
-  page,
-  totalPages,
-  onChange,
-  className,
-  label,
-}: PaginationProps & { label?: string }) {
+export const Pagination = memo(function Pagination({ page, totalPages, onChange, className }: PaginationProps) {
   const { t } = useTranslation();
   if (totalPages <= 1) return null;
 
   return (
-    <nav aria-label={label ?? t("pagination")} className={cn("flex items-center gap-3", className)}>
+    <nav aria-label={t("pagination")} className={cn("flex items-center gap-3", className)}>
       <PageButton label={t("previousPage")} disabled={page <= 1} onClick={() => onChange(page - 1)}>
         <ChevronLeft size={16} />
       </PageButton>

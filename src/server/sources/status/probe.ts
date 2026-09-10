@@ -1,10 +1,7 @@
 import type { AppContext } from "@/server/context";
-import { rssConfig, upstreamConfig } from "@/server/config";
+import { rssConfig, upstreamConfig, upstreamEndpoints } from "@/server/config";
 import type { ProbeResult } from "@/server/infra/http-client";
 import { runCapped } from "@/server/infra/pool";
-import { INDEX_PATH } from "@/server/sources/aa/fetch";
-import { TEXT_TO_IMAGE_PATH } from "@/server/sources/aa/text-to-image";
-import { RANKINGS_PATH } from "@/server/sources/openrouter/directory";
 import type { SourceStatus } from "@/shared/types";
 
 export interface ProbeTarget {
@@ -19,16 +16,16 @@ export function buildTargets(): ProbeTarget[] {
   return [
     {
       id: "artificialAnalysis",
-      url: `${upstreamConfig.artificialAnalysis}${INDEX_PATH}`,
+      url: `${upstreamConfig.artificialAnalysis}${upstreamEndpoints.aaIndex}`,
     },
-    { id: "openrouter", url: `${upstreamConfig.openrouter}/api/v1/models` },
-    { id: "openrouter", url: `${upstreamConfig.openrouter}${RANKINGS_PATH}` },
+    { id: "openrouter", url: `${upstreamConfig.openrouter}${upstreamEndpoints.openRouterDirectory}` },
+    { id: "openrouter", url: `${upstreamConfig.openrouter}${upstreamEndpoints.openRouterRankings}` },
     {
       id: "artificialAnalysis",
-      url: `${upstreamConfig.artificialAnalysis}${TEXT_TO_IMAGE_PATH}`,
+      url: `${upstreamConfig.artificialAnalysis}${upstreamEndpoints.aaTextToImage}`,
     },
     { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
-    { id: "arena", url: `${upstreamConfig.arena}/leaderboard/agent` },
+    { id: "arena", url: `${upstreamConfig.arena}${upstreamEndpoints.agentBoard}` },
     ...newsSample.map((url): ProbeTarget => ({ id: "news", url })),
   ];
 }

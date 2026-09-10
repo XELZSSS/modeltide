@@ -69,9 +69,12 @@ const getAgentSearchFields = (entry: AgentRankEntry) => [entry.name, entry.id, e
 
 export function AgentRankingsView() {
   const { data } = useSuspenseAgentRankings();
+  const entries = Array.isArray((data as { entries?: unknown })?.entries)
+    ? (data as { entries: AgentRankEntry[] }).entries
+    : [];
   return (
     <RankedTableView
-      rows={data.entries}
+      rows={entries}
       getRowId={getAgentRowId}
       getSearchFields={getAgentSearchFields}
       buildBodyColumns={buildAgentColumns}

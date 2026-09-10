@@ -45,7 +45,9 @@ function MobileTableBodyInner<T>({
               )}
             >
               <div className="flex items-center gap-2 min-w-0">
-                {isExpandable ? <ExpandToggle isExpanded={isExpanded} onToggle={toggle} size={16} /> : null}
+                {isExpandable ? (
+                  <ExpandToggle isExpanded={isExpanded} onToggle={toggle} size={16} controlsId={`${rowId}-panel`} />
+                ) : null}
                 <div className="min-w-0 flex-1">{primaryCol?.cell(row)}</div>
                 {mainStatCol && (
                   <div className="shrink-0 text-right min-w-0 max-w-[40%]">
@@ -71,7 +73,11 @@ function MobileTableBodyInner<T>({
               )}
             </div>
             {isExpanded && renderExpandedRow && (
-              <div className="border border-border bg-bg-secondary/50 overflow-hidden animate-slide-up">
+              <div
+                id={`${rowId}-panel`}
+                role="region"
+                className="border border-border bg-bg-secondary/50 overflow-hidden animate-slide-up"
+              >
                 {renderExpandedRow(row)}
               </div>
             )}

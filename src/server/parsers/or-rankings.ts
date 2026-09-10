@@ -1,6 +1,6 @@
 import type { OpenRouterRankEntry } from "@/shared/types";
 import { numCoerce, numOr, titleCase } from "@/server/parsers/primitives";
-import type { ModelRow, PricingEntry } from "@/server/sources/openrouter/types";
+import type { ModelRow, PricingEntry } from "@/server/parsers/or-types";
 
 const CREATORS: Record<string, string> = {
   anthropic: "Anthropic",

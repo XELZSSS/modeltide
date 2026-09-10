@@ -14,31 +14,6 @@ export const SegmentedGroup = memo(function SegmentedGroup({
   );
 });
 
-const CARD_GRID_COLS = { 2: "", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4" } as const;
-const GRID_GAPS = { 2: "gap-2", 3: "gap-3", 4: "gap-4" } as const;
-
-export const CardGrid = memo(function CardGrid({
-  cols = 3,
-  gap = 3,
-  className,
-  children,
-}: {
-  cols?: 2 | 3 | 4;
-  gap?: 2 | 3 | 4;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={cn("grid grid-cols-1 sm:grid-cols-2", CARD_GRID_COLS[cols], GRID_GAPS[gap], className)}>
-      {children}
-    </div>
-  );
-});
-
-export const DetailLayout = memo(function DetailLayout({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-4">{children}</div>;
-});
-
 export const DetailSection = memo(function DetailSection({
   title,
   children,

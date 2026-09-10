@@ -36,14 +36,12 @@ export const CompareChipBar = memo(function CompareChipBar({
   onRemove,
   onClear,
   onCompare,
-  compareLabel,
   leading,
 }: {
   models: ArtificialAnalysisModel[];
   onRemove: (model: ArtificialAnalysisModel) => void;
   onClear: () => void;
   onCompare?: () => void;
-  compareLabel?: string;
   leading?: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -76,7 +74,7 @@ export const CompareChipBar = memo(function CompareChipBar({
             disabled={!canCompare}
             className="flex-1 sm:flex-none"
           >
-            <ArrowLeftRight size={14} /> {compareLabel ?? t("compareSelected")}
+            <ArrowLeftRight size={14} /> {t("compareSelected")}
           </Button>
         )}
       </div>

@@ -1,7 +1,6 @@
 "use client";
 import { memo, useMemo } from "react";
 import { formatDollar } from "@/client/utils/format";
-import type { TFunction } from "@/shared/i18n";
 import { Input } from "@/client/components/ui/input";
 import { useTranslation } from "@/client/providers";
 import { COST_FIELDS, type CostFieldId, type CostInputState } from "@/client/features/pricing/cost-inputs";
@@ -12,16 +11,6 @@ interface CostFieldDef {
   onChange: (v: string) => void;
   label: string;
   unit?: string;
-}
-
-function getCostFields(state: CostInputState, t: TFunction): CostFieldDef[] {
-  return COST_FIELDS.map((def) => ({
-    id: def.id,
-    value: state.values[def.id],
-    onChange: (v: string) => state.setField(def.id, v),
-    label: t(def.labelKey),
-    unit: def.unit,
-  }));
 }
 
 interface CostEstimatorInputsProps {
@@ -65,7 +54,17 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
 }: CostEstimatorInputsProps) {
   const { t } = useTranslation();
   const { values } = state;
-  const fields = useMemo(() => getCostFields(state, t), [values, t]);
+  const fields = useMemo(
+    () =>
+      COST_FIELDS.map((def) => ({
+        id: def.id,
+        value: state.values[def.id],
+        onChange: (v: string) => state.setField(def.id, v),
+        label: t(def.labelKey),
+        unit: def.unit,
+      })),
+    [values, t],
+  );
 
   return (
     <>

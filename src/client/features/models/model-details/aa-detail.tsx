@@ -15,7 +15,7 @@ import {
 import { normalizePercent } from "@/shared/utils";
 import { getOutputSpeed } from "@/client/utils/cost-estimator";
 import { resolveBlendedPrice, resolveEffectivePricing } from "@/client/utils/pricing-merge";
-import { DetailLayout, DetailSection, InfoGrid, StatGrid } from "@/client/components/ui/grids";
+import { DetailSection, InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { useOfficialPricing } from "@/client/features/pricing/official";
@@ -103,7 +103,7 @@ export function ModelDetailContent({
     ["outputSpeed", getOutputSpeed(model)],
   ];
   return (
-    <DetailLayout>
+    <div className="flex flex-col gap-4">
       <StatGrid columns={4}>
         {scoreStats.map(([labelKey, value]) => (
           <StatCard key={labelKey} label={t(labelKey)} value={formatScore(t, value)} />
@@ -152,7 +152,7 @@ export function ModelDetailContent({
           </div>
         </DetailSection>
       )}
-    </DetailLayout>
+    </div>
   );
 }
 

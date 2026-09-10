@@ -1,14 +1,5 @@
 "use client";
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { createContext, use, useEffect, useMemo, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSettingsStore } from "@/client/stores";
 import { ApiClientError, isAbortError } from "@/client/api/client";
@@ -53,6 +44,7 @@ function I18nProvider({ children }: { children: ReactNode }) {
     () =>
       createT(lang, {
         onMissingParam: (key, out) => console.warn(`[i18n] missing param for key "${key}": "${out}"`),
+        onMissingKey: (key, l) => console.warn(`[i18n] missing key "${key}" for lang "${l}", fell back to en`),
       }),
     [lang],
   );
@@ -69,20 +61,22 @@ const MOBILE_BREAKPOINT = 768;
 
 function useIsMobile(breakpoint = 768): boolean {
   const query = `(max-width: ${breakpoint - 1}px)`;
-  const mq = useMemo(() => (typeof window !== "undefined" ? window.matchMedia(query) : null), [query]);
-  const subscribe = useCallback(
-    (onChange: () => void) => {
-      if (!mq) return () => {};
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    [mq],
+  // Read matchMedia synchronously on first render: this app is CSR-only (no
+  // SSR HTML), so there is no hydration snapshot to honor — defaulting to
+  // `false` would paint the desktop table on phones for a frame before
+  // flipping to cards. The effect below keeps the value live afterwards.
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false,
   );
-  return useSyncExternalStore(
-    subscribe,
-    () => mq?.matches ?? false,
-    () => false,
-  );
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia(query);
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return isMobile;
 }
 
 interface DeviceContextValue {

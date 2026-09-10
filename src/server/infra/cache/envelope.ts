@@ -18,18 +18,8 @@ export interface StaleEnvelope<T> {
   d: T;
   e: number;
   t?: number;
-  v: number;
 }
 
-export const ENVELOPE_VERSION = 1;
-
 export function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    "d" in v &&
-    "e" in v &&
-    typeof (v as StaleEnvelope<T>).e === "number" &&
-    typeof (v as StaleEnvelope<T>).v === "number"
-  );
+  return typeof v === "object" && v !== null && "d" in v && "e" in v && typeof (v as StaleEnvelope<T>).e === "number";
 }

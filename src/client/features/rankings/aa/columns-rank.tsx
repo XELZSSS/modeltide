@@ -2,13 +2,7 @@
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatScore } from "@/client/utils/format";
-import {
-  RightAlignedText,
-  rightCol,
-  rightColNA,
-  textCol,
-  type DataTableColumn,
-} from "@/client/components/data/columns";
+import { RightAlignedText, rightCol, textCol, type DataTableColumn } from "@/client/components/data/columns";
 import { CompareModelCell } from "@/client/features/rankings/aa/cells";
 
 function scoreColumn(
@@ -18,14 +12,17 @@ function scoreColumn(
   t: TFunction,
   opts?: { mobilePrimary?: boolean; hiddenMd?: boolean },
 ): DataTableColumn<ArtificialAnalysisModel> {
-  return rightColNA(
+  return rightCol(
     id,
     header,
     (model) => {
       const value = accessor(model);
-      return value == null ? null : formatScore(t, value);
+      return (
+        <RightAlignedText className={value == null ? "text-text-tertiary" : undefined}>
+          {value == null ? t("notAvailable") : formatScore(t, value)}
+        </RightAlignedText>
+      );
     },
-    t,
     opts,
   );
 }

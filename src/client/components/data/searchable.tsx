@@ -4,9 +4,14 @@ import { useSearchStore } from "@/client/stores";
 import { filterByTerm } from "@/shared/utils";
 import { DataTable, type DataTableProps } from "@/client/components/data/table";
 
-function useFilteredData<T>(data: T[], getFields: (x: T) => (string | null | undefined)[], term: string): T[] {
+function useFilteredData<T>(
+  data: T[],
+  getFields: (x: T) => (string | null | undefined)[],
+  term: string,
+): { filtered: T[]; deferredTerm: string } {
   const deferredTerm = useDeferredValue(term);
-  return useMemo(() => filterByTerm(data, deferredTerm, getFields), [data, deferredTerm, getFields]);
+  const filtered = useMemo(() => filterByTerm(data, deferredTerm, getFields), [data, deferredTerm, getFields]);
+  return { filtered, deferredTerm };
 }
 
 interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
@@ -16,8 +21,10 @@ interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
 
 function SearchableDataTableInner<T>({ data, getSearchFields, ...tableProps }: SearchableDataTableProps<T>) {
   const searchTerm = useSearchStore((s) => s.searchTerm);
-  const filtered = useFilteredData(data, getSearchFields, searchTerm);
-  return <DataTable data={filtered} resetKey={searchTerm} {...tableProps} />;
+  const { filtered, deferredTerm } = useFilteredData(data, getSearchFields, searchTerm);
+  // resetKey tracks the deferred term so pagination resets in the same frame
+  // the visible list actually changes (no one-keystroke flash).
+  return <DataTable data={filtered} resetKey={deferredTerm} {...tableProps} />;
 }
 
 export const SearchableDataTable = memo(SearchableDataTableInner) as typeof SearchableDataTableInner;

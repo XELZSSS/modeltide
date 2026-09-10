@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  fetchProviderStatuses,
-  parseGoogleCloudIncidents,
-  parseStatuspageSummary,
-} from "@/server/sources/provider-status";
+import { fetchProviderStatuses } from "@/server/sources/provider-status";
+import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/provider-status";
 import type { AppContext } from "@/server/context";
-import { parseDailyPapers } from "@/server/sources/hf-papers";
-import { parseLitellmPricing } from "@/server/sources/pricing/litellm";
+import { parseDailyPapers } from "@/server/parsers/hf-papers";
+import { parseLitellmPricing } from "@/server/parsers/official-pricing";
 import { SOURCE_LIMITS } from "@/shared/config";
 
 describe("parseStatuspageSummary", () => {

@@ -117,27 +117,15 @@ async function readBodyText(res: Response, url: string, maxBytes: number): Promi
 }
 
 export class HttpClient {
-  private userAgent: string;
-  private timeoutMs: number;
-  private defaultRetries: number;
   private defaultSignal?: AbortSignal;
-  constructor(opts?: { userAgent?: string; timeoutMs?: number; retries?: number; signal?: AbortSignal }) {
-    this.userAgent = opts?.userAgent ?? USER_AGENT;
-    this.timeoutMs = opts?.timeoutMs ?? 10_000;
-    this.defaultRetries = opts?.retries ?? 0;
+  constructor(opts?: { signal?: AbortSignal }) {
     this.defaultSignal = opts?.signal;
   }
 
   private async doFetch(url: string, init: FetchOptions, accept: string): Promise<Response> {
-    const {
-      timeoutMs = this.timeoutMs,
-      retries = this.defaultRetries,
-      headers: initHeaders,
-      signal: initSignalOpt,
-      ...rest
-    } = init;
+    const { timeoutMs = 10_000, retries = 0, headers: initHeaders, signal: initSignalOpt, ...rest } = init;
     const initSignal = initSignalOpt ?? this.defaultSignal;
-    const headers = buildHeaders(this.userAgent, accept, initHeaders);
+    const headers = buildHeaders(USER_AGENT, accept, initHeaders);
     for (let attempt = 0; attempt <= retries; attempt++) {
       const signal = initSignal
         ? AbortSignal.any([initSignal, AbortSignal.timeout(timeoutMs)])
@@ -200,7 +188,7 @@ export class HttpClient {
     const signal = this.defaultSignal ? AbortSignal.any([this.defaultSignal, timeout]) : timeout;
     try {
       const res = await fetch(url, {
-        headers: buildHeaders(this.userAgent, "*/*"),
+        headers: buildHeaders(USER_AGENT, "*/*"),
         signal,
         cache: "no-store",
       });

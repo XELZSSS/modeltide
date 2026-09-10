@@ -142,7 +142,7 @@ function HomeContent() {
             <Suspense
               fallback={
                 <Card>
-                  <CardContent padding="md">
+                  <CardContent>
                     <p className="ui-card-title mb-1">{t("intelligenceIndex")}</p>
                     <p className="ui-caption mb-4">{t("artificialSource")}</p>
                     <div className="h-[200px] sm:h-[240px] animate-pulse bg-bg-secondary" />
@@ -157,7 +157,7 @@ function HomeContent() {
             <Suspense
               fallback={
                 <Card>
-                  <CardContent padding="md">
+                  <CardContent>
                     <div className="h-[200px] sm:h-[240px] animate-pulse bg-bg-secondary" />
                   </CardContent>
                 </Card>

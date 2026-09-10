@@ -44,7 +44,7 @@ function resolveChartTheme(): ChartTheme {
     tickSecondary: read("--text-secondary", "#5b6472"),
     tooltipBg: read("--bg-secondary", "#f4f4f5"),
     tooltipText: read("--text-primary", "#0b1220"),
-    palette: Array.from({ length: 10 }, (_, i) => read(`--chart-${i + 1}`, "")),
+    palette: Array.from({ length: 10 }, (_, i) => read(`--chart-${i + 1}`, FALLBACK_THEME.palette[i] ?? "#888888")),
     donut: Array.from({ length: DONUT_FALLBACK.length }, (_, i) =>
       read(`--donut-${i + 1}`, DONUT_FALLBACK[i] ?? "#888888"),
     ),
@@ -66,6 +66,8 @@ function ensureObserver(): void {
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
   const observer = new MutationObserver(notify);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  // Accent switches (body[data-accent]) re-derive chart vars via color-mix.
+  observer.observe(document.body, { attributes: true, attributeFilter: ["data-accent"] });
   media?.addEventListener?.("change", notify);
 }
 
@@ -98,10 +100,13 @@ export function seriesColor(theme: ChartTheme, index: number): string {
 }
 
 export function hexToRgba(hex: string, alpha: number): string {
+  if (!hex || !hex.trim()) return `rgba(136, 136, 136, ${alpha})`;
   const value = hex.replace("#", "");
   if (!/^[0-9a-f]{3}$/i.test(value) && !/^[0-9a-f]{6}$/i.test(value)) {
+    // Non-hex (var()/rgb()/named): leave blending to CSS. Empty input is
+    // guarded above so this never emits an invalid color-mix().
     const pct = Math.round(alpha * 100);
-    return `color-mix(in srgb, ${hex} ${pct}%, transparent)`;
+    return `color-mix(in srgb, ${hex.trim()} ${pct}%, transparent)`;
   }
   const full =
     value.length === 3

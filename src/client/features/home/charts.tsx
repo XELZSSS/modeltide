@@ -105,7 +105,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
 
   return (
     <Card>
-      <CardContent padding="md">
+      <CardContent>
         <p className="ui-card-title mb-1">{t("intelligenceIndex")}</p>
         <p className="ui-caption mb-4">{t("artificialSource")}</p>
         {top10.length === 0 ? (

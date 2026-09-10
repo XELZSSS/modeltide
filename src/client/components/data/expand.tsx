@@ -1,29 +1,19 @@
 "use client";
-import type { MouseEvent as ReactMouseEvent } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/providers";
 import { Button } from "@/client/components/ui/button";
 
-function expandToggleProps(isExpanded: boolean, toggle: () => void, label: string) {
-  return {
-    "aria-expanded": isExpanded,
-    "aria-label": label,
-    onClick: (e: ReactMouseEvent) => {
-      e.stopPropagation();
-      toggle();
-    },
-  } as const;
-}
-
 export function ExpandToggle({
   isExpanded,
   onToggle,
   size = 14,
+  controlsId,
 }: {
   isExpanded: boolean;
   onToggle: () => void;
   size?: number;
+  controlsId?: string;
 }) {
   const { t } = useTranslation();
   return (
@@ -31,7 +21,13 @@ export function ExpandToggle({
       variant="ghost"
       size="icon"
       className="shrink-0 size-7"
-      {...expandToggleProps(isExpanded, onToggle, isExpanded ? t("collapseRow") : t("expandRow"))}
+      aria-expanded={isExpanded}
+      aria-label={isExpanded ? t("collapseRow") : t("expandRow")}
+      {...(controlsId ? { "aria-controls": controlsId } : {})}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
     >
       <span className={cn("shrink-0 text-text-secondary transition-transform duration-200", isExpanded && "rotate-90")}>
         <ChevronRight size={size} />

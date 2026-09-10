@@ -34,6 +34,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeMore = useCallback(() => setMobileMoreOpen(false), []);
+  // Sheets are mutually exclusive: opening one closes the other so two
+  // z-50 dialogs never stack and focus/background locking stays unambiguous.
+  const openSettings = useCallback(() => {
+    setMobileMoreOpen(false);
+    setSettingsOpen(true);
+  }, []);
+  const openMore = useCallback(() => {
+    setSettingsOpen(false);
+    setMobileMoreOpen(true);
+  }, []);
 
   useLayoutEffect(() => {
     const dark = themeMode === "dark";
@@ -59,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {t("skipToContent")}
       </a>
-      <DesktopNav onSettingsOpen={() => setSettingsOpen(true)} />
+      <DesktopNav onSettingsOpen={openSettings} />
       <PwaBanners />
       <main
         ref={mainRef}
@@ -70,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      <MobileNav onMoreOpen={() => setMobileMoreOpen(true)} onSettingsOpen={() => setSettingsOpen(true)} />
+      <MobileNav onMoreOpen={openMore} onSettingsOpen={openSettings} />
       {settingsOpen && (
         <Suspense fallback={null}>
           <SettingsSheet open={settingsOpen} onClose={closeSettings} />
@@ -80,6 +90,3 @@ export function AppShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
-
-// Re-export page layout primitives from dedicated module
-export { PageContainer, PageHeader, PageSection, TabbedPage } from "./page";

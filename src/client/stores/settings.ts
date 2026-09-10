@@ -7,10 +7,8 @@ import type { Lang } from "@/shared/i18n";
 import { STORAGE_KEYS } from "@/shared/config";
 import { localJsonStorage } from "@/client/stores/storage";
 
-type LangToggle = (s: Lang) => Lang;
-const toggleLang: LangToggle = (lang) => (lang === "en" ? "zh" : "en");
-type ThemeToggle = (s: ThemeMode) => ThemeMode;
-const toggleThemeMode: ThemeToggle = (mode) => (mode === "light" ? "dark" : "light");
+const toggleLang = (lang: Lang): Lang => (lang === "en" ? "zh" : "en");
+const toggleThemeMode = (mode: ThemeMode): ThemeMode => (mode === "light" ? "dark" : "light");
 
 /**
  * First-render theme, resolved from the same source as the pre-hydration
@@ -54,7 +52,6 @@ export const useSettingsStore = create<SettingsState>()(
       name: STORAGE_KEYS.settings,
       version: 1,
       storage: localJsonStorage,
-      migrate: (persisted) => persisted as SettingsState,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn("[settings] rehydrate failed", error);
       },
@@ -70,25 +67,23 @@ export const useSettingsStore = create<SettingsState>()(
   ),
 );
 
-const SYNCED_FIELDS = [
-  { key: "themeMode", valid: ["dark", "light"], get: () => useSettingsStore.getState().themeMode },
-  { key: "lang", valid: ["zh", "en"], get: () => useSettingsStore.getState().lang },
-] as const;
-
 export function useThemeStorageSync(): void {
   useEffect(() => {
     const onStorage = (e: StorageEvent): void => {
       if (e.key !== STORAGE_KEYS.settings || e.newValue == null) return;
       try {
-        const parsed = JSON.parse(e.newValue) as {
-          state?: Partial<Record<(typeof SYNCED_FIELDS)[number]["key"], string>>;
-        };
+        const parsed = JSON.parse(e.newValue) as { state?: Partial<{ themeMode: string; lang: string }> };
         const updates: Partial<{ themeMode: ThemeMode; lang: Lang }> = {};
-        for (const field of SYNCED_FIELDS) {
-          const foreign = parsed.state?.[field.key];
-          if (foreign != null && (field.valid as readonly string[]).includes(foreign) && field.get() !== foreign) {
-            updates[field.key] = foreign as never;
-          }
+        const foreignTheme = parsed.state?.themeMode;
+        if (
+          (foreignTheme === "dark" || foreignTheme === "light") &&
+          useSettingsStore.getState().themeMode !== foreignTheme
+        ) {
+          updates.themeMode = foreignTheme;
+        }
+        const foreignLang = parsed.state?.lang;
+        if ((foreignLang === "zh" || foreignLang === "en") && useSettingsStore.getState().lang !== foreignLang) {
+          updates.lang = foreignLang;
         }
         if (Object.keys(updates).length > 0) useSettingsStore.setState(updates);
       } catch (err) {

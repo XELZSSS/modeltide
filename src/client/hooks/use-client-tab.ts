@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useSearchParams } from "@/client/router";
 
 export function resolveInitialTab<T extends string>(validTabs: readonly T[], raw: string | null, fallback: T): T {
@@ -7,32 +7,47 @@ export function resolveInitialTab<T extends string>(validTabs: readonly T[], raw
 }
 
 /**
- * Client-only tab state.
+ * Client tab state reflected in the URL via replaceState (`?tab=`).
  *
- * Tab switches intentionally do NOT rewrite the URL: every `?tab=` change
- * would re-mount the tab's SuspenseQuery reset boundary, while tab datasets
- * are already served from the React Query cache / /api. The URL param is
- * read once as the initial value so shared deep-links still land on the
- * right tab.
+ * Replace (not push) keeps back-button history clean and never adds entries,
+ * while still making tabs shareable, refresh-stable, and back/forward-aware.
+ * Tab content resets through each page's `SuspenseQuery resetKey`, and data
+ * comes from the React Query cache so switches stay instant.
  */
 export function useClientTab<T extends string>(
   paramKey: string,
   validTabs: readonly T[],
   fallback: T,
-): [T, (tabId: string) => void, boolean] {
+): [T, (tabId: string) => void] {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<T>(() => resolveInitialTab(validTabs, searchParams.get(paramKey), fallback));
+  const paramValue = searchParams.get(paramKey);
+  const [tab, setTab] = useState<T>(() => resolveInitialTab(validTabs, paramValue, fallback));
   // Inside a transition React keeps the old tab on screen until the new one
   // (lazy chunk + suspense query) is ready, instead of flashing the fallback.
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  // Back/forward navigation changes ?tab=: adopt it (guarded against no-ops).
+  useEffect(() => {
+    const next = resolveInitialTab(validTabs, paramValue, fallback);
+    setTab((prev) => (prev === next ? prev : next));
+  }, [paramValue, validTabs, fallback]);
   const setTabTransition = useCallback(
     (tabId: string) => {
       if (!(validTabs as readonly string[]).includes(tabId)) return;
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get(paramKey) !== tabId) {
+          url.searchParams.set(paramKey, tabId);
+          window.history.replaceState(null, "", url.href);
+          window.dispatchEvent(new Event("routechange"));
+        }
+      } catch {
+        // Non-browser or malformed URL: tab state still updates locally.
+      }
       startTransition(() => {
         setTab(tabId as T);
       });
     },
-    [validTabs],
+    [paramKey, validTabs],
   );
-  return [tab, setTabTransition, isPending];
+  return [tab, setTabTransition];
 }

@@ -1,5 +1,3 @@
-import { dedupeBy } from "@/shared/utils";
-
 const PLACEHOLDER_TEXTS = new Set([
   "-",
   "--",
@@ -60,7 +58,7 @@ function isValidHttpUrl(link: string): boolean {
   }
 }
 
-function isValidRowId(id: unknown): boolean {
+export function isValidRowId(id: unknown): boolean {
   if (typeof id !== "string") return false;
   const t = id.trim();
   if (!t || t.length > 500) return false;
@@ -105,18 +103,10 @@ export function isUsableOpenRouterPricing(input: number, output: number): boolea
   return true;
 }
 
-export function isValidOpenRouterRowId(permaslug: unknown): boolean {
-  return isValidRowId(permaslug);
-}
-
 export function isValidOpenRouterDirectoryRow(m: { id?: unknown; pricing?: unknown }): boolean {
   if (!isValidRowId(m.id)) return false;
   if (m.pricing == null || typeof m.pricing !== "object") return false;
   return true;
-}
-
-export function isValidHuggingFaceId(id: unknown): boolean {
-  return isValidRowId(id);
 }
 
 export function keepOpenSourceRanking(m: { downloads: number }): boolean {
@@ -144,15 +134,4 @@ export function isSuitableNewsItem(title: unknown, link: unknown): boolean {
   if (NEWS_TITLE_BAD_RE.test(t)) return false;
   if (!isValidHttpUrl(l)) return false;
   return true;
-}
-
-export function filterMapDedupe<T, R>(
-  items: T[],
-  mapFn: (item: T) => R | null,
-  keyFn: (item: R) => string | null | undefined,
-): R[] {
-  return dedupeBy(
-    items.map(mapFn).filter((m): m is R => m !== null),
-    keyFn,
-  );
 }

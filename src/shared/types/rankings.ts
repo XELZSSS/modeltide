@@ -27,6 +27,8 @@ export interface OpenRouterRankEntry {
 export interface OpenRouterRankingsPayload {
   tokenUsageRankings: OpenRouterRankEntry[];
   fetchedAt: string;
+  /** True when the pricing directory was empty and rankings ship without prices. */
+  partial?: boolean;
 }
 
 export interface OpenSourceModelEntry {

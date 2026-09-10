@@ -1,6 +1,6 @@
 import { StrictMode, Suspense, lazy, useEffect, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { usePathname, useSearchParams } from "@/client/router";
+import { usePathname } from "@/client/router";
 import { Providers } from "@/client/providers";
 import { AppShell } from "@/client/components/layout/AppShell";
 import { ErrorBoundary, NotFound, Spinner } from "@/client/components/feedback";
@@ -32,12 +32,12 @@ const SourceDetailView = lazy(() =>
 
 function SearchResetOnNavigate(): null {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const resetSearch = useSearchStore((s) => s.resetSearch);
 
+  // Pathname only: ?tab= switches (replaceState) must preserve the table filter.
   useEffect(() => {
     resetSearch();
-  }, [pathname, searchParams, resetSearch]);
+  }, [pathname, resetSearch]);
   return null;
 }
 

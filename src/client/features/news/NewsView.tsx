@@ -105,7 +105,7 @@ export function NewsView() {
 
   return (
     <TabbedPage title={t("aiNews")} tabs={tabs} activeTab={activeCategory} onTabChange={setActiveCategory}>
-      <SuspenseQuery key={activeCategory}>
+      <SuspenseQuery resetKey={activeCategory}>
         <NewsCategoryContent categoryId={activeCategory} />
       </SuspenseQuery>
     </TabbedPage>

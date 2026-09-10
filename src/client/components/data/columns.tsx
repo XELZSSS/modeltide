@@ -1,7 +1,6 @@
 "use client";
 import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
-import type { TFunction } from "@/shared/i18n";
 
 interface RankingNameCellProps {
   name: string;
@@ -53,30 +52,7 @@ export function rightCol<T>(
   cell: (row: T) => ReactNode,
   opts?: { hiddenMd?: boolean; width?: number | string },
 ): DataTableColumn<T> {
-  return { id, header, cell, align: "right", hiddenMd: false, ...opts };
-}
-
-export function rightColNA<T>(
-  id: string,
-  header: string,
-  render: (row: T) => ReactNode | null,
-  t: TFunction,
-  opts?: { hiddenMd?: boolean; width?: number | string; mobilePrimary?: boolean },
-): DataTableColumn<T> {
-  return rightCol(
-    id,
-    header,
-    (row) => {
-      const value = render(row);
-      const missing = value == null;
-      return (
-        <RightAlignedText className={missing ? "text-text-tertiary" : undefined}>
-          {missing ? t("notAvailable") : value}
-        </RightAlignedText>
-      );
-    },
-    opts,
-  );
+  return { id, header, cell, align: "right", ...opts };
 }
 
 export function mobilePrimaryCol<T>(
@@ -85,7 +61,7 @@ export function mobilePrimaryCol<T>(
   cell: (row: T) => ReactNode,
   opts?: { hiddenMd?: boolean },
 ): DataTableColumn<T> {
-  return { id, header, cell, align: "right", hiddenMd: false, mobilePrimary: true, ...opts };
+  return { id, header, cell, align: "right", mobilePrimary: true, ...opts };
 }
 
 export function rankCol<T>(rankOf: (row: T) => number | null | undefined): DataTableColumn<T> {

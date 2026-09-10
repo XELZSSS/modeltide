@@ -1,5 +1,5 @@
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import type { ModelMetaEntry } from "@/server/sources/openrouter/types";
+import type { ModelMetaEntry } from "@/server/parsers/or-types";
 import { normalizeModelKey, normalizePercent } from "@/shared/utils";
 
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {

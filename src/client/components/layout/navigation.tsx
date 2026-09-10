@@ -234,6 +234,8 @@ function NavRow({
       onClick={onClose}
       aria-current={active ? "page" : undefined}
       onTouchStart={() => onHover(item.path)}
+      onMouseEnter={() => onHover(item.path)}
+      onFocus={() => onHover(item.path)}
       className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors ${
         active ? "text-accent" : "text-text-primary hover:bg-hover"
       }`}

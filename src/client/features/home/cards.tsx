@@ -5,7 +5,6 @@ import type { TextToImageModel } from "@/shared/types";
 import { formatDollar, formatSpeed } from "@/client/utils/format";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { StatCard } from "@/client/components/ui/stat-card";
-import { CardGrid } from "@/client/components/ui/grids";
 import { Dot } from "@/client/components/ui/primitives";
 import { PageSection } from "@/client/components/layout";
 import type { HomeKpi, HomeProviderStat } from "./use-home-stats";
@@ -41,7 +40,7 @@ export const ProviderSpeedCard = memo(function ProviderSpeedCard({
   const { t } = useTranslation();
   return (
     <Card className="h-full">
-      <CardContent padding="md" className="flex flex-col h-full">
+      <CardContent className="flex flex-col h-full">
         <p className="ui-caption font-medium mb-1">{t("providerSpeed")}</p>
         <p className="ui-meta mb-3">{t("artificialSource")}</p>
         <div className="flex flex-col gap-3 flex-1 justify-between">
@@ -66,7 +65,7 @@ const TextToImageCard = memo(function TextToImageCard({ entry }: { entry: TextTo
   const { t } = useTranslation();
   return (
     <Card>
-      <CardContent padding="md" className="flex flex-col gap-3 w-full">
+      <CardContent className="flex flex-col gap-3 w-full">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span className="ui-card-title truncate">{entry.name}</span>
@@ -95,11 +94,11 @@ export const TextToImageSection = memo(function TextToImageSection({ models }: {
   if (models.length === 0) return null;
   return (
     <PageSection title={t("textToImage")} description={t("artificialSource")}>
-      <CardGrid cols={4} gap={3}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {models.slice(0, 8).map((entry) => (
           <TextToImageCard key={entry.id} entry={entry} />
         ))}
-      </CardGrid>
+      </div>
     </PageSection>
   );
 });

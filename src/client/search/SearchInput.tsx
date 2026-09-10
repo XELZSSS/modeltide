@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "@/client/router";
+import { usePathname, useRouter } from "@/client/router";
 import { Loader2, Search, X } from "lucide-react";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/providers";
@@ -8,7 +8,6 @@ import { useSearchStore } from "@/client/stores";
 import type { SearchResult } from "@/shared/types";
 import { useSearchAllRankings } from "@/client/search/use-search";
 import { useClickOutside, useListKeyboard } from "@/client/search/interaction";
-import { useDebouncedCallback } from "@/client/hooks/use-debounced-callback";
 
 const DEBOUNCE_MS = 200;
 
@@ -26,13 +25,35 @@ export function SearchInput({ className }: { className?: string }) {
   const searchTerm = useSearchStore((s) => s.searchTerm);
   const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [inputValue, setInputValue] = useState(searchTerm);
-  const { flush: debouncedSetTerm, cancel: cancelDebounce } = useDebouncedCallback(setSearchTerm, DEBOUNCE_MS);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelDebounce = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+  const debouncedSetTerm = useCallback(
+    (value: string) => {
+      cancelDebounce();
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        setSearchTerm(value);
+      }, DEBOUNCE_MS);
+    },
+    [cancelDebounce, setSearchTerm],
+  );
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
+  // Pathname only: ?tab= switches (replaceState) must preserve the typed query.
   useEffect(() => {
     cancelDebounce();
     setInputValue("");
-  }, [pathname, searchParams, cancelDebounce]);
+  }, [pathname, cancelDebounce]);
   useEffect(() => {
     if (inputValue !== searchTerm) debouncedSetTerm(inputValue);
   }, [inputValue, searchTerm, debouncedSetTerm]);

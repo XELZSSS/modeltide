@@ -82,14 +82,14 @@ function StatusContent() {
 
       {data.persisted === false && (
         <Card>
-          <CardContent padding="md">
+          <CardContent>
             <p className="text-xs text-text-secondary">{t("memoryModeNotice")}</p>
           </CardContent>
         </Card>
       )}
 
       <Card>
-        <CardContent padding="md" className="flex items-center justify-between gap-3 flex-wrap">
+        <CardContent className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <Dot
               size="md"

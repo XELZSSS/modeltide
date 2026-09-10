@@ -5,83 +5,30 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { parseRscPayloads, findNextData } from "@/server/parsers/rsc";
 import { zeroUpstream } from "@/server/infra/errors";
 import { byNumberDesc } from "@/server/parsers/shaping";
-import { hasCatalogIdentity, isValidModelIdentity } from "@/server/sources/data-filter";
-import { obj, str } from "@/server/parsers/primitives";
+import { isValidModelIdentity } from "@/server/parsers/data-filter";
 import { getModelDirectory } from "@/server/sources/openrouter/directory";
-import { compact, compactOmniscienceEnrich } from "@/server/sources/aa/compact";
-import { backfillFromMeta } from "@/server/sources/aa/match-meta";
-import {
-  INDEX_PATH,
-  MODELS_PATH,
-  OMNISCIENCE_PATH,
-  fetchAaRsc,
-  fetchAndParseEnrich,
-  findModelArray,
-} from "@/server/sources/aa/fetch";
-
-export function mergeBySlug(
-  catalog: Record<string, unknown>[],
-  ...enrich: Record<string, unknown>[][]
-): Record<string, unknown>[] {
-  const merged = new Map<string, Record<string, unknown>>();
-  for (const m of catalog) {
-    if (!hasCatalogIdentity(m)) continue;
-    const slug = str(m.slug);
-    if (!merged.has(slug)) merged.set(slug, { ...m });
-  }
-  for (const models of enrich) {
-    for (const m of models) {
-      const slug = str(m.slug);
-      if (!slug || !merged.has(slug)) continue;
-      const cur = merged.get(slug) as Record<string, unknown>;
-      const mergedEntry: Record<string, unknown> = { ...cur };
-      for (const [key, value] of Object.entries(m)) {
-        if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
-        if (value !== null && value !== undefined && value !== "") mergedEntry[key] = value;
-      }
-      if (cur.omniscienceBreakdown && m.omniscienceBreakdown) {
-        const patch = Object.fromEntries(
-          Object.entries(obj(m.omniscienceBreakdown) ?? {}).filter(
-            ([, v]) => v !== null && v !== undefined && v !== "",
-          ),
-        );
-        mergedEntry.omniscienceBreakdown = { ...obj(cur.omniscienceBreakdown), ...patch };
-      }
-      merged.set(slug, mergedEntry);
-    }
-  }
-  return [...merged.values()];
-}
-
-export interface IntelligenceIndexResult {
-  models: ArtificialAnalysisModel[];
-  /** Open-weights flags for the FULL pre-slice index: slug/id → flag. */
-  weights: Record<string, boolean>;
-  enrichFailed: boolean;
-}
-
-/** Weights lookup covering every merged model, built before the serving cap is applied. */
-export function buildWeightsRecord(models: ArtificialAnalysisModel[]): Record<string, boolean> {
-  const record: Record<string, boolean> = {};
-  for (const m of models) {
-    if (typeof m.is_open_weights !== "boolean") continue;
-    if (m.slug) record[m.slug] = m.is_open_weights;
-    if (m.id && m.id !== m.slug) record[m.id] = m.is_open_weights;
-  }
-  return record;
-}
+import { compact, compactOmniscienceEnrich } from "@/server/parsers/aa-catalog";
+import { backfillFromMeta } from "@/server/parsers/aa-match-meta";
+import { fetchAaRsc, fetchAndParseEnrich } from "@/server/sources/aa/fetch";
+import { upstreamEndpoints } from "@/server/config";
+import { buildWeightsRecord, findModelArray, mergeBySlug } from "@/server/parsers/aa-index";
+import type { IntelligenceIndexResult } from "@/server/parsers/aa-index";
 
 async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceIndexResult> {
   const [indexBody, [modelsPageModels, omniscienceEnrich], openRouterMeta] = await Promise.all([
-    fetchAaRsc(ctx, INDEX_PATH),
+    fetchAaRsc(ctx, upstreamEndpoints.aaIndex),
     Promise.all([
-      fetchAndParseEnrich<Record<string, unknown>>(ctx, "/models", MODELS_PATH, "initialModels", (tree) =>
-        findNextData(tree, "initialModels"),
+      fetchAndParseEnrich<Record<string, unknown>>(
+        ctx,
+        "/models",
+        upstreamEndpoints.aaModels,
+        "initialModels",
+        (tree) => findNextData(tree, "initialModels"),
       ),
       fetchAndParseEnrich<Record<string, unknown>>(
         ctx,
         "/omniscience",
-        OMNISCIENCE_PATH,
+        upstreamEndpoints.aaOmniscience,
         "initialModels",
         (tree) => {
           const arr = findNextData<Record<string, unknown>>(tree, "initialModels");
@@ -92,7 +39,7 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceInde
     ]),
     getModelDirectory(ctx)
       .then((d) => d.meta)
-      .catch(() => ({}) as Record<string, import("@/server/sources/openrouter/types").ModelMetaEntry>),
+      .catch(() => ({}) as Record<string, import("@/server/parsers/or-types").ModelMetaEntry>),
   ]);
 
   const [indexModels, catalog] = parseRscPayloads(indexBody, ["intelligenceIndex", "models"], findModelArray) as [

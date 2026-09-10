@@ -10,7 +10,12 @@ import { TableBody, TableHeader } from "./table-desktop";
 
 const DEFAULT_PAGE_SIZE = 8;
 
-export function usePagedData<T>(data: T[], getRowId: (row: T) => string, pageSize = 8, resetKey?: string | number) {
+export function usePagedData<T>(
+  data: T[],
+  getRowId: (row: T) => string,
+  pageSize = DEFAULT_PAGE_SIZE,
+  resetKey?: string | number,
+) {
   const dedupedData = useMemo(() => dedupeBy(data, getRowId), [data, getRowId]);
   const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : DEFAULT_PAGE_SIZE;
   const [page, setPage] = useState(1);

@@ -65,6 +65,11 @@ async function parseErrorMessage(res: Response): Promise<string> {
   return message;
 }
 
+// Wire contract (do not collapse): the Worker wraps every payload as
+// `{ data: T }` (see server/routes/define-route), and T itself is usually a
+// `SourcePayload<X> = { data: X; fetchedAt; partial? }`. So `apiFetch` unwraps
+// exactly ONE layer here; `normalize.ts` unwraps the second. If either side
+// changes the envelope, update both files together.
 async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { cache?: RequestCache }): Promise<T> {
   const url = buildApiUrl(path);
   const timeout = timeoutSignal(FETCH_TIMEOUT_MS);

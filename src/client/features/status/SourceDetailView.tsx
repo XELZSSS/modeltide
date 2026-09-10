@@ -113,7 +113,7 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
   return (
     <PageSection title={title}>
       <Card>
-        <CardContent padding="md">{children}</CardContent>
+        <CardContent>{children}</CardContent>
       </Card>
     </PageSection>
   );

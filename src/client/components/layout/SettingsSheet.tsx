@@ -1,5 +1,5 @@
 "use client";
-import { memo, type ReactNode } from "react";
+import { memo, type KeyboardEvent, type ReactNode } from "react";
 import { Download, Languages, RefreshCw, SunMoon } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { useSettingsStore } from "@/client/stores";
@@ -19,12 +19,28 @@ const Segmented = memo(function Segmented({
   options: { value: string; label: ReactNode }[];
   label?: string;
 }) {
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const dir = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1;
+    const idx = options.findIndex((o) => o.value === value);
+    const next = options[(idx + dir + options.length) % options.length];
+    if (next) {
+      onChange(next.value);
+      // Move DOM focus to the newly checked radio (WAI-APG roving pattern).
+      const group = e.currentTarget;
+      const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+      buttons[(idx + dir + options.length) % options.length]?.focus();
+    }
+  };
+
   return (
     <div
       className="flex rounded-none border border-border bg-bg-secondary p-0.5"
       role="radiogroup"
       aria-label={label}
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={handleKeyDown}
     >
       {options.map((opt) => (
         <button
@@ -32,6 +48,7 @@ const Segmented = memo(function Segmented({
           key={opt.value}
           role="radio"
           aria-checked={value === opt.value}
+          tabIndex={value === opt.value ? 0 : -1}
           onClick={() => onChange(opt.value)}
           className={cn(
             "h-7 px-3 rounded-none inline-flex items-center justify-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",

@@ -107,7 +107,9 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
       continue;
     }
   }
-  if (raws.length === 0) return { sources: {} };
+  // KV empty (expired on first deploy, TTL lapse): fall back to this isolate's
+  // memory samples rather than reporting a blank history.
+  if (raws.length === 0) return Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} };
   // Nothing salvageable: back up the raw payloads before clearing the keys so
   // they aren't re-parsed forever. The next cron sample rebuilds from scratch,
   // but the last copy of history survives for manual recovery.
@@ -117,7 +119,7 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
     });
     await Promise.all(raws.map(({ key }) => ctx.kv!.delete(key)));
   } catch {}
-  return { sources: {} };
+  return Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} };
 }
 
 /** Drop unreadable per-source entries, keep readable ones. `null` when nothing survives. */
@@ -137,9 +139,10 @@ function salvageStore(parsed: unknown): HistoryStore | null {
   return Object.keys(out).length > 0 ? { sources: out } : null;
 }
 
-export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Promise<void> {
+export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Promise<boolean | null> {
   const token = await acquireSampleLock(ctx);
-  if (!token) return;
+  // Lock held by another instance: skipped, not a failure (caller treats null as neutral).
+  if (!token) return null;
   try {
     const [probed, providerResults] = await Promise.all([probeTargets(ctx), fetchProviderStatuses(ctx)]);
     const aggregates = aggregateProbes(probed);
@@ -151,7 +154,11 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
         error: result.error,
       });
     }
+    // Fully unknown round: mergeSamplesIntoStore writes nothing; report false
+    // so the cron health check can fail the dead-man's-switch ping.
+    if (aggregates.size === 0) return false;
     await mergeSamplesIntoStore(ctx, aggregates, now);
+    return true;
   } finally {
     await releaseSampleLock(ctx, token);
   }

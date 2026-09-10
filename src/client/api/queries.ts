@@ -11,7 +11,7 @@ import {
   THIRTY_MINUTES,
   publicApiPaths as apiPaths,
 } from "@/shared/config";
-import { fetcher, type QueryCtx } from "@/client/api/client";
+import { fetcher } from "@/client/api/client";
 import { buildHallucinationRankings } from "@/client/utils/hallucination";
 import { queryKeys } from "@/shared/config";
 import type {
@@ -35,9 +35,6 @@ interface ApiQueryOptions<T> {
   ttl?: number;
   staleTime?: number;
   gcTime?: number;
-  refetchInterval?: number | false;
-  refetchIntervalInBackground?: boolean;
-  queryFn?: (ctx: QueryCtx) => Promise<T>;
   /**
    * When the served data is partial (degraded upstream), poll on this
    * interval instead of sitting on the full staleTime. Matches the
@@ -48,9 +45,9 @@ interface ApiQueryOptions<T> {
 }
 
 function createApiQuery<T>(key: readonly (string | number)[], path: string, opts?: ApiQueryOptions<T>) {
-  const { queryFn: customFn, ttl, partialRefetchMs, isPartialData, ...rest } = opts ?? {};
-  const queryFn = customFn ?? fetcher<T>(path);
-  const ttlMs = ttl ?? rest.staleTime ?? THIRTY_MINUTES;
+  const { ttl, staleTime, gcTime, partialRefetchMs, isPartialData } = opts ?? {};
+  const queryFn = fetcher<T>(path);
+  const ttlMs = ttl ?? staleTime ?? THIRTY_MINUTES;
   const partialPoll: false | ((query: unknown) => number | false) =
     partialRefetchMs != null && isPartialData != null
       ? // (query: unknown): keeps T inference for useQuery intact, and matches
@@ -61,10 +58,9 @@ function createApiQuery<T>(key: readonly (string | number)[], path: string, opts
         }
       : false;
   const timing = {
-    gcTime: rest.gcTime ?? Math.min(Math.max(ttlMs, THIRTY_MINUTES), STATIC_TTL_MS),
+    gcTime: gcTime ?? Math.min(Math.max(ttlMs, THIRTY_MINUTES), STATIC_TTL_MS),
     refetchInterval: partialPoll,
-    ...rest,
-    staleTime: rest.staleTime ?? ttlMs,
+    staleTime: staleTime ?? ttlMs,
   };
   return {
     use: (enabled = true) => useQuery<T>({ queryKey: key, queryFn, ...timing, enabled }),
@@ -80,6 +76,8 @@ const qArtificialRaw = createApiQuery<SourcePayload<ArtificialAnalysisModel[]>>(
   apiPaths.artificialIndex,
   {
     ttl: THIRTY_MINUTES,
+    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+    isPartialData: (d) => d?.partial === true,
   },
 );
 const qOpenSourceReleasesRaw = createApiQuery<SourcePayload<OpenSourceModelEntry[]>>(
@@ -90,7 +88,11 @@ const qOpenSourceReleasesRaw = createApiQuery<SourcePayload<OpenSourceModelEntry
 const qOpenRouter = createApiQuery<OpenRouterRankingsPayload>(
   queryKeys.openRouterRankings,
   apiPaths.openRouterRankings,
-  { ttl: THIRTY_MINUTES },
+  {
+    ttl: THIRTY_MINUTES,
+    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+    isPartialData: (d) => d?.partial === true,
+  },
 );
 const qHomeDashboardRaw = createApiQuery<HomeDashboardData>(queryKeys.homeDashboard, apiPaths.homeDashboard, {
   ttl: FIVE_MINUTES,
@@ -104,43 +106,13 @@ const qOpenSourceModelsRaw = createApiQuery<SourcePayload<OpenSourceModelEntry[]
   { ttl: SLOW_TTL_MS },
 );
 
-function resolveNewsCategory(c: NewsCategory): NewsCategory {
-  return (NEWS_CATEGORIES.includes(c) ? c : NEWS_CATEGORIES[0]) as NewsCategory;
-}
-
-function getCachedQuery<K extends string, Q>(cache: Map<K, Q>, key: K, create: () => Q): Q {
-  const existing = cache.get(key);
-  if (existing) return existing;
-  const created = create();
-  cache.set(key, created);
-  return created;
-}
-
-function safeUnwrapList<T>(payload: unknown, label: string): T[] {
-  if (payload == null) return [] as T[];
-  try {
-    return unwrapList<T>(payload, label);
-  } catch (err) {
-    console.warn(`[api] dropping malformed ${label} payload:`, err);
-    return [] as T[];
-  }
-}
-
-const newsQueryCache = new Map<string, ReturnType<typeof createApiQuery<SourcePayload<NewsItem[]>>>>();
-const openSourceModelQueryCache = new Map<
-  string,
-  ReturnType<typeof createApiQuery<SourcePayload<OpenSourceModelEntry | null>>>
->();
-
 const qNewsRaw = (c: NewsCategory) => {
-  const safe = resolveNewsCategory(c);
-  return getCachedQuery(newsQueryCache, safe, () =>
-    createApiQuery<SourcePayload<NewsItem[]>>(queryKeys.news(safe), apiPaths.news(safe), {
-      ttl: THIRTY_MINUTES,
-      partialRefetchMs: PARTIAL_FAIL_TTL_MS,
-      isPartialData: (d) => d?.partial === true,
-    }),
-  );
+  const safe = (NEWS_CATEGORIES.includes(c) ? c : NEWS_CATEGORIES[0]) as NewsCategory;
+  return createApiQuery<SourcePayload<NewsItem[]>>(queryKeys.news(safe), apiPaths.news(safe), {
+    ttl: THIRTY_MINUTES,
+    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+    isPartialData: (d) => d?.partial === true,
+  });
 };
 
 const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHistory, apiPaths.statusHistory, {
@@ -149,6 +121,10 @@ const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHist
 const qAgent = createApiQuery<AgentRankingsPayload>(queryKeys.agentRankings, apiPaths.agentRankings, {
   ttl: SLOW_TTL_MS,
 });
+// STATIC (6h stale) is intentional for slow-moving data: official pricing and
+// closed-release archives change on release cadence, not minutes. A wrong price
+// can linger up to 6h — accepted tradeoff for fewer upstreams hits; shorten to
+// SLOW_TTL_MS if fresher pricing ever matters more than quota.
 export const qOfficialPricing = createApiQuery<OfficialPricingPayload>(
   queryKeys.officialPricing,
   apiPaths.officialPricing,
@@ -169,7 +145,7 @@ const qClosedReleasesRaw = createApiQuery<SourcePayload<ClosedReleaseEntry[]>>(
 
 export function useArtificialRankings(enabled = true) {
   const q = qArtificialRaw.use(enabled);
-  const data = useMemo(() => safeUnwrapList<ArtificialAnalysisModel>(q.data, "artificialIndex"), [q.data]);
+  const data = useMemo(() => unwrapListPartial<ArtificialAnalysisModel>(q.data, "artificialIndex").data, [q.data]);
   return { ...q, data };
 }
 
@@ -197,12 +173,10 @@ export function useSuspenseOpenSourceReleases(): OpenSourceModelEntry[] {
 }
 
 const qOpenSourceModel = (id: string) =>
-  getCachedQuery(openSourceModelQueryCache, id, () =>
-    createApiQuery<SourcePayload<OpenSourceModelEntry | null>>(
-      queryKeys.openSourceModel(id),
-      apiPaths.openSourceModel(id),
-      { ttl: SLOW_TTL_MS },
-    ),
+  createApiQuery<SourcePayload<OpenSourceModelEntry | null>>(
+    queryKeys.openSourceModel(id),
+    apiPaths.openSourceModel(id),
+    { ttl: SLOW_TTL_MS },
   );
 
 /** Single-model lookup without any list window; missing rows resolve to null. */
@@ -243,14 +217,16 @@ export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
   const trending = qOpenSourceModelsRaw.use(enabled);
   const releases = qOpenSourceReleasesRaw.use(enabled);
 
-  const trendingList = useMemo(
-    () => safeUnwrapList<OpenSourceModelEntry>(trending.data, "openSourceModels"),
+  const trendingUnwrapped = useMemo(
+    () => unwrapListPartial<OpenSourceModelEntry>(trending.data, "openSourceModels"),
     [trending.data],
   );
-  const releasesList = useMemo(
-    () => safeUnwrapList<OpenSourceModelEntry>(releases.data, "openSourceReleases"),
+  const releasesUnwrapped = useMemo(
+    () => unwrapListPartial<OpenSourceModelEntry>(releases.data, "openSourceReleases"),
     [releases.data],
   );
+  const trendingList = trendingUnwrapped.data;
+  const releasesList = releasesUnwrapped.data;
 
   const data = useMemo(
     () =>
@@ -262,9 +238,13 @@ export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
   );
 
   const hasData = data.length > 0;
-  const isPending = enabled && !hasData && (trending.isPending || releases.isPending);
-  const isError = enabled && !hasData && (trending.isError || releases.isError);
-  const error = isError ? (trending.error ?? releases.error ?? null) : null;
+  const malformed = trendingUnwrapped.malformed || releasesUnwrapped.malformed;
+  const isPending = enabled && !hasData && !malformed && (trending.isPending || releases.isPending);
+  const isError =
+    enabled &&
+    !hasData &&
+    (trending.isError || releases.isError || (malformed && !trending.isPending && !releases.isPending));
+  const error = isError ? (trending.error ?? releases.error ?? new Error("Malformed open-source payload")) : null;
 
   return {
     data,
@@ -296,6 +276,9 @@ export const prefetchQueriesForRoute = (qc: QueryClient, pathname: string): void
     void qStatusHistory.prefetch(qc);
   } else if (pathname === "/models") {
     void qArtificialRaw.prefetch(qc);
+    void qOpenRouter.prefetch(qc);
+    void qOpenSourceModelsRaw.prefetch(qc);
+    void qAgent.prefetch(qc);
   } else if (pathname === "/releases") {
     void qOpenSourceReleasesRaw.prefetch(qc);
     void qClosedReleasesRaw.prefetch(qc);

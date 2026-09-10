@@ -71,13 +71,11 @@ interface TabbedPageProps {
   description?: string;
   actions?: ReactNode;
   compact?: boolean;
-  containerClassName?: string;
   countLabel?: string;
   tabs: TabItem[];
   activeTab: string;
   onTabChange: (id: string) => void;
   tabSize?: "sm" | "md";
-  tabClassName?: string;
   tabFill?: boolean;
   children: ReactNode;
 }
@@ -87,32 +85,23 @@ export function TabbedPage({
   description,
   actions,
   compact,
-  containerClassName,
   countLabel,
   tabs,
   activeTab,
   onTabChange,
   tabSize = "sm",
-  tabClassName,
   tabFill,
   children,
 }: TabbedPageProps) {
   return (
-    <PageContainer className={containerClassName}>
+    <PageContainer>
       <PageHeader compact={compact} title={title} description={description} actions={actions} />
       {countLabel && (
         <div className="flex items-center gap-2 mb-4">
           <span className="text-xs text-text-tertiary">{countLabel}</span>
         </div>
       )}
-      <TabContainer
-        tabs={tabs}
-        activeTab={activeTab}
-        tabSize={tabSize}
-        className={tabClassName}
-        fill={tabFill}
-        onTabChange={onTabChange}
-      >
+      <TabContainer tabs={tabs} activeTab={activeTab} tabSize={tabSize} fill={tabFill} onTabChange={onTabChange}>
         {children}
       </TabContainer>
     </PageContainer>

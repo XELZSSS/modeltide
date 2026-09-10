@@ -16,7 +16,9 @@ export function BackButton({ labelKey, to }: { labelKey: TranslationKey; to: str
     const raw = typeof window !== "undefined" ? (window.history.state as { idx?: unknown } | null)?.idx : undefined;
     const idx = typeof raw === "number" && Number.isInteger(raw) ? raw : undefined;
     if (idx != null && idx > 0) router.back();
-    else router.push(to);
+    // Fallback replaces instead of pushing: no extra history entry when the
+    // user landed here directly (deep link, reload, new tab).
+    else router.replace(to);
   };
   return (
     <Button size="sm" variant="outline" onClick={goBack} className="self-start">

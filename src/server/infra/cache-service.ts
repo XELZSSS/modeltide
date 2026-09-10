@@ -1,6 +1,6 @@
 import { utf8ByteLength, fnv1aHash } from "@/shared/utils";
 import { UpstreamError } from "@/server/infra/errors";
-import { ENVELOPE_VERSION, isEnvelope, maxStaleMs, type StaleEnvelope } from "@/server/infra/cache/envelope";
+import { isEnvelope, maxStaleMs, type StaleEnvelope } from "@/server/infra/cache/envelope";
 import { L1_MAX_TTL_MS, MAX_KV_RETENTION_TTL_S } from "@/server/config";
 import { MemoryL1 } from "@/server/infra/cache/memory-l1";
 
@@ -42,35 +42,42 @@ const FAILURE_COOLDOWN_MS = 45_000;
 const FAILURE_COOLDOWN_MAX_KEYS = 512;
 
 class FailureCooldown {
-  private lastFailAt = new Map<string, number>();
+  private lastFail = new Map<string, { at: number; timeout: boolean }>();
 
   constructor(private windowMs: number = FAILURE_COOLDOWN_MS) {}
 
   shouldSkip(key: string, windowMs?: number): boolean {
     const window = windowMs ?? this.windowMs;
-    const at = this.lastFailAt.get(key);
-    if (at == null) return false;
-    if (Date.now() - at < window) return true;
-    this.lastFailAt.delete(key);
+    const entry = this.lastFail.get(key);
+    if (entry == null) return false;
+    if (Date.now() - entry.at < window) return true;
+    this.lastFail.delete(key);
     return false;
   }
 
-  record(key: string): void {
+  /** Whether the recorded failure for key was timeout-caused (for 504 fidelity). */
+  wasTimeout(key: string): boolean {
+    return this.lastFail.get(key)?.timeout === true;
+  }
+
+  record(key: string, err?: unknown): void {
     const now = Date.now();
-    this.lastFailAt.set(key, now);
-    if (this.lastFailAt.size <= FAILURE_COOLDOWN_MAX_KEYS) return;
-    for (const [k, t] of this.lastFailAt) {
-      if (now - t >= this.windowMs) this.lastFailAt.delete(k);
+    const timeout =
+      (err instanceof UpstreamError && err.causedByTimeout) || (err instanceof Error && err.name === "TimeoutError");
+    this.lastFail.set(key, { at: now, timeout });
+    if (this.lastFail.size <= FAILURE_COOLDOWN_MAX_KEYS) return;
+    for (const [k, t] of this.lastFail) {
+      if (now - t.at >= this.windowMs) this.lastFail.delete(k);
     }
-    while (this.lastFailAt.size > FAILURE_COOLDOWN_MAX_KEYS) {
-      const oldest = this.lastFailAt.keys().next();
+    while (this.lastFail.size > FAILURE_COOLDOWN_MAX_KEYS) {
+      const oldest = this.lastFail.keys().next();
       if (oldest.done) break;
-      this.lastFailAt.delete(oldest.value);
+      this.lastFail.delete(oldest.value);
     }
   }
 
   clear(): void {
-    this.lastFailAt.clear();
+    this.lastFail.clear();
   }
 }
 
@@ -155,7 +162,7 @@ export class CacheService {
     const requested = ttl;
     const effective = jitteredTtl(vk, Number.isFinite(requested) && requested > 0 ? requested : ttl);
     try {
-      const serialized = JSON.stringify({ d: data, e: Date.now() + effective, t: effective, v: ENVELOPE_VERSION });
+      const serialized = JSON.stringify({ d: data, e: Date.now() + effective, t: effective });
       const bytes = utf8ByteLength(serialized);
       this.l1.set(vk, data, hasKv ? l1TtlFor(effective) : effective, bytes);
       await this.setSerialized(vk, serialized, effective);
@@ -177,7 +184,10 @@ export class CacheService {
       if (!mem) return this.refresh(vk, ttl, fn);
       try {
         return await this.refresh(vk, ttl, fn);
-      } catch {
+      } catch (err) {
+        // Memory-only mode still honors the stale budget so an isolate never
+        // serves arbitrarily old data (mirrors the KV stale path below).
+        if (Date.now() - mem.e > maxStaleMs(ttl)) throw err;
         return mem.d;
       }
     }
@@ -210,7 +220,10 @@ export class CacheService {
     const existing = this.inflight.get<T>(vk);
     if (existing) return existing;
     if (refreshFailureCooldown.shouldSkip(vk, this.failureCooldownMs)) {
-      throw new UpstreamError(`Upstream refresh skipped (failure cooldown) for ${vk}`);
+      // Preserve the original failure class so a timed-out upstream keeps
+      // surfacing 504 (not 502) while the cooldown is armed.
+      const timeout = refreshFailureCooldown.wasTimeout(vk);
+      throw new UpstreamError(`Upstream refresh skipped (failure cooldown) for ${vk}`, { timeout });
     }
     const p = this.inflight.run(
       vk,
@@ -223,7 +236,7 @@ export class CacheService {
     try {
       return await p;
     } catch (err) {
-      refreshFailureCooldown.record(vk);
+      refreshFailureCooldown.record(vk, err);
       throw err;
     } finally {
       this.inflight.release(vk, p);

@@ -5,8 +5,6 @@ const FIRST_LAUNCH_KEY = "uptime:first-launch";
 
 let memoryFirstLaunch: number | null = null;
 
-const firstLaunchCache = new WeakMap<object, number>();
-
 export interface UptimePayload {
   firstLaunchAt: string;
   uptimeMs: number;
@@ -23,13 +21,6 @@ function memoryUptime(now: number): UptimePayload {
 export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
   const now = Date.now();
   if (!ctx.kv) return memoryUptime(now);
-  const cached = firstLaunchCache.get(ctx.kv);
-  if (cached != null) {
-    return {
-      firstLaunchAt: new Date(cached).toISOString(),
-      uptimeMs: Math.max(0, now - cached),
-    };
-  }
   let raw: string | null;
   try {
     raw = await ctx.kv.get(FIRST_LAUNCH_KEY);
@@ -46,7 +37,6 @@ export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
       ctx.log("warn", `[uptime] failed to persist first launch: ${errMsg(err)}`);
     }
   }
-  firstLaunchCache.set(ctx.kv, firstLaunchMs);
 
   return {
     firstLaunchAt: new Date(firstLaunchMs).toISOString(),

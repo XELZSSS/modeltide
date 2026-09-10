@@ -1,13 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache-service";
-import { backfillFromMeta } from "@/server/sources/aa/match-meta";
-import { compact, compactOmniscienceEnrich } from "@/server/sources/aa/compact";
-import { parseChangelogModels } from "@/server/sources/aa/changelog";
-import { buildWeightsRecord, mergeBySlug } from "@/server/sources/aa/intelligence-index";
-import { getTextToImageLeaderboard, mapEntry, type RawEntry } from "@/server/sources/aa/text-to-image";
-import { categoryFrom, creatorFromSlug, mapModels, titleFromSlug } from "@/server/sources/openrouter/mapping";
-import { parseDirectoryRows } from "@/server/sources/openrouter/directory";
-import { type ModelRow, type PricingEntry } from "@/server/sources/openrouter/types";
+import { backfillFromMeta } from "@/server/parsers/aa-match-meta";
+import { compact, compactOmniscienceEnrich } from "@/server/parsers/aa-catalog";
+import { parseChangelogModels } from "@/server/parsers/aa-changelog";
+import { buildWeightsRecord, mergeBySlug } from "@/server/parsers/aa-index";
+import { getTextToImageLeaderboard } from "@/server/sources/aa/text-to-image";
+import { mapEntry, type RawEntry } from "@/server/parsers/aa-text-to-image";
+import { categoryFrom, creatorFromSlug, mapModels, titleFromSlug } from "@/server/parsers/or-rankings";
+import { parseDirectoryRows } from "@/server/parsers/or-directory";
+import { type ModelRow, type PricingEntry } from "@/server/parsers/or-types";
 import { getModels, getModelById, fetchHFModelById } from "@/server/sources/huggingface";
 import { UpstreamError } from "@/server/infra/errors";
 import { CacheService } from "@/server/infra/cache-service";
@@ -31,8 +32,8 @@ import { normalizeModelKey } from "@/shared/utils";
 import { upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import type { ArtificialAnalysisModel, DayBucket, SourceStatus, UptimeSample } from "@/shared/types";
-import { isClosedChangelogRelease, toClosedReleases } from "@/server/sources/closed-releases";
-import type { ChangelogModel } from "@/server/sources/aa/changelog";
+import { isClosedChangelogRelease, toClosedReleases } from "@/server/parsers/closed-releases";
+import type { ChangelogModel } from "@/server/parsers/aa-changelog";
 
 beforeEach(() => resetModuleCachesForTests());
 function rawModel(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -1285,7 +1286,7 @@ describe("parseAgentBoards (agent overall composite)", () => {
   ].join("\n");
 
   it("composites the overall board as the mean of the five signals", async () => {
-    const { parseAgentBoards } = await import("@/server/sources/agent-arena");
+    const { parseAgentBoards } = await import("@/server/parsers/agent-board");
     const rows = parseAgentBoards(FLIGHT_BODY);
     expect(rows.map((r) => r.id)).toEqual(["contenders/c", "contenders/a", "contenders/b"]);
     expect(rows.map((r) => r.rank)).toEqual([1, 2, 3]);
@@ -1295,7 +1296,7 @@ describe("parseAgentBoards (agent overall composite)", () => {
   });
 
   it("throws when a signal board is missing (shape drift)", async () => {
-    const { parseAgentBoards } = await import("@/server/sources/agent-arena");
+    const { parseAgentBoards } = await import("@/server/parsers/agent-board");
     expect(() => parseAgentBoards('41:{"signals":[]}')).toThrow();
   });
 
@@ -1320,7 +1321,7 @@ describe("parseAgentBoards (agent overall composite)", () => {
   });
 
   it("caps parsed boards at SOURCE_LIMITS.agentRankings entries", async () => {
-    const { buildAgentOverall } = await import("@/server/sources/agent-arena");
+    const { buildAgentOverall } = await import("@/server/parsers/agent-board");
     const boards = SIGNALS.map((signal) => ({
       signal,
       rows: Array.from({ length: 150 }, (_, i) => ({

@@ -18,11 +18,15 @@ export function interpolate(template: string, params?: TranslationParams): strin
 
 export function createT(
   lang: Lang,
-  opts?: { onMissingParam?: (key: TranslationKey, rendered: string) => void },
+  opts?: {
+    onMissingParam?: (key: TranslationKey, rendered: string) => void;
+    onMissingKey?: (key: string, lang: Lang) => void;
+  },
 ): TFunction {
   const dict = dictionaries[lang];
   return (key, params) => {
     const template = dict[key] ?? en[key] ?? key;
+    if (!(key in dict) && opts?.onMissingKey) opts.onMissingKey(key, lang);
     const out = interpolate(template, params);
     if (opts?.onMissingParam && /\{\w+\}/.test(out)) opts.onMissingParam(key, out);
     return out;

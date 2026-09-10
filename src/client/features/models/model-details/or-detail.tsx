@@ -3,7 +3,7 @@ import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import type { OpenRouterRankEntry } from "@/shared/types";
 import { categoryLabel, formatPricePerMillion, formatShortNumber, formatTrend } from "@/client/utils/format";
-import { DetailLayout, InfoGrid, StatGrid } from "@/client/components/ui/grids";
+import { InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { useSuspenseOpenRouterRankings } from "@/client/api/queries";
@@ -22,7 +22,7 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
     ["outputTokens", formatShortNumber(model.completionTokens ?? 0)],
   ];
   return (
-    <DetailLayout>
+    <div className="flex flex-col gap-4">
       <StatGrid columns={4}>
         <StatCard label={t("creator")} value={model.creator} />
         {tokenStats.map(([labelKey, value]) => (
@@ -63,7 +63,7 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
           {model.isFree && <Badge className="text-success">{t("free")}</Badge>}
         </div>
       )}
-    </DetailLayout>
+    </div>
   );
 }
 
@@ -71,7 +71,7 @@ export const OrDetail = createDetailView(
   () => {
     const { data } = useSuspenseOpenRouterRankings();
     if (data && !Array.isArray(data.tokenUsageRankings)) {
-      return { data: undefined, isPending: false, isError: true };
+      throw new Error("openRouterRankings: invalid shape (tokenUsageRankings is not an array)");
     }
     return { data: data?.tokenUsageRankings };
   },

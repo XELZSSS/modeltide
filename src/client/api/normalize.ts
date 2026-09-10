@@ -51,17 +51,23 @@ export function normalizeHomeDashboard(raw: HomeDashboardData, label = "homeDash
   return { orRankings, textToImage, opensource, partial };
 }
 
-/** Non-throwing variant of unwrapList that also surfaces the payload partial flag. */
-export function unwrapListPartial<T>(payload: unknown, label: string): { data: T[]; partial: boolean } {
+/**
+ * Non-throwing variant of unwrapList that also surfaces the payload partial
+ * flag and whether the payload failed local validation (`malformed`).
+ */
+export function unwrapListPartial<T>(
+  payload: unknown,
+  label: string,
+): { data: T[]; partial: boolean; malformed: boolean } {
   const partial =
     typeof payload === "object" && payload != null && "partial" in payload
       ? (payload as SourcePayload<T[]>).partial === true
       : false;
-  if (payload == null) return { data: [] as T[], partial };
+  if (payload == null) return { data: [] as T[], partial, malformed: false };
   try {
-    return { data: unwrapList<T>(payload, label), partial };
+    return { data: unwrapList<T>(payload, label), partial, malformed: false };
   } catch (err) {
     console.warn(`[api] dropping malformed ${label} payload:`, err);
-    return { data: [] as T[], partial };
+    return { data: [] as T[], partial, malformed: true };
   }
 }

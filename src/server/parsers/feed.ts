@@ -3,7 +3,7 @@ import type { NewsItem } from "@/shared/types";
 import { MAX_FEED_BYTES } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
 import { UpstreamError } from "@/server/infra/errors";
-import { isSuitableNewsItem } from "@/server/sources/data-filter";
+import { isSuitableNewsItem } from "@/server/parsers/data-filter";
 import { isRecord } from "@/server/parsers/primitives";
 import { decodeEntities } from "@/server/parsers/entities";
 import { stripHtml } from "@/server/parsers/html";

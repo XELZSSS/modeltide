@@ -50,6 +50,7 @@
             stored === "dark" ||
             (stored == null && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
           if (dark) document.documentElement.classList.add("dark");
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
           var m = document.querySelector("meta[name='theme-color']");
           if (m) m.setAttribute("content", dark ? "#000000" : "#ffffff");
           if (lang) document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";

@@ -25,8 +25,3 @@ export function byNumberDesc<T>(score: (item: T) => number | null | undefined): 
     return (sb ?? Number.NEGATIVE_INFINITY) - (sa ?? Number.NEGATIVE_INFINITY);
   };
 }
-
-/** Assign 1-based ranks in the given order, without re-sorting. */
-export function withRanks<T>(items: T[]): (T & { rank: number })[] {
-  return items.map((item, i) => ({ ...item, rank: i + 1 }));
-}

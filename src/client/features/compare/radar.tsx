@@ -94,10 +94,19 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
   return (
     <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:items-stretch">
       <Card className="w-full md:w-1/2">
-        <CardContent padding="md" className="h-full flex items-center justify-center">
+        <CardContent className="h-full flex items-center justify-center">
           <div className="w-full h-[240px] sm:h-[320px]">
             <figure className="h-full">
               <Radar data={data} options={options} role="img" aria-label={t("modelComparison")} />
+              <figcaption className="sr-only">
+                {radarData.map((row) => {
+                  const values = models.map((m, i) => {
+                    const v = row[`model_${i}`];
+                    return `${m.short_name || m.name}: ${typeof v === "number" ? v.toFixed(1) : "—"}`;
+                  });
+                  return `${String(row.metric)} — ${values.join(", ")}`;
+                })}
+              </figcaption>
             </figure>
           </div>
         </CardContent>

@@ -6,6 +6,8 @@
  * - Hashed build output (/assets/*) + fonts/icons: cache-first with
  *   background revalidation (filenames are content-hashed, so stale risk is nil).
  * - /api/*: never cached, always network (server + React Query own the policy).
+ *   Offline reads are served from the React Query cache, not the SW — do NOT
+ *   add stale-while-revalidate here or prices/rankings will go stale silently.
  * - SKIP_WAITING message from the client activates updates on demand.
  */
 

@@ -84,7 +84,7 @@ export const PriceChart = memo(function PriceChart({
 
   return (
     <Card>
-      <CardContent padding="md">
+      <CardContent>
         <p className="ui-card-title mb-4">{t("priceComparison")}</p>
         <div className="w-full h-[200px] sm:h-[240px]">
           <figure className="h-full">

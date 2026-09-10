@@ -117,7 +117,7 @@ function DesktopTable({ rows, models, getKey, getName, getColor, renderValue, wi
   const { t } = useTranslation();
   return (
     <Card>
-      <CardContent padding="md">
+      <CardContent>
         <div className="min-w-0 w-full overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -171,7 +171,7 @@ function MobileTable({
       <div className="flex flex-col gap-3">
         {models.map((model, index) => (
           <Card key={getKey(model, index)}>
-            <CardContent padding="sm" className="flex flex-col gap-3">
+            <CardContent className="flex flex-col gap-3 sm:p-4">
               <p className="flex items-center gap-2 text-sm font-medium truncate" style={{ color: getColor(index) }}>
                 <Dot size="sm" color={getColor(index)} />
                 {getName(model)}
@@ -193,7 +193,7 @@ function MobileTable({
 
   return (
     <Card>
-      <CardContent padding="sm">
+      <CardContent className="sm:p-4">
         <div className="flex flex-col divide-y divide-border">
           {rows.map((row) => {
             const perModel = winners.get(rowKey(row));

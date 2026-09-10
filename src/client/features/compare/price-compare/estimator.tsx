@@ -26,7 +26,7 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
 
   return (
     <Card>
-      <CardContent padding="md">
+      <CardContent>
         <p className="ui-card-title mb-4">{t("estimatedMonthlyCost")}</p>
         <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-5">
           <CostEstimatorInputs state={inputs} layout="label-input-unit" />

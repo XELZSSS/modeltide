@@ -1,47 +1,7 @@
 import type { AppContext } from "@/server/context";
-import { UPSTREAM_FETCH_OPTS } from "@/server/config";
-import { obj, str } from "@/server/parsers/primitives";
-import { UpstreamError } from "@/server/infra/errors";
+import { UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
 import { errMsg, runCapped } from "@/server/infra/pool";
-
-const HEALTHY_COMPONENT_STATES = new Set(["operational"]);
-
-// Page-level verdicts reported by Statuspage (`summary.json` → `status.indicator`).
-// This is the provider's own communicated state ("All Systems Operational" vs an
-// incident banner) and the only thing that may flip a source to down.
-// Per-component states are kept as detail text for the error message, but a single
-// degraded edge component must not flip the whole provider: that produced a
-// down/up flap on nearly every sampling round.
-const HEALTHY_PAGE_INDICATORS = new Set(["none"]);
-
-export function parseStatuspageSummary(raw: unknown): { ok: boolean; degradedComponents: string[]; total: number } {
-  const root = obj(raw);
-  const componentsRaw = root?.components;
-  if (!Array.isArray(componentsRaw) || componentsRaw.length === 0) {
-    throw new UpstreamError("Statuspage summary has no components array");
-  }
-  const degradedComponents: string[] = [];
-  let total = 0;
-  for (const entry of componentsRaw as unknown[]) {
-    const c = obj(entry);
-    if (!c) continue;
-    const status = str(c.status).trim().toLowerCase();
-    if (!status) continue;
-    total += 1;
-    if (!HEALTHY_COMPONENT_STATES.has(status)) {
-      const name = str(c.name).trim();
-      degradedComponents.push(name || status);
-    }
-  }
-  if (total === 0) {
-    throw new UpstreamError("Statuspage summary has no readable component states");
-  }
-  // Prefer the page-level indicator when the payload carries one; fall back to the
-  // component rule for non-standard shapes so unknown payloads fail closed, not open.
-  const indicator = str(obj(root?.status)?.indicator).trim().toLowerCase();
-  const ok = indicator ? HEALTHY_PAGE_INDICATORS.has(indicator) : degradedComponents.length === 0;
-  return { ok, degradedComponents, total };
-}
+import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/provider-status";
 
 export interface ProviderStatusResult {
   ok: boolean;
@@ -93,39 +53,27 @@ async function fetchProviderHealth(
   }
 }
 
-interface GcpIncident {
-  external_desc?: unknown;
-  end?: unknown;
-  severity?: unknown;
-}
-
-const GCP_ROUTINE_SEVERITIES = new Set(["low"]);
-
-export function parseGoogleCloudIncidents(raw: unknown): { ok: boolean; openIncidents: string[] } {
-  if (!Array.isArray(raw)) {
-    throw new UpstreamError("Google Cloud status returned a non-array payload");
-  }
-  const openIncidents: string[] = [];
-  for (const entry of raw as GcpIncident[]) {
-    const incident = obj(entry);
-    if (!incident) continue;
-    if (str(incident.end).trim()) continue;
-    const severity = str(incident.severity).trim().toLowerCase();
-    if (GCP_ROUTINE_SEVERITIES.has(severity)) continue;
-    openIncidents.push(str(incident.external_desc).trim().slice(0, 120) || severity || "open incident");
-  }
-  return { ok: openIncidents.length === 0, openIncidents };
-}
-
-const OPENAI_STATUS_URL = "https://status.openai.com/api/v2/summary.json";
-const CLAUDE_STATUS_URL = "https://status.claude.com/api/v2/summary.json";
-const GOOGLE_CLOUD_STATUS_URL = "https://status.cloud.google.com/incidents.json";
-const GROQ_STATUS_URL = "https://groqstatus.com/api/v2/summary.json";
-const COHERE_STATUS_URL = "https://status.cohere.com/api/v2/summary.json";
-const FIREWORKS_STATUS_URL = "https://status.fireworks.ai/api/v2/summary.json";
-const CEREBRAS_STATUS_URL = "https://status.cerebras.ai/api/v2/summary.json";
-const DEEPSEEK_STATUS_URL = "https://deepseek.statuspage.io/api/v2/summary.json";
-const MOONSHOT_STATUS_URL = "https://status.moonshot.cn/api/v2/summary.json";
+const PROVIDER_STATUS_TARGETS: readonly {
+  id: ProviderStatusId;
+  url: string;
+  label: string;
+  parse: HealthParse;
+}[] = [
+  { id: "openaiApi", url: providerStatusEndpoints.openaiApi, label: "openai", parse: parseStatuspageHealth },
+  { id: "anthropicApi", url: providerStatusEndpoints.anthropicApi, label: "anthropic", parse: parseStatuspageHealth },
+  {
+    id: "googleCloudApi",
+    url: providerStatusEndpoints.googleCloudApi,
+    label: "google-cloud",
+    parse: parseGoogleCloudHealth,
+  },
+  { id: "groqApi", url: providerStatusEndpoints.groqApi, label: "groq", parse: parseStatuspageHealth },
+  { id: "cohereApi", url: providerStatusEndpoints.cohereApi, label: "cohere", parse: parseStatuspageHealth },
+  { id: "fireworksApi", url: providerStatusEndpoints.fireworksApi, label: "fireworks", parse: parseStatuspageHealth },
+  { id: "cerebrasApi", url: providerStatusEndpoints.cerebrasApi, label: "cerebras", parse: parseStatuspageHealth },
+  { id: "deepseekApi", url: providerStatusEndpoints.deepseekApi, label: "deepseek", parse: parseStatuspageHealth },
+  { id: "moonshotApi", url: providerStatusEndpoints.moonshotApi, label: "moonshot", parse: parseStatuspageHealth },
+];
 
 export type ProviderStatusId =
   | "openaiApi"
@@ -137,23 +85,6 @@ export type ProviderStatusId =
   | "cerebrasApi"
   | "deepseekApi"
   | "moonshotApi";
-
-const PROVIDER_STATUS_TARGETS: readonly {
-  id: ProviderStatusId;
-  url: string;
-  label: string;
-  parse: HealthParse;
-}[] = [
-  { id: "openaiApi", url: OPENAI_STATUS_URL, label: "openai", parse: parseStatuspageHealth },
-  { id: "anthropicApi", url: CLAUDE_STATUS_URL, label: "anthropic", parse: parseStatuspageHealth },
-  { id: "googleCloudApi", url: GOOGLE_CLOUD_STATUS_URL, label: "google-cloud", parse: parseGoogleCloudHealth },
-  { id: "groqApi", url: GROQ_STATUS_URL, label: "groq", parse: parseStatuspageHealth },
-  { id: "cohereApi", url: COHERE_STATUS_URL, label: "cohere", parse: parseStatuspageHealth },
-  { id: "fireworksApi", url: FIREWORKS_STATUS_URL, label: "fireworks", parse: parseStatuspageHealth },
-  { id: "cerebrasApi", url: CEREBRAS_STATUS_URL, label: "cerebras", parse: parseStatuspageHealth },
-  { id: "deepseekApi", url: DEEPSEEK_STATUS_URL, label: "deepseek", parse: parseStatuspageHealth },
-  { id: "moonshotApi", url: MOONSHOT_STATUS_URL, label: "moonshot", parse: parseStatuspageHealth },
-];
 
 export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<ProviderStatusId, ProviderStatusResult>> {
   const settled = await runCapped(

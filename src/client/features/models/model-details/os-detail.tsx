@@ -4,7 +4,7 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import { formatDate, formatShortNumber, orNA } from "@/client/utils/format";
 import { shortModelId } from "@/client/utils/model";
-import { DetailLayout, DetailSection, InfoGrid, StatGrid } from "@/client/components/ui/grids";
+import { DetailSection, InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { NotFound } from "@/client/components/feedback";
@@ -18,7 +18,7 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
     ["lastUpdated", model.lastModified],
   ];
   return (
-    <DetailLayout>
+    <div className="flex flex-col gap-4">
       <StatGrid columns={2}>
         <StatCard label={t("downloads")} value={formatShortNumber(model.downloads)} />
         <StatCard label={t("likes")} value={formatShortNumber(model.likes)} />
@@ -60,7 +60,7 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
           </div>
         </DetailSection>
       )}
-    </DetailLayout>
+    </div>
   );
 }
 
