@@ -44,7 +44,7 @@ function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMe
   return { intelligenceIndex: target.intelligenceIndex ?? patch.intelligenceIndex, agenticIndex: target.agenticIndex ?? patch.agenticIndex };
 }
 
-function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
+export function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
   const pricingRecord: PricingRecord = Object.create(null);
   const metaRecord: Record<string, ModelMetaEntry> = Object.create(null);
   for (const m of rows) {
@@ -52,10 +52,12 @@ function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
     const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
     const input = numOr(pricing.prompt, NaN);
     const output = numOr(pricing.completion, NaN);
+    // OpenRouter uses -1 as a "dynamic/unavailable" sentinel on price legs; a
+    // negative cache leg must not surface as a negative $/M price.
     const rawCache = numOr(pricing.input_cache_read, NaN);
-    const cacheHitRate = Number.isFinite(rawCache) ? rawCache : null;
+    const cacheHitRate = Number.isFinite(rawCache) && rawCache >= 0 ? rawCache : null;
     const rawCacheWrite = numOr(pricing.input_cache_write, NaN);
-    const cacheWriteRate = Number.isFinite(rawCacheWrite) ? rawCacheWrite : null;
+    const cacheWriteRate = Number.isFinite(rawCacheWrite) && rawCacheWrite >= 0 ? rawCacheWrite : null;
     const pricingEntry = buildPricingEntry(input, output, cacheHitRate, cacheWriteRate);
     if (pricingEntry) {
       const keys = [m.id.trim(), m.canonical_slug?.trim()].filter((v): v is string => !!v);

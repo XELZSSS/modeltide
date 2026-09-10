@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import type { TranslationKey } from "@/shared/i18n";
 import { calcMonthlyCost } from "@/client/utils/cost-estimator";
 import { resolveEffectivePricing, type OfficialGetter } from "@/client/utils/pricing-merge";
@@ -97,20 +97,22 @@ function costCacheKey(
   ].join("|");
 }
 
-function getCachedMonthlyCost(
+export function getCachedMonthlyCost(
   model: ArtificialAnalysisModel,
   calc: { input: number; output: number; reasoning: number; cache: number; cacheWrite: number; days: number },
   getOfficial?: OfficialGetter,
 ): number | null {
-  // Fast path: server precomputed default (calc matches DEFAULT_COST_INPUTS)
-  // If calc is default, reuse model.defaultMonthlyCost when available
+  const official = getOfficial?.(model);
+  // Fast path: server precomputed default (calc matches DEFAULT_COST_INPUTS).
+  // defaultMonthlyCost is computed from catalog pricing only, so it is valid
+  // only when no official price overrides this model.
   const isDefaultCalc =
     calc.input === 2 && calc.output === 1 && calc.reasoning === 2 && calc.cache === 0.5 && calc.cacheWrite === 0.05 && calc.days === 22;
-  if (isDefaultCalc && typeof (model as unknown as { defaultMonthlyCost?: number | null }).defaultMonthlyCost === "number") {
-    const v = (model as unknown as { defaultMonthlyCost: number | null }).defaultMonthlyCost;
+  if (isDefaultCalc && official == null) {
+    const v = model.defaultMonthlyCost;
     if (v != null && Number.isFinite(v)) return v;
   }
-  const pricing = resolveEffectivePricing(model.pricing, getOfficial?.(model));
+  const pricing = resolveEffectivePricing(model.pricing, official);
   const key = costCacheKey(model, pricing, calc);
   if (COST_CACHE.has(key)) return COST_CACHE.get(key)!;
   const opts = {
@@ -121,9 +123,7 @@ function getCachedMonthlyCost(
     cacheWriteRate: calc.cacheWrite,
     daysPerMonth: calc.days,
   };
-  // calcMonthlyCost internally re-resolves pricing, but we pass pre-resolved to avoid double work:
-  // Use direct calc to keep single pricing resolution
-  const result = calcMonthlyCost(model, opts, getOfficial?.(model));
+  const result = calcMonthlyCost(model, opts, official);
   COST_CACHE.set(key, result);
   if (COST_CACHE.size > COST_CACHE_MAX) {
     const first = COST_CACHE.keys().next().value as string | undefined;
@@ -135,16 +135,11 @@ function getCachedMonthlyCost(
 export function useMonthlyCosts(models: ArtificialAnalysisModel[], getOfficial?: OfficialGetter) {
   const estimator = useCostEstimator();
   const { calc } = estimator;
-  // Stable calc key to avoid object identity churn — JSON is cheap for 6 fields
-  const calcKey = `${calc.input}|${calc.output}|${calc.reasoning}|${calc.cache}|${calc.cacheWrite}|${calc.days}`;
-  const getOfficialRef = useRef(getOfficial);
-  getOfficialRef.current = getOfficial;
   const monthlyCosts = useMemo(() => {
     // Only compute when viewMode==="pricing" passes non-empty models; empty -> []
     if (models.length === 0) return [] as (number | null)[];
-    return models.map((model) => getCachedMonthlyCost(model, calc, getOfficialRef.current));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models, calcKey]);
+    return models.map((model) => getCachedMonthlyCost(model, calc, getOfficial));
+  }, [models, calc, getOfficial]);
   return { ...estimator, monthlyCosts };
 }
 

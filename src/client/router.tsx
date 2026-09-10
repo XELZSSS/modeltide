@@ -67,25 +67,34 @@ export function useSearchParams(): URLSearchParams {
  * useParams(pattern): parse dynamic segments of a path pattern such as
  * "/model/:source/*" against the current location. ":name" captures one
  * segment; "*" captures the remaining path joined by "/" under "wildcard".
+ * Re-parses on every pathname change, not just on mount.
  */
+function safeDecodeSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    // Malformed percent-encoding: keep the raw segment so the route can
+    // resolve to NotFound instead of crashing on a URIError.
+    return value;
+  }
+}
+
 export function useParams<T extends Record<string, string>>(pattern: string): T {
+  const pathname = usePathname();
   return useMemo(() => {
     const params: Record<string, string> = {};
     const patternParts = pattern.split("/").filter(Boolean);
-    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const pathParts = pathname.split("/").filter(Boolean);
     patternParts.forEach((seg, i) => {
       if (seg.startsWith(":")) {
         const value = pathParts[i];
-        if (value !== undefined) params[seg.slice(1)] = decodeURIComponent(value);
+        if (value !== undefined) params[seg.slice(1)] = safeDecodeSegment(value);
       } else if (seg === "*") {
-        params.wildcard = pathParts
-          .slice(i)
-          .map((p) => decodeURIComponent(p))
-          .join("/");
+        params.wildcard = pathParts.slice(i).map(safeDecodeSegment).join("/");
       }
     });
     return params as T;
-  }, [pattern]);
+  }, [pattern, pathname]);
 }
 
 /**

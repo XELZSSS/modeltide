@@ -14,7 +14,7 @@ const toggleThemeMode: ThemeToggle = (mode) => (mode === "light" ? "dark" : "lig
 
 /**
  * First-render theme, resolved from the same source as the pre-hydration
- * inline script in `app/layout.tsx` (stored value → system preference).
+ * inline script in `index.html` (stored value → system preference).
  * Reading storage synchronously keeps the store, the painted `<html>` class
  * and the later persist rehydration on the same value, so there is no
  * SSR/client divergence and no dark↔light flash for returning visitors.

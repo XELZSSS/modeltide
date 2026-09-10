@@ -6,6 +6,7 @@ import { parseChangelogModels } from "@/server/sources/aa/changelog";
 import { buildWeightsRecord, mergeBySlug } from "@/server/sources/aa/intelligence-index";
 import { getTextToImageLeaderboard, mapEntry, type RawEntry } from "@/server/sources/aa/text-to-image";
 import { categoryFrom, creatorFromSlug, mapModels, titleFromSlug } from "@/server/sources/openrouter/mapping";
+import { parseDirectoryRows } from "@/server/sources/openrouter/directory";
 import { type ModelRow, type PricingEntry } from "@/server/sources/openrouter/types";
 import { getModels, getModelById, fetchHFModelById } from "@/server/sources/huggingface";
 import { UpstreamError } from "@/server/infra/errors";
@@ -322,6 +323,63 @@ describe("creatorFromSlug / titleFromSlug / categoryFrom", () => {
     expect(categoryFrom("deepseek/deepseek-coder-v2", "DeepSeek Coder V2")).toBe("coding");
     expect(categoryFrom("deepseek/deepseek-r1", "DeepSeek R1")).toBe("reasoning");
     expect(categoryFrom("qwen/qwen3-max", "Qwen3 Max")).toBe("general");
+  });
+});
+
+describe("parseDirectoryRows", () => {
+  it("drops -1 sentinel cache legs but keeps valid pricing legs", () => {
+    const entry = parseDirectoryRows([
+      {
+        id: "acme/dynamic-model",
+        pricing: {
+          prompt: "0.000001",
+          completion: "0.000002",
+          input_cache_read: "-1",
+          input_cache_write: "-1",
+        },
+      },
+    ]);
+    expect(entry.pricing["acme/dynamic-model"]).toEqual({
+      input: 1,
+      output: 2,
+      cacheHit: null,
+      cacheWrite: null,
+    });
+  });
+
+  it("keeps non-negative cache legs scaled to per-million", () => {
+    const entry = parseDirectoryRows([
+      {
+        id: "acme/cached-model",
+        pricing: {
+          prompt: "0.000003",
+          completion: "0.000015",
+          input_cache_read: "0.0000003",
+          input_cache_write: "0.00000375",
+        },
+      },
+    ]);
+    expect(entry.pricing["acme/cached-model"]).toEqual({
+      input: 3,
+      output: 15,
+      cacheHit: 0.3,
+      cacheWrite: 3.75,
+    });
+  });
+
+  it("rejects rows whose prompt/completion sentinel is negative", () => {
+    const entry = parseDirectoryRows([
+      {
+        id: "acme/valid-model",
+        pricing: { prompt: "0.000001", completion: "0.000002" },
+      },
+      {
+        id: "acme/dynamic-model",
+        pricing: { prompt: "-1", completion: "0.000002" },
+      },
+    ]);
+    expect(entry.pricing["acme/dynamic-model"]).toBeUndefined();
+    expect(entry.pricing["acme/valid-model"]).toEqual({ input: 1, output: 2, cacheHit: null, cacheWrite: null });
   });
 });
 

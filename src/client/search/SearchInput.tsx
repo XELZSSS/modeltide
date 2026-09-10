@@ -36,7 +36,6 @@ export function SearchInput({ className }: { className?: string }) {
   useEffect(() => {
     if (inputValue !== searchTerm) debouncedSetTerm(inputValue);
   }, [inputValue, searchTerm, debouncedSetTerm]);
-  useEffect(() => setInputValue(searchTerm), [searchTerm]);
 
   const { results, isPending, isError } = useSearchAllRankings(searchTerm, { suspended: !isOpen });
 

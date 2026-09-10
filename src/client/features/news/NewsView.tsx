@@ -40,9 +40,9 @@ function NewsList({ news }: { news: NewsItem[] }) {
           const key = `${getNewsRowId(item)}::${idx}`;
           const body = (
             <>
-              <h3 className="ui-body font-medium leading-relaxed group-hover:text-accent transition-colors min-w-0 break-words">
+              <h2 className="ui-body font-medium leading-relaxed group-hover:text-accent transition-colors min-w-0 break-words">
                 {item.title}
-              </h3>
+              </h2>
               <div className="flex items-center gap-3 shrink-0 ui-caption mt-0.5">
                 <span className="hidden sm:inline">{item.source}</span>
                 <span className="flex items-center gap-1.5" title={formatDate(item.pubDate, lang)}>
@@ -67,7 +67,7 @@ function NewsList({ news }: { news: NewsItem[] }) {
                   {body}
                 </a>
               ) : (
-                <span className={rowClass}>{body}</span>
+                <div className={rowClass}>{body}</div>
               )}
             </li>
           );

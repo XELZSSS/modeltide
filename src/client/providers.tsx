@@ -109,8 +109,11 @@ function createQueryClient(): QueryClient {
       queries: {
         retry: (count, err) => {
           if (isAbortError(err)) return false;
-          if (err instanceof ApiClientError && err.status >= 400 && err.status < 500 && err.status !== 429) {
-            return false;
+          if (err instanceof ApiClientError) {
+            const status = err.status;
+            // Never retry permanent request errors; rate-limit and timeout
+            // signals are retriable under the exponential backoff below.
+            if (status >= 400 && status < 500 && status !== 429 && status !== 408) return false;
           }
           return count < 2;
         },

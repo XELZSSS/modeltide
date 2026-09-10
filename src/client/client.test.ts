@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderHook, act } from "@testing-library/react";
 import {
   formatTokens,
   formatScore,
@@ -15,8 +16,10 @@ import {
   safeHref,
 } from "@/client/utils/format";
 import { calcMonthlyCost } from "@/client/utils/cost-estimator";
+import { getCachedMonthlyCost, useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
 import {
   indexOfficialPricing,
+  makeOfficialGetter,
   matchOfficialPricing,
   resolveBlendedPrice,
   resolveEffectivePricing,
@@ -33,8 +36,10 @@ import {
 import { aggregateTaskShare, formatTaskLabel, taskLabel } from "@/client/features/home/usage";
 import { pickLatestReleaseName } from "@/client/features/home/use-home-stats";
 import { resolveInitialTab } from "@/client/hooks/use-client-tab";
+import { useParams } from "@/client/router";
 import { isIosDevice, isStandaloneMode, unregisterStaleServiceWorker } from "@/client/pwa/use-pwa";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry, OfficialPriceModel } from "@/shared/types";
+import type { OfficialGetter } from "@/client/utils/pricing-merge";
 import type { TFunction } from "@/shared/i18n";
 
 const t = (overrides: Record<string, string> = {}): TFunction => {
@@ -623,6 +628,41 @@ describe("official price resolution", () => {
   });
 });
 
+describe("monthly cost default fast path", () => {
+  const defaultCalc = { input: 2, output: 1, reasoning: 2, cache: 0.5, cacheWrite: 0.05, days: 22 };
+
+  it("reuses the server precomputed default when no official pricing is loaded", () => {
+    const model = makeModel({ defaultMonthlyCost: 123 });
+    expect(getCachedMonthlyCost(model, defaultCalc, undefined)).toBe(123);
+  });
+
+  it("keeps the precomputed default when official pricing is loaded but the model is unmatched", () => {
+    const model = makeModel({ defaultMonthlyCost: 123 });
+    expect(getCachedMonthlyCost(model, defaultCalc, makeOfficialGetter([makeOfficial({})]))).toBe(123);
+  });
+
+  it("recomputes from official legs when an official price matches", () => {
+    const model = makeModel({
+      name: "GPT-5",
+      defaultMonthlyCost: 123,
+      pricing: { input: 10, output: 50, cacheHit: null },
+    });
+    expect(getCachedMonthlyCost(model, defaultCalc, makeOfficialGetter([makeOfficial({})]))).toBeCloseTo(1773.75, 5);
+  });
+});
+
+describe("useMonthlyCosts", () => {
+  it("recomputes monthly costs when official pricing arrives after mount", () => {
+    const models = [makeModel({ name: "GPT-5", pricing: { input: 10, output: 50, cacheHit: null } })];
+    const { result, rerender } = renderHook(({ getOfficial }) => useMonthlyCosts(models, getOfficial), {
+      initialProps: { getOfficial: undefined as OfficialGetter | undefined },
+    });
+    expect(result.current.monthlyCosts[0]).toBe(3740);
+    rerender({ getOfficial: makeOfficialGetter([makeOfficial({})]) });
+    expect(result.current.monthlyCosts[0]).toBeCloseTo(1773.75, 5);
+  });
+});
+
 describe("aggregateTaskShare", () => {
   const task = (value: string | null) => ({ task: value });
   it("counts models per task sorted descending, tail folded into other", () => {
@@ -682,6 +722,33 @@ describe("resolveInitialTab", () => {
   it("falls back for missing or unknown params", () => {
     expect(resolveInitialTab(tabs, null, "feed")).toBe("feed");
     expect(resolveInitialTab(tabs, "nope", "feed")).toBe("feed");
+  });
+});
+
+describe("useParams", () => {
+  it("re-parses dynamic segments when the path changes under the same pattern", async () => {
+    window.history.replaceState(null, "", "/model/aa/old-model");
+    const { result } = renderHook(() => useParams<{ source: string; wildcard: string }>("/model/:source/*"));
+    expect(result.current).toEqual({ source: "aa", wildcard: "old-model" });
+
+    window.history.replaceState(null, "", "/model/aa/new-model");
+    await act(async () => {
+      window.dispatchEvent(new Event("routechange"));
+    });
+    expect(result.current).toEqual({ source: "aa", wildcard: "new-model" });
+
+    window.history.replaceState(null, "", "/");
+    await act(async () => {
+      window.dispatchEvent(new Event("routechange"));
+    });
+    expect(result.current).toEqual({ wildcard: "" });
+  });
+
+  it("keeps malformed percent-encoding as the raw segment instead of throwing", () => {
+    window.history.replaceState(null, "", "/model/aa/%E0%A4%A");
+    const { result } = renderHook(() => useParams<{ source: string; wildcard: string }>("/model/:source/*"));
+    expect(result.current).toEqual({ source: "aa", wildcard: "%E0%A4%A" });
+    window.history.replaceState(null, "", "/");
   });
 });
 
