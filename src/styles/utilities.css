@@ -140,7 +140,7 @@ main,
 }
 
 @utility animate-fade-in {
-  animation: fade-in 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: fade-in var(--duration-base) var(--ease-out) both;
 }
 
 @keyframes slide-up {
@@ -155,7 +155,7 @@ main,
 }
 
 @utility animate-slide-up {
-  animation: slide-up 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: slide-up var(--duration-base) var(--ease-out) both;
 }
 
 @keyframes sheet-up {
@@ -170,7 +170,40 @@ main,
 }
 
 @utility animate-sheet-up {
-  animation: sheet-up 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: sheet-up var(--duration-base) var(--ease-out) both;
+}
+
+@utility ui-skeleton {
+  background-color: var(--bg-secondary);
+  animation: skeleton-pulse 1.6s var(--ease-out) infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@utility ui-focus-ring {
+  outline: var(--ring-width) solid var(--ring);
+  outline-offset: var(--ring-offset);
+}
+
+/* Unified vertical rhythm: page sections share one spacing scale. */
+@utility ui-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@utility ui-stack-lg {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 @supports not (backdrop-filter: blur(12px)) {

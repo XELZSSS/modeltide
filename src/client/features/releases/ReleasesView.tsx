@@ -246,7 +246,7 @@ function ReleasesContent() {
 
 export function ReleasesView() {
   return (
-    <SuspenseQuery>
+    <SuspenseQuery resetKey="releases">
       <ReleasesContent />
     </SuspenseQuery>
   );

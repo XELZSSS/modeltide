@@ -33,35 +33,40 @@ function NewsList({ news }: { news: NewsItem[] }) {
   if (news.length === 0) return <EmptyState icon={Search} message={t("noResults")} />;
 
   return (
-    <div className="flex flex-col">
-      <ul className="flex flex-col divide-y divide-border">
+    <div className="flex flex-col gap-2">
+      <ul className="flex flex-col border border-border bg-bg-card divide-y divide-border">
         {currentNews.map((item, idx) => {
           const href = safeHref(item.link);
           const key = `${getNewsRowId(item)}::${idx}`;
           const body = (
             <>
-              <h2 className="ui-body font-medium leading-relaxed group-hover:text-accent transition-colors min-w-0 break-words">
+              <h2 className="ui-body font-medium leading-relaxed group-hover:text-accent transition-colors duration-fast min-w-0 break-words">
                 {item.title}
               </h2>
-              <div className="flex items-center gap-3 shrink-0 ui-caption mt-0.5">
-                <span className="hidden sm:inline">{item.source}</span>
-                <span className="flex items-center gap-1.5" title={formatDate(item.pubDate, lang)}>
-                  <Clock size={12} />
+              <div className="flex items-center gap-3 shrink-0 ui-caption mt-1">
+                <span className="hidden sm:inline truncate max-w-48">{item.source}</span>
+                <span className="flex items-center gap-1.5 shrink-0" title={formatDate(item.pubDate, lang)}>
+                  <Clock size={12} aria-hidden="true" />
                   {formatRelativeTime(item.pubDate, t, lang)}
                 </span>
-                <ExternalLink size={14} className="md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
+                <ExternalLink
+                  size={14}
+                  className="md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-fast shrink-0"
+                  aria-hidden="true"
+                />
               </div>
             </>
           );
-          const rowClass = "group flex items-start justify-between gap-4 py-3";
+          const rowClass =
+            "group flex items-start justify-between gap-4 px-4 py-3.5 transition-colors duration-fast hover:bg-hover focus-visible:outline-none focus-visible:bg-hover";
           return (
-            <li key={key}>
+            <li key={key} className="animate-fade-in">
               {href ? (
                 <a
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`${rowClass} transition-colors`}
+                  className={rowClass}
                   aria-label={t("newsItemLabel", { title: item.title, source: item.source })}
                 >
                   {body}
@@ -73,11 +78,7 @@ function NewsList({ news }: { news: NewsItem[] }) {
           );
         })}
       </ul>
-      {totalPages > 1 && (
-        <div className="mt-5 flex justify-center">
-          <Pagination page={page} totalPages={totalPages} onChange={goToPage} />
-        </div>
-      )}
+      {totalPages > 1 && <Pagination page={page} totalPages={totalPages} onChange={goToPage} />}
     </div>
   );
 }

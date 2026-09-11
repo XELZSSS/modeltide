@@ -32,21 +32,27 @@ export function EmptyState({
   message,
   title,
   variant = "empty",
+  compact,
 }: {
   icon?: LucideIcon;
   message: string;
   title?: string;
   variant?: "empty" | "error";
+  compact?: boolean;
 }) {
   return (
     <Card
-      className="flex flex-col items-center justify-center gap-3 p-10 text-text-secondary min-h-[240px]"
+      className={
+        compact
+          ? "flex flex-col items-center justify-center gap-2 p-6 text-center"
+          : "flex flex-col items-center justify-center gap-3 p-10 text-center min-h-[240px]"
+      }
       role={variant === "error" ? "alert" : "status"}
       aria-live="polite"
     >
-      {Icon && <Icon size={32} className="opacity-50" aria-hidden="true" />}
-      {title ? <p className="ui-card-title text-center">{title}</p> : null}
-      <p className="ui-body-secondary text-center">{message}</p>
+      {Icon && <Icon size={compact ? 24 : 32} className="opacity-50 text-text-tertiary" aria-hidden="true" />}
+      {title ? <p className="ui-card-title text-center text-text-primary">{title}</p> : null}
+      <p className="ui-body-secondary text-center text-balance max-w-md">{message}</p>
     </Card>
   );
 }
@@ -83,18 +89,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const retry = this.props.retryLabel ?? "Retry";
       const offline = typeof navigator !== "undefined" && navigator.onLine === false;
       return (
-        <div className="flex flex-col items-center justify-center gap-3 min-h-[240px] p-6 text-center">
+        <Card className="flex flex-col items-center justify-center gap-3 min-h-[240px] p-8 text-center" role="alert">
+          <TriangleAlert size={28} className="text-destructive opacity-80" aria-hidden="true" />
           <p className="ui-card-title text-destructive">{title}</p>
-          <p className="ui-caption">{this.state.error?.message}</p>
+          <p className="ui-caption max-w-md text-balance">{this.state.error?.message}</p>
           {offline && (
             <p className="ui-caption" role="status">
               Offline — reconnect and reload to retry
             </p>
           )}
-          <Button variant="link" size="sm" onClick={this.handleRetry} disabled={offline}>
+          <Button variant="outline" size="sm" onClick={this.handleRetry} disabled={offline}>
             {retry}
           </Button>
-        </div>
+        </Card>
       );
     }
     return <Fragment key={String(this.state.resetKey)}>{this.props.children}</Fragment>;
@@ -105,13 +112,15 @@ export function NotFound() {
   const { t } = useTranslation();
   return (
     <PageContainer>
-      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-        <div className="text-4xl sm:text-5xl font-semibold text-text-tertiary">404</div>
+      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center animate-fade-in">
+        <div className="border border-border bg-bg-secondary px-4 py-2 text-4xl sm:text-5xl font-semibold tabular-nums text-text-tertiary">
+          404
+        </div>
         <h1 className="ui-section-title">{t("notFoundTitle")}</h1>
-        <p className="ui-body-secondary">{t("notFound")}</p>
+        <p className="ui-body-secondary max-w-md text-balance">{t("notFound")}</p>
         <Link
           href="/"
-          className="mt-2 inline-flex items-center justify-center gap-1.5 h-9 px-4 text-sm font-medium rounded-none border border-border text-text-primary hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          className="mt-2 inline-flex items-center justify-center gap-1.5 h-9 px-4 text-sm font-medium rounded-none bg-accent text-accent-contrast hover:bg-accent/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft size={14} />
           {t("backToHome")}
@@ -125,17 +134,33 @@ export const Spinner = memo(function Spinner() {
   const { t } = useTranslation();
   return (
     <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
-      <Loader2 className="size-7 animate-spin text-text-secondary" aria-hidden="true" />
+      <Loader2 className="size-7 animate-spin text-accent" aria-hidden="true" />
       <span className="sr-only">{t("loading")}</span>
+    </div>
+  );
+});
+
+export const Skeleton = memo(function Skeleton({ className, lines = 3 }: { className?: string; lines?: number }) {
+  return (
+    <div className={className} role="status" aria-live="polite" aria-label="loading">
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: lines }).map((_, i) => (
+          <div key={i} className="ui-skeleton h-16 w-full border border-border" style={{ opacity: 1 - i * 0.15 }} />
+        ))}
+        <span className="sr-only">loading</span>
+      </div>
     </div>
   );
 });
 
 export function PartialNotice({ message }: { message: string }) {
   return (
-    <div role="status" className="ui-caption flex items-center gap-1.5 text-text-secondary">
-      <TriangleAlert size={14} className="shrink-0" aria-hidden="true" />
-      {message}
+    <div
+      role="status"
+      className="flex items-center gap-1.5 border border-warning/30 bg-warning-light px-3 py-2 ui-caption text-text-secondary"
+    >
+      <TriangleAlert size={14} className="shrink-0 text-warning" aria-hidden="true" />
+      <span className="min-w-0">{message}</span>
     </div>
   );
 }

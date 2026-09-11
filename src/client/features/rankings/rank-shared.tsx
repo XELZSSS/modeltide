@@ -15,7 +15,7 @@ export function modelNameCol<T>(
     header,
     width: "40%",
     cell: (row) => (
-      <p className="text-sm font-medium truncate" title={titleOf(row)}>
+      <p className="ui-body font-medium truncate" title={titleOf(row)}>
         {textOf(row)}
       </p>
     ),

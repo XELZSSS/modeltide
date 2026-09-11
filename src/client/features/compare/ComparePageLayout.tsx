@@ -45,22 +45,19 @@ export function ComparePageLayout({ backLabelKey, backTo, title, children }: Com
     clearCompare();
     router.push(backTo);
   }, [clearCompare, router, backTo]);
-  const handleBack = useCallback(() => router.push(backTo), [router, backTo]);
 
   if (models === null) return <Spinner />;
 
   if (rankingsFailed) {
     return (
       <PageContainer>
-        <div className="flex flex-col gap-4 items-center py-16">
+        <div className="flex flex-col gap-4 items-center py-16 animate-fade-in">
           <EmptyState variant="error" title={t("errorBoundaryTitle")} message={t("loadFailed")} />
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => refetchRankings()}>
               {t("errorBoundaryRetry")}
             </Button>
-            <Button size="sm" variant="outline" onClick={handleBack}>
-              {t("backToList")}
-            </Button>
+            <BackButton labelKey="backToList" to={backTo} />
           </div>
         </div>
       </PageContainer>
@@ -70,16 +67,14 @@ export function ComparePageLayout({ backLabelKey, backTo, title, children }: Com
   if (models.length < 2) {
     return (
       <PageContainer>
-        <div className="flex flex-col gap-4 items-center py-16">
-          <p className="text-sm text-text-secondary">{t("compareLimit")}</p>
+        <div className="flex flex-col gap-3 items-center py-16 text-center animate-fade-in">
+          <EmptyState message={t("compareLimit")} compact />
           {pruned && (
-            <p className="text-xs text-text-tertiary" role="status">
+            <p className="ui-caption" role="status">
               {t("compareStale")}
             </p>
           )}
-          <Button size="sm" variant="outline" onClick={handleBack}>
-            {t("backToList")}
-          </Button>
+          <BackButton labelKey="backToList" to={backTo} />
         </div>
       </PageContainer>
     );
@@ -87,7 +82,7 @@ export function ComparePageLayout({ backLabelKey, backTo, title, children }: Com
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-4 min-w-0">
+      <div className="flex flex-col gap-5 min-w-0 animate-fade-in">
         <BackButton labelKey={backLabelKey} to={backTo} />
         <PageHeader compact title={title} description={t("artificialSource")} />
         <CompareChipBar models={models} onRemove={removeCompareModel} onClear={handleClearAndBack} />

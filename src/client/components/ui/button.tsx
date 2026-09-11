@@ -4,20 +4,21 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium transition-colors duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary active:translate-y-px",
   {
     variants: {
       variant: {
-        primary: "bg-accent text-accent-contrast hover:bg-accent/90",
-        outline: "border border-border text-text-primary hover:bg-hover",
+        primary: "bg-accent text-accent-contrast hover:bg-accent/90 border border-transparent",
+        outline: "border border-border bg-transparent text-text-primary hover:bg-hover hover:border-text-tertiary/40",
         ghost: "text-text-primary hover:bg-hover",
-        link: "text-text-primary underline-offset-4 hover:underline",
-        destructive: "bg-destructive text-destructive-contrast hover:bg-destructive/90",
+        link: "text-text-primary underline-offset-4 hover:underline px-0",
+        destructive: "bg-destructive text-destructive-contrast hover:bg-destructive/90 border border-transparent",
       },
       size: {
         sm: "h-8 px-3 text-xs rounded-none",
         md: "h-9 px-4 text-sm rounded-none",
         icon: "size-9 rounded-none",
+        xs: "h-7 px-2 text-xs rounded-none",
       },
     },
     defaultVariants: { variant: "ghost", size: "sm" },

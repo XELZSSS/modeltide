@@ -87,7 +87,7 @@ export const Sheet = memo(function Sheet({ open, onClose, children, className, a
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-sheet flex items-end justify-center sm:items-center" onClick={onClose}>
       <div className="fixed inset-0 bg-black/50 animate-fade-in" aria-hidden="true" />
       <div
         ref={panelRef}
@@ -95,7 +95,7 @@ export const Sheet = memo(function Sheet({ open, onClose, children, className, a
         aria-modal="true"
         aria-label={ariaLabel}
         className={cn(
-          "relative z-50 w-full max-w-md rounded-none border border-border bg-bg-primary shadow-lg animate-sheet-up focus:outline-none",
+          "relative z-sheet w-full max-w-md rounded-none border border-border bg-bg-primary shadow-lg animate-sheet-up focus:outline-none",
           className,
         )}
         onClick={(e) => e.stopPropagation()}

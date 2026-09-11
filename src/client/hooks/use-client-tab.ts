@@ -37,7 +37,9 @@ export function useClientTab<T extends string>(
         const url = new URL(window.location.href);
         if (url.searchParams.get(paramKey) !== tabId) {
           url.searchParams.set(paramKey, tabId);
-          window.history.replaceState(null, "", url.href);
+          // Pass the current state through: it carries the router's history
+          // idx, which must survive the replace for BackButton to work.
+          window.history.replaceState(window.history.state, "", url.href);
           window.dispatchEvent(new Event("routechange"));
         }
       } catch {

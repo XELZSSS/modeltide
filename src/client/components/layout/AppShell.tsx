@@ -65,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen h-[100dvh] flex flex-col bg-bg-primary overflow-x-hidden pt-[env(safe-area-inset-top,0px)]">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-bg-primary focus:border focus:border-border focus:rounded-none focus:text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-skip focus:px-4 focus:py-2 focus:bg-bg-primary focus:border focus:border-border focus:rounded-none focus:text-sm focus:outline-none focus:ring-2 focus:ring-ring"
       >
         {t("skipToContent")}
       </a>

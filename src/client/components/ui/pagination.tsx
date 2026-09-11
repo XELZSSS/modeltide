@@ -35,11 +35,11 @@ export const Pagination = memo(function Pagination({ page, totalPages, onChange,
   if (totalPages <= 1) return null;
 
   return (
-    <nav aria-label={t("pagination")} className={cn("flex items-center gap-3", className)}>
+    <nav aria-label={t("pagination")} className={cn("flex items-center justify-center gap-3 pt-2", className)}>
       <PageButton label={t("previousPage")} disabled={page <= 1} onClick={() => onChange(page - 1)}>
         <ChevronLeft size={16} />
       </PageButton>
-      <span className="text-sm text-text-secondary tabular-nums" aria-live="polite">
+      <span className="ui-caption tabular-nums min-w-16 text-center" aria-live="polite">
         {page} / {totalPages}
       </span>
       <PageButton label={t("nextPage")} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>

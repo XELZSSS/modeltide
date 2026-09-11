@@ -6,7 +6,7 @@ export const Badge = memo(function Badge({ className, children }: { className?: 
   return (
     <span
       className={cn(
-        "inline-flex items-center text-xs font-medium uppercase tracking-wide leading-5 px-2 py-0.5 rounded-none transition-colors border border-border text-text-secondary bg-transparent",
+        "inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide leading-5 px-2 py-0.5 rounded-none transition-colors border border-border text-text-secondary bg-bg-secondary/60",
         className,
       )}
     >
@@ -52,11 +52,13 @@ export const InfoCard = memo(function InfoCard({ title, children }: { title: str
 
 export const InfoRow = memo(function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className={cn("flex flex-row justify-between min-w-0 py-1.5 gap-3")}>
-      <p className="text-sm text-text-secondary truncate">{label}</p>
-      <div className="text-sm font-mono tabular-nums text-right truncate text-text-primary font-medium min-w-0">
-        {value}
-      </div>
+    <div
+      className={cn(
+        "flex flex-row items-baseline justify-between min-w-0 py-1.5 gap-3 border-b border-border/60 last:border-0",
+      )}
+    >
+      <p className="ui-caption truncate shrink-0">{label}</p>
+      <div className="ui-mono-value text-right truncate min-w-0 font-medium">{value}</div>
     </div>
   );
 });

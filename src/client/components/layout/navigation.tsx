@@ -62,7 +62,7 @@ interface DesktopNavProps {
 }
 
 const DESKTOP_ICON_BUTTON =
-  "p-1.5 text-text-secondary hover:text-text-primary bg-transparent rounded-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
+  "p-1.5 text-text-secondary hover:text-text-primary hover:bg-hover bg-transparent rounded-none transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
   const pathname = usePathname();
@@ -73,11 +73,11 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
 
   return (
     <nav
-      className="hidden md:flex h-11 shrink-0 items-center border-b border-border bg-nav-bg backdrop-blur-md sticky top-0 z-30"
+      className="hidden md:flex h-12 shrink-0 items-center border-b border-border bg-nav-bg backdrop-blur-md sticky top-0 z-nav"
       aria-label={t("navPrimary")}
     >
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex items-center">
-        <div className="flex items-center gap-1">
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {all.map((item) => {
             const active = isNavActive(pathname, item);
             return (
@@ -88,8 +88,10 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
                 aria-current={active ? "page" : undefined}
                 onMouseEnter={() => prefetch(item.path)}
                 onFocus={() => prefetch(item.path)}
-                className={`relative px-3 py-1 text-sm font-medium rounded-none transition-colors whitespace-nowrap active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-1 ${
-                  active ? "text-accent bg-accent-light" : "text-text-secondary hover:text-text-primary hover:bg-hover"
+                className={`relative px-3 py-1.5 text-sm font-medium rounded-none transition-colors duration-fast whitespace-nowrap active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                  active
+                    ? "text-accent bg-accent-light ring-1 ring-inset ring-accent/20"
+                    : "text-text-secondary hover:text-text-primary hover:bg-hover"
                 }`}
               >
                 {item.label}
@@ -124,7 +126,7 @@ interface MobileNavProps {
 }
 
 const MOBILE_BAR_BUTTON =
-  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50 rounded-none";
+  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring rounded-none min-h-16 py-2";
 
 function MobileBarButton({
   active,
@@ -142,7 +144,7 @@ function MobileBarButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className={`${MOBILE_BAR_BUTTON} ${active ? "text-accent" : "text-text-secondary"}`}
+      className={`${MOBILE_BAR_BUTTON} relative ${active ? "text-accent" : "text-text-secondary"}`}
     >
       {children}
     </button>
@@ -159,7 +161,7 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
 
   return (
     <nav
-      className="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch rounded-none border-t border-border bg-nav-bg backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)]"
+      className="md:hidden fixed left-0 right-0 bottom-0 z-nav flex h-16 items-stretch rounded-none border-t border-border bg-nav-bg backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)]"
       aria-label={t("navPrimaryMobile")}
     >
       {mobilePrimary.map((item) => {
@@ -171,14 +173,16 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
             aria-label={item.label}
             aria-current={active ? "page" : undefined}
             onTouchStart={() => prefetch(item.path)}
-            className={`${MOBILE_BAR_BUTTON} ${active ? "text-accent" : "text-text-secondary"}`}
+            className={`${MOBILE_BAR_BUTTON} relative ${active ? "text-accent" : "text-text-secondary"}`}
           >
+            {active && <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />}
             {item.icon}
             <span>{item.label}</span>
           </Link>
         );
       })}
       <MobileBarButton active={isMoreActive} onClick={onMoreOpen} label={t("more")}>
+        {isMoreActive && <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />}
         <MoreHorizontal size={18} />
         <span>{t("more")}</span>
       </MobileBarButton>

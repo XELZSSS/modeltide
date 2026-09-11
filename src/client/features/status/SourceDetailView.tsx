@@ -35,8 +35,6 @@ function isSourceId(value: string | undefined): value is SourceStatus["id"] {
 const BEIJING_OFFSET_MS = 8 * ONE_HOUR;
 const beijingHHMM = (ts: number): string => new Date(ts + BEIJING_OFFSET_MS).toISOString().slice(11, 16);
 
-const LATENCY_COLOR_SLOT = 6;
-
 const EMPTY_SAMPLES: { t: number; latencyMs: number | null }[] = [];
 const EMPTY_BUCKETS: import("@/shared/types").DayBucket[] = [];
 
@@ -53,9 +51,11 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
   const theme = useChartTheme();
   const decimated = useMemo(() => decimateSamples(samples), [samples]);
 
-  const latencyColor = theme.palette[LATENCY_COLOR_SLOT]?.trim()
-    ? (theme.palette[LATENCY_COLOR_SLOT] as string)
-    : theme.tick;
+  // Semantic latency color: chart-7 (teal) in both themes, falls back to axis tick.
+  const latencyColor =
+    getComputedStyle(document.documentElement).getPropertyValue("--chart-7")?.trim() ||
+    theme.palette[6]?.trim() ||
+    theme.tick;
   const data = useMemo(
     () => ({
       labels: decimated.map((s) => beijingHHMM(s.t)),

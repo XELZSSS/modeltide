@@ -10,13 +10,16 @@ interface RankingNameCellProps {
 export const RankingNameCell = memo(function RankingNameCell({ name, suffix }: RankingNameCellProps) {
   return (
     <div className="flex items-center min-w-0 gap-2">
-      <p className="truncate flex-1 min-w-0 text-sm font-semibold" title={name}>
+      <p className="truncate flex-1 min-w-0 ui-body font-medium" title={name}>
         {name || "—"}
       </p>
       {suffix}
     </div>
   );
 });
+
+/** Canonical model-name cell alias (replaces ad-hoc modelNameCol/ReleaseModelCell variants). */
+export const ModelNameCell = RankingNameCell;
 
 interface RightAlignedTextProps {
   children: ReactNode;
@@ -68,13 +71,11 @@ export function rankCol<T>(rankOf: (row: T) => number | null | undefined): DataT
   return {
     id: "rank",
     header: "",
-    width: 76,
+    width: 56,
     hiddenMd: true,
     cell: (row) => {
       const rank = rankOf(row);
-      return (
-        <span className="font-mono text-sm font-semibold whitespace-nowrap tabular-nums shrink-0">{rank ?? "—"}</span>
-      );
+      return <span className="ui-mono-value font-semibold whitespace-nowrap shrink-0">{rank ?? "—"}</span>;
     },
   };
 }

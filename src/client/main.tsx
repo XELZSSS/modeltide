@@ -140,8 +140,14 @@ const boot = () => {
     void document.fonts.load('400 1em "JetBrains Mono Variable"');
   }
 };
+// requestIdleCallback may fire after `load` has already fired (busy main
+// thread); gate on readyState so boot is never attached to a fired event.
+const bootWhenLoaded = () => {
+  if (document.readyState === "complete") boot();
+  else window.addEventListener("load", boot, { once: true });
+};
 if (typeof requestIdleCallback === "function") {
-  requestIdleCallback(boot, { timeout: 2000 });
+  requestIdleCallback(bootWhenLoaded, { timeout: 2000 });
 } else {
-  window.addEventListener("load", () => setTimeout(boot, 0), { once: true });
+  bootWhenLoaded();
 }

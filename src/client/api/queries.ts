@@ -145,8 +145,13 @@ const qClosedReleasesRaw = createApiQuery<SourcePayload<ClosedReleaseEntry[]>>(
 
 export function useArtificialRankings(enabled = true) {
   const q = qArtificialRaw.use(enabled);
-  const data = useMemo(() => unwrapListPartial<ArtificialAnalysisModel>(q.data, "artificialIndex").data, [q.data]);
-  return { ...q, data };
+  const unwrapped = useMemo(() => unwrapListPartial<ArtificialAnalysisModel>(q.data, "artificialIndex"), [q.data]);
+  // A malformed payload is an error state, not a silently empty list — mirror
+  // useAllOpenSourceModels so views render the retry path instead of "no data".
+  const hasData = unwrapped.data.length > 0;
+  const isError = enabled && !hasData && !q.isPending && (q.isError || unwrapped.malformed);
+  const error = isError ? (q.error ?? new Error("Malformed artificialIndex payload")) : null;
+  return { ...q, data: unwrapped.data, isError, error };
 }
 
 export function useSuspenseArtificialRankings(): ArtificialAnalysisModel[] {

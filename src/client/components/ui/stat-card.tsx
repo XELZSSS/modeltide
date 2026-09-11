@@ -15,16 +15,16 @@ export const StatCard = memo(function StatCard({
 }) {
   return (
     <Card className={className}>
-      <CardContent className="text-center sm:p-4">
-        <div className="flex items-center justify-center gap-1.5 mb-2 min-w-0">
+      <CardContent className="flex flex-col items-center justify-center gap-1.5 py-4 text-center sm:p-4">
+        <div className="flex items-center justify-center gap-1.5 min-w-0 max-w-full">
           {Icon && (
-            <span className="text-text-tertiary shrink-0">
+            <span className="text-accent shrink-0" aria-hidden="true">
               <Icon className="size-4" />
             </span>
           )}
-          <p className="text-xs text-text-tertiary font-medium truncate">{label}</p>
+          <p className="ui-caption font-medium truncate">{label}</p>
         </div>
-        <div className="text-xl font-semibold tracking-tight break-words min-w-0">{value}</div>
+        <div className="ui-mono-value text-xl font-semibold tracking-tight break-words min-w-0">{value}</div>
       </CardContent>
     </Card>
   );

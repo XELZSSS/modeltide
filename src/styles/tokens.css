@@ -18,20 +18,53 @@
   --color-destructive-light: var(--destructive-light);
   --color-success: var(--success);
   --color-success-light: var(--success-light);
+  --color-success-contrast: var(--success-contrast);
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
+  --color-warning-contrast: var(--warning-contrast);
   --color-info: var(--info);
   --color-info-light: var(--info-light);
+  --color-info-contrast: var(--info-contrast);
   --color-nav-bg: var(--nav-bg);
 
+  /* Flat language: intentional zero-radius ladder (xs→full all 0).
+     Keep the scale so future rounding is a token-only change. */
   --radius-sm: 0;
   --radius-md: 0;
   --radius-lg: 0;
   --radius-xl: 0;
   --radius-2xl: 0;
   --radius-full: 0;
+
+  /* Elevation: card stays border-only (no shadow); overlay only. */
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.06);
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.12);
   --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.18);
+
+  /* Layering (replaces scattered z-30/40/50/100). */
+  --z-nav: 30;
+  --z-dropdown: 40;
+  --z-toast: 45;
+  --z-sheet: 50;
+  --z-skip: 100;
+
+  /* Motion (replaces hardcoded 0.2s cubic-bezier). */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Layout */
+  --container-max: 80rem;
+  --breakpoint-mobile: 768px;
+
+  /* Focus ring */
+  --ring-width: 2px;
+  --ring-offset: 2px;
+
+  /* Chart alphas (replaces hardcoded 0.06/0.85). */
+  --chart-fill-alpha: 0.08;
+  --chart-bar-alpha: 0.85;
 
   --font-sans:
     "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Symbol", "PingFang SC",

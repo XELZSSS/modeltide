@@ -18,10 +18,13 @@
   --destructive-contrast: #ffffff;
   --destructive-light: color-mix(in srgb, var(--destructive) 10%, transparent);
   --success: #15803d;
+  --success-contrast: #ffffff;
   --success-light: color-mix(in srgb, var(--success) 10%, transparent);
   --warning: #b45309;
+  --warning-contrast: #ffffff;
   --warning-light: color-mix(in srgb, var(--warning) 10%, transparent);
   --info: #0369a1;
+  --info-contrast: #ffffff;
   --info-light: color-mix(in srgb, var(--info) 10%, transparent);
   --nav-bg: rgba(255, 255, 255, 0.85);
   --chart-1: #2563eb;
@@ -62,10 +65,13 @@
   --destructive-contrast: #1c0505;
   --destructive-light: color-mix(in srgb, var(--destructive) 14%, transparent);
   --success: #4cc38a;
+  --success-contrast: #06130c;
   --success-light: color-mix(in srgb, var(--success) 14%, transparent);
   --warning: #ffc53d;
+  --warning-contrast: #1c1206;
   --warning-light: color-mix(in srgb, var(--warning) 14%, transparent);
   --info: #38bdf8;
+  --info-contrast: #06121c;
   --info-light: color-mix(in srgb, var(--info) 14%, transparent);
   --nav-bg: rgba(0, 0, 0, 0.78);
   --chart-1: #60a5fa;

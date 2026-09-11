@@ -41,6 +41,20 @@ const sharedInflight = new InflightRegistry();
 const FAILURE_COOLDOWN_MS = 45_000;
 const FAILURE_COOLDOWN_MAX_KEYS = 512;
 
+// A persistently failing KV read is otherwise indistinguishable from an empty
+// store; throttle so a full outage logs once per interval instead of per hit.
+const KV_READ_WARN_THROTTLE_MS = 5 * 60_000;
+let lastKvReadWarnAt = 0;
+
+function warnKvReadFailure(err: unknown): void {
+  const now = Date.now();
+  if (now - lastKvReadWarnAt < KV_READ_WARN_THROTTLE_MS) return;
+  lastKvReadWarnAt = now;
+  console.warn(
+    `[cache] KV read failed, degrading to refresh/stale path: ${err instanceof Error ? err.message : String(err)}`,
+  );
+}
+
 class FailureCooldown {
   private lastFail = new Map<string, { at: number; timeout: boolean }>();
 
@@ -87,6 +101,7 @@ export function resetModuleCachesForTests(): void {
   sharedL1.clear();
   sharedInflight.clear();
   refreshFailureCooldown.clear();
+  lastKvReadWarnAt = 0;
 }
 
 export interface CacheStores {
@@ -128,8 +143,9 @@ export class CacheService {
     let raw: string | null;
     try {
       raw = await this.kv!.get(key, { type: "text" });
-    } catch {
+    } catch (err) {
       // KV read failure should degrade to a refresh/stale path, not bubble a 502.
+      warnKvReadFailure(err);
       return undefined;
     }
     if (!raw) return undefined;

@@ -65,7 +65,7 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
 
   const pagination =
     totalPages > 1 ? (
-      <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} className="pt-2 self-center" />
+      <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} className="justify-center" />
     ) : null;
   const listProps: RowListProps<T> = {
     pagedData,

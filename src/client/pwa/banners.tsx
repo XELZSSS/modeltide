@@ -14,9 +14,9 @@ export function PwaBanners() {
       {!online && (
         <div
           role="status"
-          className="flex shrink-0 items-center justify-center gap-2 border-b border-border bg-bg-secondary px-4 py-1.5 text-xs text-text-secondary"
+          className="flex shrink-0 items-center justify-center gap-2 border-b border-warning/30 bg-warning-light px-4 py-1.5 ui-caption"
         >
-          <WifiOff size={14} aria-hidden="true" />
+          <WifiOff size={14} className="text-warning" aria-hidden="true" />
           <span>{t("offlineNotice")}</span>
         </div>
       )}
@@ -24,10 +24,10 @@ export function PwaBanners() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-20 md:bottom-6 right-4 z-40 flex items-center gap-2 border border-border bg-bg-card px-3 py-2 shadow-lg"
+          className="fixed bottom-20 md:bottom-6 right-4 z-toast flex items-center gap-2.5 border border-border bg-bg-card px-3 py-2 shadow-lg animate-slide-up"
         >
-          <RefreshCw size={14} className="text-text-secondary shrink-0" aria-hidden="true" />
-          <span className="text-xs text-text-primary">{t("pwaUpdateAvailable")}</span>
+          <RefreshCw size={14} className="text-accent shrink-0" aria-hidden="true" />
+          <span className="ui-caption text-text-primary">{t("pwaUpdateAvailable")}</span>
           <Button variant="primary" size="sm" onClick={applyUpdate}>
             {t("pwaUpdateNow")}
           </Button>

@@ -8,7 +8,13 @@ export const SegmentedGroup = memo(function SegmentedGroup({
   ...rest
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex gap-1 p-0.5 rounded-none border border-border bg-bg-secondary", className)} {...rest}>
+    <div
+      className={cn(
+        "inline-flex max-w-full items-center gap-0.5 p-1 rounded-none border border-border bg-bg-secondary",
+        className,
+      )}
+      {...rest}
+    >
       {children}
     </div>
   );
@@ -23,8 +29,9 @@ export const DetailSection = memo(function DetailSection({
   children: ReactNode;
   className?: string;
 }) {
+  // Legacy alias: keep API stable, visuals aligned with PageSection.
   return (
-    <section className={cn("flex flex-col gap-4", className)}>
+    <section className={cn("flex flex-col gap-3 sm:gap-4", className)} aria-label={title}>
       <h2 className="ui-card-title">{title}</h2>
       {children}
     </section>

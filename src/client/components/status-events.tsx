@@ -7,13 +7,13 @@ import { formatRelativeTime } from "@/client/utils/format";
 import { SOURCE_LABELS } from "@/shared/config";
 import { Dot } from "@/client/components/ui/primitives";
 
-const EVENT_STYLES = {
+export const EVENT_STYLES = {
   down: { color: "var(--destructive)", text: "text-destructive", labelKey: "eventDown" },
   degraded: { color: "var(--warning)", text: "text-warning", labelKey: "eventDegraded" },
   up: { color: "var(--success)", text: "text-success", labelKey: "eventUp" },
 } as const;
 
-const StatusEventRow = memo(function StatusEventRow({
+export const StatusEventRow = memo(function StatusEventRow({
   event,
   showSource = false,
   showTime = false,
@@ -66,10 +66,14 @@ export const StatusEventList = memo(function StatusEventList({
   showTime?: boolean;
 }) {
   if (events.length === 0) {
-    return <p className="ui-body-secondary">{emptyMessage}</p>;
+    return (
+      <div className="border border-dashed border-border bg-bg-card px-4 py-6 text-center ui-caption">
+        {emptyMessage}
+      </div>
+    );
   }
   return (
-    <div className="divide-y divide-border border border-border bg-bg-card">
+    <div className="divide-y divide-border border border-border bg-bg-card shadow-none">
       {events.map((event, idx) => (
         <StatusEventRow
           key={`${event.id}-${event.at}-${event.type}-${idx}`}

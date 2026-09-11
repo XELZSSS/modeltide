@@ -100,12 +100,16 @@ export async function fetchHFModelById(ctx: AppContext, id: string): Promise<Ope
   return mapModel(raw);
 }
 
-export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload<OpenSourceModelEntry | null>> =>
-  ctx.cache.withTtl<SourcePayload<OpenSourceModelEntry | null>>(
-    cacheKeys.openSourceModel(id.trim()),
+export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload<OpenSourceModelEntry | null>> => {
+  // Validate before keying: garbage ids must not produce cache keys (and
+  // therefore KV writes) at all, not even for the failed lookup.
+  const trimmed = id.trim();
+  if (!isValidRowId(trimmed)) return Promise.reject(new ValidationError(`Invalid Hugging Face model id "${id}"`));
+  return ctx.cache.withTtl<SourcePayload<OpenSourceModelEntry | null>>(
+    cacheKeys.openSourceModel(trimmed),
     SLOW_TTL_MS,
     async () => {
-      const model = await fetchHFModelById(ctx, id);
+      const model = await fetchHFModelById(ctx, trimmed);
       // 404 (null) is a lookup miss, not data: cache it for 60s only so a
       // newly-published model becomes visible quickly instead of sticking to
       // NotFound for the full 2h slow TTL.
@@ -113,3 +117,4 @@ export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload
       return { data: { data: model, fetchedAt: nowIso() } };
     },
   );
+};

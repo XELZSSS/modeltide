@@ -39,9 +39,9 @@ function MobileTableBodyInner<T>({
           <Fragment key={rowId}>
             <div
               className={cn(
-                "border border-border bg-bg-card p-3 sm:p-4 transition-colors",
-                "hover:bg-hover",
-                isExpanded && "bg-accent-light",
+                "border border-border bg-bg-card p-4 transition-colors duration-fast",
+                "hover:border-text-tertiary/40",
+                isExpanded && "border-accent/40 bg-accent-light/50",
               )}
             >
               <div className="flex items-center gap-2 min-w-0">
@@ -51,22 +51,20 @@ function MobileTableBodyInner<T>({
                 <div className="min-w-0 flex-1">{primaryCol?.cell(row)}</div>
                 {mainStatCol && (
                   <div className="shrink-0 text-right min-w-0 max-w-[40%]">
-                    {mainStatCol.header && (
-                      <span className="text-xs text-text-secondary mr-1.5 truncate">{mainStatCol.header}</span>
-                    )}
-                    <div className="text-sm font-semibold">{mainStatCol.cell(row)}</div>
+                    {mainStatCol.header && <span className="ui-meta mr-1.5 truncate">{mainStatCol.header}</span>}
+                    <div className="ui-mono-value font-semibold">{mainStatCol.cell(row)}</div>
                   </div>
                 )}
               </div>
               {secondaryCols.length > 0 && (
-                <div className="flex flex-wrap gap-x-4 gap-y-1.5 sm:gap-y-2 mt-2 sm:mt-3">
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 border-t border-border/60 pt-3">
                   {secondaryCols.map((col) => (
                     <div
                       key={col.id}
                       className={cn("flex items-baseline gap-1.5 min-w-0", col.align === "right" && "ml-auto")}
                     >
-                      {col.header && <span className="text-xs text-text-secondary shrink-0">{col.header}</span>}
-                      <div className="text-sm min-w-0">{col.cell(row)}</div>
+                      {col.header && <span className="ui-meta shrink-0">{col.header}</span>}
+                      <div className="ui-body min-w-0">{col.cell(row)}</div>
                     </div>
                   ))}
                 </div>
@@ -76,7 +74,7 @@ function MobileTableBodyInner<T>({
               <div
                 id={`${rowId}-panel`}
                 role="region"
-                className="border border-border bg-bg-secondary/50 overflow-hidden animate-slide-up"
+                className="border border-t-0 border-border bg-bg-secondary/60 px-4 py-3 overflow-hidden animate-slide-up"
               >
                 {renderExpandedRow(row)}
               </div>

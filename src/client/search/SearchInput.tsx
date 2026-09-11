@@ -163,7 +163,7 @@ export function SearchInput({ className }: { className?: string }) {
       <label htmlFor={inputId} className="sr-only">
         {t("searchPlaceholder")}
       </label>
-      <div className="flex h-10 items-center gap-2 min-w-0 max-w-full border border-border rounded-none bg-bg-card px-3.5 focus-within:border-text-tertiary">
+      <div className="flex h-9 items-center gap-2 min-w-0 max-w-full border border-border rounded-none bg-bg-card px-3 transition-colors duration-fast hover:border-text-tertiary/40 focus-within:border-accent focus-within:ring-2 focus-within:ring-ring/20">
         <Search size={16} className="text-text-secondary shrink-0" aria-hidden="true" />
         <input
           ref={inputRef}
@@ -201,7 +201,7 @@ export function SearchInput({ className }: { className?: string }) {
             inputRef.current?.focus();
           }}
           className={cn(
-            "shrink-0 rounded-none p-1 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+            "shrink-0 rounded-none p-1 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             !inputValue && "invisible pointer-events-none",
           )}
         >
@@ -214,7 +214,7 @@ export function SearchInput({ className }: { className?: string }) {
           id={listboxId}
           ref={listRef}
           role="listbox"
-          className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-none shadow-lg z-50 animate-fade-in"
+          className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-none shadow-lg z-dropdown animate-fade-in"
         >
           <div className="p-1.5">{dropdownBody}</div>
         </div>

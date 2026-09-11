@@ -14,14 +14,24 @@ function emitRouteChange(): void {
   window.dispatchEvent(new Event(ROUTE_CHANGE));
 }
 
+/**
+ * Router-owned position of the current entry. Written on every navigate and
+ * carried through popstate by the history machinery, so BackButton can tell
+ * an in-app trail (idx > 0) from a fresh landing (idx 0 / absent).
+ */
+function historyIndex(): number {
+  const raw = (window.history.state as { idx?: unknown } | null)?.idx;
+  return typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : 0;
+}
+
 function navigate(to: string, replace = false): void {
   const url = new URL(to, window.location.href);
   if (url.origin !== window.location.origin) {
     window.location.assign(url.href);
     return;
   }
-  if (replace) window.history.replaceState(null, "", url.href);
-  else window.history.pushState(null, "", url.href);
+  if (replace) window.history.replaceState({ idx: historyIndex() }, "", url.href);
+  else window.history.pushState({ idx: historyIndex() + 1 }, "", url.href);
   emitRouteChange();
 }
 

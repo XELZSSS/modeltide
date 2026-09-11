@@ -14,6 +14,7 @@ import { SearchInput } from "@/client/search/SearchInput";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { PageContainer, PageSection } from "@/client/components/layout";
 import { Dot } from "@/client/components/ui/primitives";
+import { EVENT_STYLES } from "@/client/components/status-events";
 import { SOURCE_LABELS } from "@/shared/config";
 import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
@@ -23,12 +24,6 @@ import { KpiStrip, ProviderSpeedCard, TextToImageSection } from "./cards";
 const IndexLineChart = lazy(() => import("./charts").then((m) => ({ default: m.IndexLineChart })));
 const UsageDonut = lazy(() => import("./UsageDonut").then((m) => ({ default: m.UsageDonut })));
 const StatisticsSection = lazy(() => import("./statistics-section").then((m) => ({ default: m.StatisticsSection })));
-
-const EVENT_STYLES = {
-  down: { color: "var(--destructive)", text: "text-destructive", labelKey: "eventDown" },
-  degraded: { color: "var(--warning)", text: "text-warning", labelKey: "eventDegraded" },
-  up: { color: "var(--success)", text: "text-success", labelKey: "eventUp" },
-} as const;
 
 function HomeLatestEvents() {
   const { t, lang } = useTranslation();
@@ -43,9 +38,9 @@ function HomeLatestEvents() {
     return (
       <Link
         href="/status"
-        className="flex h-10 items-center gap-2 min-w-0 w-full border border-border rounded-none bg-bg-card px-3.5 hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        className="flex h-9 items-center gap-2 min-w-0 w-full border border-dashed border-border rounded-none bg-bg-card px-3.5 hover:border-text-tertiary/40 hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="text-sm text-text-tertiary truncate">{t("noRecentEvents")}</span>
+        <span className="ui-body-secondary truncate">{t("noRecentEvents")}</span>
       </Link>
     );
   }
@@ -60,10 +55,10 @@ function HomeLatestEvents() {
   return (
     <Link
       href="/status"
-      className="flex h-10 items-center gap-2 min-w-0 w-full overflow-hidden border border-border rounded-none bg-bg-card px-3.5 hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className="flex h-9 items-center gap-2 min-w-0 w-full overflow-hidden border border-border rounded-none bg-bg-card px-3.5 hover:border-text-tertiary/40 hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Dot size="sm" color={eventStyle!.color} aria-hidden="true" />
-      <span className="text-sm truncate min-w-0 flex-1 whitespace-nowrap">
+      <span className="ui-body truncate min-w-0 flex-1 whitespace-nowrap">
         <span className={`font-medium ${eventStyle!.text}`}>{t(eventStyle!.labelKey)}</span>
         <span className="text-text-secondary mx-1.5">·</span>
         <span className="text-text-secondary">{labelKey ? t(labelKey) : latest.id}</span>

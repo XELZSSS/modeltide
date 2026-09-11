@@ -7,6 +7,8 @@ import { aggregateProbes, probeTargets, type SourceAggregate } from "@/server/so
 import { fetchProviderStatuses } from "@/server/sources/provider-status";
 
 const SAMPLE_LOCK_TTL_S = 120;
+// Settle window before confirming lock ownership (see acquireSampleLock).
+const LOCK_CONFIRM_DELAY_MS = 100;
 // Stable across deploys by design: locks are ephemeral, versions must not orphan them.
 export const SAMPLE_LOCK_KEY = `${API_DOMAINS.statusHistory}:lock`;
 
@@ -27,14 +29,21 @@ async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
   const token = `${Date.now()}:${rand.toString(36)}`;
   const expiresAt = Date.now() + SAMPLE_LOCK_TTL_S * 1000;
   const value = `${token}:${expiresAt}`;
+  const isLiveLock = (held: string): boolean => {
+    const heldExpiry = Number(held.split(":").at(-1));
+    return Number.isFinite(heldExpiry) && heldExpiry > Date.now();
+  };
   try {
     const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
-    if (held) {
-      const parts = held.split(":");
-      const heldExpiry = Number(parts[parts.length - 1]);
-      if (Number.isFinite(heldExpiry) && heldExpiry > Date.now()) return null;
-    }
+    if (held && isLiveLock(held)) return null;
     await ctx.kv.put(SAMPLE_LOCK_KEY, value, { expirationTtl: SAMPLE_LOCK_TTL_S });
+    // KV is eventually consistent, so the initial get can miss a lock another
+    // isolate just took. Confirm ownership after a short settle delay: seeing
+    // a different live token means our put was overwritten and we lost the
+    // race. A stale read of our own put stays ambiguous and counts as success.
+    await new Promise((resolve) => setTimeout(resolve, LOCK_CONFIRM_DELAY_MS));
+    const confirmed = await ctx.kv.get(SAMPLE_LOCK_KEY);
+    if (confirmed && confirmed !== value && isLiveLock(confirmed)) return null;
     return token;
   } catch {
     return null;
@@ -79,12 +88,27 @@ async function collectHistoryRaws(kv: NonNullable<AppContext["kv"]>): Promise<{ 
   return raws;
 }
 
+/** Throttled KV read-failure warning: a dead KV must not look like an empty one. */
+const KV_READ_WARN_THROTTLE_MS = 30 * 60 * 1000;
+let lastKvReadWarnAt = 0;
+
+function warnKvReadFailure(ctx: AppContext, err: unknown): void {
+  const now = Date.now();
+  if (now - lastKvReadWarnAt < KV_READ_WARN_THROTTLE_MS) return;
+  lastKvReadWarnAt = now;
+  ctx.log(
+    "warn",
+    `[status-history] KV read failed, serving memory: ${err instanceof Error ? err.message : String(err)}`,
+  );
+}
+
 export async function readStore(ctx: AppContext): Promise<HistoryStore> {
   if (!ctx.kv) return memoryStore;
   let raws: { key: string; raw: string }[];
   try {
     raws = await collectHistoryRaws(ctx.kv);
-  } catch {
+  } catch (err) {
+    warnKvReadFailure(ctx, err);
     return memoryStore;
   }
   for (const { key, raw } of raws) {
@@ -99,7 +123,14 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
           try {
             await ctx.kv.put(HISTORY_KEY, JSON.stringify(salvaged), { expirationTtl: HISTORY_KV_RETENTION_TTL_S });
             await ctx.kv.delete(key);
-          } catch {}
+          } catch (err) {
+            // One-time bridge: a failure here leaves the legacy key in place,
+            // which is safe (it is re-read next time) but must be visible.
+            ctx.log(
+              "warn",
+              `[status-history] legacy history adoption failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
         }
         return salvaged;
       }
@@ -118,7 +149,14 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
       expirationTtl: HISTORY_KV_RETENTION_TTL_S,
     });
     await Promise.all(raws.map(({ key }) => ctx.kv!.delete(key)));
-  } catch {}
+  } catch (err) {
+    // Without the backup, the unsalvageable payloads are gone for good once
+    // the keys are cleared — surface the loss instead of failing silently.
+    ctx.log(
+      "warn",
+      `[status-history] history backup write failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   return Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} };
 }
 

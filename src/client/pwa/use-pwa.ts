@@ -166,11 +166,15 @@ export function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
   if (!window.isSecureContext) return;
   if (process.env.NODE_ENV !== "production") return;
-  window.addEventListener("load", () => {
+  const register = (): void => {
     void navigator.serviceWorker.register("/sw.js").catch((err) => {
       console.warn("[pwa] service worker registration failed:", err);
     });
-  });
+  };
+  // Idle-time boot can run after `load` has already fired; gate on readyState
+  // so registration is never attached to an event that will not fire again.
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
 }
 
 /**

@@ -4,7 +4,7 @@ import { SafeLink as Link } from "@/client/router";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { useSuspenseStatusHistory } from "@/client/api/queries";
-import { SuspenseQuery } from "@/client/components/feedback";
+import { PartialNotice, SuspenseQuery } from "@/client/components/feedback";
 import { PageContainer, PageHeader, PageSection } from "@/client/components/layout";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { Dot } from "@/client/components/ui/primitives";
@@ -32,14 +32,14 @@ const SourceCard = memo(function SourceCard({
   return (
     <Link
       href={`/status/${summary.id}`}
-      className="block border border-border bg-bg-card p-4 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className="group block border border-border bg-bg-card p-4 transition-colors duration-fast hover:border-text-tertiary/40 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <Dot size="sm" color={style.dot} />
-          <span className="text-sm font-medium truncate">{label}</span>
+          <span className="ui-body font-medium truncate">{label}</span>
         </div>
-        <span className={cn("text-xs font-medium shrink-0", style.text)}>{t(style.labelKey)}</span>
+        <span className={cn("ui-caption font-medium shrink-0", style.text)}>{t(style.labelKey)}</span>
       </div>
       <UptimeStrip buckets={buckets} />
       <div className="flex items-center justify-between gap-3 mt-3 ui-caption">
@@ -51,10 +51,13 @@ const SourceCard = memo(function SourceCard({
         ).map(([labelKey, value]) => (
           <span key={labelKey}>
             {t(labelKey)}
-            <span className="font-mono text-text-primary ml-1.5">{formatUptimePct(t, value)}</span>
+            <span className="ui-mono-value text-xs text-text-primary ml-1.5">{formatUptimePct(t, value)}</span>
           </span>
         ))}
-        <ChevronRight size={16} className="shrink-0 text-text-tertiary" />
+        <ChevronRight
+          size={16}
+          className="shrink-0 text-text-tertiary transition-transform duration-fast group-hover:translate-x-0.5"
+        />
       </div>
     </Link>
   );
@@ -76,15 +79,13 @@ function StatusContent() {
       <PageHeader title={t("statusPageTitle")} description={t("sourceStatus")} />
 
       {data.persisted === false && (
-        <Card>
-          <CardContent>
-            <p className="text-xs text-text-secondary">{t("memoryModeNotice")}</p>
-          </CardContent>
-        </Card>
+        <div className="mb-4">
+          <PartialNotice message={t("memoryModeNotice")} />
+        </div>
       )}
 
       <Card>
-        <CardContent className="flex items-center justify-between gap-3 flex-wrap">
+        <CardContent className="flex items-center justify-between gap-3 flex-wrap py-4">
           <div className="flex items-center gap-3 min-w-0">
             <Dot
               size="md"
@@ -100,7 +101,7 @@ function StatusContent() {
                         : "var(--success)"
               }
             />
-            <p className="text-sm font-medium">
+            <p className="ui-body font-medium text-balance">
               {!hasData
                 ? t("historyAccumulating")
                 : erroring > 0
@@ -112,15 +113,15 @@ function StatusContent() {
                       : t("statusAllOk")}
             </p>
           </div>
-          <span className="text-xs text-text-secondary shrink-0">
+          <span className="ui-caption shrink-0">
             {t("serviceUptime")}
-            <span className="font-mono text-text-primary ml-1.5">{formatUptime(t, data.uptimeMs)}</span>
+            <span className="ui-mono-value text-xs text-text-primary ml-1.5">{formatUptime(t, data.uptimeMs)}</span>
           </span>
         </CardContent>
       </Card>
 
       <PageSection>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in">
           {data.sources.map((summary) => (
             <SourceCard key={summary.id} summary={summary} buckets={data.daily[summary.id] ?? EMPTY_BUCKETS} />
           ))}
