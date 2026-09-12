@@ -1,19 +1,13 @@
 import type { NewsItem } from "@/shared/types";
 import { SOURCE_LIMITS } from "@/shared/config";
-import { UpstreamError, zeroUpstream } from "@/server/infra/errors";
+import { zeroUpstreamMessage } from "@/server/infra/errors";
 import { isRecord, str } from "@/server/parsers/primitives";
 import { isSuitableNewsItem } from "@/server/parsers/data-filter";
 import { upstreamConfig } from "@/server/config";
+import type { DailyPaperEntry } from "@/server/parsers/upstream";
+import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
 
-export interface DailyPaperEntry {
-  paper?: {
-    id?: unknown;
-    title?: unknown;
-    upvotes?: unknown;
-    publishedAt?: unknown;
-    summary?: unknown;
-  };
-}
+export type { DailyPaperEntry } from "@/server/parsers/upstream";
 
 function toNewsItem(entry: DailyPaperEntry): NewsItem | null {
   const paper = isRecord(entry.paper) ? entry.paper : undefined;
@@ -34,9 +28,9 @@ function toNewsItem(entry: DailyPaperEntry): NewsItem | null {
   };
 }
 
-export function parseDailyPapers(raw: unknown): NewsItem[] {
+export function parseDailyPapers(raw: unknown): ParseResult<NewsItem[]> {
   if (!Array.isArray(raw)) {
-    throw new UpstreamError(`HuggingFace daily papers returned non-array (got ${raw === null ? "null" : typeof raw})`);
+    return parseFail(`HuggingFace daily papers returned non-array (got ${raw === null ? "null" : typeof raw})`);
   }
   const items = (raw as DailyPaperEntry[])
     .map((entry) => ({ entry, upvotes: upvotesOf(entry) }))
@@ -46,9 +40,9 @@ export function parseDailyPapers(raw: unknown): NewsItem[] {
   const seen = new Set<string>();
   const unique = items.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));
   if (unique.length === 0) {
-    throw zeroUpstream("HuggingFace daily papers", "usable items", `raw=${raw.length}`);
+    return parseFail(zeroUpstreamMessage("HuggingFace daily papers", "usable items", `raw=${raw.length}`));
   }
-  return unique.slice(0, SOURCE_LIMITS.dailyPapers);
+  return parseOk(unique.slice(0, SOURCE_LIMITS.dailyPapers));
 }
 
 function upvotesOf(entry: DailyPaperEntry): number {

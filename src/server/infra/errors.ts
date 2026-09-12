@@ -27,10 +27,18 @@ export class UpstreamError extends ApiError {
 }
 
 /**
- * Canonical shape for "upstream parsed but kept nothing" failures:
+ * Canonical message for "upstream parsed but kept nothing" failures:
  * `${label} yielded 0 ${unit} (${detail})`. `detail` is verbatim so callers
  * keep their source-specific counts (raw/kept/body/...).
+ *
+ * Parsers (which must not throw) use this pure formatter and hand the message
+ * to the source layer, which raises it via `zeroUpstream` or `requireParsed`.
  */
+export function zeroUpstreamMessage(label: string, unit: string, detail?: string): string {
+  return `${label} yielded 0 ${unit}${detail ? ` (${detail})` : ""}`;
+}
+
+/** `zeroUpstreamMessage` wrapped as the canonical 502 error. */
 export function zeroUpstream(label: string, unit: string, detail?: string): UpstreamError {
-  return new UpstreamError(`${label} yielded 0 ${unit}${detail ? ` (${detail})` : ""}`);
+  return new UpstreamError(zeroUpstreamMessage(label, unit, detail));
 }

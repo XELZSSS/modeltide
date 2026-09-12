@@ -1,6 +1,7 @@
-import { UpstreamError } from "@/server/infra/errors";
 import { obj, str } from "@/server/parsers/primitives";
 import type { SourceLevel } from "@/shared/types";
+import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
+import type { GcpIncidentRaw, StatuspageSummaryRaw } from "@/server/parsers/upstream";
 
 const HEALTHY_COMPONENT_STATES = new Set(["operational"]);
 
@@ -22,11 +23,11 @@ export interface StatuspageVerdict {
   total: number;
 }
 
-export function parseStatuspageSummary(raw: unknown): StatuspageVerdict {
-  const root = obj(raw);
+export function parseStatuspageSummary(raw: unknown): ParseResult<StatuspageVerdict> {
+  const root = obj(raw) as StatuspageSummaryRaw | undefined;
   const componentsRaw = root?.components;
   if (!Array.isArray(componentsRaw) || componentsRaw.length === 0) {
-    throw new UpstreamError("Statuspage summary has no components array");
+    return parseFail("Statuspage summary has no components array");
   }
   const degradedComponents: string[] = [];
   let worst: SourceLevel = "ok";
@@ -45,7 +46,7 @@ export function parseStatuspageSummary(raw: unknown): StatuspageVerdict {
     }
   }
   if (total === 0) {
-    throw new UpstreamError("Statuspage summary has no readable component states");
+    return parseFail("Statuspage summary has no readable component states");
   }
   // Prefer the page-level indicator when the payload carries one; fall back to the
   // component rule for non-standard shapes so unknown payloads fail closed, not open.
@@ -57,13 +58,7 @@ export function parseStatuspageSummary(raw: unknown): StatuspageVerdict {
         ? "warn"
         : "error"
     : worst;
-  return { level, degradedComponents, total };
-}
-
-interface GcpIncident {
-  external_desc?: unknown;
-  end?: unknown;
-  severity?: unknown;
+  return parseOk({ level, degradedComponents, total });
 }
 
 const GCP_ROUTINE_SEVERITIES = new Set(["low"]);
@@ -71,13 +66,15 @@ const GCP_ROUTINE_SEVERITIES = new Set(["low"]);
 // unknown severity) is treated as an outage.
 const GCP_WARN_SEVERITIES = new Set(["medium"]);
 
-export function parseGoogleCloudIncidents(raw: unknown): { level: SourceLevel; openIncidents: string[] } {
+export function parseGoogleCloudIncidents(
+  raw: unknown,
+): ParseResult<{ level: SourceLevel; openIncidents: string[] }> {
   if (!Array.isArray(raw)) {
-    throw new UpstreamError("Google Cloud status returned a non-array payload");
+    return parseFail("Google Cloud status returned a non-array payload");
   }
   const openIncidents: string[] = [];
   let worst: SourceLevel = "ok";
-  for (const entry of raw as GcpIncident[]) {
+  for (const entry of raw as GcpIncidentRaw[]) {
     const incident = obj(entry);
     if (!incident) continue;
     if (str(incident.end).trim()) continue;
@@ -87,5 +84,5 @@ export function parseGoogleCloudIncidents(raw: unknown): { level: SourceLevel; o
     if (!GCP_WARN_SEVERITIES.has(severity)) worst = "error";
     else if (worst === "ok") worst = "warn";
   }
-  return { level: worst, openIncidents };
+  return parseOk({ level: worst, openIncidents });
 }

@@ -10,9 +10,10 @@ import { byNumberDesc } from "@/server/parsers/shaping";
 import type { RawEntry } from "@/server/parsers/aa-text-to-image";
 import { mapEntry } from "@/server/parsers/aa-text-to-image";
 import { fetchAaRsc } from "@/server/sources/aa/fetch";
+import { cachedSource } from "@/server/sources/pipeline";
 
 export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImagePayload> =>
-  ctx.cache.withTtl(cacheKeys.textToImage, DEFAULT_TTL_MS, async () => {
+  cachedSource(ctx, cacheKeys.textToImage, DEFAULT_TTL_MS, async () => {
     let body: string;
     try {
       body = await fetchAaRsc(ctx, upstreamEndpoints.aaTextToImage);
@@ -44,5 +45,5 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<TextToImageP
     if (models.length === 0) {
       throw zeroUpstream("Text-to-image", "models", `raw=${rawModels.length}, kept=0`);
     }
-    return { data: { models, fetchedAt: new Date().toISOString() } };
+    return { value: { models, fetchedAt: new Date().toISOString() } };
   });

@@ -3,6 +3,7 @@ import { cacheKeys } from "@/server/config";
 import { ensureFreshSamples } from "@/server/sources/status/store";
 import { getUptime } from "@/server/sources/status/uptime";
 import { buildHistoryPayload } from "@/server/sources/status/payload";
+import { cachedSource } from "@/server/sources/pipeline";
 
 // Short server-side cache (30s): the route additionally caps browsers/CDN at
 // 15-30s, but every request otherwise pays 2 KV reads + a full 30-day payload copy.
@@ -10,9 +11,9 @@ import { buildHistoryPayload } from "@/server/sources/status/payload";
 const STATUS_PAYLOAD_TTL_MS = 30_000;
 
 export async function getStatusHistory(ctx: AppContext) {
-  return ctx.cache.withTtl(cacheKeys.statusHistoryPayload, STATUS_PAYLOAD_TTL_MS, async () => {
+  return cachedSource(ctx, cacheKeys.statusHistoryPayload, STATUS_PAYLOAD_TTL_MS, async () => {
     const [store, uptime] = await Promise.all([ensureFreshSamples(ctx), getUptime(ctx)]);
     const data = buildHistoryPayload(store, uptime, Date.now(), ctx.kv != null);
-    return { data, ttl: STATUS_PAYLOAD_TTL_MS };
+    return { value: data, ttl: STATUS_PAYLOAD_TTL_MS };
   });
 }

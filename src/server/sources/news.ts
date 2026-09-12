@@ -10,7 +10,8 @@ import { parseTs } from "@/server/parsers/shaping";
 import { fetchDailyPapersItems } from "@/server/sources/hf-papers";
 import { dedupeBy } from "@/shared/utils";
 import { isSuitableNewsItem } from "@/server/parsers/data-filter";
-import { nowIso, type SourcePayload } from "@/server/sources/types";
+import type { SourcePayload } from "@/server/sources/types";
+import { cachedPayload, requireParsed } from "@/server/sources/pipeline";
 
 // Dedupe key only (never served): collapse to a canonical origin+path+query
 // form. Inputs are pre-validated by isSuitableNewsItem -> isValidHttpUrl.
@@ -32,9 +33,11 @@ async function fetchNews(
   if (!urls || urls.length === 0) throw new ValidationError(`Unknown news category "${category}"`);
   const legTasks: (() => Promise<NewsItem[]>)[] = urls.map(
     (url) => async () =>
-      parseFeed(
-        await ctx.http.text(url, { headers: { accept: FEED_ACCEPT }, ...FAST_FETCH_OPTS }, MAX_FEED_BYTES),
-        url,
+      requireParsed(
+        parseFeed(
+          await ctx.http.text(url, { headers: { accept: FEED_ACCEPT }, ...FAST_FETCH_OPTS }, MAX_FEED_BYTES),
+          url,
+        ),
       ),
   );
   const legLabels: string[] = [...urls];
@@ -80,13 +83,10 @@ async function fetchNews(
 }
 
 export const getNews = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>
-  ctx.cache.withTtl<SourcePayload<NewsItem[]>>(cacheKeys.news(category), NEWS_TTL_MS, async () => {
+  cachedPayload(ctx, cacheKeys.news(category), NEWS_TTL_MS, async () => {
     const { items, failCount, total } = await fetchNews(ctx, category);
     // Never cache an empty list: every other source throws zeroUpstream so the
     // stale copy survives. An empty news array would otherwise poison KV for 30m.
     if (items.length === 0) throw zeroUpstream(`news "${category}"`, "usable items", "all filtered?");
-    return {
-      data: { data: items, fetchedAt: nowIso(), ...(failCount > 0 ? { partial: true } : {}) },
-      ttl: ttlForRatio(failCount, total, NEWS_TTL_MS),
-    };
+    return { rows: items, partial: failCount > 0, ttl: ttlForRatio(failCount, total, NEWS_TTL_MS) };
   });

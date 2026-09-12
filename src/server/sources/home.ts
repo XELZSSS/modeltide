@@ -8,6 +8,7 @@ import { FIVE_MINUTES, OPEN_SOURCE_MODELS_DEFAULTS, ttlFor } from "@/shared/conf
 import { cacheKeys } from "@/server/config";
 import type { HomeDashboardData } from "@/shared/types";
 import type { SourcePayload } from "@/server/sources/types";
+import { cachedSource } from "@/server/sources/pipeline";
 
 async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
   const [orRankingsRes, textToImageRes, opensourceRes] = await Promise.allSettled([
@@ -32,9 +33,9 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
 }
 
 export async function getHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
-  return ctx.cache.withTtl(cacheKeys.homeDashboard, FIVE_MINUTES, async () => {
+  return cachedSource(ctx, cacheKeys.homeDashboard, FIVE_MINUTES, async () => {
     const data = await fetchHomeDashboard(ctx);
     const partial = data.orRankings == null || data.textToImage == null || data.opensource == null;
-    return { data, ttl: ttlFor(partial, FIVE_MINUTES) };
+    return { value: data, ttl: ttlFor(partial, FIVE_MINUTES) };
   });
 }

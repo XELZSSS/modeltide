@@ -1,6 +1,7 @@
 import { extractNeedleJsonArrays, MAX_SCAN_CHARS } from "@/server/parsers/rsc-scan";
 import { isRecord, str } from "@/server/parsers/primitives";
 import { isUnsuitableContent } from "@/server/parsers/data-filter";
+import type { ChangelogRawEntry } from "@/server/parsers/upstream";
 
 export interface ChangelogModel {
   slug: string;
@@ -27,9 +28,9 @@ function extractModelsArrays(html: string): unknown[] {
   });
 }
 
-function isChangelogRaw(e: unknown): e is Record<string, unknown> {
+function isChangelogRaw(e: unknown): e is ChangelogRawEntry {
   if (!isRecord(e)) return false;
-  const r = e as Record<string, unknown>;
+  const r = e as ChangelogRawEntry;
   // Reject arrays: a repeated <creator>/<release> element in the payload
   // parses as an array, and str() on it would yield "" silently downstream.
   if (Array.isArray(r.slug) || Array.isArray(r.name) || Array.isArray(r.releaseDate)) return false;
@@ -40,9 +41,9 @@ function isChangelogRaw(e: unknown): e is Record<string, unknown> {
 
 const CHANGELOG_FIELD_MAX = 500;
 
-function toChangelogModel(e: Record<string, unknown>): ChangelogModel | null {
-  const release = e.release as Record<string, unknown>;
-  const creator = e.creator as Record<string, unknown>;
+function toChangelogModel(e: ChangelogRawEntry): ChangelogModel | null {
+  const release = isRecord(e.release) ? e.release : {};
+  const creator = isRecord(e.creator) ? e.creator : {};
   const slug = str(e.slug).trim();
   const name = str(e.name).trim();
   const releaseSlug = str(release.slug).trim();

@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { fetchProviderStatuses } from "@/server/sources/provider-status";
-import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/provider-status";
+import {
+  parseGoogleCloudIncidents as parseGoogleCloudIncidentsResult,
+  parseStatuspageSummary as parseStatuspageSummaryResult,
+} from "@/server/parsers/provider-status";
 import type { AppContext } from "@/server/context";
-import { parseDailyPapers } from "@/server/parsers/hf-papers";
-import { parseLitellmPricing } from "@/server/parsers/official-pricing";
+import { parseDailyPapers as parseDailyPapersResult } from "@/server/parsers/hf-papers";
+import { parseLitellmPricing as parseLitellmPricingResult } from "@/server/parsers/official-pricing";
 import { SOURCE_LIMITS } from "@/shared/config";
+
+/** Unwrap a successful ParseResult; failure surfaces as a thrown error. */
+function unwrap<T>(res: { ok: true; data: T } | { ok: false; error: string }): T {
+  if (!res.ok) throw new Error(res.error);
+  return res.data;
+}
+
+const parseStatuspageSummary = (raw: unknown) => unwrap(parseStatuspageSummaryResult(raw));
+const parseGoogleCloudIncidents = (raw: unknown) => unwrap(parseGoogleCloudIncidentsResult(raw));
+const parseDailyPapers = (raw: unknown) => unwrap(parseDailyPapersResult(raw));
+const parseLitellmPricing = (raw: unknown) => unwrap(parseLitellmPricingResult(raw));
 
 describe("parseStatuspageSummary", () => {
   it("is healthy when every component is operational", () => {
@@ -63,10 +77,14 @@ describe("parseStatuspageSummary", () => {
     }
   });
 
-  it("throws on empty or unreadable component lists (fail closed)", () => {
-    expect(() => parseStatuspageSummary({ components: [] })).toThrow(/no components/);
-    expect(() => parseStatuspageSummary({ components: [{ name: "x", status: "" }] })).toThrow(/no readable/);
-    expect(() => parseStatuspageSummary({})).toThrow(/no components/);
+  it("fails closed on empty or unreadable component lists", () => {
+    const empty = parseStatuspageSummaryResult({ components: [] });
+    expect(empty.ok).toBe(false);
+    expect(empty.ok ? "" : empty.error).toMatch(/no components/);
+    const unreadable = parseStatuspageSummaryResult({ components: [{ name: "x", status: "" }] });
+    expect(unreadable.ok).toBe(false);
+    expect(unreadable.ok ? "" : unreadable.error).toMatch(/no readable/);
+    expect(parseStatuspageSummaryResult({}).ok).toBe(false);
   });
 });
 
@@ -104,8 +122,10 @@ describe("parseGoogleCloudIncidents", () => {
     expect(out.openIncidents).toEqual(["Mystery"]);
   });
 
-  it("throws on a non-array payload", () => {
-    expect(() => parseGoogleCloudIncidents({ nope: true })).toThrow(/non-array/);
+  it("fails on a non-array payload", () => {
+    const res = parseGoogleCloudIncidentsResult({ nope: true });
+    expect(res.ok).toBe(false);
+    expect(res.ok ? "" : res.error).toMatch(/non-array/);
   });
 });
 
@@ -194,9 +214,13 @@ describe("parseDailyPapers", () => {
     expect(parseDailyPapers(many)).toHaveLength(SOURCE_LIMITS.dailyPapers);
   });
 
-  it("throws on non-array or all-unusable payloads", () => {
-    expect(() => parseDailyPapers({ nope: 1 })).toThrow(/non-array/);
-    expect(() => parseDailyPapers([paper("x", "test", 1)])).toThrow(/0 usable/);
+  it("fails on non-array or all-unusable payloads", () => {
+    const nonArray = parseDailyPapersResult({ nope: 1 });
+    expect(nonArray.ok).toBe(false);
+    expect(nonArray.ok ? "" : nonArray.error).toMatch(/non-array/);
+    const unusable = parseDailyPapersResult([paper("x", "test", 1)]);
+    expect(unusable.ok).toBe(false);
+    expect(unusable.ok ? "" : unusable.error).toMatch(/0 usable/);
   });
 });
 
@@ -242,9 +266,13 @@ describe("parseLitellmPricing", () => {
     expect(ids).toEqual(["claude-opus-4", "gpt-5"]);
   });
 
-  it("throws on non-object payloads or zero usable rows", () => {
-    expect(() => parseLitellmPricing("nope")).toThrow(/non-object/);
-    expect(() => parseLitellmPricing({ sample_spec: {} })).toThrow(/0 usable rows/);
+  it("fails on non-object payloads or zero usable rows", () => {
+    const nonObject = parseLitellmPricingResult("nope");
+    expect(nonObject.ok).toBe(false);
+    expect(nonObject.ok ? "" : nonObject.error).toMatch(/non-object/);
+    const zeroRows = parseLitellmPricingResult({ sample_spec: {} });
+    expect(zeroRows.ok).toBe(false);
+    expect(zeroRows.ok ? "" : zeroRows.error).toMatch(/0 usable rows/);
   });
 
   it("resolves newer provider families instead of dropping them", () => {

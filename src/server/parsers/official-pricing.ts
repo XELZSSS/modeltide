@@ -1,8 +1,12 @@
 import type { OfficialPriceModel } from "@/shared/types";
 import { MAX_PLAUSIBLE_RATE, PER_MILLION } from "@/shared/config/limits";
-import { UpstreamError, zeroUpstream } from "@/server/infra/errors";
+import { zeroUpstreamMessage } from "@/server/infra/errors";
 import { humanizeId, isRecord, numCoerce, str } from "@/server/parsers/primitives";
 import { isUsablePricing } from "@/server/parsers/data-filter";
+import type { LitellmEntry } from "@/server/parsers/upstream";
+import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
+
+export type { LitellmEntry } from "@/server/parsers/upstream";
 
 function officialModel(
   provider: string,
@@ -83,15 +87,6 @@ function resolveProvider(id: string): string | null {
   return null;
 }
 
-export interface LitellmEntry {
-  mode?: unknown;
-  litellm_provider?: unknown;
-  input_cost_per_token?: unknown;
-  output_cost_per_token?: unknown;
-  cache_read_input_token_cost?: unknown;
-  cache_creation_input_token_cost?: unknown;
-}
-
 function toPricingModel(key: string, value: unknown, seen: Set<string>): OfficialPriceModel | null {
   if (!isRecord(value)) return null;
   const entry = value as LitellmEntry;
@@ -123,9 +118,9 @@ function toPricingModel(key: string, value: unknown, seen: Set<string>): Officia
   return model;
 }
 
-export function parseLitellmPricing(raw: unknown): OfficialPriceModel[] {
+export function parseLitellmPricing(raw: unknown): ParseResult<OfficialPriceModel[]> {
   const spec = isRecord(raw) ? raw : undefined;
-  if (!spec) throw new UpstreamError("LiteLLM pricing returned a non-object payload");
+  if (!spec) return parseFail("LiteLLM pricing returned a non-object payload");
   const seen = new Set<string>();
   const models: OfficialPriceModel[] = [];
   let total = 0;
@@ -150,7 +145,7 @@ export function parseLitellmPricing(raw: unknown): OfficialPriceModel[] {
     );
   }
   if (models.length === 0) {
-    throw zeroUpstream("LiteLLM pricing", "usable rows", "schema drift?");
+    return parseFail(zeroUpstreamMessage("LiteLLM pricing", "usable rows", "schema drift?"));
   }
-  return models;
+  return parseOk(models);
 }

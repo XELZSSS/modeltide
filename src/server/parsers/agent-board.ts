@@ -1,10 +1,12 @@
 import { SOURCE_LIMITS } from "@/shared/config";
 import type { AgentRankEntry } from "@/shared/types";
-import { zeroUpstream } from "@/server/infra/errors";
+import { zeroUpstreamMessage } from "@/server/infra/errors";
 import { num, isRecord, strOrNull } from "@/server/parsers/primitives";
 import { parseRscPayload, traverse } from "@/server/parsers/rsc";
 import { byNumberDesc } from "@/server/parsers/shaping";
 import { isUnsuitableContent } from "@/server/parsers/data-filter";
+import type { AgentSignalEntry } from "@/server/parsers/upstream";
+import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
 
 /**
  * The five scored signals embedded in the agent board payload. The page
@@ -30,7 +32,7 @@ export interface AgentSignalRow {
   license: string | null;
 }
 
-function toAgentSignalRow(e: unknown): AgentSignalRow | null {
+function toAgentSignalRow(e: AgentSignalEntry): AgentSignalRow | null {
   if (!isRecord(e)) return null;
   const id = strOrNull(e.contenderName);
   const name = strOrNull(e.model);
@@ -50,11 +52,11 @@ function toAgentSignalRow(e: unknown): AgentSignalRow | null {
 }
 
 function extractSignalEntries(signal: string) {
-  return (tree: unknown): Record<string, unknown>[] | null => {
+  return (tree: unknown): AgentSignalEntry[] | null => {
     for (const node of traverse(tree)) {
       if (!isRecord(node) || node.name !== signal) continue;
       const entries = node.entries;
-      if (Array.isArray(entries) && entries.length > 0) return entries as Record<string, unknown>[];
+      if (Array.isArray(entries) && entries.length > 0) return entries as AgentSignalEntry[];
     }
     return null;
   };
@@ -99,14 +101,24 @@ export function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow
   return ranked.map((r, i) => ({ rank: i + 1, ...r })).slice(0, SOURCE_LIMITS.agentRankings);
 }
 
-export function parseAgentBoards(body: string): AgentRankEntry[] {
-  const boards = AGENT_SIGNALS.map((signal) => {
-    const raw = parseRscPayload<Record<string, unknown>>(body, signal, extractSignalEntries(signal));
+export function parseAgentBoards(body: string): ParseResult<AgentRankEntry[]> {
+  const boards: { signal: string; rows: AgentSignalRow[] }[] = [];
+  for (const signal of AGENT_SIGNALS) {
+    let raw: AgentSignalEntry[];
+    try {
+      raw = parseRscPayload<AgentSignalEntry>(body, signal, extractSignalEntries(signal));
+    } catch (err) {
+      // parseRscPayload is a throwing transport scanner; translate here so the
+      // domain parser itself never throws.
+      return parseFail(
+        `Agent board "${signal}" could not be extracted: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     const rows = raw.map(toAgentSignalRow).filter((r): r is AgentSignalRow => r !== null);
     if (rows.length === 0) {
-      throw zeroUpstream(`Agent board "${signal}"`, "usable rows", "markup changed?");
+      return parseFail(zeroUpstreamMessage(`Agent board "${signal}"`, "usable rows", "markup changed?"));
     }
-    return { signal, rows };
-  });
-  return buildAgentOverall(boards);
+    boards.push({ signal, rows });
+  }
+  return parseOk(buildAgentOverall(boards));
 }

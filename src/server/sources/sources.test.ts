@@ -1348,7 +1348,9 @@ describe("parseAgentBoards (agent overall composite)", () => {
 
   it("composites the overall board as the mean of the five signals", async () => {
     const { parseAgentBoards } = await import("@/server/parsers/agent-board");
-    const rows = parseAgentBoards(FLIGHT_BODY);
+    const res = parseAgentBoards(FLIGHT_BODY);
+    if (!res.ok) throw new Error(res.error);
+    const rows = res.data;
     expect(rows.map((r) => r.id)).toEqual(["contenders/c", "contenders/a", "contenders/b"]);
     expect(rows.map((r) => r.rank)).toEqual([1, 2, 3]);
     expect(rows[0]?.score).toBeCloseTo(0.2, 10);
@@ -1356,9 +1358,9 @@ describe("parseAgentBoards (agent overall composite)", () => {
     expect(rows[0]).toMatchObject({ ciLower: 0, ciUpper: 1 });
   });
 
-  it("throws when a signal board is missing (shape drift)", async () => {
+  it("reports a failure when a signal board is missing (shape drift)", async () => {
     const { parseAgentBoards } = await import("@/server/parsers/agent-board");
-    expect(() => parseAgentBoards('41:{"signals":[]}')).toThrow();
+    expect(parseAgentBoards('41:{"signals":[]}').ok).toBe(false);
   });
 
   it("feeds getAgentRankings through the RSC flight path", async () => {

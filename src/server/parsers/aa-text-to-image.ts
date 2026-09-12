@@ -1,17 +1,9 @@
 import type { TextToImageModel } from "@/shared/types";
 import { num, numNonNegative, strOrNull } from "@/server/parsers/primitives";
 import { isValidTextToImageEntry } from "@/server/parsers/data-filter";
+import type { RawEntry } from "@/server/parsers/upstream";
 
-export interface RawEntry {
-  id?: unknown;
-  slug?: unknown;
-  name?: unknown;
-  elo?: unknown;
-  lower95ci?: unknown;
-  upper95ci?: unknown;
-  price?: unknown;
-  creator?: unknown;
-}
+export type { RawEntry } from "@/server/parsers/upstream";
 
 /** Parsed entry; `rank` is assigned from elo order by the caller. */
 export function mapEntry(raw: RawEntry): Omit<TextToImageModel, "rank"> | null {

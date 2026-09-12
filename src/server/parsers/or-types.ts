@@ -1,16 +1,4 @@
-export interface ModelRow {
-  date: string;
-  model_permaslug: string;
-  variant: string;
-  variant_permaslug: string;
-  total_completion_tokens: number;
-  total_prompt_tokens: number;
-  total_native_tokens_reasoning: number;
-  total_native_tokens_cached: number;
-  count: number;
-  total_tool_calls: number;
-  change: number | null;
-}
+export type { ModelRow } from "@/server/parsers/upstream";
 
 export interface PricingEntry {
   input: number;

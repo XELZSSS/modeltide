@@ -2,17 +2,9 @@ import type { OpenSourceModelEntry } from "@/shared/types";
 import { getOpenLicense } from "@/server/parsers/licenses";
 import { isoDate, numIntNonNegative, strOrNull } from "@/server/parsers/primitives";
 import { isValidRowId } from "@/server/parsers/data-filter";
+import type { HFModel } from "@/server/parsers/upstream";
 
-export interface HFModel {
-  id?: string;
-  author?: string;
-  downloads?: number;
-  likes?: number;
-  pipeline_tag?: string | null;
-  createdAt?: string | null;
-  lastModified?: string | null;
-  tags?: string[];
-}
+export type { HFModel } from "@/server/parsers/upstream";
 
 export function resolveAuthor(m: HFModel, id: string): string | null {
   return strOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);

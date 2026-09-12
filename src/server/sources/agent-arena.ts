@@ -5,6 +5,7 @@ import type { AppContext } from "@/server/context";
 import { zeroUpstream } from "@/server/infra/errors";
 import { fetchRscText } from "@/server/sources/rsc-fetch";
 import { parseAgentBoards } from "@/server/parsers/agent-board";
+import { cachedSource, requireParsed } from "@/server/sources/pipeline";
 
 const AGENT_PATH = upstreamEndpoints.agentBoard;
 
@@ -16,7 +17,7 @@ async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
     maxBytes: MAX_JSON_BYTES,
     retries: UPSTREAM_FETCH_OPTS.retries,
   });
-  const entries = parseAgentBoards(body);
+  const entries = requireParsed(parseAgentBoards(body));
   if (entries.length === 0) {
     throw zeroUpstream("Agent board", "rows from the flight payload", `body=${body.length}B, markup changed?`);
   }
@@ -24,7 +25,7 @@ async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
 }
 
 export const getAgentRankings = (ctx: AppContext): Promise<AgentRankingsPayload> =>
-  ctx.cache.withTtl(cacheKeys.agentRankings, SLOW_TTL_MS, async () => {
+  cachedSource(ctx, cacheKeys.agentRankings, SLOW_TTL_MS, async () => {
     const entries = await fetchAgentBoard(ctx);
-    return { data: { entries, fetchedAt: new Date().toISOString() } };
+    return { value: { entries, fetchedAt: new Date().toISOString() } };
   });

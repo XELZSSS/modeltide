@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeEntities } from "@/server/parsers/entities";
 import { stripHtml } from "@/server/parsers/html";
-import { parseFeed } from "@/server/parsers/feed";
+import { parseFeed as parseFeedResult } from "@/server/parsers/feed";
 import {
   balancedJsonEnd,
   findNextData,
@@ -19,6 +19,13 @@ import {
   numOr,
   numPositive,
 } from "@/server/parsers/primitives";
+
+/** Unwrap a successful parseFeed result; failure surfaces as a thrown error. */
+function readFeed(xml: string, url = "https://x.example/feed") {
+  const res = parseFeedResult(xml, url);
+  if (!res.ok) throw new Error(res.error);
+  return res.data;
+}
 
 describe("decodeEntities", () => {
   it("decodes named entities", () => {
@@ -187,7 +194,7 @@ describe("parseFeed", () => {
           <updated>2026-08-01T00:00:00Z</updated>
         </entry>
       </feed>`;
-    const items = parseFeed(xml, "https://x.example/feed");
+    const items = readFeed(xml, "https://x.example/feed");
     expect(items).toHaveLength(1);
     expect(items[0]?.link).toBe("https://x.example/post-1");
   });
@@ -203,7 +210,7 @@ describe("parseFeed", () => {
           <id>e1</id>
         </entry>
       </feed>`;
-    const items = parseFeed(xml, "https://x.example/feed");
+    const items = readFeed(xml, "https://x.example/feed");
     expect(items[0]?.link).toBe("https://x.example/self");
   });
 
@@ -217,7 +224,7 @@ describe("parseFeed", () => {
           <guid isPermaLink="false">guid-123</guid>
         </item>
       </channel></rss>`;
-    const items = parseFeed(xml, "https://y.example/feed");
+    const items = readFeed(xml, "https://y.example/feed");
     expect(items[0]?.id).toBe("guid-123");
   });
 
@@ -231,7 +238,7 @@ describe("parseFeed", () => {
           <id>e1</id>
         </entry>
       </feed>`;
-    const items = parseFeed(xml, "https://x.example/feed");
+    const items = readFeed(xml, "https://x.example/feed");
     expect(items[0]?.title).toBe("Real Title");
   });
 
@@ -241,7 +248,7 @@ describe("parseFeed", () => {
         <title>T</title>
         <item><title>A</title><link>https://y.example/a</link></item>
       </channel></rss>`;
-    expect(parseFeed(withLink, "https://y.example/feed")[0]?.id).toBe("https://y.example/a");
+    expect(readFeed(withLink, "https://y.example/feed")[0]?.id).toBe("https://y.example/a");
   });
 
   it("drops entries that expose no usable link", () => {
@@ -251,7 +258,7 @@ describe("parseFeed", () => {
         <item><title>Only Title</title></item>
         <item><title>Keep</title><link>https://y.example/keep</link></item>
       </channel></rss>`;
-    const items = parseFeed(withoutLink, "https://y.example/feed");
+    const items = readFeed(withoutLink, "https://y.example/feed");
     expect(items).toHaveLength(1);
     expect(items[0]?.title).toBe("Keep");
   });
@@ -263,18 +270,15 @@ describe("parseFeed", () => {
         <title>T</title>
         ${junk}<item><title>Real</title><link>https://y.example/real</link></item>
       </channel></rss>`;
-    const items = parseFeed(xml, "https://y.example/feed");
+    const items = readFeed(xml, "https://y.example/feed");
     expect(items).toHaveLength(1);
     expect(items[0]?.title).toBe("Real");
   });
 
-  it("throws UpstreamError (502) on garbage feeds instead of generic Error", () => {
-    expect(() => parseFeed("not xml at all <>>>", "https://y.example/feed")).toThrow(/Unrecognized|Unparseable/);
-    try {
-      parseFeed("not xml at all <>>>", "https://y.example/feed");
-    } catch (e) {
-      expect((e as Error).name).toBe("UpstreamError");
-    }
+  it("returns a failure result on garbage feeds instead of throwing", () => {
+    const res = parseFeedResult("not xml at all <>>>", "https://y.example/feed");
+    expect(res.ok).toBe(false);
+    expect(res.ok ? "" : res.error).toMatch(/Unrecognized|Unparseable/);
   });
 
   it("trims whitespace links and supports numeric guid", () => {
@@ -283,7 +287,7 @@ describe("parseFeed", () => {
         <title>T</title>
         <item><title>N</title><link>  https://y.example/spaced  </link><guid>12345</guid></item>
       </channel></rss>`;
-    const items = parseFeed(xml, "https://y.example/feed");
+    const items = readFeed(xml, "https://y.example/feed");
     expect(items[0]?.link).toBe("https://y.example/spaced");
     expect(items[0]?.id).toBe("12345");
   });
@@ -294,7 +298,7 @@ describe("parseFeed", () => {
         <title>T</title>
         <item><title>A</title><link>https://y.example/a?b=1&amp;c=2&amp;amp;d=3</link></item>
       </channel></rss>`;
-    const items = parseFeed(xml, "https://y.example/feed");
+    const items = readFeed(xml, "https://y.example/feed");
     // &amp; → & ; &amp;amp; → literal &amp; (single XML decode pass)
     expect(items[0]?.link).toBe("https://y.example/a?b=1&c=2&amp;d=3");
   });
@@ -305,7 +309,7 @@ describe("parseFeed", () => {
         <title>T</title>
         <entry><title>A</title><link rel="alternate" href="https://x.example/p?ref=rss&amp;utm=x"/></entry>
       </feed>`;
-    const items = parseFeed(xml, "https://x.example/feed");
+    const items = readFeed(xml, "https://x.example/feed");
     expect(items[0]?.link).toBe("https://x.example/p?ref=rss&utm=x");
   });
 
@@ -315,7 +319,7 @@ describe("parseFeed", () => {
         <title>T</title>
         <item><title>First</title><title>Second</title><link>https://y.example/dup</link></item>
       </channel></rss>`;
-    const items = parseFeed(xml, "https://y.example/feed");
+    const items = readFeed(xml, "https://y.example/feed");
     expect(items[0]?.title).toBe("First");
   });
 
@@ -329,7 +333,7 @@ describe("parseFeed", () => {
           <link>https://y.example/fallback</link>
         </item>
       </channel></rss>`;
-    const items = parseFeed(xml, "https://y.example/feed");
+    const items = readFeed(xml, "https://y.example/feed");
     expect(items[0]?.link).toBe("https://y.example/fallback");
   });
 
@@ -340,7 +344,7 @@ describe("parseFeed", () => {
         <title>T</title>
         <item><title>${longTitle}</title><link>https://y.example/surrogate</link></item>
       </channel></rss>`;
-    const items = parseFeed(xml, "https://y.example/feed");
+    const items = readFeed(xml, "https://y.example/feed");
     const t = items[0]?.title ?? "";
     expect(t.length).toBeLessThanOrEqual(300);
     // 'A' + 149 complete emoji = 150 code points; the dangling high surrogate
@@ -358,7 +362,7 @@ describe("parseFeed", () => {
         <title>T</title>
         <item><title><![CDATA[<p>${longTitle}</p>]]></title><link>https://y.example/a</link></item>
       </channel></rss>`;
-    const items = parseFeed(xml, "https://y.example/feed");
+    const items = readFeed(xml, "https://y.example/feed");
     expect(items[0]?.title.length).toBeLessThanOrEqual(300);
   });
 });
@@ -448,7 +452,7 @@ describe("findLongestData", () => {
 describe("parseFeed title hardening", () => {
   it("strips tags decoded from entities instead of rendering them", () => {
     const xml = `<rss version="2.0"><channel><title>T</title><item><title>&lt;script&gt;alert(1)&lt;/script&gt;Real News</title><link>https://y.example/a</link></item></channel></rss>`;
-    expect(parseFeed(xml, "https://y.example/feed")[0]?.title).toBe("Real News");
+    expect(readFeed(xml, "https://y.example/feed")[0]?.title).toBe("Real News");
   });
 });
 
@@ -461,13 +465,13 @@ describe("isoDate edges", () => {
 
 describe("feed guard", () => {
   it("rejects DOCTYPE/ENTITY bombs before parsing", () => {
-    expect(() => parseFeed(`<?xml?><!DOCTYPE foo [<!ENTITY x "y">]><rss/>`, "https://x")).toThrow();
+    expect(parseFeedResult(`<?xml?><!DOCTYPE foo [<!ENTITY x "y">]><rss/>`, "https://x").ok).toBe(false);
   });
 
   it("accepts a plain entity-free DOCTYPE (legacy WordPress-style feeds)", () => {
     const xml =
       '<?xml version="1.0"?><!DOCTYPE rss><rss><channel><title>T</title><item><title>A</title><link>https://x.example/a</link></item></channel></rss>';
-    const items = parseFeed(xml, "https://x");
+    const items = readFeed(xml, "https://x");
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ title: "A", link: "https://x.example/a" });
   });

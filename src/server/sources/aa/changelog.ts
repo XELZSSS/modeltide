@@ -5,6 +5,7 @@ import { zeroUpstream } from "@/server/infra/errors";
 import { byDateDesc } from "@/server/parsers/shaping";
 import type { ChangelogModel } from "@/server/parsers/aa-changelog";
 import { parseChangelogModels } from "@/server/parsers/aa-changelog";
+import { cachedSource } from "@/server/sources/pipeline";
 
 const CHANGELOG_PATH = upstreamEndpoints.aaChangelog;
 
@@ -27,7 +28,7 @@ async function fetchChangelogModels(ctx: AppContext): Promise<ChangelogModel[]> 
 }
 
 export async function getChangelogModels(ctx: AppContext): Promise<ChangelogModel[]> {
-  return ctx.cache.withTtl(cacheKeys.changelog, STATIC_TTL_MS, async () => {
-    return { data: await fetchChangelogModels(ctx) };
-  });
+  return cachedSource(ctx, cacheKeys.changelog, STATIC_TTL_MS, async () => ({
+    value: await fetchChangelogModels(ctx),
+  }));
 }

@@ -8,9 +8,10 @@ import { isValidRowId } from "@/server/parsers/data-filter";
 import type { ModelRow, PricingEntry, ModelMetaEntry } from "@/server/parsers/or-types";
 import { mapModels } from "@/server/parsers/or-rankings";
 import { getModelDirectory } from "@/server/sources/openrouter/directory";
+import { cachedSource } from "@/server/sources/pipeline";
 
 export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankingsPayload> =>
-  ctx.cache.withTtl(cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async () => {
+  cachedSource(ctx, cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async () => {
     const [rankingsRes, directoryRes] = await Promise.allSettled([
       ctx.http.json<{ data: ModelRow[] }>(
         `${upstreamConfig.openrouter}${upstreamEndpoints.openRouterRankings}`,
@@ -47,7 +48,7 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
       throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${validRows.length} rows`);
     }
     return {
-      data: {
+      value: {
         tokenUsageRankings: models,
         fetchedAt: new Date().toISOString(),
         ...(partialFailure ? { partial: true } : {}),

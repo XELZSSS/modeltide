@@ -1,4 +1,4 @@
-import { STATIC_TTL_MS, ttlFor } from "@/shared/config";
+import { STATIC_TTL_MS } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import type { ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
@@ -7,7 +7,8 @@ import { settled } from "@/server/infra/pool";
 import { getChangelogModels } from "@/server/sources/aa/changelog";
 import { getIntelligenceIndexResult } from "@/server/sources/aa/intelligence-index";
 import { toClosedReleases, toClosedReleasesFromIndex } from "@/server/parsers/closed-releases";
-import { nowIso, type SourcePayload } from "@/server/sources/types";
+import type { SourcePayload } from "@/server/sources/types";
+import { cachedPayload } from "@/server/sources/pipeline";
 
 async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedReleaseEntry[]; partial: boolean }> {
   const [indexRes, changelogRes] = await Promise.allSettled([getIntelligenceIndexResult(ctx), getChangelogModels(ctx)]);
@@ -36,10 +37,8 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
 }
 
 export const getClosedReleases = (ctx: AppContext): Promise<SourcePayload<ClosedReleaseEntry[]>> =>
-  ctx.cache.withTtl<SourcePayload<ClosedReleaseEntry[]>>(cacheKeys.closedReleases, STATIC_TTL_MS, async () => {
+  cachedPayload(ctx, cacheKeys.closedReleases, STATIC_TTL_MS, async () => {
     const { entries: finalEntries, partial } = await fetchClosedReleases(ctx);
-    return {
-      data: { data: finalEntries, fetchedAt: nowIso(), ...(partial ? { partial: true } : {}) },
-      ttl: ttlFor(partial, STATIC_TTL_MS),
-    };
+    // cachedPayload derives the partial-failure TTL downgrade automatically.
+    return { rows: finalEntries, partial };
   });

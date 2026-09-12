@@ -1,22 +1,11 @@
 import { PER_MILLION } from "@/shared/config";
-import { UpstreamError } from "@/server/infra/errors";
 import { num, numCoerce } from "@/server/parsers/primitives";
 import { normalizeModelKey } from "@/shared/utils";
 import { isUsableOpenRouterPricing, isValidOpenRouterDirectoryRow } from "@/server/parsers/data-filter";
 import type { ModelMetaEntry, PricingEntry, PricingRecord } from "@/server/parsers/or-types";
+import type { PricingRow } from "@/server/parsers/upstream";
 
-export interface PricingRow {
-  id: string;
-  canonical_slug?: string;
-  name?: string;
-  benchmarks?: { artificial_analysis?: { intelligence_index?: unknown; agentic_index?: unknown } };
-  pricing?: {
-    prompt?: string | number;
-    completion?: string | number;
-    input_cache_read?: string | number;
-    input_cache_write?: string | number;
-  };
-}
+export type { PricingRow } from "@/server/parsers/upstream";
 
 export interface DirectoryCacheEntry {
   pricing: PricingRecord;
@@ -88,7 +77,5 @@ export function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
       metaRecord[key] = cur ? mergeMetaRecord(cur, metaEntry) : metaEntry;
     }
   }
-  if (Object.keys(pricingRecord).length === 0)
-    throw new UpstreamError(`OpenRouter: empty pricing response (raw=${rows.length}, kept=0)`);
   return { pricing: pricingRecord, meta: metaRecord };
 }

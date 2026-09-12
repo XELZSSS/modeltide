@@ -7,7 +7,8 @@ import { dedupeBy } from "@/shared/utils";
 import type { HFModel } from "@/server/parsers/hf-models";
 import { findUnknownLicenseTags, mapModel } from "@/server/parsers/hf-models";
 import { isOpenReleaseEntry, isValidRowId, keepOpenSourceRanking } from "@/server/parsers/data-filter";
-import { nowIso, type SourcePayload } from "@/server/sources/types";
+import type { SourcePayload } from "@/server/sources/types";
+import { cachedPayload } from "@/server/sources/pipeline";
 
 export interface ModelQuery {
   sort: string;
@@ -34,33 +35,38 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
   return items;
 }
 
-export const getModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
-  ctx.cache
-    .withTtl<SourcePayload<OpenSourceModelEntry[]>>(
-      cacheKeys.openSourceModels(p.sort, p.direction, p.limit),
-      SLOW_TTL_MS,
-      async () => {
-        const bucketLimit = normalizeModelLimit(p.limit);
-        const items = await fetchHFModels(ctx, p.sort, p.direction, bucketLimit);
-        // HF may cap `limit` server-side; log the shortfall so a silent
-        // truncation is visible in cron/worker logs instead of looking full.
-        if (items.length < bucketLimit) {
-          ctx.log("info", `[huggingface] short response: got ${items.length}/${bucketLimit} rows`);
-        }
-        const kept = items
-          .map(mapModel)
-          .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m));
-        const bucket = dedupeBy(kept, (m) => m.id);
-        if (bucket.length === 0) throw zeroUpstream("HuggingFace", "usable models", `raw=${items.length}, kept=0`);
-        if (kept.length < items.length)
-          ctx.log("info", `[huggingface] filtered ${items.length - kept.length}/${items.length} rows`);
-        return { data: { data: bucket, fetchedAt: nowIso() } };
-      },
-    )
-    .then((payload) => ({ data: sliceToLimit(payload.data, p.limit), fetchedAt: payload.fetchedAt }));
+export const getModels = async (
+  ctx: AppContext,
+  p: ModelQuery,
+): Promise<SourcePayload<OpenSourceModelEntry[]>> => {
+  const payload = await cachedPayload<OpenSourceModelEntry[]>(
+    ctx,
+    cacheKeys.openSourceModels(p.sort, p.direction, p.limit),
+    SLOW_TTL_MS,
+    async () => {
+      const bucketLimit = normalizeModelLimit(p.limit);
+      const items = await fetchHFModels(ctx, p.sort, p.direction, bucketLimit);
+      // HF may cap `limit` server-side; log the shortfall so a silent
+      // truncation is visible in cron/worker logs instead of looking full.
+      if (items.length < bucketLimit) {
+        ctx.log("info", `[huggingface] short response: got ${items.length}/${bucketLimit} rows`);
+      }
+      const kept = items
+        .map(mapModel)
+        .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m));
+      const bucket = dedupeBy(kept, (m) => m.id);
+      if (bucket.length === 0) throw zeroUpstream("HuggingFace", "usable models", `raw=${items.length}, kept=0`);
+      if (kept.length < items.length)
+        ctx.log("info", `[huggingface] filtered ${items.length - kept.length}/${items.length} rows`);
+      return { rows: bucket };
+    },
+  );
+  // The full bucket is cached so sibling limits never poison each other.
+  return { data: sliceToLimit(payload.data, p.limit), fetchedAt: payload.fetchedAt };
+};
 
 export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
-  ctx.cache.withTtl<SourcePayload<OpenSourceModelEntry[]>>(cacheKeys.openSourceReleases, SLOW_TTL_MS, async () => {
+  cachedPayload(ctx, cacheKeys.openSourceReleases, SLOW_TTL_MS, async () => {
     const items = await fetchHFModels(ctx, "createdAt", "-1", normalizeModelLimit(SOURCE_LIMITS.openSourceReleases));
     const deduped = dedupeBy(
       items.map(mapModel).filter((m): m is OpenSourceModelEntry => m !== null),
@@ -74,7 +80,7 @@ export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceMo
       );
     const sorted = mapped.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
     if (sorted.length === 0) throw zeroUpstream("HuggingFace", "usable releases", `raw=${items.length}, kept=0`);
-    return { data: { data: sorted, fetchedAt: nowIso() } };
+    return { rows: sorted };
   });
 
 // ── Single-model fetch (no list window): detail pages resolve any id ──
@@ -105,7 +111,8 @@ export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload
   // therefore KV writes) at all, not even for the failed lookup.
   const trimmed = id.trim();
   if (!isValidRowId(trimmed)) return Promise.reject(new ValidationError(`Invalid Hugging Face model id "${id}"`));
-  return ctx.cache.withTtl<SourcePayload<OpenSourceModelEntry | null>>(
+  return cachedPayload<OpenSourceModelEntry | null>(
+    ctx,
     cacheKeys.openSourceModel(trimmed),
     SLOW_TTL_MS,
     async () => {
@@ -113,8 +120,7 @@ export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload
       // 404 (null) is a lookup miss, not data: cache it for 60s only so a
       // newly-published model becomes visible quickly instead of sticking to
       // NotFound for the full 2h slow TTL.
-      if (model == null) return { data: { data: model, fetchedAt: nowIso() }, ttl: ONE_MINUTE };
-      return { data: { data: model, fetchedAt: nowIso() } };
+      return model == null ? { rows: model, ttl: ONE_MINUTE } : { rows: model };
     },
   );
 };

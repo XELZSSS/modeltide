@@ -2,12 +2,12 @@ import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
 import { MAX_FEED_BYTES } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
-import { UpstreamError } from "@/server/infra/errors";
+import { zeroUpstreamMessage } from "@/server/infra/errors";
 import { isSuitableNewsItem } from "@/server/parsers/data-filter";
 import { isRecord } from "@/server/parsers/primitives";
 import { decodeEntities } from "@/server/parsers/entities";
 import { stripHtml } from "@/server/parsers/html";
-import { zeroUpstream } from "@/server/infra/errors";
+import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
 import { SOURCE_LIMITS } from "@/shared/config";
 
 const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
@@ -100,10 +100,10 @@ function itemId(item: Record<string, unknown>, link: string | null, title: strin
   return textOf(raw)?.trim().slice(0, MAX_ID_CHARS) ?? link ?? `title:${title}`;
 }
 
-export function parseFeed(xml: string, sourceUrl: string): NewsItem[] {
+export function parseFeed(xml: string, sourceUrl: string): ParseResult<NewsItem[]> {
   const bytes = utf8ByteLength(xml);
   if (bytes > MAX_FEED_BYTES) {
-    throw new UpstreamError(`Feed too large at ${sourceUrl} (${bytes} bytes)`);
+    return parseFail(`Feed too large at ${sourceUrl} (${bytes} bytes)`);
   }
   // Belt-and-suspenders: the parser runs with processEntities:false so entities
   // are never expanded, but refuse entity-bearing DOCTYPEs outright. Bounded to
@@ -111,13 +111,13 @@ export function parseFeed(xml: string, sourceUrl: string): NewsItem[] {
   const head = xml.slice(0, 8192);
   const doctypeAt = head.search(/<!DOCTYPE/i);
   if (doctypeAt !== -1 && /<!ENTITY/i.test(head.slice(doctypeAt))) {
-    throw new UpstreamError(`Feed with entity-bearing DOCTYPE rejected at ${sourceUrl}`);
+    return parseFail(`Feed with entity-bearing DOCTYPE rejected at ${sourceUrl}`);
   }
   let parsed: unknown;
   try {
     parsed = parser.parse(xml);
   } catch (err) {
-    throw new UpstreamError(`Unparseable feed at ${sourceUrl}: ${err instanceof Error ? err.message : String(err)}`);
+    return parseFail(`Unparseable feed at ${sourceUrl}: ${err instanceof Error ? err.message : String(err)}`);
   }
   return parseChannel(parsed, sourceUrl);
 }
@@ -150,24 +150,24 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
   };
 }
 
-function parseChannel(feed: unknown, sourceUrl: string): NewsItem[] {
+function parseChannel(feed: unknown, sourceUrl: string): ParseResult<NewsItem[]> {
   const channel = resolveChannel(feed);
   if (!channel || (channel.item == null && channel.entry == null && channel.title == null)) {
-    throw new UpstreamError(`Unrecognized feed format at ${sourceUrl}`);
+    return parseFail(`Unrecognized feed format at ${sourceUrl}`);
   }
   let items = (channel.item ?? channel.entry ?? []) as unknown;
   if (!Array.isArray(items)) items = [items];
   const source = channelTitle(channel, sourceUrl);
   const records = (items as unknown[]).filter((item): item is Record<string, unknown> => isRecord(item));
   if (records.length === 0 && (items as unknown[]).length > 0) {
-    throw new UpstreamError(`Unrecognized feed items at ${sourceUrl}`);
+    return parseFail(`Unrecognized feed items at ${sourceUrl}`);
   }
   const parsed = records
     .map((item) => toNewsItem(item, source))
     .filter((x: NewsItem | null): x is NewsItem => x !== null)
     .slice(0, MAX_ITEMS_PER_FEED);
   if (parsed.length === 0) {
-    throw zeroUpstream(`Feed at ${sourceUrl}`, "usable items", `raw=${records.length}, kept=0`);
+    return parseFail(zeroUpstreamMessage(`Feed at ${sourceUrl}`, "usable items", `raw=${records.length}, kept=0`));
   }
-  return parsed;
+  return parseOk(parsed);
 }

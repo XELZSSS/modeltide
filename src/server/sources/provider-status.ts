@@ -2,6 +2,7 @@ import type { AppContext } from "@/server/context";
 import { UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
 import { errMsg, runCapped } from "@/server/infra/pool";
 import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/provider-status";
+import { parseOk, type ParseResult } from "@/server/parsers/result";
 import type { SourceLevel } from "@/shared/types";
 
 export interface ProviderStatusResult {
@@ -14,16 +15,24 @@ export interface ProviderStatusResult {
 }
 
 /** Adapter turning a provider-specific parser into a uniform health verdict. */
-type HealthParse = (raw: unknown) => { level: SourceLevel; error: string };
+type HealthParse = (raw: unknown) => ParseResult<{ level: SourceLevel; error: string }>;
 
 const parseStatuspageHealth: HealthParse = (raw) => {
   const parsed = parseStatuspageSummary(raw);
-  return { level: parsed.level, error: `degraded: ${parsed.degradedComponents.slice(0, 3).join(", ")}` };
+  if (!parsed.ok) return parsed;
+  return parseOk({
+    level: parsed.data.level,
+    error: `degraded: ${parsed.data.degradedComponents.slice(0, 3).join(", ")}`,
+  });
 };
 
 const parseGoogleCloudHealth: HealthParse = (raw) => {
   const parsed = parseGoogleCloudIncidents(raw);
-  return { level: parsed.level, error: `open incidents: ${parsed.openIncidents.slice(0, 3).join("; ")}` };
+  if (!parsed.ok) return parsed;
+  return parseOk({
+    level: parsed.data.level,
+    error: `open incidents: ${parsed.data.openIncidents.slice(0, 3).join("; ")}`,
+  });
 };
 
 async function fetchProviderHealth(
@@ -44,16 +53,16 @@ async function fetchProviderHealth(
     return null;
   }
   const latencyMs = Date.now() - started;
-  try {
-    const parsed = parse(raw);
-    if (parsed.level === "error") return { ok: false, warn: false, status: 200, latencyMs, error: parsed.error };
-    return { ok: true, warn: parsed.level === "warn", status: 200, latencyMs, error: null };
-  } catch (err) {
+  const parsed = parse(raw);
+  if (!parsed.ok) {
     // Got a payload we can't parse: our parser is outdated, not proof the
     // provider is down. Same unknown handling as a fetch failure.
-    ctx.log("warn", `[provider-status] ${label} parse failed: ${errMsg(err)}`);
+    ctx.log("warn", `[provider-status] ${label} parse failed: ${parsed.error}`);
     return null;
   }
+  const { level, error } = parsed.data;
+  if (level === "error") return { ok: false, warn: false, status: 200, latencyMs, error };
+  return { ok: true, warn: level === "warn", status: 200, latencyMs, error: null };
 }
 
 const PROVIDER_STATUS_TARGETS: readonly {

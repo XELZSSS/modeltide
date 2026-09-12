@@ -1,13 +1,7 @@
-import { buildContext, type Env } from "@/server/context";
+import { buildContext, type AppContext, type Env } from "@/server/context";
 import { recordStatusSamples } from "@/server/sources/status/store";
-import { getHomeDashboard } from "@/server/sources/home";
-import { getIntelligenceIndex } from "@/server/sources/aa/intelligence-index";
-import { getNews } from "@/server/sources/news";
-import { getAgentRankings } from "@/server/sources/agent-arena";
-import { getClosedReleases } from "@/server/sources/closed-releases";
-import { getModels, getReleases } from "@/server/sources/huggingface";
-import { getOfficialPricing } from "@/server/sources/pricing";
-import { NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
+import { SOURCES, type WarmTier } from "@/server/sources/registry";
+import type { QuerySchema, ValidatedQuery } from "@/server/infra/validation";
 import { runCapped } from "@/server/infra/pool";
 import { applyApiHeaders } from "@/shared/config/security";
 import { handleApi } from "./router";
@@ -20,9 +14,23 @@ const SAMPLE_TIMEOUT_MS = 25_000;
 const WARM_CALL_TIMEOUT_MS = 45_000;
 const WARM_CONCURRENCY = 6;
 const PING_TIMEOUT_MS = 5_000;
-// Mirrors normalizeModelLimit buckets (shared/config/limits): one warmed KV
-// key per limit so the client's limit switcher never cold-starts on HF.
-const OPEN_SOURCE_MODEL_LIMIT_BUCKETS = [50, 100, 200, 500];
+
+/**
+ * Warmup tasks for one cadence tier, derived from the shared source manifest
+ * (src/server/sources/registry.ts) so endpoints and warmup targets never drift.
+ * Sources without a `warm` tier are intentionally never warmed.
+ */
+function warmTasks(ctx: AppContext, tier: WarmTier): (() => Promise<unknown>)[] {
+  const tasks: (() => Promise<unknown>)[] = [];
+  for (const source of SOURCES) {
+    if (source.warm !== tier) continue;
+    const paramSets = source.warmParams?.length
+      ? source.warmParams
+      : [{} as ValidatedQuery<QuerySchema>];
+    for (const params of paramSets) tasks.push(() => source.handler(ctx, params));
+  }
+  return tasks;
+}
 
 // Dead-man's switch: Healthchecks.io (or compatible) alerts when pings stop
 // arriving. Covers the blind spot of never firing at all (config lost,
@@ -72,28 +80,13 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
     try {
       const warmSignal = AbortSignal.timeout(WARM_CALL_TIMEOUT_MS);
       const ctx = buildContext(env, { signal: warmSignal });
-      // Short-TTL core (30-min cadence): home SSR inputs + news + rankings
-      // data the home and rankings pages read on every visit.
-      const coreTasks: (() => Promise<unknown>)[] = [
-        () => getIntelligenceIndex(ctx),
-        () => getHomeDashboard(ctx),
-        ...NEWS_CATEGORIES.map((category) => () => getNews(ctx, category)),
-      ];
-      // 2h lists, warmed once an hour. Open-source models warm every limit
-      // bucket of the client's default sort/direction (normalizeModelLimit
-      // buckets: 50/100/200/500) so limit switches hit KV instead of HF.
-      // Non-default sorts stay cold by design (5 sorts x 2 dirs = 40 keys).
-      const hourlyTasks: (() => Promise<unknown>)[] = [
-        () => getAgentRankings(ctx),
-        () => getReleases(ctx),
-        ...OPEN_SOURCE_MODEL_LIMIT_BUCKETS.map(
-          (limit) => () => getModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS, limit }),
-        ),
-      ];
-      // 6h static archives: warmed on the first pass every 6 hours.
-      const staticTasks: (() => Promise<unknown>)[] = [() => getOfficialPricing(ctx), () => getClosedReleases(ctx)];
+      // Per-source tiers/params live in the manifest; only cadence policy here.
+      const coreTasks = warmTasks(ctx, "core");
+      const hourlyTasks = warmTasks(ctx, "hourly");
       const tasks =
-        fireMinuteUtc < 30 ? [...coreTasks, ...hourlyTasks, ...(fireHourUtc % 6 === 0 ? staticTasks : [])] : coreTasks;
+        fireMinuteUtc < 30
+          ? [...coreTasks, ...hourlyTasks, ...(fireHourUtc % 6 === 0 ? warmTasks(ctx, "static") : [])]
+          : coreTasks;
       const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: warmSignal });
       const failed = results.filter((r) => r.status === "rejected").length;
       if (failed > 0) {
