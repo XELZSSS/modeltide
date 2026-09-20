@@ -315,11 +315,16 @@ async function releaseSampleLock(ctx: AppContext, token: string | null): Promise
 
 export const HISTORY_KEY = API_DOMAINS.statusHistory;
 export const HISTORY_BACKUP_KEY = `${HISTORY_KEY}:backup`;
+// v1 bridge: v1 writer used a versioned key with no TTL. Keep reading it until
+// the stable key is adopted, otherwise v1 -> v2 migration resets history.
+const LEGACY_HISTORY_KEY = "v1:status-history";
 let memoryStore: HistoryStore = { sources: {} };
 
 async function collectHistoryRaws(kv: NonNullable<AppContext["kv"]>): Promise<{ key: string; raw: string }[]> {
   const stableRaw = await kv.get(HISTORY_KEY);
   if (stableRaw != null) return [{ key: HISTORY_KEY, raw: stableRaw }];
+  const legacyRaw = await kv.get(LEGACY_HISTORY_KEY).catch(() => null);
+  if (legacyRaw != null) return [{ key: LEGACY_HISTORY_KEY, raw: legacyRaw }];
   return [];
 }
 
@@ -345,11 +350,24 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
     warnKvReadFailure(ctx, err);
     return memoryStore;
   }
-  for (const { raw } of raws) {
+  for (const { key, raw } of raws) {
     try {
       const parsed: unknown = JSON.parse(raw);
       const salvaged = salvageStore(parsed);
-      if (salvaged) return salvaged;
+      if (salvaged) {
+        if (key !== HISTORY_KEY) {
+          try {
+            await ctx.kv.put(HISTORY_KEY, JSON.stringify(salvaged), { expirationTtl: HISTORY_KV_RETENTION_TTL_S });
+            await ctx.kv.delete(key);
+          } catch (err) {
+            ctx.log(
+              "warn",
+              `[status-history] legacy history adoption failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+        return salvaged;
+      }
     } catch {
       continue;
     }
