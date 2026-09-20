@@ -2,9 +2,10 @@
 import { useId, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
 import { TabContainer, type TabItem } from "@/client/components/ui/tabs";
+import { Card, CardContent } from "@/client/components/ui/card";
 
 export function PageContainer({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6", className)}>{children}</div>;
+  return <div className={cn("max-w-7xl mx-auto px-5 sm:px-8 lg:px-10 py-8 sm:py-12", className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -12,19 +13,22 @@ export function PageHeader({
   description,
   actions,
   compact,
+  kicker,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
   compact?: boolean;
+  kicker?: string;
 }) {
   return (
     <header
-      className={cn("flex flex-col sm:flex-row sm:items-end justify-between gap-3", compact ? "mb-4" : "mb-5 sm:mb-6")}
+      className={cn("flex flex-col sm:flex-row sm:items-end justify-between gap-4", compact ? "mb-6" : "mb-8 sm:mb-12")}
     >
       <div className="min-w-0">
-        <h1 className={cn(compact ? "text-lg sm:text-xl font-semibold tracking-tight" : "ui-page-title")}>{title}</h1>
-        {description && <p className="ui-body-secondary mt-1.5 max-w-2xl text-balance">{description}</p>}
+        {kicker && <p className="ui-kicker mb-3">{kicker}</p>}
+        <h1 className={cn(compact ? "text-xl sm:text-2xl font-semibold tracking-tight" : "ui-page-title")}>{title}</h1>
+        {description && <p className="ui-body-secondary mt-3 max-w-2xl text-balance">{description}</p>}
       </div>
       {actions && (
         <div className="flex w-full sm:w-auto min-w-0 max-w-full items-center gap-2 sm:shrink-0">{actions}</div>
@@ -46,12 +50,12 @@ export function PageSection({
 }) {
   const headingId = useId();
   if (!title) {
-    return <div className={cn("my-5 sm:my-6", className)}>{children}</div>;
+    return <div className={cn("my-8 sm:my-10", className)}>{children}</div>;
   }
   return (
-    <section className={cn("my-5 sm:my-6 first:mt-0 last:mb-0", className)} aria-labelledby={headingId}>
+    <section className={cn("my-8 sm:my-10 first:mt-0 last:mb-0", className)} aria-labelledby={headingId}>
       {title && (
-        <div className="flex items-baseline justify-between gap-2 mb-3 sm:mb-4">
+        <div className="flex items-baseline justify-between gap-2 mb-4 sm:mb-6">
           <h2 id={headingId} className="ui-section-title">
             {title}
           </h2>
@@ -68,6 +72,7 @@ interface TabbedPageProps {
   description?: string;
   actions?: ReactNode;
   compact?: boolean;
+  kicker?: string;
   countLabel?: string;
   tabs: TabItem[];
   activeTab: string;
@@ -82,6 +87,7 @@ export function TabbedPage({
   description,
   actions,
   compact,
+  kicker,
   countLabel,
   tabs,
   activeTab,
@@ -92,7 +98,7 @@ export function TabbedPage({
 }: TabbedPageProps) {
   return (
     <PageContainer>
-      <PageHeader compact={compact} title={title} description={description} actions={actions} />
+      <PageHeader compact={compact} title={title} description={description} actions={actions} kicker={kicker} />
       {countLabel && (
         <div className="flex items-center gap-2 -mt-2 mb-4">
           <span className="ui-meta tabular-nums">{countLabel}</span>
@@ -109,5 +115,15 @@ export function TabbedPage({
         {children}
       </TabContainer>
     </PageContainer>
+  );
+}
+
+export function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <PageSection title={title}>
+      <Card>
+        <CardContent>{children}</CardContent>
+      </Card>
+    </PageSection>
   );
 }

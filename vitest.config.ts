@@ -22,11 +22,10 @@ export default defineConfig({
       reporter: ["text", "html"],
       thresholds: { lines: 70, branches: 65, functions: 70, statements: 70 },
     },
-    // Vitest 4: inline projects do NOT inherit the root config by default;
-    // `extends: true` opts each project into the root plugins + resolve.alias.
+    // Inline projects inherit the root config by default (plugins +
+    // resolve.alias); each project only declares its own test scope.
     projects: [
       {
-        extends: true,
         test: {
           name: "client",
           include: ["src/client/**/*.{test,spec}.{ts,tsx}"],
@@ -35,7 +34,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           name: "server",
           include: ["src/server/**/*.{test,spec}.{ts,tsx}"],
@@ -43,7 +41,6 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           name: "shared",
           include: ["src/shared/**/*.{test,spec}.{ts,tsx}"],

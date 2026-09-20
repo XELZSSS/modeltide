@@ -9,7 +9,7 @@ import { useTranslation } from "@/client/providers";
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-let sheetLocked = false;
+let sheetLockCount = 0;
 let sheetPrevOverflow = "";
 let sheetPrevPaddingRight = "";
 
@@ -21,14 +21,12 @@ function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.Ref
     if (!open) return;
     const trigger = document.activeElement;
     const main = document.getElementById("main-content");
-    if (!sheetLocked) {
+    if (sheetLockCount === 0) {
       sheetPrevOverflow = document.body.style.overflow;
       sheetPrevPaddingRight = document.body.style.paddingRight;
-      // Hide the page behind the modal dialog from assistive tech while any
-      // sheet is open (pairs with the Tab focus trap below).
       main?.setAttribute("inert", "");
     }
-    sheetLocked = true;
+    sheetLockCount += 1;
     const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (scrollbarW > 0) document.body.style.paddingRight = `${scrollbarW}px`;
@@ -63,7 +61,11 @@ function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.Ref
     return () => {
       document.removeEventListener("keydown", handler);
       clearTimeout(timer);
-      sheetLocked = false;
+      sheetLockCount = Math.max(0, sheetLockCount - 1);
+      if (sheetLockCount !== 0) {
+        if (trigger instanceof HTMLElement) trigger.focus();
+        return;
+      }
       document.body.style.overflow = sheetPrevOverflow;
       document.body.style.paddingRight = sheetPrevPaddingRight;
       document.getElementById("main-content")?.removeAttribute("inert");
@@ -87,7 +89,7 @@ export const Sheet = memo(function Sheet({ open, onClose, children, className, a
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-sheet flex items-end justify-center sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
       <div className="fixed inset-0 bg-black/50 animate-fade-in" aria-hidden="true" />
       <div
         ref={panelRef}
@@ -95,7 +97,7 @@ export const Sheet = memo(function Sheet({ open, onClose, children, className, a
         aria-modal="true"
         aria-label={ariaLabel}
         className={cn(
-          "relative z-sheet w-full max-w-md rounded-none border border-border bg-bg-primary shadow-lg animate-sheet-up focus:outline-none",
+          "relative z-50 w-full max-w-md rounded-none ui-overlay-lg animate-sheet-up focus:outline-none",
           className,
         )}
         onClick={(e) => e.stopPropagation()}

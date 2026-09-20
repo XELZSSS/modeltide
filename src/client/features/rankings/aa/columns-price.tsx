@@ -25,7 +25,12 @@ export function buildPricingColumns(
   onToggleCompare: (m: ArtificialAnalysisModel) => void,
   effectiveMap?: Map<string, EffectivePricing>,
   getOfficial?: OfficialGetter,
+  opts?: { pending?: boolean },
 ): DataTableColumn<PricingRow>[] {
+  const pending = opts?.pending === true;
+  const pendingBar = (width: string) => (
+    <span className="ui-skeleton inline-block h-4 rounded-none align-middle" style={{ width }} aria-hidden="true" />
+  );
   const getEff = (model: ArtificialAnalysisModel): EffectivePricing =>
     effectiveMap?.get(model.id) ?? resolveEffectivePricing(model.pricing, getOfficial?.(model));
   const pricingLegCol = (
@@ -33,7 +38,13 @@ export function buildPricingColumns(
     header: string,
     getLeg: (eff: EffectivePricing) => number | null | undefined,
     opts?: { hiddenMd?: boolean },
-  ) => rightCol(id, header, (row: PricingRow) => formatDollar(getLeg(getEff(row.model)), t), opts);
+  ) =>
+    rightCol(
+      id,
+      header,
+      (row: PricingRow) => (pending ? pendingBar("4rem") : formatDollar(getLeg(getEff(row.model)), t)),
+      opts,
+    );
   return [
     textCol(
       "model",
@@ -46,10 +57,15 @@ export function buildPricingColumns(
     )),
     pricingLegCol("cacheHitPrice", t("cacheHitPrice"), (eff) => eff.cacheHit, { hiddenMd: true }),
     rightCol("blendedPrice", t("blendedPrice"), (row: PricingRow) =>
-      formatDollar(computeBlendPrice(getEff(row.model)), t),
+      pending ? pendingBar("4.5rem") : formatDollar(computeBlendPrice(getEff(row.model)), t),
     ),
     pricingLegCol("promptPrice", t("promptPrice"), (eff) => eff.input, { hiddenMd: true }),
     pricingLegCol("completionPrice", t("completionPrice"), (eff) => eff.output, { hiddenMd: true }),
-    { ...mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.monthlyCost, t)), hiddenMd: true },
+    {
+      ...mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) =>
+        pending ? pendingBar("5rem") : formatDollar(row.monthlyCost, t),
+      ),
+      hiddenMd: true,
+    },
   ];
 }

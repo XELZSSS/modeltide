@@ -1,12 +1,10 @@
+import { humanizeId, isRecord, numCoerce, str, isUsablePricing } from "@/server/parsers/primitives";
 import type { OfficialPriceModel } from "@/shared/types";
 import { MAX_PLAUSIBLE_RATE, PER_MILLION } from "@/shared/config/limits";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
-import { humanizeId, isRecord, numCoerce, str } from "@/server/parsers/primitives";
-import { isUsablePricing } from "@/server/parsers/data-filter";
+
 import type { LitellmEntry } from "@/server/parsers/upstream";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
-
-export type { LitellmEntry } from "@/server/parsers/upstream";
 
 function officialModel(
   provider: string,
@@ -42,7 +40,6 @@ const PROVIDER_PREFIX_RULES: readonly (readonly [label: string, pattern: RegExp]
   ["moonshot", /^moonshot/i],
 ];
 
-/** `litellm_provider` values seen in the wild mapped to our provider labels. */
 const LITELLM_PROVIDER_ALIASES: Record<string, string> = {
   openai: "openai",
   anthropic: "anthropic",
@@ -74,7 +71,6 @@ function resolveProviderFromLitellm(raw: unknown): string | null {
   const key = str(raw).trim().toLowerCase();
   if (!key) return null;
   if (Object.hasOwn(LITELLM_PROVIDER_ALIASES, key)) return LITELLM_PROVIDER_ALIASES[key]!;
-  // Fall back to the id-prefix table so provider renames don't silently drop rows.
   return resolveProvider(key);
 }
 
@@ -94,8 +90,6 @@ function toPricingModel(key: string, value: unknown, seen: Set<string>): Officia
   if (mode && !CHAT_MODES.has(mode)) return null;
   const id = key.includes("/") ? (key.split("/").pop() ?? "") : key;
   if (!id || id.includes(":")) return null;
-  // Prefer the explicit `litellm_provider` field; fall back to id prefixes so
-  // new model families without a prefix rule still resolve.
   const provider = resolveProviderFromLitellm(entry.litellm_provider) ?? resolveProvider(id);
   if (!provider) return null;
   const input = numCoerce(entry.input_cost_per_token);
@@ -112,7 +106,7 @@ function toPricingModel(key: string, value: unknown, seen: Set<string>): Officia
     cacheWrite == null ? null : cacheWrite * PER_MILLION,
   );
   if (!model) return null;
-  const dedupeKey = id.toLowerCase();
+  const dedupeKey = `${provider}:${id.toLowerCase()}`;
   if (seen.has(dedupeKey)) return null;
   seen.add(dedupeKey);
   return model;

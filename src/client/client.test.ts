@@ -28,6 +28,7 @@ import { matchTerm } from "@/shared/utils";
 import { fuzzyMatch } from "@/client/utils/fuzzy";
 import {
   buildCompareRows,
+  buildPriceRows,
   buildRadarData,
   computeWinners,
   radarMaxFor,
@@ -49,195 +50,41 @@ const t = (overrides: Record<string, string> = {}): TFunction => {
     return Object.entries(params).reduce((s, [k, v]) => s.replace(`{${k}}`, String(v)), val);
   }) as unknown as TFunction;
 };
-
-describe("formatTokens", () => {
-  it("formats small token counts as-is", () => {
-    expect(formatTokens(100)).toBe("100");
-  });
-  it("shows one decimal for kilo tokens instead of rounding up to the next K", () => {
-    expect(formatTokens(1500)).toBe("1.5K");
-    expect(formatTokens(128_000)).toBe("128K");
-  });
-  it("formats millions with M suffix", () => {
-    expect(formatTokens(1_500_000)).toBe("1.5M");
-  });
-  it("promotes values that round into the next unit", () => {
-    expect(formatTokens(999_999)).toBe("1M");
-    expect(formatTokens(999_999_999)).toBe("1B");
-  });
-  it("formats billions with B suffix", () => {
-    expect(formatTokens(2_000_000_000)).toBe("2B");
-  });
-  it("returns N/A for null/undefined/non-finite", () => {
-    expect(formatTokens(null, t({ notAvailable: "N/A" }))).toBe("N/A");
-    expect(formatTokens(undefined, t({ notAvailable: "N/A" }))).toBe("N/A");
-    expect(formatTokens(Number.NaN)).toBe("N/A");
-  });
-});
-
-describe("formatScore", () => {
-  it("returns N/A for null/undefined", () => {
-    expect(formatScore(t({ notAvailable: "N/A" }), null)).toBe("N/A");
-    expect(formatScore(t({ notAvailable: "N/A" }), undefined)).toBe("N/A");
-  });
-  it("formats number as string", () => {
-    expect(formatScore(t(), 85)).toBe("85.00");
-  });
-});
-
-describe("formatBoolean", () => {
-  it("returns Yes/No for boolean", () => {
-    const t1 = t({ yes: "Yes", no: "No" });
-    expect(formatBoolean(t1, true)).toBe("Yes");
-    expect(formatBoolean(t1, false)).toBe("No");
-  });
-  it("returns N/A for undefined", () => {
-    expect(formatBoolean(t({ notAvailable: "N/A" }), undefined)).toBe("N/A");
-  });
-});
-
-describe("formatShortNumber", () => {
-  it("formats small numbers as-is", () => {
-    expect(formatShortNumber(42)).toBe("42");
-    expect(formatShortNumber(500)).toBe("500");
-  });
-  it("formats thousands with K suffix", () => {
-    expect(formatShortNumber(1_500)).toBe("1.50K");
-    expect(formatShortNumber(1234)).toBe("1.23K");
-    expect(formatShortNumber(-2500)).toBe("-2.50K");
-  });
-  it("formats millions with M suffix", () => {
-    expect(formatShortNumber(1_500_000)).toBe("1.50M");
-  });
-  it("promotes values that round into the next unit", () => {
-    expect(formatShortNumber(999_999)).toBe("1.00M");
-    expect(formatShortNumber(999_999_999_999)).toBe("1.00T");
-  });
-  it("formats billions with B suffix", () => {
-    expect(formatShortNumber(2_000_000_000)).toBe("2.00B");
-  });
-  it("returns em dash for non-finite", () => {
-    expect(formatShortNumber(NaN)).toBe("\u2014");
-  });
-});
-
-describe("formatDate", () => {
-  it("returns string for invalid date", () => {
-    expect(formatDate("invalid", "en")).toBe("invalid");
-  });
-  it("formats a date string", () => {
-    expect(formatDate("2024-01-15", "en")).toBe("1/15/2024");
-  });
-});
-
-describe("benchmarkLabel", () => {
-  it("returns translated label for known keys", () => {
-    expect(benchmarkLabel("gpqa", t({ benchmarkGpqa: "GPQA" }))).toBe("GPQA");
-  });
-  it("returns key itself for unknown keys", () => {
-    expect(benchmarkLabel("unknown", t())).toBe("unknown");
-  });
-});
-
-describe("categoryLabel", () => {
-  it("returns translated category label", () => {
-    expect(categoryLabel("coding", t({ catCoding: "Coding", catReasoning: "Reasoning" }))).toBe("Coding");
-    expect(categoryLabel("reasoning", t({ catCoding: "Coding", catReasoning: "Reasoning" }))).toBe("Reasoning");
-  });
-  it("returns catGeneral for unknown category", () => {
-    expect(categoryLabel("unknown", t())).toBe("catGeneral");
-  });
-});
-
-describe("formatTrend", () => {
-  it("returns N/A for null/undefined", () => {
-    expect(formatTrend(null, t({ notAvailable: "N/A" }))).toBe("N/A");
-    expect(formatTrend(undefined)).toBe("N/A");
-  });
-  it("passes percentage points through with a sign and one decimal", () => {
-    expect(formatTrend(5.5)).toBe("+5.5%");
-    expect(formatTrend(47.8)).toBe("+47.8%");
-    expect(formatTrend(0.8)).toBe("+0.8%");
-  });
-  it("formats negative change", () => {
-    expect(formatTrend(-3.2)).toBe("-3.2%");
-  });
-  it("returns 0.0% for zero", () => {
-    expect(formatTrend(0)).toBe("0.0%");
-  });
-});
-
-describe("formatDollar", () => {
-  it("formats dollar amount", () => {
-    expect(formatDollar(42)).toBe("$42.00");
-  });
-  it("keeps tiny prices visible instead of rendering $0.00", () => {
-    expect(formatDollar(0.004)).toBe("$0.004");
-    expect(formatDollar(0.0001)).toBe("$0.0001");
-  });
-  it("keeps typical two-decimal formatting otherwise", () => {
-    expect(formatDollar(3)).toBe("$3.00");
-    expect(formatDollar(0.02)).toBe("$0.02");
-    expect(formatDollar(0)).toBe("$0.00");
-  });
-  it("returns N/A for null/undefined", () => {
-    expect(formatDollar(null, t({ notAvailable: "N/A" }))).toBe("N/A");
-    expect(formatDollar(undefined, t({ notAvailable: "N/A" }))).toBe("N/A");
-  });
-});
-
-describe("formatPricePerMillion", () => {
-  it("formats price per million tokens", () => {
-    expect(formatPricePerMillion(0.005)).toBe("$0.01/M tokens");
-  });
-  it("returns N/A for null/undefined", () => {
-    expect(formatPricePerMillion(null, t({ notAvailable: "N/A" }))).toBe("N/A");
-    expect(formatPricePerMillion(undefined, t({ notAvailable: "N/A" }))).toBe("N/A");
-  });
-});
-
-describe("formatUptime", () => {
-  it("returns days format for large values", () => {
-    const t1 = t({ uptimeDays: "{days}d {hours}h" });
-    expect(formatUptime(t1, 172_800_000)).toBe("2d 0h");
-  });
-  it("returns hours format for medium values", () => {
-    const t1 = t({ uptimeHours: "{hours}h {mins}m" });
-    expect(formatUptime(t1, 7_200_000)).toBe("2h 0m");
-  });
-  it("returns mins format for small values", () => {
-    const t1 = t({ uptimeMins: "{mins}m" });
-    expect(formatUptime(t1, 300_000)).toBe("5m");
-  });
-});
-
-describe("formatRelativeTime", () => {
-  it("returns just now for recent times", () => {
-    const t1 = t({ timeJustNow: "just now" });
-    const now = new Date().toISOString();
-    expect(formatRelativeTime(now, t1)).toBe("just now");
-  });
-  it("returns past date string for invalid input", () => {
-    expect(formatRelativeTime("invalid", t())).toBe("invalid");
-  });
-});
-
-describe("safeHref", () => {
-  it("allows internal paths and http(s) URLs", () => {
-    expect(safeHref("/models?tab=x")).toBe("/models?tab=x");
-    expect(safeHref("https://ok.example/a")).toBe("https://ok.example/a");
-  });
-  it("rejects protocol-relative and backslash-scheme-relative URLs", () => {
-    expect(safeHref("//evil.example")).toBeUndefined();
-    expect(safeHref("/\\evil.example")).toBeUndefined();
-    expect(safeHref("javascript:alert(1)")).toBeUndefined();
-    expect(safeHref(null)).toBeUndefined();
-    expect(safeHref("   ")).toBeUndefined();
-  });
-});
+const tKey = ((key: string): string => key) as unknown as TFunction;
+const NA = t({ notAvailable: "N/A" });
 
 function makeModel(over: Partial<ArtificialAnalysisModel>): ArtificialAnalysisModel {
   return { id: "m", slug: "m", name: "M", intelligence_index: null, ...over };
+}
+
+function makeCompareModel(over: Partial<ArtificialAnalysisModel> = {}): ArtificialAnalysisModel {
+  return {
+    id: "m",
+    slug: "m",
+    name: "M",
+    intelligence_index: 80,
+    coding_index: 70,
+    agentic_index: 60,
+    model_creators: { name: "Creator", color: "#000" },
+    release_date: "2024-01-01",
+    is_open_weights: true,
+    speed: { median_output_speed: 100 },
+    benchmarks: { gpqa: 85, hle: 90, scicode: 75, ifbench: 88 },
+    ...over,
+  };
+}
+
+function makeOfficial(over: Partial<OfficialPriceModel>): OfficialPriceModel {
+  return {
+    id: "gpt-5",
+    name: "GPT-5",
+    provider: "OpenAI",
+    input: 5,
+    output: 25,
+    cachedInput: 0.5,
+    cacheWrite: 6.25,
+    ...over,
+  };
 }
 
 function dailyCost(
@@ -256,86 +103,209 @@ function dailyCost(
   });
 }
 
+describe("formatTokens", () => {
+  it.each([
+    [100, "100"],
+    [1500, "1.5K"],
+    [128_000, "128K"],
+    [1_500_000, "1.5M"],
+    [999_999, "1M"],
+    [999_999_999, "1B"],
+    [2_000_000_000, "2B"],
+  ])("formatTokens(%s) -> %s", (input, expected) => {
+    expect(formatTokens(input)).toBe(expected);
+  });
+
+  it.each([[null], [undefined], [Number.NaN]])("formatTokens(%s) -> N/A", (input) => {
+    expect(formatTokens(input as never, NA)).toBe("N/A");
+  });
+});
+
+describe("formatScore / formatBoolean", () => {
+  it.each([[null], [undefined]])("formatScore(%s) -> N/A", (input) => {
+    expect(formatScore(NA, input as never)).toBe("N/A");
+  });
+
+  it("formats number as string", () => {
+    expect(formatScore(t(), 85)).toBe("85.00");
+  });
+
+  it("returns Yes/No for boolean, N/A for undefined", () => {
+    const t1 = t({ yes: "Yes", no: "No" });
+    expect(formatBoolean(t1, true)).toBe("Yes");
+    expect(formatBoolean(t1, false)).toBe("No");
+    expect(formatBoolean(NA, undefined)).toBe("N/A");
+  });
+});
+
+describe("formatShortNumber", () => {
+  it.each([
+    [42, "42"],
+    [500, "500"],
+    [1_500, "1.50K"],
+    [1234, "1.23K"],
+    [-2500, "-2.50K"],
+    [1_500_000, "1.50M"],
+    [999_999, "1.00M"],
+    [999_999_999_999, "1.00T"],
+    [2_000_000_000, "2.00B"],
+  ])("formatShortNumber(%s) -> %s", (input, expected) => {
+    expect(formatShortNumber(input)).toBe(expected);
+  });
+
+  it("returns em dash for non-finite", () => {
+    expect(formatShortNumber(NaN)).toBe("\u2014");
+  });
+});
+
+describe("formatDate / benchmarkLabel / categoryLabel", () => {
+  it.each([
+    ["invalid", "invalid"],
+    ["2024-01-15", "1/15/2024"],
+  ])("formatDate(%s)", (input, expected) => {
+    expect(formatDate(input, "en")).toBe(expected);
+  });
+
+  it.each([
+    ["gpqa", "GPQA", "benchmarkGpqa"],
+    ["unknown", "unknown", undefined],
+  ])("benchmarkLabel(%s)", (input, expected, key) => {
+    expect(benchmarkLabel(input, key ? t({ [key]: expected }) : t())).toBe(expected);
+  });
+
+  it("returns translated category labels, catGeneral for unknown", () => {
+    const t1 = t({ catCoding: "Coding", catReasoning: "Reasoning" });
+    expect(categoryLabel("coding", t1)).toBe("Coding");
+    expect(categoryLabel("reasoning", t1)).toBe("Reasoning");
+    expect(categoryLabel("unknown", t())).toBe("catGeneral");
+  });
+});
+
+describe("formatTrend", () => {
+  it.each([[null], [undefined]])("formatTrend(%s) -> N/A", (input) => {
+    expect(formatTrend(input as never, NA)).toBe("N/A");
+  });
+
+  it.each([
+    [5.5, "+5.5%"],
+    [47.8, "+47.8%"],
+    [0.8, "+0.8%"],
+    [-3.2, "-3.2%"],
+    [0, "0.0%"],
+  ])("formatTrend(%s) -> %s", (input, expected) => {
+    expect(formatTrend(input)).toBe(expected);
+  });
+});
+
+describe("formatDollar / formatPricePerMillion", () => {
+  it.each([
+    [42, "$42.00"],
+    [0.004, "$0.004"],
+    [0.0001, "$0.0001"],
+    [3, "$3.00"],
+    [0.02, "$0.02"],
+    [0, "$0.00"],
+  ])("formatDollar(%s) -> %s", (input, expected) => {
+    expect(formatDollar(input)).toBe(expected);
+  });
+
+  it.each([[null], [undefined]])("formatDollar(%s) -> N/A", (input) => {
+    expect(formatDollar(input as never, NA)).toBe("N/A");
+  });
+
+  it("formats price per million tokens", () => {
+    expect(formatPricePerMillion(0.005)).toBe("$0.01/M tokens");
+  });
+
+  it.each([[null], [undefined]])("formatPricePerMillion(%s) -> N/A", (input) => {
+    expect(formatPricePerMillion(input as never, NA)).toBe("N/A");
+  });
+});
+
+describe("formatUptime / formatRelativeTime / safeHref", () => {
+  it.each([
+    [{ uptimeDays: "{days}d {hours}h" }, 172_800_000, "2d 0h"],
+    [{ uptimeHours: "{hours}h {mins}m" }, 7_200_000, "2h 0m"],
+    [{ uptimeMins: "{mins}m" }, 300_000, "5m"],
+  ])("formatUptime(%j)", (overrides, ms, expected) => {
+    expect(formatUptime(t(overrides), ms)).toBe(expected);
+  });
+
+  it("returns just now for recent times, input for invalid", () => {
+    expect(formatRelativeTime(new Date().toISOString(), t({ timeJustNow: "just now" }))).toBe("just now");
+    expect(formatRelativeTime("invalid", t())).toBe("invalid");
+  });
+
+  it.each([
+    ["/models?tab=x", "/models?tab=x"],
+    ["https://ok.example/a", "https://ok.example/a"],
+  ])("safeHref allows %s", (input, expected) => {
+    expect(safeHref(input)).toBe(expected);
+  });
+
+  it.each([["//evil.example"], ["/\\evil.example"], ["javascript:alert(1)"], [null], ["   "]])(
+    "safeHref rejects %s",
+    (input) => {
+      expect(safeHref(input as string)).toBeUndefined();
+    },
+  );
+});
+
 describe("calcMonthlyCost", () => {
-  it("scales daily cost by days per month", () => {
+  it("scales daily cost by days per month and clamps days to >= 1", () => {
     const model = makeModel({ pricing: { input: 1, output: 2, cacheHit: null } });
-    const cost = calcMonthlyCost(model, {
-      dailyInput: 1_000_000,
-      dailyOutput: 1_000_000,
-      cacheHitRate: 0,
-      cacheWriteRate: 0,
-      daysPerMonth: 22,
-    });
-    expect(cost).toBe(3 * 22);
+    const base = { dailyInput: 1_000_000, dailyOutput: 1_000_000, cacheHitRate: 0, cacheWriteRate: 0 };
+    expect(calcMonthlyCost(model, { ...base, daysPerMonth: 22 })).toBe(3 * 22);
+    expect(calcMonthlyCost(model, { ...base, daysPerMonth: 0 })).toBe(3);
   });
 
   it("forwards reasoning and cache settings", () => {
     const model = makeModel({ pricing: { input: 10, output: 2, cacheHit: 1 } });
-    const cost = calcMonthlyCost(model, {
-      dailyInput: 2_000_000,
-      dailyOutput: 0,
-      dailyReasoning: 1_000_000,
-      cacheHitRate: 0.5,
-      cacheWriteRate: 0,
-      daysPerMonth: 22,
-    });
-    expect(cost).toBe(13 * 22);
+    expect(
+      calcMonthlyCost(model, {
+        dailyInput: 2_000_000,
+        dailyOutput: 0,
+        dailyReasoning: 1_000_000,
+        cacheHitRate: 0.5,
+        cacheWriteRate: 0,
+        daysPerMonth: 22,
+      }),
+    ).toBe(13 * 22);
   });
 
-  it("clamps daysPerMonth to at least 1", () => {
-    const model = makeModel({ pricing: { input: 1, output: 2, cacheHit: null } });
-    const cost = calcMonthlyCost(model, {
-      dailyInput: 1_000_000,
-      dailyOutput: 1_000_000,
-      cacheHitRate: 0,
-      cacheWriteRate: 0,
-      daysPerMonth: 0,
-    });
-    expect(cost).toBe(3);
+  it.each([
+    ["input+output from per-million prices", { input: 1, output: 2, cacheHit: 0.1 }, [1_000_000, 1_000_000, {}], 3],
+    [
+      "splits cached/uncached by rate",
+      { input: 10, output: 2, cacheHit: 1 },
+      [2_000_000, 0, { cacheHitRate: 0.5 }],
+      11,
+    ],
+    ["falls back to input price", { input: 10, output: 2, cacheHit: null }, [1_000_000, 0, { cacheHitRate: 1 }], 10],
+    [
+      "bills reasoning at output rate",
+      { input: 1, output: 2, cacheHit: null },
+      [1_000_000, 1_000_000, { dailyReasoning: 2_000_000 }],
+      1 + 3 * 2,
+    ],
+    ["clamps high hit rate", { input: 10, output: 2, cacheHit: 1 }, [1_000_000, 0, { cacheHitRate: 5 }], 1],
+    ["clamps low hit rate", { input: 10, output: 2, cacheHit: 1 }, [1_000_000, 0, { cacheHitRate: -1 }], 10],
+    ["clamps negative tokens", { input: 1, output: 2, cacheHit: null }, [-5, -5, {}], 0],
+  ])("%s", (_label, pricing, args, expected) => {
+    const [input, output, opts] = args as [number, number, { dailyReasoning?: number; cacheHitRate?: number }];
+    expect(dailyCost(makeModel({ pricing: pricing as never }), input, output, opts)).toBe(expected);
   });
 
-  it("computes input and output cost from per-million prices", () => {
-    const model = makeModel({ pricing: { input: 1, output: 2, cacheHit: 0.1 } });
-    expect(dailyCost(model, 1_000_000, 1_000_000)).toBe(3);
+  it.each([[{}], [{ cacheHit: 0.1 }]])("returns null when legs missing: %j", (pricing) => {
+    expect(dailyCost(makeModel({ pricing: pricing as never }), 1_000_000, 1_000_000)).toBeNull();
   });
 
-  it("splits input between cached and uncached rates by cacheHitRate", () => {
-    const model = makeModel({ pricing: { input: 10, output: 2, cacheHit: 1 } });
-    expect(dailyCost(model, 2_000_000, 0, { cacheHitRate: 0.5 })).toBe(11);
-  });
-
-  it("falls back to input price when cacheHit is missing", () => {
-    const model = makeModel({ pricing: { input: 10, output: 2, cacheHit: null } });
-    expect(dailyCost(model, 1_000_000, 0, { cacheHitRate: 1 })).toBe(10);
-  });
-
-  it("bills reasoning tokens at the output rate", () => {
-    const model = makeModel({ pricing: { input: 1, output: 2, cacheHit: null } });
-    expect(dailyCost(model, 1_000_000, 1_000_000, { dailyReasoning: 2_000_000 })).toBe(1 + 3 * 2);
-  });
-
-  it("clamps cacheHitRate to [0, 1]", () => {
-    const model = makeModel({ pricing: { input: 10, output: 2, cacheHit: 1 } });
-    expect(dailyCost(model, 1_000_000, 0, { cacheHitRate: 5 })).toBe(1);
-    expect(dailyCost(model, 1_000_000, 0, { cacheHitRate: -1 })).toBe(10);
-  });
-
-  it("clamps negative token counts to zero", () => {
-    const model = makeModel({ pricing: { input: 1, output: 2, cacheHit: null } });
-    expect(dailyCost(model, -5, -5)).toBe(0);
-  });
-
-  it("returns null when pricing is missing", () => {
+  it("returns null for missing pricing and non-finite tokens", () => {
     expect(dailyCost(makeModel({}), 1_000_000, 1_000_000)).toBeNull();
-  });
-
-  it("returns null when input/output prices are missing", () => {
     expect(dailyCost(makeModel({ pricing: { cacheHit: 0.1 } }), 1_000_000, 1_000_000)).toBeNull();
-  });
-
-  it("returns null for non-finite tokens", () => {
-    const model = makeModel({ pricing: { input: 1, output: 2, cacheHit: null } });
-    expect(dailyCost(model, Number.NaN, 1_000_000)).toBeNull();
+    expect(
+      dailyCost(makeModel({ pricing: { input: 1, output: 2, cacheHit: null } }), Number.NaN, 1_000_000),
+    ).toBeNull();
   });
 });
 
@@ -348,14 +318,12 @@ describe("fuzzyMatch", () => {
     expect(fuzzyMatch(items, "calude", fields).map((m) => m.name)).toContain("claude-opus-4");
   });
 
-  it("returns empty for short terms and empty input", () => {
-    expect(fuzzyMatch(items, "gp", fields)).toEqual([]);
-    expect(fuzzyMatch([], "claude", fields)).toEqual([]);
-    expect(fuzzyMatch(items, "   ", fields)).toEqual([]);
+  it.each([["gp"], ["   "], ["zzzqqq"]])("returns empty for %s", (query) => {
+    expect(fuzzyMatch(items, query, fields)).toEqual([]);
   });
 
-  it("returns empty when nothing is close", () => {
-    expect(fuzzyMatch(items, "zzzqqq", fields)).toEqual([]);
+  it("returns empty for empty input", () => {
+    expect(fuzzyMatch([], "claude", fields)).toEqual([]);
   });
 });
 
@@ -389,13 +357,27 @@ describe("computeWinners", () => {
     expect(winners.get("cost")?.get("c")).toBe("loss");
   });
 
-  it("treats display-identical values as a tie with no highlighting", () => {
-    const near: M[] = [
-      { id: "x", score: 100, cost: null },
-      { id: "y", score: 100.0000000001, cost: null },
-    ];
-    const rows: CompareRow<M>[] = [{ label: "score", getNumeric: (m) => m.score, bestIs: "max" }];
-    const winners = computeWinners(rows, near, getKey);
+  it.each([
+    [
+      "display-identical tie",
+      [
+        { id: "x", score: 100, cost: null },
+        { id: "y", score: 100.0000000001, cost: null },
+      ],
+    ],
+    [
+      "every model ties",
+      [
+        { id: "x", score: 88, cost: null },
+        { id: "y", score: 88, cost: null },
+      ],
+    ],
+  ])("no highlight when %s", (_label, rows) => {
+    const winners = computeWinners(
+      [{ label: "score", getNumeric: (m: M) => m.score, bestIs: "max" }],
+      rows as M[],
+      getKey,
+    );
     expect(winners.get("score")?.get("x")).toBeUndefined();
     expect(winners.get("score")?.get("y")).toBeUndefined();
   });
@@ -405,56 +387,33 @@ describe("computeWinners", () => {
       { id: "x", score: 88.41, cost: null },
       { id: "y", score: 88.5, cost: null },
     ];
-    const rows: CompareRow<M>[] = [{ label: "score", getNumeric: (m) => m.score, bestIs: "max", worstIs: "min" }];
-    const winners = computeWinners(rows, close, getKey);
+    const winners = computeWinners(
+      [{ label: "score", getNumeric: (m) => m.score, bestIs: "max", worstIs: "min" }],
+      close,
+      getKey,
+    );
     expect(winners.get("score")?.get("y")).toBe("win");
     expect(winners.get("score")?.get("x")).toBe("loss");
   });
 
   it("skips rows without a direction or with fewer than two numeric values", () => {
-    const rows: CompareRow<M>[] = [
-      { label: "noDirection", getNumeric: (m) => m.score },
-      { label: "noAccessor", bestIs: "max" },
-      { label: "singleValue", getNumeric: (m) => (m.id === "a" ? 1 : null), bestIs: "min" },
-    ];
-    expect(computeWinners(rows, models, getKey).size).toBe(0);
-  });
-
-  it("does not highlight win/loss when every model ties", () => {
-    const tied: M[] = [
-      { id: "x", score: 88, cost: null },
-      { id: "y", score: 88, cost: null },
-    ];
-    const rows: CompareRow<M>[] = [{ label: "score", getNumeric: (m) => m.score, bestIs: "max", worstIs: "min" }];
-    const winners = computeWinners(rows, tied, getKey);
-    expect(winners.get("score")?.get("x")).toBeUndefined();
-    expect(winners.get("score")?.get("y")).toBeUndefined();
+    expect(
+      computeWinners(
+        [
+          { label: "noDirection", getNumeric: (m) => m.score },
+          { label: "noAccessor", bestIs: "max" },
+          { label: "singleValue", getNumeric: (m) => (m.id === "a" ? 1 : null), bestIs: "min" },
+        ],
+        models,
+        getKey,
+      ).size,
+    ).toBe(0);
   });
 });
 
-const tKey = ((key: string): string => key) as unknown as TFunction;
-
-function makeCompareModel(over: Partial<ArtificialAnalysisModel> = {}): ArtificialAnalysisModel {
-  return {
-    id: "m",
-    slug: "m",
-    name: "M",
-    intelligence_index: 80,
-    coding_index: 70,
-    agentic_index: 60,
-    model_creators: { name: "Creator", color: "#000" },
-    release_date: "2024-01-01",
-    is_open_weights: true,
-    speed: { median_output_speed: 100 },
-    benchmarks: { gpqa: 85, hle: 90, scicode: 75, ifbench: 88 },
-    ...over,
-  };
-}
-
-describe("buildRadarData", () => {
+describe("buildRadarData / radarMaxFor", () => {
   it("builds radar data for a single model", () => {
-    const model = makeCompareModel();
-    const data = buildRadarData(tKey, [model]);
+    const data = buildRadarData(tKey, [makeCompareModel()]);
     expect(data).toHaveLength(7);
     expect(data[0]).toEqual({ metric: "intelligence", model_0: 80 });
     expect(data[1]).toEqual({ metric: "coding", model_0: 70 });
@@ -463,137 +422,125 @@ describe("buildRadarData", () => {
     expect(data[6]).toEqual({ metric: "ifbench", model_0: 88 });
   });
 
-  it("builds radar data for multiple models", () => {
-    const data = buildRadarData(tKey, [makeCompareModel(), makeCompareModel({ intelligence_index: 90 })]);
-    expect(data[0]!.model_0).toBe(80);
-    expect(data[0]!.model_1).toBe(90);
+  it("builds radar data for multiple models, nulls missing benchmarks, empty models", () => {
+    const multi = buildRadarData(tKey, [makeCompareModel(), makeCompareModel({ intelligence_index: 90 })]);
+    expect(multi[0]!.model_0).toBe(80);
+    expect(multi[0]!.model_1).toBe(90);
+    expect(buildRadarData(tKey, [makeCompareModel({ benchmarks: {} })])[3]!.model_0).toBeNull();
+    expect(buildRadarData(tKey, [])[0]).toEqual({ metric: "intelligence" });
   });
 
-  it("returns null for missing benchmarks", () => {
-    const model = makeCompareModel({ benchmarks: {} });
-    const data = buildRadarData(tKey, [model]);
-    expect(data[3]!.model_0).toBeNull();
-  });
-
-  it("returns rows with only metric labels for empty models", () => {
-    const data = buildRadarData(tKey, []);
-    expect(data).toHaveLength(7);
-    expect(data[0]).toEqual({ metric: "intelligence" });
-  });
-});
-
-describe("radarMaxFor", () => {
-  it("returns the fallback when data is empty or has no numeric values", () => {
-    expect(radarMaxFor([])).toBe(100);
-    expect(radarMaxFor([{ metric: "intelligence" }])).toBe(100);
-    expect(radarMaxFor([{ metric: "intelligence", model_0: null }])).toBe(100);
-  });
-
-  it("ignores the metric label key and non-finite values", () => {
-    expect(radarMaxFor([{ metric: 150, model_0: 80 }, { metric: "x", model_0: Infinity } as never])).toBe(100);
-  });
-
-  it("grows in 20-steps when data exceeds the fallback", () => {
-    expect(radarMaxFor([{ metric: "x", model_0: 101 }])).toBe(120);
-    expect(radarMaxFor([{ metric: "x", model_0: 120 }])).toBe(120);
-    expect(radarMaxFor([{ metric: "x", model_0: 121 }])).toBe(140);
-  });
-
-  it("honors a custom fallback", () => {
-    expect(radarMaxFor([{ metric: "x", model_0: 10 }], 20)).toBe(20);
+  it.each([
+    [[], 100, 100],
+    [[{ metric: "intelligence" }], 100, 100],
+    [[{ metric: "intelligence", model_0: null }], 100, 100],
+    [
+      [
+        { metric: 150, model_0: 80 },
+        { metric: "x", model_0: Infinity },
+      ],
+      100,
+      100,
+    ],
+    [[{ metric: "x", model_0: 101 }], 100, 120],
+    [[{ metric: "x", model_0: 120 }], 100, 120],
+    [[{ metric: "x", model_0: 121 }], 100, 140],
+    [[{ metric: "x", model_0: 10 }], 20, 20],
+  ])("radarMaxFor(%j, %s) -> %s", (data, fallback, expected) => {
+    expect(radarMaxFor(data as never, fallback)).toBe(expected);
   });
 });
 
-describe("buildCompareRows", () => {
+describe("buildCompareRows / buildPriceRows", () => {
   const metrics = buildCompareRows(tKey);
+  const rows = buildPriceRows(tKey);
 
-  it("includes score metrics with bestIs max", () => {
-    const intelMetric = metrics.find((m) => m.label === "intelligenceIndex");
-    expect(intelMetric).toBeDefined();
-    expect(intelMetric?.bestIs).toBe("max");
+  it("includes score/percent/speed/open-weights metrics", () => {
+    expect(metrics.find((m) => m.label === "intelligenceIndex")?.bestIs).toBe("max");
+    expect(metrics.find((m) => m.label === "gpqa")?.getNumeric?.(makeCompareModel())).toBe(85);
+    expect(metrics.find((m) => m.label === "outputSpeed")?.bestIs).toBe("max");
+    expect(metrics.find((m) => m.label === "openWeights")).toBeDefined();
   });
 
-  it("includes percent metrics", () => {
-    const gpqaMetric = metrics.find((m) => m.label === "gpqa");
-    expect(gpqaMetric).toBeDefined();
-    expect(gpqaMetric?.getNumeric?.(makeCompareModel())).toBe(85);
-  });
-
-  it("includes output speed metric", () => {
-    const speedMetric = metrics.find((m) => m.label === "outputSpeed");
-    expect(speedMetric).toBeDefined();
-    expect(speedMetric?.bestIs).toBe("max");
-  });
-
-  it("includes open weights metric", () => {
-    const owMetric = metrics.find((m) => m.label === "openWeights");
-    expect(owMetric).toBeDefined();
-  });
-
-  it("computes getValue correctly", () => {
-    const model = makeCompareModel();
+  it("computes getValue, N/A for missing", () => {
     const intelMetric = metrics.find((m) => m.label === "intelligenceIndex")!;
-    expect(intelMetric.getValue!(model)).toBe("80.00");
+    expect(intelMetric.getValue!(makeCompareModel())).toBe("80.00");
+    expect(intelMetric.getValue!(makeCompareModel({ intelligence_index: null }))).toBe("notAvailable");
   });
 
-  it("returns N/A for missing values", () => {
-    const model = makeCompareModel({ intelligence_index: null });
-    const intelMetric = metrics.find((m) => m.label === "intelligenceIndex")!;
-    expect(intelMetric.getValue!(model)).toBe("notAvailable");
+  it("marks cheapest win and priciest loss on every leg", () => {
+    expect(rows).toHaveLength(4);
+    for (const row of rows) {
+      expect(row.bestIs).toBe("min");
+      expect(row.worstIs).toBe("max");
+    }
+    const winners = computeWinners(
+      rows,
+      [
+        makeCompareModel({ id: "cheap", pricing: { input: 1, output: 10 } }),
+        makeCompareModel({ id: "mid", pricing: { input: 2, output: 20 } }),
+        makeCompareModel({ id: "deep", pricing: { input: 3, output: 30 } }),
+      ],
+      (m) => m.id,
+    );
+    expect(winners.get("promptPrice")?.get("cheap")).toBe("win");
+    expect(winners.get("promptPrice")?.get("deep")).toBe("loss");
+    expect(winners.get("completionPrice")?.get("cheap")).toBe("win");
+    expect(winners.get("completionPrice")?.get("deep")).toBe("loss");
   });
 });
-
-function makeOfficial(over: Partial<OfficialPriceModel>): OfficialPriceModel {
-  return {
-    id: "gpt-5",
-    name: "GPT-5",
-    provider: "OpenAI",
-    input: 5,
-    output: 25,
-    cachedInput: 0.5,
-    cacheWrite: 6.25,
-    ...over,
-  };
-}
 
 describe("official price resolution", () => {
   const official = makeOfficial({});
   const index = indexOfficialPricing([official]);
-  it("matches parenthesized catalog variant names to clean official ids", () => {
-    const hit = matchOfficialPricing(index, makeModel({ name: "GPT-5 (Reasoning, High Effort)" }));
-    expect(hit?.id).toBe("gpt-5");
+
+  it.each([
+    ["GPT-5 (Reasoning, High Effort)", "gpt-5"],
+    ["GPT-5", "gpt-5"],
+  ])("matches catalog variant %s to official %s", (name, id) => {
+    expect(matchOfficialPricing(index, makeModel({ name }))?.id).toBe(id);
   });
+
   it("returns undefined without a match", () => {
     expect(matchOfficialPricing(index, makeModel({ name: "Some Other Model" }))).toBeUndefined();
   });
-  it("official legs win per-leg, catalog fills the gaps", () => {
-    const eff = resolveEffectivePricing({ input: 10, output: 50, cacheHit: 1 }, makeOfficial({ output: null }));
-    expect(eff).toEqual({ input: 5, output: 50, cacheHit: 0.5, cacheWrite: 6.25, source: "official" });
-  });
-  it("falls back to catalog without an official match", () => {
-    const eff = resolveEffectivePricing({ input: 10, output: 50, cacheHit: 1 });
-    expect(eff).toEqual({ input: 10, output: 50, cacheHit: 1, cacheWrite: null, source: "catalog" });
-  });
-  it("fills the write leg from the catalog when the official match lacks one", () => {
-    const eff = resolveEffectivePricing(
+
+  it.each([
+    [
+      "official legs win per-leg, catalog fills gaps",
+      { input: 10, output: 50, cacheHit: 1 },
+      { output: null },
+      { input: 5, output: 50, cacheHit: 0.5, cacheWrite: 6.25, source: "official" },
+    ],
+    [
+      "fills write leg from catalog when official lacks one",
       { input: 10, output: 50, cacheHit: 1, cacheWrite: 12.5 },
-      makeOfficial({ cacheWrite: null }),
-    );
-    expect(eff).toEqual({ input: 5, output: 25, cacheHit: 0.5, cacheWrite: 12.5, source: "official" });
+      { cacheWrite: null },
+      { input: 5, output: 25, cacheHit: 0.5, cacheWrite: 12.5, source: "official" },
+    ],
+  ])("%s", (_label, catalog, officialOver, expected) => {
+    expect(resolveEffectivePricing(catalog as never, makeOfficial(officialOver))).toEqual(expected);
   });
-  it("reports a null source when no leg resolves", () => {
+
+  it("falls back to catalog without an official match, null source when nothing resolves", () => {
+    expect(resolveEffectivePricing({ input: 10, output: 50, cacheHit: 1 })).toEqual({
+      input: 10,
+      output: 50,
+      cacheHit: 1,
+      cacheWrite: null,
+      source: "catalog",
+    });
     expect(resolveEffectivePricing(undefined, null).source).toBeNull();
   });
-  it("recomputes blended from official legs", () => {
-    const model = makeModel({ pricing: { input: 10, output: 50, cacheHit: 1 } });
-    expect(resolveBlendedPrice(model, official)).toBeCloseTo(3.85, 5);
+
+  it.each([
+    [{ input: 10, output: 50, cacheHit: 1 }, makeOfficial({}), 3.85],
+    [{ input: 5, output: 25, cacheHit: 0.5 }, undefined, 3.85],
+  ])("resolveBlendedPrice(%j)", (pricing, officialPrice, expected) => {
+    expect(resolveBlendedPrice(makeModel({ pricing: pricing as never }), officialPrice)).toBeCloseTo(expected, 5);
   });
-  it("computes blended from catalog legs without an official match", () => {
-    const model = makeModel({ pricing: { input: 5, output: 25, cacheHit: 0.5 } });
-    expect(resolveBlendedPrice(model)).toBeCloseTo(3.85, 5);
-  });
-  it("monthly cost uses official legs when matched", () => {
-    const model = makeModel({ pricing: { input: 10, output: 50, cacheHit: null } });
+
+  it("monthly cost uses official legs when matched, bills write tier", () => {
     const opts = {
       dailyInput: 1_000_000,
       dailyOutput: 1_000_000,
@@ -601,70 +548,74 @@ describe("official price resolution", () => {
       cacheWriteRate: 0,
       daysPerMonth: 1,
     };
+    const model = makeModel({ pricing: { input: 10, output: 50, cacheHit: null } });
     expect(calcMonthlyCost(model, opts)).toBe(60);
     expect(calcMonthlyCost(model, opts, official)).toBe(30);
   });
-  it("monthly cost bills cache-write tokens at the write tier", () => {
-    const model = makeModel({ pricing: { input: 10, output: 0, cacheHit: 1, cacheWrite: 30 } });
-    const opts = {
-      dailyInput: 1_000_000,
-      dailyOutput: 0,
-      cacheHitRate: 0.5,
-      cacheWriteRate: 0.2,
-      daysPerMonth: 1,
-    };
-    expect(calcMonthlyCost(model, opts)).toBeCloseTo(0.5 * 1 + 0.2 * 30 + 0.3 * 10, 5);
-  });
-  it("monthly cost ignores the write rate when the interface has no write price", () => {
-    const model = makeModel({ pricing: { input: 10, output: 0, cacheHit: 1 } });
-    const opts = {
-      dailyInput: 1_000_000,
-      dailyOutput: 0,
-      cacheHitRate: 0.5,
-      cacheWriteRate: 0.2,
-      daysPerMonth: 1,
-    };
-    expect(calcMonthlyCost(model, opts)).toBeCloseTo(0.5 * 1 + 0.5 * 10, 5);
+
+  it.each([
+    [{ input: 10, output: 0, cacheHit: 1, cacheWrite: 30 }, 0.5 * 1 + 0.2 * 30 + 0.3 * 10],
+    [{ input: 10, output: 0, cacheHit: 1 }, 0.5 * 1 + 0.5 * 10],
+  ])("monthly cost write-tier handling %j", (pricing, expected) => {
+    expect(
+      calcMonthlyCost(makeModel({ pricing: pricing as never }), {
+        dailyInput: 1_000_000,
+        dailyOutput: 0,
+        cacheHitRate: 0.5,
+        cacheWriteRate: 0.2,
+        daysPerMonth: 1,
+      }),
+    ).toBeCloseTo(expected, 5);
   });
 });
 
 describe("monthly cost default fast path", () => {
   const defaultCalc = { input: 2, output: 1, reasoning: 2, cache: 0.5, cacheWrite: 0.05, days: 22 };
 
-  it("reuses the server precomputed default when no official pricing is loaded", () => {
-    const model = makeModel({ defaultMonthlyCost: 123 });
-    expect(getCachedMonthlyCost(model, defaultCalc, undefined)).toBe(123);
+  it("reuses the server precomputed default when unmatched", () => {
+    expect(getCachedMonthlyCost(makeModel({ defaultMonthlyCost: 123 }), defaultCalc, undefined)).toBe(123);
+    expect(
+      getCachedMonthlyCost(makeModel({ defaultMonthlyCost: 123 }), defaultCalc, makeOfficialGetter([makeOfficial({})])),
+    ).toBe(123);
   });
 
-  it("keeps the precomputed default when official pricing is loaded but the model is unmatched", () => {
-    const model = makeModel({ defaultMonthlyCost: 123 });
-    expect(getCachedMonthlyCost(model, defaultCalc, makeOfficialGetter([makeOfficial({})]))).toBe(123);
-  });
-
-  it("recomputes from official legs when an official price matches", () => {
-    const model = makeModel({
-      name: "GPT-5",
-      defaultMonthlyCost: 123,
-      pricing: { input: 10, output: 50, cacheHit: null },
-    });
-    expect(getCachedMonthlyCost(model, defaultCalc, makeOfficialGetter([makeOfficial({})]))).toBeCloseTo(1773.75, 5);
+  it("recomputes from official legs when matched", () => {
+    expect(
+      getCachedMonthlyCost(
+        makeModel({ name: "GPT-5", defaultMonthlyCost: 123, pricing: { input: 10, output: 50, cacheHit: null } }),
+        defaultCalc,
+        makeOfficialGetter([makeOfficial({})]),
+      ),
+    ).toBeCloseTo(1773.75, 5);
   });
 });
 
 describe("useMonthlyCosts", () => {
   it("recomputes monthly costs when official pricing arrives after mount", () => {
-    const models = [makeModel({ name: "GPT-5", pricing: { input: 10, output: 50, cacheHit: null } })];
-    const { result, rerender } = renderHook(({ getOfficial }) => useMonthlyCosts(models, getOfficial), {
+    const hookModels = [makeModel({ name: "GPT-5", pricing: { input: 10, output: 50, cacheHit: null } })];
+    const { result, rerender } = renderHook(({ getOfficial }) => useMonthlyCosts(hookModels, getOfficial), {
       initialProps: { getOfficial: undefined as OfficialGetter | undefined },
     });
     expect(result.current.monthlyCosts[0]).toBe(3740);
     rerender({ getOfficial: makeOfficialGetter([makeOfficial({})]) });
     expect(result.current.monthlyCosts[0]).toBeCloseTo(1773.75, 5);
   });
+
+  it("emits no catalog numbers before pricing is ready", () => {
+    const hookModels = [makeModel({ name: "GPT-5", pricing: { input: 10, output: 50, cacheHit: null } })];
+    const { result, rerender } = renderHook(
+      ({ getOfficial, ready }) => useMonthlyCosts(hookModels, getOfficial, { ready }),
+      { initialProps: { getOfficial: undefined as OfficialGetter | undefined, ready: false } },
+    );
+    expect(result.current.monthlyCosts).toEqual([null]);
+    rerender({ getOfficial: makeOfficialGetter([makeOfficial({})]), ready: true });
+    expect(result.current.monthlyCosts[0]).toBeCloseTo(1773.75, 5);
+  });
 });
 
 describe("aggregateTaskShare", () => {
   const task = (value: string | null) => ({ task: value });
+
   it("counts models per task sorted descending, tail folded into other", () => {
     const { slices, total } = aggregateTaskShare([
       task("text-generation"),
@@ -679,25 +630,24 @@ describe("aggregateTaskShare", () => {
     ]);
     expect(total).toBe(4);
   });
-  it("folds the long tail beyond the slice limit into other", () => {
-    const models = ["a", "b", "c", "d", "e", "f", "g"].map((t) => task(t));
-    const { slices, total } = aggregateTaskShare(models);
+
+  it("folds the long tail beyond the slice limit into other, empty for empty input", () => {
+    const { slices, total } = aggregateTaskShare(["a", "b", "c", "d", "e", "f", "g"].map((item) => task(item)));
     expect(slices).toHaveLength(6);
     expect(slices[5]).toEqual({ key: "__other__", total: 2 });
     expect(total).toBe(7);
-  });
-  it("returns empty slices for empty input", () => {
     expect(aggregateTaskShare([])).toEqual({ slices: [], total: 0 });
   });
+
   it("resolves localized labels with English fallback", () => {
-    const t = (key: string) => (key === "taskTextGeneration" ? "文本生成" : key);
-    expect(taskLabel("text-generation", t)).toBe("文本生成");
-    expect(taskLabel("some-new-task", t)).toBe("Some New Task");
+    const tf = (key: string) => (key === "taskTextGeneration" ? "\u6587\u672c\u751f\u6210" : key);
+    expect(taskLabel("text-generation", tf)).toBe("\u6587\u672c\u751f\u6210");
+    expect(taskLabel("some-new-task", tf)).toBe("Some New Task");
     expect(formatTaskLabel("automatic_speech_recognition")).toBe("Automatic Speech Recognition");
   });
 });
 
-describe("pickLatestReleaseName", () => {
+describe("pickLatestReleaseName / resolveInitialTab", () => {
   const closed = (releaseDate: string, model = "Closed Model"): ClosedReleaseEntry => ({
     id: model,
     model,
@@ -705,21 +655,18 @@ describe("pickLatestReleaseName", () => {
     releaseDate,
     link: "https://example.com",
   });
-  it("returns the head of the 模型发布 feed", () => {
-    expect(pickLatestReleaseName([closed("2026-09-05"), closed("2026-09-01")])).toBe("Closed Model");
-  });
-  it("returns null when the feed is empty or dateless", () => {
-    expect(pickLatestReleaseName([])).toBeNull();
-    expect(pickLatestReleaseName([closed("not-a-date")])).toBeNull();
-  });
-});
 
-describe("resolveInitialTab", () => {
-  const tabs = ["feed", "closed"] as const;
-  it("accepts a valid deep-link param", () => {
-    expect(resolveInitialTab(tabs, "closed", "feed")).toBe("closed");
+  it.each([
+    [[closed("2026-09-05"), closed("2026-09-01")], "Closed Model"],
+    [[], null],
+    [[closed("not-a-date")], null],
+  ])("pickLatestReleaseName(%j)", (feed, expected) => {
+    expect(pickLatestReleaseName(feed as ClosedReleaseEntry[])).toBe(expected);
   });
-  it("falls back for missing or unknown params", () => {
+
+  it("resolveInitialTab accepts deep-link, falls back otherwise", () => {
+    const tabs = ["feed", "closed"] as const;
+    expect(resolveInitialTab(tabs, "closed", "feed")).toBe("closed");
     expect(resolveInitialTab(tabs, null, "feed")).toBe("feed");
     expect(resolveInitialTab(tabs, "nope", "feed")).toBe("feed");
   });
@@ -752,32 +699,26 @@ describe("useParams", () => {
   });
 });
 
-describe("isIosDevice", () => {
-  it("detects iPhone and iPad user agents", () => {
-    expect(isIosDevice("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)")).toBe(true);
-    expect(isIosDevice("Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X)")).toBe(true);
+describe("isIosDevice / isStandaloneMode", () => {
+  it.each([
+    ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", undefined, true],
+    ["Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X)", undefined, true],
+    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)", 5, true],
+    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)", 0, false],
+    ["Mozilla/5.0 (Linux; Android 14; Pixel 8)", undefined, false],
+    ["Mozilla/5.0 (Windows NT 10.0; Win64; x64)", undefined, false],
+  ])("isIosDevice(%s)", (ua, touchPoints, expected) => {
+    expect(isIosDevice(ua, touchPoints as never)).toBe(expected);
   });
-  it("detects iPadOS 13+ masquerading as Macintosh with touch", () => {
-    expect(isIosDevice("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)", 5)).toBe(true);
-  });
-  it("rejects desktop Macs without touch and Android devices", () => {
-    expect(isIosDevice("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)", 0)).toBe(false);
-    expect(isIosDevice("Mozilla/5.0 (Linux; Android 14; Pixel 8)")).toBe(false);
-    expect(isIosDevice("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe(false);
-  });
-});
 
-describe("isStandaloneMode", () => {
-  it("is true for iOS standalone or any display-mode match", () => {
-    expect(isStandaloneMode({ navigatorStandalone: true })).toBe(true);
-    expect(isStandaloneMode({ displayStandalone: true })).toBe(true);
-    expect(isStandaloneMode({ displayFullscreen: true })).toBe(true);
-  });
-  it("is false for regular browser tabs", () => {
-    expect(isStandaloneMode({})).toBe(false);
-    expect(isStandaloneMode({ navigatorStandalone: false, displayStandalone: false, displayFullscreen: false })).toBe(
-      false,
-    );
+  it.each([
+    [{ navigatorStandalone: true }, true],
+    [{ displayStandalone: true }, true],
+    [{ displayFullscreen: true }, true],
+    [{}, false],
+    [{ navigatorStandalone: false, displayStandalone: false, displayFullscreen: false }, false],
+  ])("isStandaloneMode(%j) -> %s", (input, expected) => {
+    expect(isStandaloneMode(input)).toBe(expected);
   });
 });
 

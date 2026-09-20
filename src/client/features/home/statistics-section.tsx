@@ -1,7 +1,7 @@
 "use client";
 import { memo } from "react";
 import { useTranslation } from "@/client/providers";
-import { Card, CardContent } from "@/client/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { PageSection } from "@/client/components/layout";
 
 export interface HomeBarStat {
@@ -41,8 +41,7 @@ const RankedStatCard = memo(function RankedStatCard({
   return (
     <Card>
       <CardContent>
-        <p className="ui-card-title mb-1">{title}</p>
-        <p className="ui-caption mb-4">{source}</p>
+        <CardHeader title={title} subtitle={source} />
         {rows.length === 0 ? (
           <p className="ui-body-secondary">{t("notAvailable")}</p>
         ) : (

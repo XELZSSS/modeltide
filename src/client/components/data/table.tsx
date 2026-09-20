@@ -78,7 +78,7 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
   };
 
   return (
-    <div ref={rootRef} className="flex flex-col gap-4">
+    <div ref={rootRef} className="flex flex-col gap-4 min-w-0">
       <span data-table-top tabIndex={-1} className="outline-none" aria-hidden="true" />
       {dedupedData.length === 0 ? (
         <EmptyState message={t("noResults")} />
@@ -89,7 +89,7 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
         </>
       ) : (
         <>
-          <div className="border border-border overflow-x-auto min-w-0">
+          <div className="ui-card overflow-x-auto">
             <table className="w-full text-sm table-fixed">
               <TableHeader columns={columns} isExpandable={isExpandable} />
               <TableBody {...listProps} />

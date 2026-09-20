@@ -2,7 +2,7 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useSuspenseAgentRankings } from "@/client/api/queries";
 import type { AgentRankEntry } from "@/shared/types";
-import { RankedTableView, modelNameCol } from "@/client/features/rankings/rank-shared";
+import { RankedTableView, modelNameCol } from "@/client/components/data/ranked";
 import { cn } from "@/client/utils/cn";
 import type { DataTableColumn } from "@/client/components/data/columns";
 import type { useTranslation } from "@/client/providers";

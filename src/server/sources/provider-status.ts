@@ -7,14 +7,12 @@ import type { SourceLevel } from "@/shared/types";
 
 export interface ProviderStatusResult {
   ok: boolean;
-  /** True when the provider is up but degraded (minor incident) — a warning, not an outage. */
   warn: boolean;
   status: number | null;
   latencyMs: number;
   error: string | null;
 }
 
-/** Adapter turning a provider-specific parser into a uniform health verdict. */
 type HealthParse = (raw: unknown) => ParseResult<{ level: SourceLevel; error: string }>;
 
 const parseStatuspageHealth: HealthParse = (raw) => {
@@ -46,17 +44,12 @@ async function fetchProviderHealth(
   try {
     raw = await ctx.http.json<unknown>(url, UPSTREAM_FETCH_OPTS);
   } catch (err) {
-    // Our fetch failing says nothing about the provider — status pages are
-    // independently hosted. Report unknown (skip this round) so our own network
-    // blip can't flip the source down and manufacture a down/up event pair.
     ctx.log("warn", `[provider-status] ${label} fetch failed: ${errMsg(err)}`);
     return null;
   }
   const latencyMs = Date.now() - started;
   const parsed = parse(raw);
   if (!parsed.ok) {
-    // Got a payload we can't parse: our parser is outdated, not proof the
-    // provider is down. Same unknown handling as a fetch failure.
     ctx.log("warn", `[provider-status] ${label} parse failed: ${parsed.error}`);
     return null;
   }
@@ -104,7 +97,7 @@ export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<Provid
       (target) => () =>
         fetchProviderHealth(ctx, target.url, target.label, target.parse).then((result) => [target.id, result] as const),
     ),
-    3,
+    6,
   );
   const results: (readonly [ProviderStatusId, ProviderStatusResult])[] = [];
   for (let i = 0; i < settled.length; i++) {
@@ -112,8 +105,6 @@ export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<Provid
     const target = PROVIDER_STATUS_TARGETS[i]!;
     if (s.status === "fulfilled") {
       const [id, result] = s.value;
-      // Unknown (our fetch/parse failed) is skipped, not recorded: the source keeps
-      // its previous state instead of flapping down on this round and up on the next.
       if (result !== null) results.push([id, result] as const);
     } else {
       ctx.log("warn", `[provider-status] ${target.label} sampling threw, skipping round`);

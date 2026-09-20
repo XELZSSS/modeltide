@@ -1,17 +1,9 @@
 // @ts-check
-// Layering guard: client/server/shared isolation + route-feature isolation.
-// Vite + Workers layout:
-//   - worker layer: worker/** (entrypoint) imports @/server/**
-//   - client layer: src/client/** (must never import @/server/*)
-//   - server layer: src/server/** (must never import @/client/*)
-//   - shared: src/shared/** (must stay pure)
-
 const fs = require("fs");
 const path = require("path");
 const { walkTs: walk, stripComments } = require("./_util.cjs");
 
 const CLIENT_APP_RE = /^src\/client\/(main|router)\.tsx$/;
-const PAGE_RE = /^$/;
 
 let ROUTE_FEATURES = ["home", "rankings", "releases", "news", "status", "compare", "models"];
 try {
@@ -58,11 +50,10 @@ for (const file of [...walk("src"), ...(fs.existsSync("worker") ? walk("worker")
     if (!spec) continue;
     const isServerFile = rel.startsWith("src/server/") || rel.startsWith("worker/");
     const isClientFile = rel.startsWith("src/client/") || CLIENT_APP_RE.test(rel);
-    const isPageFile = PAGE_RE.test(rel);
-    if (!isPageFile && isClientFile && (spec === "@/server" || spec.startsWith("@/server/"))) {
+    if (isClientFile && (spec === "@/server" || spec.startsWith("@/server/"))) {
       fail(`${rel} imports server-only "${spec}" (client bundle leak)`);
     }
-    if (!isPageFile && isServerFile && (spec === "@/client" || spec.startsWith("@/client/"))) {
+    if (isServerFile && (spec === "@/client" || spec.startsWith("@/client/"))) {
       fail(`${rel} imports client code "${spec}"`);
     }
     if (rel.startsWith("src/shared/")) {

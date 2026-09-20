@@ -24,7 +24,7 @@ export function PwaBanners() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-20 md:bottom-6 right-4 z-toast flex items-center gap-2.5 border border-border bg-bg-card px-3 py-2 shadow-lg animate-slide-up"
+          className="fixed bottom-20 md:bottom-6 right-4 z-[45] flex items-center gap-2.5 ui-overlay-md px-3 py-2 animate-slide-up"
         >
           <RefreshCw size={14} className="text-accent shrink-0" aria-hidden="true" />
           <span className="ui-caption text-text-primary">{t("pwaUpdateAvailable")}</span>

@@ -6,6 +6,7 @@ import { cn } from "@/client/utils/cn";
 import { formatRelativeTime } from "@/client/utils/format";
 import { SOURCE_LABELS } from "@/shared/config";
 import { Dot } from "@/client/components/ui/primitives";
+import { EmptyState } from "@/client/components/feedback";
 
 export const EVENT_STYLES = {
   down: { color: "var(--destructive)", text: "text-destructive", labelKey: "eventDown" },
@@ -66,14 +67,10 @@ export const StatusEventList = memo(function StatusEventList({
   showTime?: boolean;
 }) {
   if (events.length === 0) {
-    return (
-      <div className="border border-dashed border-border bg-bg-card px-4 py-6 text-center ui-caption">
-        {emptyMessage}
-      </div>
-    );
+    return <EmptyState compact message={emptyMessage} />;
   }
   return (
-    <div className="divide-y divide-border border border-border bg-bg-card shadow-none">
+    <div className="ui-card divide-y divide-border">
       {events.map((event, idx) => (
         <StatusEventRow
           key={`${event.id}-${event.at}-${event.type}-${idx}`}

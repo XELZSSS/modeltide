@@ -18,8 +18,8 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
     ["completionPrice", model.pricing?.output],
   ];
   const tokenStats: [TranslationKey, string][] = [
-    ["inputTokens", formatShortNumber(model.promptTokens ?? 0)],
-    ["outputTokens", formatShortNumber(model.completionTokens ?? 0)],
+    ["inputTokens", model.promptTokens != null ? formatShortNumber(model.promptTokens) : t("notAvailable")],
+    ["outputTokens", model.completionTokens != null ? formatShortNumber(model.completionTokens) : t("notAvailable")],
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -42,7 +42,10 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
           />
           <InfoRow label={t("category")} value={categoryLabel(model.category, t)} />
           <InfoRow label={t("trend")} value={formatTrend(model.change, t)} />
-          <InfoRow label={t("totalTokens")} value={formatShortNumber(model.totalTokens ?? 0)} />
+          <InfoRow
+            label={t("totalTokens")}
+            value={model.totalTokens != null ? formatShortNumber(model.totalTokens) : t("notAvailable")}
+          />
           {model.cachedTokens ? (
             <InfoRow label={t("cachedTokens")} value={formatShortNumber(model.cachedTokens)} />
           ) : null}

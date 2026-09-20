@@ -2,6 +2,7 @@
 import { memo, useEffect, type ReactNode } from "react";
 import { ArrowLeftRight, Trash2, X } from "lucide-react";
 import { Button } from "@/client/components/ui/button";
+import { Badge } from "@/client/components/ui/primitives";
 import { useTranslation } from "@/client/providers";
 import { useCompareStore } from "@/client/stores";
 import { modelId } from "@/client/utils/model";
@@ -17,17 +18,17 @@ const CompareChip = memo(function CompareChip({
   const { t } = useTranslation();
   const name = model.short_name || model.name;
   return (
-    <span className="inline-flex items-center gap-1 pl-3 pr-1 py-1 rounded-none bg-bg-secondary/60 border border-border text-sm transition-colors duration-fast hover:border-text-tertiary/40">
+    <Badge className="pl-3 pr-1 py-1 text-sm normal-case tracking-normal text-text-primary hoverable:hover:border-text-tertiary/40">
       <span className="font-medium truncate max-w-36">{name}</span>
       <button
         type="button"
         onClick={() => onRemove(model)}
         aria-label={t("removeModel", { name })}
-        className="shrink-0 p-1 rounded-none text-text-secondary hover:text-text-primary hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="shrink-0 p-1 rounded-none text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
       >
         <X size={14} />
       </button>
-    </span>
+    </Badge>
   );
 });
 
@@ -55,7 +56,7 @@ export const CompareChipBar = memo(function CompareChipBar({
   }, [lastExceedAt, clearExceed]);
   const canCompare = models.length >= 2;
   return (
-    <div className="flex flex-wrap gap-3 items-center justify-between border border-border bg-bg-card px-3 py-2.5">
+    <div className="ui-card flex flex-wrap gap-3 items-center justify-between px-3 py-2.5">
       <div className="flex flex-wrap gap-2 items-center min-w-0">
         {leading}
         {models.map((model, index) => (

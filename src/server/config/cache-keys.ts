@@ -10,8 +10,6 @@ export const cacheKeys = {
     cacheKey("openSourceModels", sort, direction, normalizeModelLimit(limit)),
   openSourceModel: (id: string) => {
     const trimmed = id.trim();
-    // KV keys cap at 512 bytes; hash the rare oversized id instead of letting
-    // every put for it throw (multi-byte ids can exceed the limit at 200 chars).
     const keyed = utf8ByteLength(trimmed) > 128 ? `h:${fnv1aHash(trimmed)}` : trimmed;
     return cacheKey("openSourceModels", "by-id", keyed);
   },

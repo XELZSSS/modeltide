@@ -1,6 +1,100 @@
+import {
+  num,
+  numCoerce,
+  numOr,
+  titleCase,
+  isUsableOpenRouterPricing,
+  isValidOpenRouterDirectoryRow,
+} from "@/server/parsers/primitives";
+import { PER_MILLION } from "@/shared/config";
 import type { OpenRouterRankEntry } from "@/shared/types";
-import { numCoerce, numOr, titleCase } from "@/server/parsers/primitives";
-import type { ModelRow, PricingEntry } from "@/server/parsers/or-types";
+
+import { normalizeModelKey } from "@/shared/utils";
+
+import type { ModelRow, PricingRow } from "@/server/parsers/upstream";
+
+export interface PricingEntry {
+  input: number;
+  output: number;
+  cacheHit: number | null;
+  cacheWrite: number | null;
+}
+
+export type PricingRecord = Record<string, PricingEntry>;
+
+export interface ModelMetaEntry {
+  intelligenceIndex?: number;
+  agenticIndex?: number;
+}
+
+export interface DirectoryCacheEntry {
+  pricing: PricingRecord;
+  meta: Record<string, ModelMetaEntry>;
+}
+
+function buildPricingEntry(
+  input: number | null,
+  output: number | null,
+  cacheHit: number | null,
+  cacheWrite: number | null,
+): PricingEntry | null {
+  if (input == null || output == null) return null;
+  if (!isUsableOpenRouterPricing(input, output)) return null;
+  return {
+    input: input * PER_MILLION,
+    output: output * PER_MILLION,
+    cacheHit: cacheHit == null ? null : cacheHit * PER_MILLION,
+    cacheWrite: cacheWrite == null ? null : cacheWrite * PER_MILLION,
+  };
+}
+
+function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
+  return {
+    intelligenceIndex: target.intelligenceIndex ?? patch.intelligenceIndex,
+    agenticIndex: target.agenticIndex ?? patch.agenticIndex,
+  };
+}
+
+export function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
+  const pricingRecord: PricingRecord = Object.create(null);
+  const metaRecord: Record<string, ModelMetaEntry> = Object.create(null);
+  for (const m of rows) {
+    if (!isValidOpenRouterDirectoryRow(m)) continue;
+    const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
+    const rawInput = numCoerce(pricing.prompt);
+    const rawOutput = numCoerce(pricing.completion);
+    const input = rawInput != null && rawInput >= 0 ? rawInput : null;
+    const output = rawOutput != null && rawOutput >= 0 ? rawOutput : null;
+    const rawCache = numCoerce(pricing.input_cache_read);
+    const cacheHitRate = rawCache != null && rawCache >= 0 ? rawCache : null;
+    const rawCacheWrite = numCoerce(pricing.input_cache_write);
+    const cacheWriteRate = rawCacheWrite != null && rawCacheWrite >= 0 ? rawCacheWrite : null;
+    const pricingEntry = buildPricingEntry(input, output, cacheHitRate, cacheWriteRate);
+    if (pricingEntry) {
+      const keys = [m.id.trim(), m.canonical_slug?.trim()].filter((v): v is string => !!v);
+      for (const key of keys) {
+        pricingRecord[key] = pricingEntry;
+        const lower = key.toLowerCase();
+        if (lower !== key) pricingRecord[lower] = pricingEntry;
+      }
+    }
+    const aaBenchmarks = m.benchmarks?.artificial_analysis;
+    const intelligenceIndex = num(aaBenchmarks?.intelligence_index);
+    const agenticIndex = num(aaBenchmarks?.agentic_index);
+    if (intelligenceIndex == null && agenticIndex == null) continue;
+    const metaEntry: ModelMetaEntry = {};
+    if (intelligenceIndex != null) metaEntry.intelligenceIndex = intelligenceIndex;
+    if (agenticIndex != null) metaEntry.agenticIndex = agenticIndex;
+    const keys = new Set(
+      [m.name, m.id, m.canonical_slug].map((v) => (typeof v === "string" ? normalizeModelKey(v) : "")).filter(Boolean),
+    );
+    for (const key of keys) {
+      const cur = Object.hasOwn(metaRecord, key) ? metaRecord[key] : undefined;
+      metaRecord[key] = cur ? mergeMetaRecord(cur, metaEntry) : metaEntry;
+    }
+  }
+  return { pricing: pricingRecord, meta: metaRecord };
+}
 
 const CREATORS: Record<string, string> = {
   anthropic: "Anthropic",
@@ -32,7 +126,7 @@ export function categoryFrom(slug: string, name: string): OpenRouterRankEntry["c
 export function titleFromSlug(permaslug: string): string {
   const raw = permaslug.split("/").slice(1).join("/") || permaslug;
   return raw
-    .replace(/[:/_.]/g, " ")
+    .replace(/[:/_]/g, " ")
     .split(/[-\s]+/)
     .filter(Boolean)
     .map((p) => (/^\d/.test(p) ? p.toLowerCase() : p.length <= 3 ? p.toUpperCase() : titleCase(p)))
@@ -101,7 +195,6 @@ function resolvePricing(
 export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry>): OpenRouterRankEntry[] {
   const grouped = new Map<string, Group>();
   for (const row of rows) {
-    // Caller (openrouter.ts) has already filtered rows by valid model_permaslug.
     const id = row.model_permaslug.trim();
     const tokens = usageTotal(row);
     const group = grouped.get(id);

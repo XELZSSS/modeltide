@@ -3,16 +3,17 @@ import { memo, type Ref } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium transition-colors duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary active:translate-y-px",
+export const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium transition-colors duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary",
   {
     variants: {
       variant: {
-        primary: "bg-accent text-accent-contrast hover:bg-accent/90 border border-transparent",
-        outline: "border border-border bg-transparent text-text-primary hover:bg-hover hover:border-text-tertiary/40",
-        ghost: "text-text-primary hover:bg-hover",
-        link: "text-text-primary underline-offset-4 hover:underline px-0",
-        destructive: "bg-destructive text-destructive-contrast hover:bg-destructive/90 border border-transparent",
+        primary: "bg-accent text-accent-contrast hoverable:hover:bg-accent/90 border border-transparent",
+        outline: "border border-border bg-transparent text-text-primary hoverable:hover:border-text-primary",
+        ghost: "text-text-primary hoverable:hover:bg-hover",
+        link: "text-text-primary underline-offset-4 hoverable:hover:underline px-0",
+        destructive:
+          "bg-destructive text-destructive-contrast hoverable:hover:bg-destructive/90 border border-transparent",
       },
       size: {
         sm: "h-8 px-3 text-xs rounded-none",

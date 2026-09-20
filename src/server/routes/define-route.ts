@@ -1,9 +1,9 @@
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
-import { ApiError } from "@/server/infra/errors";
+import { ApiError, ClientAbortError } from "@/server/infra/errors";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/validation";
 import type { AppContext } from "@/server/context";
-import { BROWSER_CACHE_HEADER, CDN_CACHE_HEADER } from "@/server/config";
+import { BROWSER_CACHE_HEADER, BROWSER_NO_STORE_HEADER, CDN_CACHE_HEADER, CDN_NO_STORE_HEADER } from "@/server/config";
 import { applyApiHeaders } from "@/shared/config/security";
 
 function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string }): void {
@@ -22,7 +22,11 @@ function clampStatus(status: number): number {
 }
 
 function errorHeaders(): Headers {
-  const headers = new Headers({ "content-type": "application/json" });
+  const headers = new Headers({
+    "content-type": "application/json",
+    "Cache-Control": BROWSER_NO_STORE_HEADER,
+    "CDN-Cache-Control": CDN_NO_STORE_HEADER,
+  });
   applyApiHeaders(headers);
   return headers;
 }
@@ -39,10 +43,6 @@ function collectQueryParams(url: URL): Record<string, string | string[]> {
 }
 
 function isTimeoutLike(err: unknown): boolean {
-  // Narrow: only TimeoutError (AbortSignal.timeout from our own fetches) maps
-  // to 504 here. UpstreamError with causedByTimeout is handled in mapApiError
-  // below; anything else — including AbortError from client disconnects or an
-  // upstream message that merely mentions "timeout" — must not become a 504.
   return err instanceof Error && err.name === "TimeoutError";
 }
 
@@ -54,6 +54,7 @@ function timeoutResponse(): Response {
 }
 
 function mapApiError(err: unknown, method: string, path: string): Response {
+  if (err instanceof ClientAbortError) return new Response(null, { status: 499 });
   if (isTimeoutLike(err)) return timeoutResponse();
   if (err instanceof ApiError) {
     const status = clampStatus(err.status);
@@ -84,11 +85,6 @@ export interface ApiRouteDef<S extends QuerySchema = QuerySchema> {
   handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<unknown>;
 }
 
-/**
- * Shared GET handler for all /api/* endpoints:
- * buildContext -> validateQuery -> handler -> cache headers -> {data}
- * Bindings come straight from the Worker entrypoint (env.CACHE, env.HF_TOKEN).
- */
 export async function handleApiRoute<S extends QuerySchema>(
   req: Request,
   env: Env,

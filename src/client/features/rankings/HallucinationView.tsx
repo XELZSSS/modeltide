@@ -1,7 +1,7 @@
 "use client";
 import { formatIndex, formatPercent } from "@/client/utils/format";
 import type { HallucinationRankingEntry } from "@/shared/types";
-import { RankedTableView, modelNameCol } from "@/client/features/rankings/rank-shared";
+import { RankedTableView, modelNameCol } from "@/client/components/data/ranked";
 import type { DataTableColumn } from "@/client/components/data/columns";
 import type { useTranslation } from "@/client/providers";
 

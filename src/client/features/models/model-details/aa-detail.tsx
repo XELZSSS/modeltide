@@ -15,8 +15,9 @@ import {
 import { normalizePercent } from "@/shared/utils";
 import { getOutputSpeed } from "@/client/utils/cost-estimator";
 import { resolveBlendedPrice, resolveEffectivePricing } from "@/client/utils/pricing-merge";
-import { DetailSection, InfoGrid, StatGrid } from "@/client/components/ui/grids";
-import { InfoCard, InfoRow } from "@/client/components/ui/primitives";
+import { InfoGrid, StatGrid } from "@/client/components/ui/grids";
+import { PageSection } from "@/client/components/layout";
+import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { useOfficialPricing } from "@/client/features/pricing/official";
 import { createDetailView } from "./detail-views";
@@ -69,9 +70,9 @@ function ModalitySection({
         {MODALITIES.map(
           (m) =>
             model[`${prefix}_modality_${m.key}` as keyof ArtificialAnalysisModel] && (
-              <span key={m.key} className={`px-2.5 py-1 text-xs font-medium rounded-none border ${m.className}`}>
+              <Badge key={m.key} className={`px-2.5 py-1 normal-case tracking-normal ${m.className}`}>
                 {t(m.labelKey)}
-              </span>
+              </Badge>
             ),
         )}
       </div>
@@ -87,10 +88,16 @@ export function ModelDetailContent({
   showBenchmarks?: boolean;
 }) {
   const { t } = useTranslation();
-  const { getOfficial } = useOfficialPricing();
+  const { getOfficial, isPending: officialPending } = useOfficialPricing();
   const official = useMemo(() => getOfficial?.(model), [getOfficial, model]);
   const pricing = useMemo(() => resolveEffectivePricing(model.pricing, official), [model.pricing, official]);
   const blended = useMemo(() => resolveBlendedPrice(model, official), [model, official]);
+  const priceValue = (v: number | null | undefined) =>
+    officialPending ? (
+      <span className="ui-skeleton inline-block h-4 w-20 rounded-none align-middle" aria-hidden="true" />
+    ) : (
+      formatPricePerMillion(v, t)
+    );
   const hasAnyModality = MODALITIES.some(
     (m) =>
       model[`input_modality_${m.key}` as keyof ArtificialAnalysisModel] ||
@@ -119,17 +126,20 @@ export function ModelDetailContent({
           {model.size_class && <InfoRow label={t("sizeClass")} value={titleCaseSizeClass(model.size_class)} />}
         </InfoCard>
         <InfoCard title={t("pricing")}>
-          <InfoRow label={t("promptPrice")} value={formatPricePerMillion(pricing.input, t)} />
-          <InfoRow label={t("completionPrice")} value={formatPricePerMillion(pricing.output, t)} />
-          <InfoRow label={t("cacheHitPrice")} value={formatPricePerMillion(pricing.cacheHit, t)} />
-          {pricing.cacheWrite != null && (
-            <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(pricing.cacheWrite, t)} />
-          )}
-          <InfoRow label={t("blendedPrice")} value={formatPricePerMillion(blended, t)} />
+          {officialPending && <span className="sr-only">{t("loading")}</span>}
+          <div aria-busy={officialPending}>
+            <InfoRow label={t("promptPrice")} value={priceValue(pricing.input)} />
+            <InfoRow label={t("completionPrice")} value={priceValue(pricing.output)} />
+            <InfoRow label={t("cacheHitPrice")} value={priceValue(pricing.cacheHit)} />
+            {pricing.cacheWrite != null && !officialPending && (
+              <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(pricing.cacheWrite, t)} />
+            )}
+            <InfoRow label={t("blendedPrice")} value={priceValue(blended)} />
+          </div>
         </InfoCard>
       </InfoGrid>
       {showBenchmarks && model.benchmarks && Object.values(model.benchmarks).some((v) => v != null) && (
-        <DetailSection title={t("benchmarks")}>
+        <PageSection title={t("benchmarks")}>
           <StatGrid columns={4}>
             {Object.entries(model.benchmarks).map(([key, value]) => {
               const display = ABSOLUTE_SCORE_BENCHMARKS.has(key as BenchmarkKey)
@@ -142,22 +152,22 @@ export function ModelDetailContent({
               );
             })}
           </StatGrid>
-        </DetailSection>
+        </PageSection>
       )}
       {hasAnyModality && (
-        <DetailSection title={t("modalities")}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <PageSection title={t("modalities")}>
+          <div className="flex flex-col gap-4 md:flex-row md:gap-12">
             <ModalitySection label={t("inputModality")} prefix="input" model={model} t={t} />
             <ModalitySection label={t("outputModality")} prefix="output" model={model} t={t} />
           </div>
-        </DetailSection>
+        </PageSection>
       )}
     </div>
   );
 }
 
 export const AADetail = createDetailView(
-  useSuspenseArtificialRankings,
+  () => ({ data: useSuspenseArtificialRankings() }),
   "aa",
   ModelDetailContent,
   (m) => m.name,

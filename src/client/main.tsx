@@ -34,7 +34,6 @@ function SearchResetOnNavigate(): null {
   const pathname = usePathname();
   const resetSearch = useSearchStore((s) => s.resetSearch);
 
-  // Pathname only: ?tab= switches (replaceState) must preserve the table filter.
   useEffect(() => {
     resetSearch();
   }, [pathname, resetSearch]);
@@ -51,7 +50,6 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Route table: a lazy view (or NotFound) per client-side path. */
 function Routes() {
   const pathname = usePathname();
   if (pathname === "/")
@@ -130,7 +128,6 @@ const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");
 createRoot(root).render(<App />);
 
-// Idle-time boot tasks formerly in ClientBoot: service worker + font preload.
 const boot = () => {
   registerServiceWorker();
   unregisterStaleServiceWorker();
@@ -140,8 +137,6 @@ const boot = () => {
     void document.fonts.load('400 1em "JetBrains Mono Variable"');
   }
 };
-// requestIdleCallback may fire after `load` has already fired (busy main
-// thread); gate on readyState so boot is never attached to a fired event.
 const bootWhenLoaded = () => {
   if (document.readyState === "complete") boot();
   else window.addEventListener("load", boot, { once: true });

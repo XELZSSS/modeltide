@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CacheService, resetModuleCachesForTests } from "@/server/infra/cache-service";
+import { resetModuleCachesForTests } from "@/server/infra/cache-service";
+import { testCtx } from "@/server/test-helpers";
 import { UpstreamError } from "@/server/infra/errors";
-import type { AppContext } from "@/server/context";
 import { getHomeDashboard } from "@/server/sources/home";
+import { hfModelsPayload, openRouterRankingsPayload, textToImagePayload } from "@/server/sources/test-fixtures";
 
 vi.mock("@/server/sources/openrouter", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/server/sources/openrouter")>();
@@ -23,67 +24,29 @@ import { getTextToImageLeaderboard } from "@/server/sources/aa/text-to-image";
 
 describe("getHomeDashboard", () => {
   beforeEach(() => resetModuleCachesForTests());
-  function homeCtx(): { ctx: AppContext; kvStore: Map<string, string> } {
-    const kvStore = new Map<string, string>();
-    const kv = {
-      get: async (key: string) => kvStore.get(key) ?? null,
-      put: async (key: string, value: string) => {
-        kvStore.set(key, value);
-      },
-    } as unknown as KVNamespace;
-    const ctx = {
-      cache: new CacheService(kv, "v1"),
-      http: {} as unknown as AppContext["http"],
-      kv,
-      log: () => {},
-    } as unknown as AppContext;
-    return { ctx, kvStore };
-  }
 
   function mockHealthyOthers() {
-    vi.mocked(getOpenRouterRankings).mockResolvedValue({
-      tokenUsageRankings: [{ rank: 1, id: "a/b", name: "B", creator: "A", category: "general" }],
-      fetchedAt: "2026-01-01T00:00:00.000Z",
-    });
-    vi.mocked(getModels).mockResolvedValue({
-      data: [
-        {
-          id: "a/b",
-          author: "a",
-          downloads: 1,
-          likes: 1,
-          license: null,
-          task: null,
-          createdAt: null,
-          lastModified: null,
-          tags: [],
-        },
-      ],
-      fetchedAt: "2026-01-01T00:00:00.000Z",
-    });
+    vi.mocked(getOpenRouterRankings).mockResolvedValue(openRouterRankingsPayload());
+    vi.mocked(getModels).mockResolvedValue(hfModelsPayload());
   }
 
   it("composes the inner sources and caches the outer snapshot", async () => {
     mockHealthyOthers();
-    vi.mocked(getTextToImageLeaderboard).mockResolvedValue({
-      models: [],
-      partial: true,
-      fetchedAt: "2026-01-01T00:00:00.000Z",
-    });
-    const { ctx, kvStore } = homeCtx();
+    vi.mocked(getTextToImageLeaderboard).mockResolvedValue(textToImagePayload());
+    const { ctx, kvStore } = testCtx();
     const data = await getHomeDashboard(ctx);
-    expect(data.textToImage?.models).toEqual([]);
+    expect(data.textToImage?.data).toEqual([]);
     expect(data.orRankings?.tokenUsageRankings).toHaveLength(1);
     expect(data.opensource?.data).toHaveLength(1);
-    expect(kvStore.size).toBe(1);
-    const second = await getHomeDashboard(ctx);
-    expect(second).toEqual(data);
+    // Outer assembly is memory-only (inner legs are KV-cached): zero KV writes.
+    expect(kvStore.size).toBe(0);
+    await expect(getHomeDashboard(ctx)).resolves.toEqual(data);
   });
 
   it("nulls the failed leg when an inner source rejects", async () => {
     mockHealthyOthers();
     vi.mocked(getTextToImageLeaderboard).mockRejectedValue(new Error("t2i down"));
-    const { ctx } = homeCtx();
+    const { ctx } = testCtx();
     const data = await getHomeDashboard(ctx);
     expect(data.textToImage).toBeNull();
     expect(data.orRankings).not.toBeNull();
@@ -93,7 +56,7 @@ describe("getHomeDashboard", () => {
     vi.mocked(getOpenRouterRankings).mockRejectedValue(new Error("or down"));
     vi.mocked(getModels).mockRejectedValue(new Error("hf down"));
     vi.mocked(getTextToImageLeaderboard).mockRejectedValue(new Error("t2i down"));
-    const { ctx } = homeCtx();
+    const { ctx } = testCtx();
     await expect(getHomeDashboard(ctx)).rejects.toBeInstanceOf(UpstreamError);
   });
 });

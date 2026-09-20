@@ -1,12 +1,13 @@
 "use client";
 import { SafeLink as Link, usePathname, useRouter, useSearchParams } from "@/client/router";
 import { ArrowLeft, TriangleAlert, type LucideIcon, Loader2 } from "lucide-react";
-import { Button } from "@/client/components/ui/button";
+import { Button, buttonVariants } from "@/client/components/ui/button";
 import { Card } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import { Component, Fragment, type ReactNode, type ErrorInfo, memo, Suspense } from "react";
 import { PageContainer } from "@/client/components/layout";
+import { cn } from "@/client/utils/cn";
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
 
 export function BackButton({ labelKey, to }: { labelKey: TranslationKey; to: string }) {
@@ -89,10 +90,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const retry = this.props.retryLabel ?? "Retry";
       const offline = typeof navigator !== "undefined" && navigator.onLine === false;
       return (
-        <Card className="flex flex-col items-center justify-center gap-3 min-h-[240px] p-8 text-center" role="alert">
-          <TriangleAlert size={28} className="text-destructive opacity-80" aria-hidden="true" />
-          <p className="ui-card-title text-destructive">{title}</p>
-          <p className="ui-caption max-w-md text-balance">{this.state.error?.message}</p>
+        <div className="flex flex-col items-center gap-3">
+          <EmptyState variant="error" icon={TriangleAlert} title={title} message={this.state.error?.message ?? retry} />
           {offline && (
             <p className="ui-caption" role="status">
               Offline — reconnect and reload to retry
@@ -101,7 +100,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <Button variant="outline" size="sm" onClick={this.handleRetry} disabled={offline}>
             {retry}
           </Button>
-        </Card>
+        </div>
       );
     }
     return <Fragment key={String(this.state.resetKey)}>{this.props.children}</Fragment>;
@@ -118,10 +117,7 @@ export function NotFound() {
         </div>
         <h1 className="ui-section-title">{t("notFoundTitle")}</h1>
         <p className="ui-body-secondary max-w-md text-balance">{t("notFound")}</p>
-        <Link
-          href="/"
-          className="mt-2 inline-flex items-center justify-center gap-1.5 h-9 px-4 text-sm font-medium rounded-none bg-accent text-accent-contrast hover:bg-accent/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <Link href="/" className={cn("mt-2", buttonVariants({ variant: "primary", size: "md" }))}>
           <ArrowLeft size={14} />
           {t("backToHome")}
         </Link>
@@ -145,7 +141,7 @@ export const Skeleton = memo(function Skeleton({ className, lines = 3 }: { class
     <div className={className} role="status" aria-live="polite" aria-label="loading">
       <div className="flex flex-col gap-3">
         {Array.from({ length: lines }).map((_, i) => (
-          <div key={i} className="ui-skeleton h-16 w-full border border-border" style={{ opacity: 1 - i * 0.15 }} />
+          <div key={i} className="ui-skeleton h-16 w-full" style={{ opacity: 1 - i * 0.15 }} />
         ))}
         <span className="sr-only">loading</span>
       </div>
@@ -162,6 +158,14 @@ export function PartialNotice({ message }: { message: string }) {
       <TriangleAlert size={14} className="shrink-0 text-warning" aria-hidden="true" />
       <span className="min-w-0">{message}</span>
     </div>
+  );
+}
+
+export function CenteredPageState({ children }: { children: ReactNode }) {
+  return (
+    <PageContainer>
+      <div className="flex flex-col gap-3 items-center py-16 text-center animate-fade-in">{children}</div>
+    </PageContainer>
   );
 }
 

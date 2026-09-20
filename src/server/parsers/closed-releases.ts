@@ -1,16 +1,11 @@
+import { isoDate, byDateDesc } from "@/server/parsers/primitives";
 import { SOURCE_LIMITS } from "@/shared/config";
 import { upstreamConfig } from "@/server/config";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
-import { isoDate } from "@/server/parsers/primitives";
-import { byDateDesc } from "@/server/parsers/shaping";
-import type { ChangelogModel } from "@/server/parsers/aa-changelog";
+
+import type { ChangelogModel } from "@/server/parsers/aa";
 import { dedupeBy } from "@/shared/utils";
 
-/**
- * The only closed-source signal: the open-weights flag from the intelligence
- * index. A release is closed unless it is explicitly flagged as open weights.
- * Unknown flags count as closed — unverified weights are not open weights.
- */
 export function isClosedChangelogRelease(e: ChangelogModel, weights: Map<string, boolean>): boolean {
   return (weights.get(e.slug) ?? weights.get(e.releaseSlug)) !== true;
 }
@@ -50,7 +45,5 @@ export function toClosedReleases(changelog: ChangelogModel[], weights: Map<strin
   const entries = dedupeBy(sorted, (e) => e.releaseSlug)
     .map(toClosedRelease)
     .filter((e): e is ClosedReleaseEntry => e !== null);
-  // releaseDate is a validated zero-padded ISO date, so the pre-dedupe
-  // Date.parse sort already is lexicographic order; no re-sort needed.
   return entries.slice(0, SOURCE_LIMITS.closedReleases);
 }

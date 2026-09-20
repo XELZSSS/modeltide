@@ -1,6 +1,7 @@
 "use client";
 import { Check, Plus } from "lucide-react";
 import { useTranslation } from "@/client/providers";
+import { cn } from "@/client/utils/cn";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelId } from "@/client/utils/model";
 import { RankingNameCell } from "@/client/components/data/columns";
@@ -27,7 +28,7 @@ function CompareButton({
         e.stopPropagation();
         onToggle(model);
       }}
-      className="shrink-0"
+      className={cn("shrink-0", isCompared ? "text-accent" : "text-text-secondary")}
     >
       {isCompared ? <Check className="size-4" /> : <Plus className="size-4" />}
     </Button>

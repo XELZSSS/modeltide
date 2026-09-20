@@ -5,11 +5,8 @@ node_modules/
 dist/
 coverage/
 
-# Generated cache version (npm run gen:cache-version)
-src/shared/config/cache-version.gen.ts
-
 # Cloudflare generated types (kept out; `npm run cf-typegen` regenerates)
-worker-configuration.d.ts
+cloudflare-env.d.ts
 
 # IDE
 .vscode/

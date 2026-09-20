@@ -6,7 +6,6 @@ export interface Env {
   CACHE?: KVNamespace;
   ASSETS?: Fetcher;
   HF_TOKEN?: string;
-  /** Dead-man's switch: pinged by the cron handler after a successful round (e.g. Healthchecks.io). */
   STATUS_PING_URL?: string;
 }
 

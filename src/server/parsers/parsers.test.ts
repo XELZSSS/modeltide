@@ -27,113 +27,96 @@ function readFeed(xml: string, url = "https://x.example/feed") {
   return res.data;
 }
 
+const rss = (items: string) =>
+  `<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>${items}</channel></rss>`;
+const rssItem = (inner: string) => `<item>${inner}</item>`;
+const atom = (entries: string) =>
+  `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>T</title>${entries}</feed>`;
+const atomEntry = (inner: string) => `<entry>${inner}</entry>`;
+/** Line just over MAX_RSC_LINE_CHARS (2MiB) to exercise the oversized fallback. */
+const oversizedLine = (inner: string) => `1:{"pad":"${"x".repeat(2 * 1024 * 1024 + 16)}",${inner}}\n`;
+
 describe("decodeEntities", () => {
-  it("decodes named entities", () => {
-    expect(decodeEntities("AT&amp;T")).toBe("AT&T");
-    expect(decodeEntities("&lt;tag&gt;")).toBe("<tag>");
+  it.each([
+    ["AT&amp;T", "AT&T"],
+    ["&lt;tag&gt;", "<tag>"],
+    ["&#65;", "A"],
+    ["&#x41;", "A"],
+    ["&bogus;", "&bogus;"],
+    ["&constructor;", "&constructor;"],
+    ["&toString;", "&toString;"],
+    ["&rarr;", "→"],
+    ["&check;", "✓"],
+  ])("decodeEntities(%s) -> %s", (input, expected) => {
+    expect(decodeEntities(input)).toBe(expected);
   });
-  it("decodes decimal and hex references", () => {
-    expect(decodeEntities("&#65;")).toBe("A");
-    expect(decodeEntities("&#x41;")).toBe("A");
-  });
-  it("leaves unknown entities untouched", () => {
-    expect(decodeEntities("&bogus;")).toBe("&bogus;");
-  });
-  it("passes prototype-named entities through untouched", () => {
-    expect(decodeEntities("&constructor;")).toBe("&constructor;");
-    expect(decodeEntities("&toString;")).toBe("&toString;");
-  });
-  it("rejects out-of-range code points", () => {
-    expect(decodeEntities("&#x110000;")).toBe("");
-  });
-  it("decodes new arrow/symbol entities and drops surrogates silently", () => {
-    expect(decodeEntities("&rarr;")).toBe("→");
-    expect(decodeEntities("&check;")).toBe("✓");
-    expect(decodeEntities("&#xD800;")).toBe("");
+
+  it.each([
+    ["&#x110000;", ""],
+    ["&#xD800;", ""],
+  ])("drops invalid code points: %s", (input, expected) => {
+    expect(decodeEntities(input)).toBe(expected);
   });
 });
 
 describe("stripHtml", () => {
-  it("removes tags and keeps text", () => {
-    expect(stripHtml("<p>Hello <b>world</b></p>")).toBe("Hello world");
-  });
-  it("ignores angle brackets inside quoted attributes", () => {
-    expect(stripHtml('<a title="a < b">x</a>')).toBe("x");
-  });
-  it("handles unterminated tags", () => {
-    expect(stripHtml("abc <div")).toBe("abc <div");
-  });
-  it("skips comments and keeps surrounding text separated by collapse", () => {
-    expect(stripHtml("Hello<!-- hidden -->World")).toBe("HelloWorld");
-    expect(stripHtml("<p>Hello</p><p>World</p>")).toBe("Hello World");
-  });
-  it("drops script content even when attributes contain >", () => {
-    expect(stripHtml('<script type="x" data-v="a>b">alert(1)</script>Hi')).toBe("Hi");
-    expect(stripHtml("<style>.a{color:red}</style>Hi")).toBe("Hi");
-  });
-  it("keeps CDATA inner text", () => {
-    expect(stripHtml("<title><![CDATA[A<B]]></title>")).toBe("A<B");
+  it.each([
+    ["<p>Hello <b>world</b></p>", "Hello world"],
+    ['<a title="a < b">x</a>', "x"],
+    ["abc <div", "abc <div"],
+    ["Hello<!-- hidden -->World", "HelloWorld"],
+    ["<p>Hello</p><p>World</p>", "Hello World"],
+    ['<script type="x" data-v="a>b">alert(1)</script>Hi', "Hi"],
+    ["<style>.a{color:red}</style>Hi", "Hi"],
+    ["<title><![CDATA[A<B]]></title>", "A<B"],
+  ])("stripHtml(%s) -> %s", (input, expected) => {
+    expect(stripHtml(input)).toBe(expected);
   });
 });
 
-describe("findNextData", () => {
+describe("findNextData / findLongestData", () => {
   it("finds the first array under a key in a nested tree", () => {
-    const tree = { leaderboard: { entries: [{ rank: 1 }] } };
-    expect(findNextData(tree, "entries")).toEqual([{ rank: 1 }]);
+    expect(findNextData({ leaderboard: { entries: [{ rank: 1 }] } }, "entries")).toEqual([{ rank: 1 }]);
   });
 
   it("returns null when the key is absent", () => {
     expect(findNextData({ other: [1] }, "entries")).toBeNull();
+    expect(findLongestData({}, "initialModels")).toBeNull();
   });
 
   it("prefers the shallowest match (BFS)", () => {
     const tree = { models: [{ slug: "shallow" }], nested: { models: [{ slug: "deep" }] } };
     expect(findNextData<{ slug: string }>(tree, "models")).toEqual([{ slug: "shallow" }]);
   });
+
+  it("returns the longest array found under the key", () => {
+    const tree = { a: { initialModels: [1] }, b: { initialModels: [1, 2, 3] } };
+    expect(findLongestData(tree, "initialModels")).toEqual([1, 2, 3]);
+  });
 });
 
 describe("parseRscPayload", () => {
-  it("parses streamed RSC lines and applies the extractor", () => {
-    const body = '0:{"$a":1}\n1:{"tree":{"initialModels":[{"id":"x"}]}}\n';
-    const out = parseRscPayload<{ id: string }>(
-      body,
-      "initialModels",
-      (tree) => (tree as { tree?: { initialModels?: { id: string }[] } })?.tree?.initialModels ?? null,
-    );
-    expect(out).toEqual([{ id: "x" }]);
+  const byInitialModels = (tree: unknown) =>
+    (tree as { tree?: { initialModels?: { id: string }[] } })?.tree?.initialModels ?? null;
+
+  it.each([
+    ['0:{"$a":1}\n1:{"tree":{"initialModels":[{"id":"x"}]}}\n', [{ id: "x" }]],
+    ['0:{"$a":1}\n2E:{"tree":{"initialModels":[{"id":"u"}]}}\n', [{ id: "u" }]],
+    ['0:{"note":"initialModels are great"}\n1:{"tree":{"initialModels":[{"id":"y"}]}}\n', [{ id: "y" }]],
+  ])("parses streamed lines, hex ids, and prose mentions", (body, expected) => {
+    expect(parseRscPayload<{ id: string }>(body, "initialModels", byInitialModels)).toEqual(expected);
   });
 
   it('parses hex-prefixed chunk lines (Next.js flight ids are hex, e.g. "c:")', () => {
     const body =
       '0:{"$a":1}\nc:["$","$L5",null,{"models":[{"slug":"claude-opus-5"},{"slug":"gpt-5"}]}]\n1:{"ignore":true}\n';
-    const out = parseRscPayload<{ slug: string }>(body, "models", (tree) =>
-      findNextData<{ slug: string }>(tree, "models"),
-    );
-    expect(out).toEqual([{ slug: "claude-opus-5" }, { slug: "gpt-5" }]);
+    expect(
+      parseRscPayload<{ slug: string }>(body, "models", (tree) => findNextData<{ slug: string }>(tree, "models")),
+    ).toEqual([{ slug: "claude-opus-5" }, { slug: "gpt-5" }]);
   });
 
   it("throws when the marker is absent", () => {
     expect(() => parseRscPayload('1:{"a":1}', "missing", () => null)).toThrow(/not found/);
-  });
-
-  it("parses uppercase hex chunk ids", () => {
-    const body = '0:{"$a":1}\n2E:{"tree":{"initialModels":[{"id":"u"}]}}\n';
-    const out = parseRscPayload<{ id: string }>(
-      body,
-      "initialModels",
-      (tree) => (tree as { tree?: { initialModels?: { id: string }[] } })?.tree?.initialModels ?? null,
-    );
-    expect(out).toEqual([{ id: "u" }]);
-  });
-
-  it("ignores prose lines that merely mention the marker", () => {
-    const body = '0:{"note":"initialModels are great"}\n1:{"tree":{"initialModels":[{"id":"y"}]}}\n';
-    const out = parseRscPayload<{ id: string }>(
-      body,
-      "initialModels",
-      (tree) => (tree as { tree?: { initialModels?: { id: string }[] } })?.tree?.initialModels ?? null,
-    );
-    expect(out).toEqual([{ id: "y" }]);
   });
 });
 
@@ -145,9 +128,7 @@ describe("parseRscPayloads", () => {
 
   it("resolves each marker against its own line", () => {
     const body = '1:{"alpha":[{"v":1}]}\n2:{"beta":[{"v":2}]}\n';
-    const [a, b] = parseRscPayloads<{ v: number }>(body, ["alpha", "beta"], pick);
-    expect(a).toEqual([{ v: 1 }]);
-    expect(b).toEqual([{ v: 2 }]);
+    expect(parseRscPayloads<{ v: number }>(body, ["alpha", "beta"], pick)).toEqual([[{ v: 1 }], [{ v: 2 }]]);
   });
 
   it("resolves two markers riding the same line (shared parse)", () => {
@@ -159,14 +140,14 @@ describe("parseRscPayloads", () => {
   });
 
   it("throws naming the marker that cannot resolve", () => {
-    const body = '1:{"alpha":[{"v":1}]}\n';
-    expect(() => parseRscPayloads(body, ["alpha", "missing"], pick)).toThrow(/"missing" not found/);
+    expect(() => parseRscPayloads('1:{"alpha":[{"v":1}]}\n', ["alpha", "missing"], pick)).toThrow(
+      /"missing" not found/,
+    );
   });
 
   it("resolves a marker behind a multi-MB sibling string via the balanced fallback", () => {
-    const body = `1:{"pad":"${"x".repeat(2 * 1024 * 1024 + 16)}","alpha":[{"v":1}]}\n`;
     const out = parseRscPayload<{ v: number }>(
-      body,
+      oversizedLine('"alpha":[{"v":1}]'),
       "alpha",
       (tree) => (tree as { alpha?: { v: number }[] }).alpha ?? null,
     );
@@ -174,7 +155,7 @@ describe("parseRscPayloads", () => {
   });
 
   it("gives up bounded when the oversized marker value is truncated mid-value", () => {
-    const body = `1:{"pad":"${"x".repeat(2 * 1024 * 1024 + 16)}","alpha":[{"v":1}`;
+    const body = oversizedLine('"alpha":[{"v":1}').slice(0, -2);
     expect(() =>
       parseRscPayload<{ v: number }>(body, "alpha", (tree) => (tree as { alpha?: { v: number }[] }).alpha ?? null),
     ).toThrow(/not found/);
@@ -183,94 +164,68 @@ describe("parseRscPayloads", () => {
 
 describe("parseFeed", () => {
   it("extracts the alternate link when an Atom entry has multiple links", () => {
-    const xml = `<?xml version="1.0"?>
-      <feed xmlns="http://www.w3.org/2005/Atom">
-        <title>T</title>
-        <entry>
-          <title>E1</title>
-          <link rel="self" href="https://x.example/self"/>
-          <link rel="alternate" type="text/html" href="https://x.example/post-1"/>
-          <id>e1</id>
-          <updated>2026-08-01T00:00:00Z</updated>
-        </entry>
-      </feed>`;
-    const items = readFeed(xml, "https://x.example/feed");
+    const items = readFeed(
+      atom(
+        atomEntry(
+          `<title>E1</title><link rel="self" href="https://x.example/self"/><link rel="alternate" type="text/html" href="https://x.example/post-1"/><id>e1</id><updated>2026-08-01T00:00:00Z</updated>`,
+        ),
+      ),
+    );
     expect(items).toHaveLength(1);
     expect(items[0]?.link).toBe("https://x.example/post-1");
   });
 
   it("falls back to the first link with an href when no alternate exists", () => {
-    const xml = `<?xml version="1.0"?>
-      <feed xmlns="http://www.w3.org/2005/Atom">
-        <title>T</title>
-        <entry>
-          <title>E1</title>
-          <link rel="self" href="https://x.example/self"/>
-          <link rel="enclosure" href="https://x.example/file.mp3"/>
-          <id>e1</id>
-        </entry>
-      </feed>`;
-    const items = readFeed(xml, "https://x.example/feed");
+    const items = readFeed(
+      atom(
+        atomEntry(
+          `<title>E1</title><link rel="self" href="https://x.example/self"/><link rel="enclosure" href="https://x.example/file.mp3"/><id>e1</id>`,
+        ),
+      ),
+    );
     expect(items[0]?.link).toBe("https://x.example/self");
   });
 
-  it("stringifies guid objects via their text node instead of [object Object]", () => {
-    const xml = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item>
-          <title>I1</title>
-          <link>https://y.example/a</link>
-          <guid isPermaLink="false">guid-123</guid>
-        </item>
-      </channel></rss>`;
-    const items = readFeed(xml, "https://y.example/feed");
-    expect(items[0]?.id).toBe("guid-123");
-  });
-
-  it("reads attributed titles via their text node instead of [object Object]", () => {
-    const xml = `<?xml version="1.0"?>
-      <feed xmlns="http://www.w3.org/2005/Atom">
-        <title>T</title>
-        <entry>
-          <title type="text">Real Title</title>
-          <link rel="alternate" href="https://x.example/p1"/>
-          <id>e1</id>
-        </entry>
-      </feed>`;
-    const items = readFeed(xml, "https://x.example/feed");
-    expect(items[0]?.title).toBe("Real Title");
+  it.each([
+    [
+      rss(rssItem(`<title>I1</title><link>https://y.example/a</link><guid isPermaLink="false">guid-123</guid>`)),
+      "guid-123",
+      undefined,
+    ],
+    [
+      atom(
+        atomEntry(
+          `<title type="text">Real Title</title><link rel="alternate" href="https://x.example/p1"/><id>e1</id>`,
+        ),
+      ),
+      "e1",
+      "Real Title",
+    ],
+  ])("stringifies attributed nodes via their text node", (xml, expectedId, expectedTitle) => {
+    const item = readFeed(xml, "https://y.example/feed")[0];
+    expect(item?.id).toBe(expectedId);
+    if (expectedTitle !== undefined) expect(item?.title).toBe(expectedTitle);
   });
 
   it("falls back to the link for ids when guid is absent", () => {
-    const withLink = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item><title>A</title><link>https://y.example/a</link></item>
-      </channel></rss>`;
-    expect(readFeed(withLink, "https://y.example/feed")[0]?.id).toBe("https://y.example/a");
+    expect(readFeed(rss(rssItem(`<title>A</title><link>https://y.example/a</link>`)))[0]?.id).toBe(
+      "https://y.example/a",
+    );
   });
 
   it("drops entries that expose no usable link", () => {
-    const withoutLink = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item><title>Only Title</title></item>
-        <item><title>Keep</title><link>https://y.example/keep</link></item>
-      </channel></rss>`;
-    const items = readFeed(withoutLink, "https://y.example/feed");
+    const items = readFeed(
+      rss(rssItem(`<title>Only Title</title>`) + rssItem(`<title>Keep</title><link>https://y.example/keep</link>`)),
+    );
     expect(items).toHaveLength(1);
     expect(items[0]?.title).toBe("Keep");
   });
 
   it("keeps valid items sitting beyond the first 50 raw entries", () => {
     const junk = Array.from({ length: 55 }, (_, i) => `<item><title>J${i}</title></item>`).join("");
-    const xml = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        ${junk}<item><title>Real</title><link>https://y.example/real</link></item>
-      </channel></rss>`;
-    const items = readFeed(xml, "https://y.example/feed");
+    const items = readFeed(
+      `<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>${junk}<item><title>Real</title><link>https://y.example/real</link></item></channel></rss>`,
+    );
     expect(items).toHaveLength(1);
     expect(items[0]?.title).toBe("Real");
   });
@@ -282,70 +237,40 @@ describe("parseFeed", () => {
   });
 
   it("trims whitespace links and supports numeric guid", () => {
-    const xml = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item><title>N</title><link>  https://y.example/spaced  </link><guid>12345</guid></item>
-      </channel></rss>`;
-    const items = readFeed(xml, "https://y.example/feed");
+    const items = readFeed(rss(rssItem(`<title>N</title><link>  https://y.example/spaced  </link><guid>12345</guid>`)));
     expect(items[0]?.link).toBe("https://y.example/spaced");
     expect(items[0]?.id).toBe("12345");
   });
 
   it("decodes XML entities in links once (processEntities is off)", () => {
-    const xml = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item><title>A</title><link>https://y.example/a?b=1&amp;c=2&amp;amp;d=3</link></item>
-      </channel></rss>`;
-    const items = readFeed(xml, "https://y.example/feed");
+    const items = readFeed(rss(rssItem(`<title>A</title><link>https://y.example/a?b=1&amp;c=2&amp;amp;d=3</link>`)));
     // &amp; → & ; &amp;amp; → literal &amp; (single XML decode pass)
     expect(items[0]?.link).toBe("https://y.example/a?b=1&c=2&amp;d=3");
   });
 
   it("decodes entities in Atom link href attributes", () => {
-    const xml = `<?xml version="1.0"?>
-      <feed xmlns="http://www.w3.org/2005/Atom">
-        <title>T</title>
-        <entry><title>A</title><link rel="alternate" href="https://x.example/p?ref=rss&amp;utm=x"/></entry>
-      </feed>`;
-    const items = readFeed(xml, "https://x.example/feed");
+    const items = readFeed(
+      atom(atomEntry(`<title>A</title><link rel="alternate" href="https://x.example/p?ref=rss&amp;utm=x"/>`)),
+    );
     expect(items[0]?.link).toBe("https://x.example/p?ref=rss&utm=x");
   });
 
   it("takes the first value when a title element is repeated", () => {
-    const xml = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item><title>First</title><title>Second</title><link>https://y.example/dup</link></item>
-      </channel></rss>`;
-    const items = readFeed(xml, "https://y.example/feed");
+    const items = readFeed(rss(rssItem(`<title>First</title><title>Second</title><link>https://y.example/dup</link>`)));
     expect(items[0]?.title).toBe("First");
   });
 
   it("falls back to a later link when the alternate link has no href", () => {
-    const xml = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item>
-          <title>A</title>
-          <link rel="alternate"/>
-          <link>https://y.example/fallback</link>
-        </item>
-      </channel></rss>`;
-    const items = readFeed(xml, "https://y.example/feed");
+    const items = readFeed(
+      rss(rssItem(`<title>A</title><link rel="alternate"/><link>https://y.example/fallback</link>`)),
+    );
     expect(items[0]?.link).toBe("https://y.example/fallback");
   });
 
   it("does not split surrogate pairs when truncating long titles", () => {
     const longTitle = `A${"😀".repeat(200)}`; // 401 UTF-16 units
-    const xml = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item><title>${longTitle}</title><link>https://y.example/surrogate</link></item>
-      </channel></rss>`;
-    const items = readFeed(xml, "https://y.example/feed");
-    const t = items[0]?.title ?? "";
+    const t =
+      readFeed(rss(rssItem(`<title>${longTitle}</title><link>https://y.example/surrogate</link>`)))[0]?.title ?? "";
     expect(t.length).toBeLessThanOrEqual(300);
     // 'A' + 149 complete emoji = 150 code points; the dangling high surrogate
     // at the old cut point is dropped instead of left invalid.
@@ -357,37 +282,54 @@ describe("parseFeed", () => {
 
   it("strips HTML and truncates abusive titles", () => {
     const longTitle = `A${"x".repeat(500)}`;
-    const xml = `<?xml version="1.0"?>
-      <rss version="2.0"><channel>
-        <title>T</title>
-        <item><title><![CDATA[<p>${longTitle}</p>]]></title><link>https://y.example/a</link></item>
-      </channel></rss>`;
-    const items = readFeed(xml, "https://y.example/feed");
+    const items = readFeed(
+      rss(rssItem(`<title><![CDATA[<p>${longTitle}</p>]]></title><link>https://y.example/a</link>`)),
+    );
     expect(items[0]?.title.length).toBeLessThanOrEqual(300);
+  });
+
+  it("strips tags decoded from entities instead of rendering them", () => {
+    const xml = rss(
+      rssItem(`<title>&lt;script&gt;alert(1)&lt;/script&gt;Real News</title><link>https://y.example/a</link>`),
+    );
+    expect(readFeed(xml)[0]?.title).toBe("Real News");
   });
 });
 
 describe("primitives", () => {
-  it("numOr never throws and treats empty string as fallback", () => {
-    expect(numOr("", 7)).toBe(7);
-    expect(numOr("   ", 7)).toBe(7);
-    expect(numOr("12.5", 0)).toBe(12.5);
+  it.each([
+    ["", 7, 7],
+    ["   ", 7, 7],
+    ["12.5", 0, 12.5],
+  ])("numOr(%s) coerces or falls back", (input, fallback, expected) => {
+    expect(numOr(input, fallback)).toBe(expected);
+  });
+
+  it("numOr never throws on non-string input", () => {
     expect(numOr(Symbol("x") as unknown as string, 3)).toBe(3);
     expect(numOr(NaN, 3)).toBe(3);
     expect(numOr(Infinity, 3)).toBe(3);
   });
+
   it("num stays strict while numCoerce accepts numeric strings", () => {
     expect(num("85.5")).toBeNull();
     expect(numCoerce("85.5")).toBe(85.5);
     expect(numCoerce("")).toBeNull();
     expect(numCoerce(true)).toBeNull();
   });
-  it("isoDate accepts ISO, trims, and rejects loose formats", () => {
-    expect(isoDate("2026-08-01")).toBe("2026-08-01");
-    expect(isoDate("  2026-08-01T00:00:00Z  ")).toBe("2026-08-01T00:00:00Z");
-    expect(isoDate("Jan 1 2020")).toBeNull();
-    expect(isoDate("2020/01/01")).toBeNull();
+
+  it.each([
+    ["2026-08-01", "2026-08-01"],
+    ["  2026-08-01T00:00:00Z  ", "2026-08-01T00:00:00Z"],
+    ["2026-01-02T03:04:05Z", "2026-01-02T03:04:05Z"],
+  ])("isoDate(%s) accepts ISO", (input, expected) => {
+    expect(isoDate(input)).toBe(expected);
   });
+
+  it.each([["Jan 1 2020"], ["2020/01/01"], ["2026-02-30"]])("isoDate(%s) rejects loose/impossible dates", (input) => {
+    expect(isoDate(input)).toBeNull();
+  });
+
   it("numPositive/numNonNegative/numIntNonNegative behave", () => {
     expect(numPositive(0)).toBeNull();
     expect(numNonNegative(0)).toBe(0);
@@ -397,69 +339,47 @@ describe("primitives", () => {
 });
 
 describe("getOpenLicense", () => {
-  it("matches exact and versioned prefixes", () => {
-    expect(getOpenLicense(["license:mit"])).toBe("mit");
-    expect(getOpenLicense(["license:llama4"])).toBe("llama4");
-    expect(getOpenLicense(["license:qwen2.5"])).toBe("qwen2.5");
+  it.each([
+    [["license:mit"], "mit"],
+    [["license:llama4"], "llama4"],
+    [["license:qwen2.5"], "qwen2.5"],
+    [["license:cc-by-nc-4.0"], "cc-by-nc-4.0"],
+    [["license:apache_2.0"], "apache-2.0"],
+    [["license:mistral"], "mistral"],
+    [["license:other", "license:phi-2"], "phi-2"],
+    [["LICENSE:MIT"], "mit"],
+  ])("getOpenLicense(%j) -> %s", (tags, expected) => {
+    expect(getOpenLicense(tags)).toBe(expected);
   });
-  it("excludes NoDerivatives even though cc prefix would match", () => {
-    expect(getOpenLicense(["license:cc-by-nd-4.0"])).toBeNull();
-    expect(getOpenLicense(["license:cc-by-nc-nd-4.0"])).toBeNull();
-    expect(getOpenLicense(["license:cc-by-nc-4.0"])).toBe("cc-by-nc-4.0");
-  });
-  it("normalizes underscores and skips non-license tags", () => {
-    expect(getOpenLicense(["license:apache_2.0"])).toBe("apache-2.0");
-    expect(getOpenLicense(["other", "license:other"])).toBeNull();
-  });
-  it("resolves new families and first-wins dual licenses", () => {
-    expect(getOpenLicense(["license:mistral"])).toBe("mistral");
-    expect(getOpenLicense(["license:other", "license:phi-2"])).toBe("phi-2");
-  });
-  it("rejects lookalike prefixes, case variants pass, empty tags fail", () => {
-    expect(getOpenLicense(["license:mitre"])).toBeNull();
-    expect(getOpenLicense(["LICENSE:MIT"])).toBe("mit");
-    expect(getOpenLicense([])).toBeNull();
+
+  it.each([
+    [["license:cc-by-nd-4.0"]],
+    [["license:cc-by-nc-nd-4.0"]],
+    [["license:mitre"]],
+    [["other", "license:other"]],
+    [[]],
+  ])("getOpenLicense(%j) rejects ND/lookalikes/non-licenses", (tags) => {
+    expect(getOpenLicense(tags)).toBeNull();
   });
 });
 
 describe("balancedJsonEnd", () => {
-  it("finds the matching close for nested arrays and objects", () => {
-    expect(balancedJsonEnd('[{"a":[1,2]}]', 0, 100)).toBe(13);
-    expect(balancedJsonEnd('{"a":1} tail', 0, 100)).toBe(7);
+  it.each([
+    ['[{"a":[1,2]}]', 0, 100, 13],
+    ['{"a":1} tail', 0, 100, 7],
+    ['{"a":"]"}', 0, 100, 9],
+    ['{"a":"\\""}', 0, 100, 10],
+  ])("finds the matching close (%s)", (text, openIdx, budget, expected) => {
+    expect(balancedJsonEnd(text, openIdx, budget)).toBe(expected);
   });
-  it("ignores brackets inside strings and escape sequences", () => {
-    expect(balancedJsonEnd('{"a":"]"}', 0, 100)).toBe(9);
-    expect(balancedJsonEnd('{"a":"\\""}', 0, 100)).toBe(10);
-  });
-  it("fails closed on truncation, budget exhaustion, or non-bracket starts", () => {
-    expect(balancedJsonEnd("[1,2", 0, 100)).toBe(-1);
-    expect(balancedJsonEnd("[1,2,3]", 0, 4)).toBe(-1);
-    expect(balancedJsonEnd("abc", 1, 100)).toBe(-1);
-    expect(balancedJsonEnd("[1]", 0, 0)).toBe(-1);
-  });
-});
 
-describe("findLongestData", () => {
-  it("returns the longest array found under the key", () => {
-    const tree = { a: { initialModels: [1] }, b: { initialModels: [1, 2, 3] } };
-    expect(findLongestData(tree, "initialModels")).toEqual([1, 2, 3]);
-  });
-  it("returns null when the key is absent", () => {
-    expect(findLongestData({}, "initialModels")).toBeNull();
-  });
-});
-
-describe("parseFeed title hardening", () => {
-  it("strips tags decoded from entities instead of rendering them", () => {
-    const xml = `<rss version="2.0"><channel><title>T</title><item><title>&lt;script&gt;alert(1)&lt;/script&gt;Real News</title><link>https://y.example/a</link></item></channel></rss>`;
-    expect(readFeed(xml, "https://y.example/feed")[0]?.title).toBe("Real News");
-  });
-});
-
-describe("isoDate edges", () => {
-  it("rejects impossible calendar dates but keeps datetimes intact", () => {
-    expect(isoDate("2026-02-30")).toBeNull();
-    expect(isoDate("2026-01-02T03:04:05Z")).toBe("2026-01-02T03:04:05Z");
+  it.each([
+    ["[1,2", 0, 100],
+    ["[1,2,3]", 0, 4],
+    ["abc", 1, 100],
+    ["[1]", 0, 0],
+  ])("fails closed on truncation/budget/non-bracket starts", (text, openIdx, budget) => {
+    expect(balancedJsonEnd(text, openIdx, budget)).toBe(-1);
   });
 });
 
@@ -469,9 +389,10 @@ describe("feed guard", () => {
   });
 
   it("accepts a plain entity-free DOCTYPE (legacy WordPress-style feeds)", () => {
-    const xml =
-      '<?xml version="1.0"?><!DOCTYPE rss><rss><channel><title>T</title><item><title>A</title><link>https://x.example/a</link></item></channel></rss>';
-    const items = readFeed(xml, "https://x");
+    const items = readFeed(
+      '<?xml version="1.0"?><!DOCTYPE rss><rss><channel><title>T</title><item><title>A</title><link>https://x.example/a</link></item></channel></rss>',
+      "https://x",
+    );
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ title: "A", link: "https://x.example/a" });
   });

@@ -3,7 +3,7 @@ import { memo, useMemo } from "react";
 import { type ChartOptions } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
-import { Card, CardContent } from "@/client/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { shortModelId } from "@/client/utils/model";
 import { registerLine } from "@/client/utils/charts-register";
 
@@ -106,8 +106,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
   return (
     <Card>
       <CardContent>
-        <p className="ui-card-title mb-1">{t("intelligenceIndex")}</p>
-        <p className="ui-caption mb-4">{t("artificialSource")}</p>
+        <CardHeader title={t("intelligenceIndex")} subtitle={t("artificialSource")} />
         {top10.length === 0 ? (
           <div
             className="flex h-[200px] sm:h-[240px] items-center justify-center text-center ui-body-secondary"
@@ -116,8 +115,8 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
             {t("noRankingsData")}
           </div>
         ) : (
-          <div className="w-full h-[200px] sm:h-[240px]">
-            <figure className="h-full">
+          <div className="w-full h-[200px] sm:h-[240px] min-w-0 overflow-hidden">
+            <figure className="h-full [&_canvas]:block">
               <Line data={data} options={options} aria-label={t("intelligenceIndex")} role="img" />
               <figcaption className="sr-only">
                 {top10.map((m) => `${m.short_name || m.name}: ${Math.round(m.intelligence_index ?? 0)}`).join(", ")}

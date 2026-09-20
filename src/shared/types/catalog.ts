@@ -65,9 +65,3 @@ export interface TextToImageModel {
   pricePer1kImages: number | null;
   creatorName: string | null;
 }
-
-export interface TextToImagePayload {
-  models: TextToImageModel[];
-  partial?: boolean;
-  fetchedAt?: string;
-}

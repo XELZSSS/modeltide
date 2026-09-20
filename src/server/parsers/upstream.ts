@@ -1,11 +1,3 @@
-// Raw upstream DTOs: the shapes exactly as external APIs return them, before
-// any normalization. Domain parsers consume these and emit normalized types;
-// nothing in this module carries validation or error policy.
-//
-// Low-level scanning utilities (rsc.ts / rsc-scan.ts) throw by design because
-// they decode hostile transport payloads; domain parsers that call them must
-// catch and translate to a ParseResult (see result.ts).
-
 /** Hugging Face `/api/models` row. */
 export interface HFModel {
   id?: string;

@@ -1,6 +1,6 @@
 import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
-import { UpstreamError } from "@/server/infra/errors";
+import { ClientAbortError, UpstreamError } from "@/server/infra/errors";
 
 interface FetchOptions extends Omit<RequestInit, "headers"> {
   timeoutMs?: number;
@@ -18,10 +18,11 @@ export interface ProbeResult {
 function parseRetryAfterMs(res: Response): number | null {
   const raw = res.headers.get("retry-after");
   if (!raw) return null;
+  const CAP_MS = 2_000;
   const secs = Number(raw.trim());
-  if (Number.isFinite(secs) && secs >= 0) return Math.min(secs, 30) * 1000;
+  if (Number.isFinite(secs) && secs >= 0) return Math.min(secs, CAP_MS / 1000) * 1000;
   const date = Date.parse(raw);
-  if (Number.isFinite(date)) return Math.min(Math.max(date - Date.now(), 0), 30_000);
+  if (Number.isFinite(date)) return Math.min(Math.max(date - Date.now(), 0), CAP_MS);
   return null;
 }
 
@@ -137,7 +138,7 @@ export class HttpClient {
       try {
         res = await fetch(url, { headers, signal, ...rest });
       } catch (e) {
-        if (initSignal?.aborted) throw new UpstreamError(`Upstream request aborted for ${url}`);
+        if (initSignal?.aborted) throw new ClientAbortError(`Client aborted request for ${url}`);
         timedOut = isTimeoutError(e);
         failMsg = timedOut ? `Upstream timeout for ${url}` : `Upstream network error for ${url}`;
       }
@@ -145,7 +146,7 @@ export class HttpClient {
       if (res) {
         if (res.ok) return res;
         void res.body?.cancel()?.catch(() => {});
-        if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+        if (res.status >= 400 && res.status < 500 && res.status !== 429 && res.status !== 408) {
           throw new UpstreamError(`HTTP ${res.status} for ${url}`, { status: res.status });
         }
         retryAfter = res.status === 429 ? parseRetryAfterMs(res) : null;
@@ -157,7 +158,7 @@ export class HttpClient {
         throw new UpstreamError(failMsg!, timedOut ? { timeout: true } : { status: failStatus ?? undefined });
       const delay = retryAfter ?? computeBackoff(attempt);
       await sleepAbortable(delay, initSignal);
-      if (initSignal?.aborted) throw new UpstreamError(`Upstream request aborted for ${url}`);
+      if (initSignal?.aborted) throw new ClientAbortError(`Client aborted request for ${url}`);
     }
     throw new UpstreamError(`HTTP failed for ${url}`);
   }
@@ -197,6 +198,7 @@ export class HttpClient {
       return { ok: res.ok, status: res.status, latencyMs, error: res.ok ? null : `HTTP ${res.status}` };
     } catch (e) {
       const latencyMs = Date.now() - started;
+      if (this.defaultSignal?.aborted) return { ok: false, status: null, latencyMs, error: "aborted" };
       const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
       return { ok: false, status: null, latencyMs, error: timedOut ? "timeout" : "network error" };
     }

@@ -4,10 +4,8 @@ const path = require("path");
 
 function loadDict(file) {
   const src = fs.readFileSync(path.resolve(file), "utf8");
-  // Support 2-space indent and keys with word chars, hyphens or dots
   const keys = [...src.matchAll(/^\s{2}([\w.-]+):/gm)].map((m) => m[1]);
   const placeholders = new Map();
-  // Capture both double-quoted and single-quoted string values
   const entryRE = /^\s{2}([\w.-]+):\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/gm;
   for (const m of src.matchAll(entryRE)) {
     const key = m[1];

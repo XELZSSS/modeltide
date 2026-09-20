@@ -6,13 +6,11 @@ import { parseRscPayload } from "@/server/parsers/rsc";
 const DEFAULT_RSC_HEADERS = { RSC: "1", "Next-Router-State-Tree": "%5B%5D" } as const;
 
 export interface RscFetchOptions {
-  /** Replaces the default RSC header set entirely when provided. */
   headers?: Record<string, string>;
   maxBytes?: number;
   retries?: number;
 }
 
-/** Fetch a Next.js RSC (flight) payload from `base + path` with standard RSC headers. */
 export async function fetchRscText(
   ctx: AppContext,
   base: string,
@@ -26,8 +24,6 @@ export async function fetchRscText(
       retries: opts.retries ?? UPSTREAM_FETCH_OPTS.retries,
       timeoutMs: UPSTREAM_FETCH_OPTS.timeoutMs,
     },
-    // Flight payloads are ~0.5-1.8MB and growing; default to the JSON ceiling
-    // so callers that omit maxBytes don't inherit a smaller feed ceiling.
     opts.maxBytes ?? MAX_JSON_BYTES,
   );
 }
@@ -40,7 +36,6 @@ export interface RscArrayOptions<T> extends RscFetchOptions {
   logPrefix?: string;
 }
 
-/** Lenient: fetch a flight payload and extract a marker array, degrading to [] with a warning. */
 export async function fetchRscArrayLenient<T>(
   ctx: AppContext,
   base: string,

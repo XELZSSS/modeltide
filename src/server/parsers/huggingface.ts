@@ -1,21 +1,63 @@
-import type { NewsItem } from "@/shared/types";
+import {
+  isRecord,
+  isoDate,
+  numIntNonNegative,
+  str,
+  strOrNull,
+  isSuitableNewsItem,
+  isValidRowId,
+} from "@/server/parsers/primitives";
+import type { NewsItem, OpenSourceModelEntry } from "@/shared/types";
 import { SOURCE_LIMITS } from "@/shared/config";
-import { zeroUpstreamMessage } from "@/server/infra/errors";
-import { isRecord, str } from "@/server/parsers/primitives";
-import { isSuitableNewsItem } from "@/server/parsers/data-filter";
 import { upstreamConfig } from "@/server/config";
-import type { DailyPaperEntry } from "@/server/parsers/upstream";
+import { zeroUpstreamMessage } from "@/server/infra/errors";
+import { getOpenLicense } from "@/server/parsers/licenses";
+import type { DailyPaperEntry, HFModel } from "@/server/parsers/upstream";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
 
-export type { DailyPaperEntry } from "@/server/parsers/upstream";
+export function resolveAuthor(m: HFModel, id: string): string | null {
+  return strOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
+}
+
+export function findUnknownLicenseTags(items: HFModel[], cap = 5): string[] {
+  const unknown = new Set<string>();
+  for (const m of items) {
+    if (!Array.isArray(m.tags)) continue;
+    for (const t of m.tags) {
+      if (typeof t !== "string" || !t.toLowerCase().startsWith("license:")) continue;
+      if (getOpenLicense([t]) == null) unknown.add(t);
+      if (unknown.size >= cap) break;
+    }
+    if (unknown.size >= cap) break;
+  }
+  return [...unknown];
+}
+
+export function mapModel(m: HFModel): OpenSourceModelEntry | null {
+  if (!isValidRowId(m.id)) return null;
+  const id = (m.id as string).trim();
+  const downloads = numIntNonNegative(m.downloads) ?? 0;
+  const likes = numIntNonNegative(m.likes) ?? 0;
+  const tags = Array.isArray(m.tags) ? m.tags.filter((t): t is string => typeof t === "string") : [];
+  const license = getOpenLicense(tags);
+  return {
+    id,
+    author: resolveAuthor(m, id),
+    downloads,
+    likes,
+    license,
+    task: strOrNull(m.pipeline_tag),
+    createdAt: isoDate(m.createdAt),
+    lastModified: isoDate(m.lastModified),
+    tags,
+  };
+}
 
 function toNewsItem(entry: DailyPaperEntry): NewsItem | null {
   const paper = isRecord(entry.paper) ? entry.paper : undefined;
   const id = str(paper?.id).trim();
   const title = str(paper?.title).replace(/\s+/g, " ").trim();
   const publishedAt = str(paper?.publishedAt);
-  // No sentinel fallback: an undated paper would sink to the bottom of the
-  // date-sorted research feed and render as a bogus ancient date in the UI.
   if (!id || !title || !Number.isFinite(Date.parse(publishedAt))) return null;
   const link = `${upstreamConfig.huggingfaceSite}/papers/${encodeURIComponent(id)}`;
   if (!isSuitableNewsItem(title, link)) return null;

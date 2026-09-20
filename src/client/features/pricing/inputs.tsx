@@ -17,6 +17,7 @@ interface CostEstimatorInputsProps {
   state: CostInputState;
   layout?: "input-label" | "label-input-unit";
   avgCost?: number | null;
+  pending?: boolean;
 }
 
 function CostFieldInput({
@@ -51,6 +52,7 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
   state,
   layout = "input-label",
   avgCost,
+  pending = false,
 }: CostEstimatorInputsProps) {
   const { t } = useTranslation();
   const { values } = state;
@@ -92,11 +94,18 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
         ),
       )}
       {layout === "input-label" && avgCost !== undefined && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" aria-busy={pending}>
           <span className="text-sm text-text-secondary">{t("estimatedMonthlyCost")}:</span>
-          <span className="text-lg font-semibold font-mono tabular-nums">
-            {avgCost == null ? t("notAvailable") : formatDollar(avgCost, t)}
-          </span>
+          {pending ? (
+            <>
+              <span className="sr-only">{t("loading")}</span>
+              <span className="ui-skeleton inline-block h-5 w-24" aria-hidden="true" />
+            </>
+          ) : (
+            <span className="text-lg font-semibold font-mono tabular-nums">
+              {avgCost == null ? t("notAvailable") : formatDollar(avgCost, t)}
+            </span>
+          )}
           <span className="ui-caption">{t("perModelAvg")}</span>
         </div>
       )}

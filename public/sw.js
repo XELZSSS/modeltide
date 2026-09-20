@@ -1,24 +1,8 @@
-/* ModelTide service worker (no build step, served as /sw.js).
- *
- * Strategy:
- * - Precache the app shell + icons on install.
- * - Navigations: network-first, fall back to cached "/" (app shell) offline.
- * - Hashed build output (/assets/*) + fonts/icons: cache-first with
- *   background revalidation (filenames are content-hashed, so stale risk is nil).
- * - /api/*: never cached, always network (server + React Query own the policy).
- *   Offline reads are served from the React Query cache, not the SW — do NOT
- *   add stale-while-revalidate here or prices/rankings will go stale silently.
- * - SKIP_WAITING message from the client activates updates on demand.
- */
+/* ModelTide service worker (no build step, served as /sw.js). */
 
-// Bump to force a fresh cache set on breaking changes. NOTE: this file has
-// no build step — bump manually on shell-breaking releases, and keep
-// PRECACHE_URLS in sync with public/manifest.webmanifest icons.
-const SW_VERSION = "modeltide-v2";
+const SW_VERSION = "modeltide-v3";
 const CACHE_NAME = `modeltide-${SW_VERSION}`;
 
-// Bound the generic same-origin cache: navigations/assets are managed
-// separately, everything else is best-effort LRU.
 const OTHER_CACHE_MAX = 100;
 
 const PRECACHE_URLS = [
@@ -36,7 +20,6 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE_URLS))
-      // A single missing icon must not brick activation.
       .catch((err) => console.warn("[sw] precache failed:", err)),
   );
 });
@@ -55,11 +38,8 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") void self.skipWaiting();
 });
 
-/** Same-origin GET only; API + dev HMR traffic bypasses the worker. */
 function isCacheable(request) {
   if (request.method !== "GET") return false;
-  // Malformed request URLs would throw and kill the fetch handler: fall
-  // through to "not cacheable" instead.
   let url;
   try {
     url = new URL(request.url);
@@ -73,12 +53,9 @@ function isCacheable(request) {
 }
 
 function isImmutableAsset(pathname) {
-  return pathname.startsWith("/assets/") || pathname.startsWith("/fonts/") || pathname.startsWith("/icons/");
+  return pathname.startsWith("/assets/");
 }
 
-/** Navigation: try network, fall back to the cached app shell.
- *  Only healthy responses refresh the shell cache: a transient 5xx/404 must
- *  not poison the offline fallback (stale-if-error, matching the CDN header). */
 async function handleNavigation(request) {
   try {
     const res = await fetch(request);
@@ -94,7 +71,6 @@ async function handleNavigation(request) {
   }
 }
 
-/** Immutable assets: pure cache-first (filenames are content-hashed). */
 async function handleAsset(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
@@ -116,7 +92,6 @@ async function trimOtherCache(cache) {
   } catch {}
 }
 
-/** Everything else same-origin: network-first with bounded cache fallback. */
 async function handleOther(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
@@ -140,7 +115,7 @@ self.addEventListener("fetch", (event) => {
   try {
     url = new URL(request.url);
   } catch {
-    return; // Uncacheable malformed URL: let the browser handle the fetch.
+    return;
   }
   if (request.mode === "navigate") {
     event.respondWith(handleNavigation(request));

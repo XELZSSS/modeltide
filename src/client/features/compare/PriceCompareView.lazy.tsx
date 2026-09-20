@@ -1,9 +1,10 @@
 "use client";
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { buildPriceRows } from "./logic";
-import { PriceTable } from "@/client/features/compare/price-compare/price-table";
+import { formatDollar } from "@/client/utils/format";
+import { buildPriceRows, type CompareRow, type Winner } from "./logic";
+import { CompareTable, WinnerValue } from "@/client/features/compare/CompareTable";
 import { PriceChart } from "@/client/features/compare/price-compare/price-chart";
 import { CostEstimator } from "@/client/features/compare/price-compare/estimator";
 import { LiteLLMVsRouterTable } from "@/client/features/compare/price-compare/litellm-vs-router-table";
@@ -17,12 +18,24 @@ export const PriceCompareContent = memo(function PriceCompareContent({
 }) {
   const { t } = useTranslation();
   const priceRows = useMemo(() => buildPriceRows(t), [t]);
+  // Stable across renders (only `t` can change it) so CompareTable's parts memo survives.
+  const renderPrice = useCallback(
+    (row: CompareRow<ArtificialAnalysisModel>, model: ArtificialAnalysisModel, winner: Winner | null): ReactNode => {
+      const value = row.getNumeric?.(model);
+      return typeof value === "number" ? (
+        <WinnerValue value={formatDollar(value, t)} winner={winner} />
+      ) : (
+        <span className="text-text-tertiary">{t("notAvailable")}</span>
+      );
+    },
+    [t],
+  );
 
   return (
     <>
       <div className="flex flex-col gap-3">
         <p className="text-sm font-semibold">{t("priceBreakdown")}</p>
-        <PriceTable priceRows={priceRows} models={models} />
+        <CompareTable rows={priceRows} models={models} mobileLayout="model-cards" renderValue={renderPrice} />
       </div>
       <PriceChart priceRows={priceRows} models={models} />
       <CostEstimator models={models} />

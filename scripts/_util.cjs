@@ -1,5 +1,4 @@
 // @ts-check
-// Shared helpers for scripts/* guards (dev-only, no runtime impact).
 const fs = require("fs");
 const path = require("path");
 
@@ -36,17 +35,11 @@ function stripComments(src) {
       }
       if (c === quote) {
         quote = null;
-        if (stack.length && stack[stack.length - 1] === "`") {
-          // closing a template expression block will be handled via brace tracking
-        }
       }
       i += 1;
       continue;
     }
-    // inside ${} expression of template
     if (stack.length && c === "}") {
-      // heuristic: close template expression - return to template string
-      // Only if we are not inside a quote
       stack.pop();
       quote = "`";
       out += c;
@@ -70,8 +63,6 @@ function stripComments(src) {
       i = end === -1 ? n : end;
       continue;
     }
-    // Handle ${ inside template string start was handled via quote branch,
-    // but if we are at top level and see ${ without quote, it's template start already handled
     out += c;
     i += 1;
   }

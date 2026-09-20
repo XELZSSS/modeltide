@@ -11,25 +11,25 @@ export interface ChartTheme {
   donut: string[];
 }
 
-const DONUT_FALLBACK = ["#8b5cf6", "#ec4899", "#0284c7", "#ea580c", "#059669", "#64748b"];
+const DONUT_FALLBACK = ["#365899", "#1e2430", "#2f6d8a", "#2f7a4d", "#9a6b0a", "#9aa5b4"];
 
 const FALLBACK_THEME: ChartTheme = {
-  grid: "rgba(15, 23, 42, 0.14)",
-  tick: "#6b7280",
-  tickSecondary: "#5b6472",
-  tooltipBg: "#f4f4f5",
-  tooltipText: "#0b1220",
+  grid: "rgba(30, 36, 48, 0.14)",
+  tick: "#8b96a5",
+  tickSecondary: "#5b6675",
+  tooltipBg: "#f1f4f7",
+  tooltipText: "#1e2430",
   palette: [
-    "#2563eb",
-    "#ea580c",
-    "#0d9488",
-    "#9333ea",
-    "#dc2626",
-    "#4d7c0f",
-    "#0891b2",
-    "#db2777",
-    "#059669",
-    "#64748b",
+    "#365899",
+    "#1e2430",
+    "#5b6675",
+    "#9aa5b4",
+    "#2f7a4d",
+    "#2f6d8a",
+    "#9a6b0a",
+    "#c03a30",
+    "#6d7a99",
+    "#c3ccd6",
   ],
   donut: DONUT_FALLBACK,
 };
@@ -39,11 +39,11 @@ function resolveChartTheme(): ChartTheme {
   const styles = getComputedStyle(document.documentElement);
   const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
   return {
-    grid: read("--border", "rgba(15, 23, 42, 0.14)"),
-    tick: read("--text-tertiary", "#6b7280"),
-    tickSecondary: read("--text-secondary", "#5b6472"),
-    tooltipBg: read("--bg-secondary", "#f4f4f5"),
-    tooltipText: read("--text-primary", "#0b1220"),
+    grid: read("--border", "rgba(30, 36, 48, 0.14)"),
+    tick: read("--text-tertiary", "#8b96a5"),
+    tickSecondary: read("--text-secondary", "#5b6675"),
+    tooltipBg: read("--bg-secondary", "#f1f4f7"),
+    tooltipText: read("--text-primary", "#1e2430"),
     palette: Array.from({ length: 10 }, (_, i) => read(`--chart-${i + 1}`, FALLBACK_THEME.palette[i] ?? "#888888")),
     donut: Array.from({ length: DONUT_FALLBACK.length }, (_, i) =>
       read(`--donut-${i + 1}`, DONUT_FALLBACK[i] ?? "#888888"),

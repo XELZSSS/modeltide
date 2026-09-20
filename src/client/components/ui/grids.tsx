@@ -10,31 +10,13 @@ export const SegmentedGroup = memo(function SegmentedGroup({
   return (
     <div
       className={cn(
-        "inline-flex max-w-full items-center gap-0.5 p-1 rounded-none border border-border bg-bg-secondary",
+        "inline-flex max-w-full items-center gap-5 p-0 rounded-none border-0 border-b border-border bg-transparent",
         className,
       )}
       {...rest}
     >
       {children}
     </div>
-  );
-});
-
-export const DetailSection = memo(function DetailSection({
-  title,
-  children,
-  className,
-}: {
-  title: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  // Legacy alias: keep API stable, visuals aligned with PageSection.
-  return (
-    <section className={cn("flex flex-col gap-3 sm:gap-4", className)} aria-label={title}>
-      <h2 className="ui-card-title">{title}</h2>
-      {children}
-    </section>
   );
 });
 

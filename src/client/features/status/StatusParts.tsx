@@ -18,6 +18,7 @@ function barClass(ratio: number | null): string {
 export const UptimeStrip = memo(function UptimeStrip({ buckets }: { buckets: DayBucket[] }) {
   const { t } = useTranslation();
   const byDay = useMemo(() => new Map(buckets.map((b) => [b.day, b])), [buckets]);
+  const dayKey = Math.floor(Date.now() / ONE_DAY);
   const days = useMemo(() => {
     const out: string[] = [];
     const now = Date.now();
@@ -25,7 +26,8 @@ export const UptimeStrip = memo(function UptimeStrip({ buckets }: { buckets: Day
       out.push(new Date(now - i * ONE_DAY).toISOString().slice(0, 10));
     }
     return out;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey]);
   return (
     <div className="flex items-end gap-0.5 h-7" role="img" aria-label={t("last30Days")}>
       {days.map((day) => {

@@ -4,12 +4,6 @@
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types", "node"]
   },
-  "include": [
-    "src/server/**/*.ts",
-    "src/shared/**/*.ts",
-    "worker/**/*.ts",
-    "worker-configuration.d.ts",
-    "cloudflare-env.d.ts"
-  ],
+  "include": ["src/server/**/*.ts", "src/shared/**/*.ts", "worker/**/*.ts", "cloudflare-env.d.ts"],
   "exclude": ["dist", "node_modules"]
 }

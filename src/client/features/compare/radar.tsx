@@ -1,5 +1,5 @@
 "use client";
-import { memo, useMemo } from "react";
+import { useMemo } from "react";
 import type { ChartOptions } from "chart.js";
 import { Radar } from "react-chartjs-2";
 import { registerRadar } from "@/client/utils/charts-register";
@@ -27,16 +27,6 @@ function renderMetricValue(
 ) {
   return <WinnerValue value={row.getValue?.(model) ?? ""} winner={winner} />;
 }
-
-const MetricCompareTable = memo(function MetricCompareTable({
-  rows,
-  models,
-}: {
-  rows: CompareRow<ArtificialAnalysisModel>[];
-  models: ArtificialAnalysisModel[];
-}) {
-  return <CompareTable rows={rows} models={models} renderValue={renderMetricValue} />;
-});
 
 export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
@@ -95,8 +85,8 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
     <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:items-stretch">
       <Card className="w-full md:w-1/2">
         <CardContent className="h-full flex items-center justify-center">
-          <div className="w-full h-[240px] sm:h-[320px]">
-            <figure className="h-full">
+          <div className="w-full h-[240px] sm:h-[320px] min-w-0 overflow-hidden">
+            <figure className="h-full [&_canvas]:block">
               <Radar data={data} options={options} role="img" aria-label={t("modelComparison")} />
               <figcaption className="sr-only">
                 {radarData.map((row) => {
@@ -112,7 +102,7 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
         </CardContent>
       </Card>
       <div className="min-w-0 w-full md:w-1/2 flex flex-col">
-        <MetricCompareTable rows={rows} models={models} />
+        <CompareTable rows={rows} models={models} renderValue={renderMetricValue} />
       </div>
     </div>
   );

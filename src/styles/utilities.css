@@ -1,3 +1,79 @@
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-variant-numeric: tabular-nums;
+    font-synthesis: none;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  ::selection {
+    background-color: var(--color-selected);
+  }
+
+  img:not([class*="h-"]):not([class*="w-"]),
+  video:not([class*="h-"]):not([class*="w-"]) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  svg:not([class*="h-"]):not([class*="w-"]),
+  canvas:not([class*="h-"]):not([class*="w-"]),
+  iframe:not([class*="h-"]):not([class*="w-"]) {
+    max-width: 100%;
+  }
+
+  code,
+  pre {
+    font-family: var(--font-mono);
+    word-break: break-word;
+  }
+
+  table {
+    max-width: 100%;
+  }
+
+  p,
+  li,
+  th,
+  td {
+    overflow-wrap: break-word;
+  }
+
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.4;
+    letter-spacing: 0.005em;
+  }
+}
+
 html,
 main,
 .overflow-y-auto:not(.no-scrollbar),
@@ -55,13 +131,23 @@ main,
 }
 
 @utility ui-page-title {
-  font-size: 1.25rem;
-  line-height: 1.75rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-family: var(--font-sans);
+  font-size: 1.75rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
   overflow-wrap: break-word;
   min-width: 0;
+}
+
+@utility ui-kicker {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
 @utility ui-section-title {
@@ -121,8 +207,8 @@ main,
 
 @media (min-width: 640px) {
   .ui-page-title {
-    font-size: 1.5rem;
-    line-height: 2rem;
+    font-size: 2.75rem;
+    line-height: 1.1;
   }
   .ui-section-title {
     font-size: 1.125rem;
@@ -188,9 +274,27 @@ main,
   }
 }
 
-@utility ui-focus-ring {
-  outline: var(--ring-width) solid var(--ring);
-  outline-offset: var(--ring-offset);
+/* Surface system: cards stay border-only, overlays get tiered elevation.
+   border-border + bg-bg-card scattered across components now funnel through here. */
+@utility ui-card {
+  border: 1px solid var(--border);
+  background-color: var(--bg-card);
+  box-shadow: none;
+  min-width: 0;
+}
+
+@utility ui-overlay-md {
+  border: 1px solid var(--border);
+  background-color: var(--bg-card);
+  box-shadow: var(--shadow-md);
+  min-width: 0;
+}
+
+@utility ui-overlay-lg {
+  border: 1px solid var(--border);
+  background-color: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  min-width: 0;
 }
 
 /* Unified vertical rhythm: page sections share one spacing scale. */

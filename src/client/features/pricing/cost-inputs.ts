@@ -69,11 +69,6 @@ function useCostEstimator(): CostEstimatorState {
   return useMemo(() => ({ values, setField, calc }), [values, setField, calc]);
 }
 
-/**
- * Client-side monthly-cost cache — keyed by model identity + effective pricing + calc.
- * Avoids recomputing 200+ models when pricing unchanged (the common case).
- * LRU via insertion-order Map, 1024 entries cap.
- */
 const COST_CACHE = new Map<string, number | null>();
 const COST_CACHE_MAX = 1024;
 
@@ -103,9 +98,6 @@ export function getCachedMonthlyCost(
   getOfficial?: OfficialGetter,
 ): number | null {
   const official = getOfficial?.(model);
-  // Fast path: server precomputed default (calc matches DEFAULT_COST_INPUTS).
-  // defaultMonthlyCost is computed from catalog pricing only, so it is valid
-  // only when no official price overrides this model.
   const isDefaultCalc =
     calc.input === 2 &&
     calc.output === 1 &&
@@ -137,14 +129,19 @@ export function getCachedMonthlyCost(
   return result;
 }
 
-export function useMonthlyCosts(models: ArtificialAnalysisModel[], getOfficial?: OfficialGetter) {
+export function useMonthlyCosts(
+  models: ArtificialAnalysisModel[],
+  getOfficial?: OfficialGetter,
+  opts?: { ready?: boolean },
+) {
   const estimator = useCostEstimator();
   const { calc } = estimator;
+  const ready = opts?.ready ?? true;
   const monthlyCosts = useMemo(() => {
-    // Only compute when viewMode==="pricing" passes non-empty models; empty -> []
     if (models.length === 0) return [] as (number | null)[];
+    if (!ready) return models.map(() => null);
     return models.map((model) => getCachedMonthlyCost(model, calc, getOfficial));
-  }, [models, calc, getOfficial]);
+  }, [models, calc, getOfficial, ready]);
   return { ...estimator, monthlyCosts };
 }
 

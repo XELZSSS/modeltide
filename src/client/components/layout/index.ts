@@ -1,2 +1,2 @@
 "use client";
-export { PageContainer, PageHeader, PageSection, TabbedPage } from "./page";
+export { PageContainer, PageHeader, PageSection, SectionCard, TabbedPage } from "./page";

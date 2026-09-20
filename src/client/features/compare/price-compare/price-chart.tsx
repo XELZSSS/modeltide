@@ -86,8 +86,8 @@ export const PriceChart = memo(function PriceChart({
     <Card>
       <CardContent>
         <p className="ui-card-title mb-4">{t("priceComparison")}</p>
-        <div className="w-full h-[200px] sm:h-[240px]">
-          <figure className="h-full">
+        <div className="w-full h-[200px] sm:h-[240px] min-w-0 overflow-hidden">
+          <figure className="h-full [&_canvas]:block">
             <Bar data={data} options={options} role="img" aria-label={t("priceComparison")} />
           </figure>
         </div>

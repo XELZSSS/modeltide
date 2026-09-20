@@ -14,9 +14,9 @@ export const Input = forwardRef<HTMLInputElement, Omit<React.InputHTMLAttributes
         aria-invalid={ariaInvalid}
         disabled={disabled}
         className={cn(
-          "h-9 px-3 min-w-0 max-w-full text-base sm:text-sm rounded-none border border-border bg-bg-primary text-text-primary placeholder:text-text-tertiary outline-none transition-colors duration-fast hover:border-text-tertiary/50 focus:border-accent focus:ring-2 focus:ring-ring/30 disabled:opacity-50 disabled:bg-bg-secondary",
+          "h-9 px-3 min-w-0 max-w-full text-base sm:text-sm rounded-none border border-border bg-bg-primary text-text-primary placeholder:text-text-tertiary outline-none transition-colors duration-fast hoverable:hover:border-text-tertiary/40 focus:border-accent/60 focus:ring-2 focus:ring-ring/30 disabled:opacity-50 disabled:bg-bg-secondary",
           type === "number" && noSpinners,
-          ariaInvalid && "border-destructive focus:border-destructive focus:ring-destructive/20",
+          ariaInvalid && "border-destructive focus:border-destructive focus:ring-destructive/30",
           className,
         )}
         {...props}

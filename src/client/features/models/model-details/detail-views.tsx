@@ -2,6 +2,7 @@
 import type { ComponentType, ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import { MODEL_SOURCES, type ModelSource } from "@/shared/config";
+import type { TranslationKey } from "@/shared/i18n";
 import { BackButton, EmptyState, NotFound, Spinner } from "@/client/components/feedback";
 import { PageHeader } from "@/client/components/layout";
 
@@ -13,22 +14,47 @@ export function findModel<T>(data: T[], id: string, ...keys: (keyof T & string)[
   return undefined;
 }
 
-export function DetailShell({ source, title, children }: { source: ModelSource; title: string; children: ReactNode }) {
-  const { t } = useTranslation();
-  const config = MODEL_SOURCES[source];
+export function DetailPageLayout({
+  backLabelKey,
+  backTo,
+  title,
+  description,
+  compact,
+  children,
+}: {
+  backLabelKey: TranslationKey;
+  backTo: string;
+  title: string;
+  description?: string;
+  compact?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex flex-col animate-fade-in">
-      <div className="mb-5">
-        <BackButton labelKey={config.backLabelKey} to={config.backTo} />
-      </div>
-      <PageHeader title={title} description={t(config.sourceLabelKey)} />
+    <div className="flex flex-col gap-5 min-w-0 animate-fade-in">
+      <BackButton labelKey={backLabelKey} to={backTo} />
+      <PageHeader compact={compact} title={title} description={description} />
       <div className="flex flex-col gap-4 sm:gap-5">{children}</div>
     </div>
   );
 }
 
+export function DetailShell({ source, title, children }: { source: ModelSource; title: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  const config = MODEL_SOURCES[source];
+  return (
+    <DetailPageLayout
+      backLabelKey={config.backLabelKey}
+      backTo={config.backTo}
+      title={title}
+      description={t(config.sourceLabelKey)}
+    >
+      {children}
+    </DetailPageLayout>
+  );
+}
+
 export function createDetailView<T>(
-  useQuery: () => T[] | { data?: T[]; isPending?: boolean; isError?: boolean },
+  useData: () => { data?: T[]; isPending?: boolean; isError?: boolean },
   source: ModelSource,
   Content: ComponentType<{ model: T }>,
   titleOf: (model: T) => string,
@@ -36,10 +62,7 @@ export function createDetailView<T>(
 ): ComponentType<{ decodedId: string }> {
   return function DetailView({ decodedId }: { decodedId: string }) {
     const { t } = useTranslation();
-    const result = useQuery();
-    const data = Array.isArray(result) ? result : result.data;
-    const isPending = !Array.isArray(result) && !!result.isPending;
-    const isError = !Array.isArray(result) && !!result.isError;
+    const { data, isPending, isError } = useData();
     const model = data ? findModel(data, decodedId, ...keys) : undefined;
     if (!model && isPending) return <Spinner />;
     if (!model && isError) {

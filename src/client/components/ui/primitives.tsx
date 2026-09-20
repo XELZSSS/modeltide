@@ -37,6 +37,27 @@ export const Dot = memo(function Dot({
   );
 });
 
+export const LabeledDot = memo(function LabeledDot({
+  color,
+  children,
+  size = "sm",
+  className,
+  textClassName,
+}: {
+  color?: string;
+  children: ReactNode;
+  size?: keyof typeof dotSizeClass;
+  className?: string;
+  textClassName?: string;
+}) {
+  return (
+    <span className={cn("flex items-center gap-2 min-w-0", className)}>
+      <Dot size={size} color={color} />
+      <span className={cn("text-sm font-medium truncate min-w-0", textClassName)}>{children}</span>
+    </span>
+  );
+});
+
 import { Card, CardContent } from "./card";
 
 export const InfoCard = memo(function InfoCard({ title, children }: { title: string; children: ReactNode }) {

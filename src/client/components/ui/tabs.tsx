@@ -5,16 +5,16 @@ import { cn } from "@/client/utils/cn";
 import { SegmentedGroup } from "@/client/components/ui/grids";
 
 const tabButtonVariants = cva(
-  "rounded-none font-medium transition-colors duration-fast whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none",
+  "rounded-none font-medium transition-colors duration-fast whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none relative pb-2.5",
   {
     variants: {
       active: {
-        true: "bg-bg-card text-text-primary ring-1 ring-inset ring-border shadow-xs",
-        false: "text-text-secondary hover:text-text-primary hover:bg-hover/60",
+        true: "text-text-primary after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-accent",
+        false: "text-text-secondary hoverable:hover:text-text-primary",
       },
       size: {
-        sm: "px-3 py-1.5 text-xs",
-        md: "px-4 py-2 text-sm",
+        sm: "px-1 py-1.5 text-xs tracking-wide",
+        md: "px-1 py-2 text-sm tracking-wide",
       },
     },
     defaultVariants: { active: false, size: "md" },

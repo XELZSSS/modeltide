@@ -4,13 +4,14 @@ import { cn } from "@/client/utils/cn";
 
 interface RankingNameCellProps {
   name: string;
+  title?: string;
   suffix?: React.ReactNode;
 }
 
-export const RankingNameCell = memo(function RankingNameCell({ name, suffix }: RankingNameCellProps) {
+export const RankingNameCell = memo(function RankingNameCell({ name, title, suffix }: RankingNameCellProps) {
   return (
     <div className="flex items-center min-w-0 gap-2">
-      <p className="truncate flex-1 min-w-0 ui-body font-medium" title={name}>
+      <p className="truncate flex-1 min-w-0 ui-body font-medium" title={title ?? name}>
         {name || "—"}
       </p>
       {suffix}
@@ -18,7 +19,7 @@ export const RankingNameCell = memo(function RankingNameCell({ name, suffix }: R
   );
 });
 
-/** Canonical model-name cell alias (replaces ad-hoc modelNameCol/ReleaseModelCell variants). */
+/** Canonical model-name cell; modelNameCol in ranked.tsx delegates to it. */
 export const ModelNameCell = RankingNameCell;
 
 interface RightAlignedTextProps {
@@ -67,22 +68,83 @@ export function mobilePrimaryCol<T>(
   return { id, header, cell, align: "right", mobilePrimary: true, ...opts };
 }
 
-export function rankCol<T>(rankOf: (row: T) => number | null | undefined): DataTableColumn<T> {
-  return {
-    id: "rank",
-    header: "",
-    width: 56,
-    hiddenMd: true,
-    cell: (row) => {
-      const rank = rankOf(row);
-      return <span className="ui-mono-value font-semibold whitespace-nowrap shrink-0">{rank ?? "—"}</span>;
-    },
-  };
+export function monoCol<T>(
+  id: string,
+  header: string,
+  format: (row: T) => ReactNode,
+  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean },
+): DataTableColumn<T> {
+  const col = opts?.mobilePrimary ? mobilePrimaryCol : rightCol;
+  return col(
+    id,
+    header,
+    (row) => <span className="ui-mono-value">{format(row)}</span>,
+    opts?.hiddenMd ? { hiddenMd: true } : undefined,
+  );
 }
 
-export function indexRankMap<T>(rows: T[], getId: (row: T) => string): Map<string, number> {
-  return new Map(rows.map((row, i) => [getId(row), i + 1]));
+interface CompareCellProps {
+  align?: "left" | "right";
+  className?: string;
+  style?: React.CSSProperties;
+  children?: ReactNode;
 }
+
+export const CompareTh = memo(function CompareTh({
+  align = "left",
+  className,
+  style,
+  children,
+  scope,
+}: CompareCellProps & { scope?: "col" | "row" }) {
+  return (
+    <th
+      scope={scope}
+      className={cn(
+        "px-4 py-3 text-xs font-medium text-text-tertiary",
+        align === "right" ? "text-right" : "text-left",
+        className,
+      )}
+      style={style}
+    >
+      {children}
+    </th>
+  );
+});
+
+export const CompareTd = memo(function CompareTd({
+  align = "left",
+  mono,
+  className,
+  style,
+  children,
+}: CompareCellProps & { mono?: boolean }) {
+  return (
+    <td
+      className={cn(
+        "px-4 py-3 text-sm",
+        mono && "font-mono tabular-nums",
+        align === "right" && "text-right",
+        className,
+      )}
+      style={style}
+    >
+      {children}
+    </td>
+  );
+});
+
+export const CompareTr = memo(function CompareTr({
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLTableRowElement>) {
+  return (
+    <tr className={cn("border-b border-border last:border-b-0", className)} {...props}>
+      {children}
+    </tr>
+  );
+});
 
 export interface RowListProps<T> {
   pagedData: T[];

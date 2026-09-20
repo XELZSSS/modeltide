@@ -11,7 +11,7 @@ import {
 } from "@/client/api/queries";
 import { SuspenseQuery, PartialNotice } from "@/client/components/feedback";
 import { SearchInput } from "@/client/search/SearchInput";
-import { Card, CardContent } from "@/client/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { PageContainer, PageSection } from "@/client/components/layout";
 import { Dot } from "@/client/components/ui/primitives";
 import { EVENT_STYLES } from "@/client/components/status-events";
@@ -38,7 +38,7 @@ function HomeLatestEvents() {
     return (
       <Link
         href="/status"
-        className="flex h-9 items-center gap-2 min-w-0 w-full border border-dashed border-border rounded-none bg-bg-card px-3.5 hover:border-text-tertiary/40 hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-9 items-center gap-2 min-w-0 w-full ui-card rounded-none px-3.5 hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
       >
         <span className="ui-body-secondary truncate">{t("noRecentEvents")}</span>
       </Link>
@@ -46,7 +46,7 @@ function HomeLatestEvents() {
   }
   const summary = data.sources.find((s) => s.id === latest.id);
   const samples = data.recent?.[latest.id] ?? [];
-  const lastSample = samples.length > 0 ? samples[samples.length - 1] : undefined;
+  const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
   const level = resolveLevel(summary);
   const latencyMs = summary?.avgLatency24h ?? summary?.latencyMs ?? lastSample?.latencyMs ?? null;
   const errorText = lastSample?.error ?? null;
@@ -55,7 +55,7 @@ function HomeLatestEvents() {
   return (
     <Link
       href="/status"
-      className="flex h-9 items-center gap-2 min-w-0 w-full overflow-hidden border border-border rounded-none bg-bg-card px-3.5 hover:border-text-tertiary/40 hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex h-9 items-center gap-2 min-w-0 w-full overflow-hidden ui-card rounded-none px-3.5 hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
     >
       <Dot size="sm" color={eventStyle!.color} aria-hidden="true" />
       <span className="ui-body truncate min-w-0 flex-1 whitespace-nowrap">
@@ -138,8 +138,7 @@ function HomeContent() {
               fallback={
                 <Card>
                   <CardContent>
-                    <p className="ui-card-title mb-1">{t("intelligenceIndex")}</p>
-                    <p className="ui-caption mb-4">{t("artificialSource")}</p>
+                    <CardHeader title={t("intelligenceIndex")} subtitle={t("artificialSource")} />
                     <div className="h-[200px] sm:h-[240px] animate-pulse bg-bg-secondary" />
                   </CardContent>
                 </Card>

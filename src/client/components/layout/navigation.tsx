@@ -62,7 +62,7 @@ interface DesktopNavProps {
 }
 
 const DESKTOP_ICON_BUTTON =
-  "p-1.5 text-text-secondary hover:text-text-primary hover:bg-hover bg-transparent rounded-none transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "p-1.5 text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover bg-transparent rounded-none transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
 
 export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
   const pathname = usePathname();
@@ -73,7 +73,7 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
 
   return (
     <nav
-      className="hidden md:flex h-12 shrink-0 items-center border-b border-border bg-nav-bg backdrop-blur-md sticky top-0 z-nav"
+      className="hidden md:flex h-12 shrink-0 items-center border-b border-border bg-nav-bg backdrop-blur-md sticky top-0 z-30"
       aria-label={t("navPrimary")}
     >
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex items-center gap-1">
@@ -88,13 +88,17 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
                 aria-current={active ? "page" : undefined}
                 onMouseEnter={() => prefetch(item.path)}
                 onFocus={() => prefetch(item.path)}
-                className={`relative px-3 py-1.5 text-sm font-medium rounded-none transition-colors duration-fast whitespace-nowrap active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
-                  active
-                    ? "text-accent bg-accent-light ring-1 ring-inset ring-accent/20"
-                    : "text-text-secondary hover:text-text-primary hover:bg-hover"
+                className={`relative px-3 py-1.5 text-sm font-medium rounded-none transition-colors duration-fast whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 ${
+                  active ? "text-text-primary" : "text-text-secondary hoverable:hover:text-text-primary"
                 }`}
               >
                 {item.label}
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-x-3 -bottom-px h-px bg-accent transition-transform duration-base origin-left ${
+                    active ? "scale-x-100" : "scale-x-0"
+                  }`}
+                />
               </Link>
             );
           })}
@@ -126,7 +130,7 @@ interface MobileNavProps {
 }
 
 const MOBILE_BAR_BUTTON =
-  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring rounded-none min-h-16 py-2";
+  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 rounded-none min-h-16 py-2";
 
 function MobileBarButton({
   active,
@@ -161,7 +165,7 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
 
   return (
     <nav
-      className="md:hidden fixed left-0 right-0 bottom-0 z-nav flex h-16 items-stretch rounded-none border-t border-border bg-nav-bg backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)]"
+      className="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch rounded-none border-t border-border bg-nav-bg backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)]"
       aria-label={t("navPrimaryMobile")}
     >
       {mobilePrimary.map((item) => {
@@ -240,8 +244,8 @@ function NavRow({
       onTouchStart={() => onHover(item.path)}
       onMouseEnter={() => onHover(item.path)}
       onFocus={() => onHover(item.path)}
-      className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors ${
-        active ? "text-accent" : "text-text-primary hover:bg-hover"
+      className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors duration-fast focus-visible:outline-none focus-visible:bg-hover ${
+        active ? "text-accent" : "text-text-primary hoverable:hover:bg-hover"
       }`}
     >
       <span className="flex items-center gap-2 min-w-0">

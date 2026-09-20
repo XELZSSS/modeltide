@@ -39,9 +39,11 @@ function MobileTableBodyInner<T>({
           <Fragment key={rowId}>
             <div
               className={cn(
-                "border border-border bg-bg-card p-4 transition-colors duration-fast",
-                "hover:border-text-tertiary/40",
-                isExpanded && "border-accent/40 bg-accent-light/50",
+                // Explicit border (not ui-card): isExpanded sets a same-specificity
+                // border-color that must win over the base border token.
+                "border border-border bg-bg-card p-4 overflow-hidden transition-colors duration-fast",
+                "hoverable:hover:border-text-tertiary/40",
+                isExpanded && "border-text-tertiary/40",
               )}
             >
               <div className="flex items-center gap-2 min-w-0">

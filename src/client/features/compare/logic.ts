@@ -15,7 +15,6 @@ export interface CompareRow<T> {
 
 export type Winner = "win" | "loss";
 
-/** Row identity used by both winner computation and table keys — keep in one place. */
 export const rowKey = <T>(row: CompareRow<T>): string => row.id ?? row.label;
 
 export function computeWinners<T>(
@@ -105,10 +104,16 @@ export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel
   const cacheOf = (m: ArtificialAnalysisModel) => m.pricing?.cacheHit;
   const cacheWriteOf = (m: ArtificialAnalysisModel) => m.pricing?.cacheWrite;
   return [
-    { label: t("promptPrice"), getNumeric: (m) => m.pricing?.input, bestIs: "min" },
-    { label: t("completionPrice"), getNumeric: (m) => m.pricing?.output, bestIs: "min" },
-    { label: t("cacheHitPrice"), getNumeric: cacheOf, bestIs: "min" },
-    { label: t("cacheWritePrice"), getNumeric: cacheWriteOf, bestIs: "min" },
+    { id: "promptPrice", label: t("promptPrice"), getNumeric: (m) => m.pricing?.input, bestIs: "min", worstIs: "max" },
+    {
+      id: "completionPrice",
+      label: t("completionPrice"),
+      getNumeric: (m) => m.pricing?.output,
+      bestIs: "min",
+      worstIs: "max",
+    },
+    { id: "cacheHitPrice", label: t("cacheHitPrice"), getNumeric: cacheOf, bestIs: "min", worstIs: "max" },
+    { id: "cacheWritePrice", label: t("cacheWritePrice"), getNumeric: cacheWriteOf, bestIs: "min", worstIs: "max" },
   ];
 }
 

@@ -1,12 +1,6 @@
 "use client";
-import {
-  type DataTableColumn,
-  RankingNameCell,
-  RightAlignedText,
-  mobilePrimaryCol,
-  rightCol,
-  textCol,
-} from "@/client/components/data/columns";
+import { type DataTableColumn, RightAlignedText, mobilePrimaryCol, rightCol } from "@/client/components/data/columns";
+import { modelNameCol } from "@/client/components/data/ranked";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { formatShortNumber, formatTrend } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
@@ -16,7 +10,7 @@ import { ShieldAlert } from "lucide-react";
 import { EmptyState } from "@/client/components/feedback";
 import { OpenRouterModelDetail } from "@/client/features/models/model-details/or-detail";
 import { useTranslation } from "@/client/providers";
-import { useRankFieldColumns } from "@/client/hooks/use-ranked-columns";
+import { useRankedColumns } from "@/client/components/data/ranked";
 
 function trendClass(change?: number | null) {
   if (change == null || change === 0) return "text-text-tertiary";
@@ -48,7 +42,12 @@ function tokenCol(
 
 function buildOpenRouterBodyColumns(t: (key: TranslationKey) => string): DataTableColumn<OpenRouterRankEntry>[] {
   return [
-    textCol("model", t("model"), (item) => <RankingNameCell name={item.name} />, { width: "45%" }),
+    modelNameCol(
+      t("model"),
+      (item) => item.name,
+      (item) => item.name,
+      "45%",
+    ),
     tokenCol("totalTokens", t("totalTokens"), (item) => item.totalTokens, { primary: true }),
     tokenCol("inputTokens", t("inputTokens"), (item) => item.promptTokens, { hiddenMd: true }),
     tokenCol("outputTokens", t("outputTokens"), (item) => item.completionTokens, { hiddenMd: true }),
@@ -74,7 +73,7 @@ const renderExpandedDetail = (item: OpenRouterRankEntry) => (
 
 export function OpenRouterRankingsView({ data }: { data?: OpenRouterRankingsPayload }) {
   const { t } = useTranslation();
-  const modelColumns = useRankFieldColumns(buildOpenRouterBodyColumns, (item: OpenRouterRankEntry) => item.rank);
+  const modelColumns = useRankedColumns(buildOpenRouterBodyColumns);
 
   if (!data) {
     return <EmptyState icon={ShieldAlert} message={t("noRankingsData")} />;

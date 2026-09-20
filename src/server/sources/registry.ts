@@ -1,5 +1,4 @@
 import type { AppContext } from "@/server/context";
-import { ValidationError } from "@/server/infra/errors";
 import { qEnum, qNum, qStr, type QuerySchema, type ValidatedQuery } from "@/server/infra/validation";
 import { apiPaths, MAX_MODEL_LIMIT, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
 import { getAgentRankings } from "@/server/sources/agent-arena";
@@ -12,36 +11,22 @@ import { getModelById, getModels, getReleases } from "@/server/sources/huggingfa
 import { getOpenRouterRankings } from "@/server/sources/openrouter";
 import { getStatusHistory } from "@/server/sources/status-history";
 
-/**
- * Cron warmup cadence. Mirrors the KV write-pressure split in the scheduled
- * handler: "core" runs every pass, "hourly" on the first pass of each hour,
- * "static" on the first pass every 6h.
- */
 export type WarmTier = "core" | "hourly" | "static";
 
-/**
- * Single manifest for every data source that backs an /api route. One entry
- * drives the HTTP router AND the cron warmup list, so adding/removing a source
- * can no longer drift between `worker/router.ts` and `worker/index.ts`.
- */
 export interface SourceManifestEntry<Q extends QuerySchema = QuerySchema> {
   path: string;
   query?: Q;
   cache?: { browser: string; cdn: string };
   handler(ctx: AppContext, params: ValidatedQuery<Q>): Promise<unknown>;
-  /** Omitted = never warmed (e.g. status-history is noStore). */
   warm?: WarmTier;
-  /** Extra warmup param sets; when absent the source warms once with no params. */
   warmParams?: ValidatedQuery<Q>[];
 }
 
 const OPEN_SOURCE_SORTS = ["trendingScore", "downloads", "likes", "createdAt", "lastModified"] as const;
 const SORT_DIRECTIONS = ["-1", "1"] as const;
-// Mirrors normalizeModelLimit buckets (shared/config/limits): one warmed KV key
-// per limit so the client's limit switcher never cold-starts on HF.
-const OPEN_SOURCE_MODEL_LIMIT_BUCKETS = [50, 100, 200, 500] as const;
 
-/** Capture the query schema generics so handler `params` keep their literal types. */
+// Identity helper with a purpose: preserves each entry's QuerySchema generic
+// so handler params stay narrowly typed.
 function defineSource<S extends QuerySchema>(entry: SourceManifestEntry<S>): SourceManifestEntry {
   return entry as SourceManifestEntry;
 }
@@ -88,7 +73,7 @@ export const SOURCES: readonly SourceManifestEntry[] = [
     },
     handler: (ctx, params) => getModels(ctx, params),
     warm: "hourly",
-    warmParams: OPEN_SOURCE_MODEL_LIMIT_BUCKETS.map((limit) => ({ ...OPEN_SOURCE_MODELS_DEFAULTS, limit })),
+    warmParams: [{ ...OPEN_SOURCE_MODELS_DEFAULTS }],
   }),
   defineSource({
     path: apiPaths.officialPricing,
@@ -103,10 +88,7 @@ export const SOURCES: readonly SourceManifestEntry[] = [
   defineSource({
     path: apiPaths.openSourceModel,
     query: { id: qStr({ maxLength: 200 }) },
-    handler: (ctx, params) => {
-      if (!params.id) throw new ValidationError('Query param "id" is required');
-      return getModelById(ctx, params.id);
-    },
+    handler: (ctx, params) => getModelById(ctx, params.id),
   }),
   defineSource({
     path: apiPaths.openRouterRankings,

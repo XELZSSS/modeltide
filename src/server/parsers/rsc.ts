@@ -76,9 +76,6 @@ export function parseRscPayloads<T>(
   const byteLength = utf8ByteLength(body);
   if (byteLength > MAX_RSC_BYTES)
     throw new UpstreamError(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);
-  for (const marker of markers) {
-    if (!body.includes(marker)) throw rscNotFound(marker, body);
-  }
   const results: (T[] | null)[] = markers.map(() => null);
   let unresolved = markers.length;
   let maxLineLen = 0;
@@ -89,8 +86,6 @@ export function parseRscPayloads<T>(
       unresolved -= scanOversizedMarkers(line, markers, results, extract);
       continue;
     }
-    // Fast path: most flight lines carry no marker at all - skip the raws
-    // array + parse-cache allocation unless a marker boundary is present.
     let anyMarker = false;
     for (let mi = 0; mi < markers.length; mi++) {
       if (!results[mi] && isMarkerBoundary(line, markers[mi]!)) {

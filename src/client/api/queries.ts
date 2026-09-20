@@ -35,11 +35,6 @@ interface ApiQueryOptions<T> {
   ttl?: number;
   staleTime?: number;
   gcTime?: number;
-  /**
-   * When the served data is partial (degraded upstream), poll on this
-   * interval instead of sitting on the full staleTime. Matches the
-   * shortened server TTLs for partial payloads (see shared/config/time).
-   */
   partialRefetchMs?: number;
   isPartialData?: (data: T | undefined) => boolean;
 }
@@ -50,9 +45,7 @@ function createApiQuery<T>(key: readonly (string | number)[], path: string, opts
   const ttlMs = ttl ?? staleTime ?? THIRTY_MINUTES;
   const partialPoll: false | ((query: unknown) => number | false) =
     partialRefetchMs != null && isPartialData != null
-      ? // (query: unknown): keeps T inference for useQuery intact, and matches
-        // the v5 signature which passes the Query (data lives at state.data).
-        (query: unknown) => {
+      ? (query: unknown) => {
           const data = (query as { state?: { data?: T } } | null)?.state?.data;
           return isPartialData(data) ? partialRefetchMs : false;
         }
@@ -65,7 +58,6 @@ function createApiQuery<T>(key: readonly (string | number)[], path: string, opts
   return {
     use: (enabled = true) => useQuery<T>({ queryKey: key, queryFn, ...timing, enabled }),
     useSuspense: () => useSuspenseQuery<T>({ queryKey: key, queryFn, ...timing }),
-    /** Warm the cache ahead of navigation; no-op while data is still fresh. */
     prefetch: (qc: QueryClient) =>
       qc.prefetchQuery({ queryKey: key, queryFn, staleTime: timing.staleTime, gcTime: timing.gcTime }),
   };
@@ -121,10 +113,6 @@ const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHist
 const qAgent = createApiQuery<AgentRankingsPayload>(queryKeys.agentRankings, apiPaths.agentRankings, {
   ttl: SLOW_TTL_MS,
 });
-// STATIC (6h stale) is intentional for slow-moving data: official pricing and
-// closed-release archives change on release cadence, not minutes. A wrong price
-// can linger up to 6h — accepted tradeoff for fewer upstreams hits; shorten to
-// SLOW_TTL_MS if fresher pricing ever matters more than quota.
 export const qOfficialPricing = createApiQuery<OfficialPricingPayload>(
   queryKeys.officialPricing,
   apiPaths.officialPricing,
@@ -143,11 +131,11 @@ const qClosedReleasesRaw = createApiQuery<SourcePayload<ClosedReleaseEntry[]>>(
 
 // ── Strict list hooks: unwrap at the boundary, components receive T[] only ──
 
+// ── Strict list hooks: unwrap at the boundary, components receive T[] only ──
+
 export function useArtificialRankings(enabled = true) {
   const q = qArtificialRaw.use(enabled);
   const unwrapped = useMemo(() => unwrapListPartial<ArtificialAnalysisModel>(q.data, "artificialIndex"), [q.data]);
-  // A malformed payload is an error state, not a silently empty list — mirror
-  // useAllOpenSourceModels so views render the retry path instead of "no data".
   const hasData = unwrapped.data.length > 0;
   const isError = enabled && !hasData && !q.isPending && (q.isError || unwrapped.malformed);
   const error = isError ? (q.error ?? new Error("Malformed artificialIndex payload")) : null;
@@ -184,7 +172,6 @@ const qOpenSourceModel = (id: string) =>
     { ttl: SLOW_TTL_MS },
   );
 
-/** Single-model lookup without any list window; missing rows resolve to null. */
 export function useSuspenseOpenSourceModel(id: string): OpenSourceModelEntry | null {
   const { data } = qOpenSourceModel(id).useSuspense();
   if (data == null || typeof data !== "object" || !("data" in data)) return null;
@@ -269,9 +256,6 @@ export function useSuspenseHallucinationRankings(): HallucinationRankingEntry[] 
 }
 
 // ── Navigation prefetch: route → queries to warm on hover/focus ──
-// Mirrors ssrJobs-style route declarations, but client-side. Hover prefetch
-// hides the API round-trip that replaced SSR hydration; staleTime reuse keeps
-// warmed entries fresh for the same window the page would consider fresh.
 
 export const prefetchQueriesForRoute = (qc: QueryClient, pathname: string): void => {
   if (pathname === "/") {
@@ -295,6 +279,4 @@ export const prefetchQueriesForRoute = (qc: QueryClient, pathname: string): void
   } else if (pathname === "/compare") {
     void qArtificialRaw.prefetch(qc);
   }
-  // /news, /model/* and /status/* fetch per-parameter data; the target page
-  // fetches on mount (same cost as the old SSR-less fallback).
 };

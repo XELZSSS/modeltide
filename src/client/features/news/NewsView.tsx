@@ -34,13 +34,13 @@ function NewsList({ news }: { news: NewsItem[] }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <ul className="flex flex-col border border-border bg-bg-card divide-y divide-border">
+      <ul className="ui-card flex flex-col divide-y divide-border">
         {currentNews.map((item, idx) => {
           const href = safeHref(item.link);
           const key = `${getNewsRowId(item)}::${idx}`;
           const body = (
             <>
-              <h2 className="ui-body font-medium leading-relaxed group-hover:text-accent transition-colors duration-fast min-w-0 break-words">
+              <h2 className="ui-body font-medium leading-relaxed min-w-0 break-words decoration-accent/50 underline-offset-4 group-hover:underline transition-colors duration-fast">
                 {item.title}
               </h2>
               <div className="flex items-center gap-3 shrink-0 ui-caption mt-1">
@@ -58,7 +58,7 @@ function NewsList({ news }: { news: NewsItem[] }) {
             </>
           );
           const rowClass =
-            "group flex items-start justify-between gap-4 px-4 py-3.5 transition-colors duration-fast hover:bg-hover focus-visible:outline-none focus-visible:bg-hover";
+            "group flex items-start justify-between gap-4 px-4 py-3.5 transition-colors duration-fast hoverable:hover:bg-hover focus-visible:outline-none focus-visible:bg-hover";
           return (
             <li key={key} className="animate-fade-in">
               {href ? (
@@ -105,7 +105,13 @@ export function NewsView() {
   const tabs: TabItem[] = useMemo(() => NEWS_CATEGORIES.map((id) => ({ id, label: t(CATEGORY_LABELS[id]) })), [t]);
 
   return (
-    <TabbedPage title={t("aiNews")} tabs={tabs} activeTab={activeCategory} onTabChange={setActiveCategory}>
+    <TabbedPage
+      title={t("aiNews")}
+      kicker={t("kickerNews")}
+      tabs={tabs}
+      activeTab={activeCategory}
+      onTabChange={setActiveCategory}
+    >
       <SuspenseQuery resetKey={activeCategory}>
         <NewsCategoryContent categoryId={activeCategory} />
       </SuspenseQuery>

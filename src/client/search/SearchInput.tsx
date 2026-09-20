@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { usePathname, useRouter } from "@/client/router";
 import { Loader2, Search, X } from "lucide-react";
 import { cn } from "@/client/utils/cn";
+import { Input } from "@/client/components/ui/input";
 import { useTranslation } from "@/client/providers";
 import { useSearchStore } from "@/client/stores";
 import type { SearchResult } from "@/shared/types";
@@ -138,8 +139,8 @@ export function SearchInput({ className }: { className?: string }) {
         role="option"
         aria-selected={clampedIndex === index}
         className={cn(
-          "w-full text-left p-2.5 rounded-none transition-colors active:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
-          clampedIndex === index ? "bg-hover" : "hover:bg-hover",
+          "w-full text-left p-2.5 rounded-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          clampedIndex === index ? "bg-hover" : "hoverable:hover:bg-hover",
         )}
         onMouseEnter={() => setActiveIndex(index)}
         onClick={() => goToResult(result)}
@@ -163,9 +164,9 @@ export function SearchInput({ className }: { className?: string }) {
       <label htmlFor={inputId} className="sr-only">
         {t("searchPlaceholder")}
       </label>
-      <div className="flex h-9 items-center gap-2 min-w-0 max-w-full border border-border rounded-none bg-bg-card px-3 transition-colors duration-fast hover:border-text-tertiary/40 focus-within:border-accent focus-within:ring-2 focus-within:ring-ring/20">
+      <div className="flex h-9 items-center gap-2 min-w-0 max-w-full ui-card rounded-none px-3 transition-colors duration-fast focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-ring/30">
         <Search size={16} className="text-text-secondary shrink-0" aria-hidden="true" />
-        <input
+        <Input
           ref={inputRef}
           id={inputId}
           type="text"
@@ -187,7 +188,7 @@ export function SearchInput({ className }: { className?: string }) {
           }}
           onKeyDown={onKeyDown}
           placeholder={t("searchPlaceholder")}
-          className="min-w-0 flex-1 w-full text-base sm:text-sm bg-transparent outline-none text-text-primary placeholder:text-text-tertiary"
+          className="flex-1 border-0 bg-transparent px-0 h-full focus:border-transparent focus:ring-0"
         />
         <button
           type="button"
@@ -201,7 +202,7 @@ export function SearchInput({ className }: { className?: string }) {
             inputRef.current?.focus();
           }}
           className={cn(
-            "shrink-0 rounded-none p-1 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "shrink-0 rounded-none p-1 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
             !inputValue && "invisible pointer-events-none",
           )}
         >
@@ -214,7 +215,7 @@ export function SearchInput({ className }: { className?: string }) {
           id={listboxId}
           ref={listRef}
           role="listbox"
-          className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar bg-bg-card border border-border rounded-none shadow-lg z-dropdown animate-fade-in"
+          className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay-md z-40 animate-fade-in"
         >
           <div className="p-1.5">{dropdownBody}</div>
         </div>

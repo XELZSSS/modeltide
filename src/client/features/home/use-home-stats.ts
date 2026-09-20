@@ -54,7 +54,7 @@ export function useHomeStats(
   // Trending order inherited from the upstream pool, mirroring the official
   // models page (Sort: Trending). Download counts are shown as reference.
   const trendingPool = openSourceRankings;
-  const t2iModels = useMemo(() => dashboardData.textToImage?.models ?? [], [dashboardData.textToImage?.models]);
+  const t2iModels = useMemo(() => dashboardData.textToImage?.data ?? [], [dashboardData.textToImage?.data]);
   const latestOpenRouterModel = dashboardData.orRankings?.tokenUsageRankings?.[0] ?? null;
 
   const trendingStats = useMemo<HomeBarStat[]>(

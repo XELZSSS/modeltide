@@ -1,8 +1,81 @@
 import { utf8ByteLength, fnv1aHash } from "@/shared/utils";
 import { UpstreamError } from "@/server/infra/errors";
-import { isEnvelope, maxStaleMs, type StaleEnvelope } from "@/server/infra/cache/envelope";
-import { L1_MAX_TTL_MS, MAX_KV_RETENTION_TTL_S } from "@/server/config";
-import { MemoryL1 } from "@/server/infra/cache/memory-l1";
+import { ONE_DAY } from "@/shared/config";
+import { L1_MAX_TTL_MS, MAX_KV_RETENTION_TTL_S, MEMORY_CACHE_MAX_BYTES, MEMORY_CACHE_MAX_KEYS } from "@/server/config";
+
+// ── Merged from infra/cache/envelope.ts + infra/cache/memory-l1.ts ──
+// Single-file cache primitives: KV envelope (generation-locked via version
+// prefix in CacheService.vk) + isolate-local L1 with stale fallback.
+const STALE_WINDOW_MS = ONE_DAY;
+const MAX_STALE_EXTRA_MS = 60 * 60_000;
+
+export function maxStaleMs(ttl: number): number {
+  if (!Number.isFinite(ttl) || ttl <= 0) return MAX_STALE_EXTRA_MS;
+  return Math.min(2 * ttl + MAX_STALE_EXTRA_MS, STALE_WINDOW_MS);
+}
+
+export interface StaleEnvelope<T> {
+  d: T;
+  e: number;
+  t?: number;
+}
+
+export function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
+  return typeof v === "object" && v !== null && "d" in v && "e" in v && typeof (v as StaleEnvelope<T>).e === "number";
+}
+
+export interface MemoryEntry<T> {
+  d: T;
+  e: number;
+}
+
+export class MemoryL1 {
+  private map = new Map<string, { entry: MemoryEntry<unknown>; bytes: number }>();
+  private bytes = 0;
+
+  get<T>(vk: string): MemoryEntry<T> | undefined {
+    const item = this.map.get(vk);
+    if (!item) return undefined;
+    this.map.delete(vk);
+    this.map.set(vk, item);
+    return item.entry as MemoryEntry<T>;
+  }
+
+  delete(vk: string): void {
+    const item = this.map.get(vk);
+    if (!item) return;
+    this.bytes -= item.bytes;
+    this.map.delete(vk);
+  }
+
+  set(vk: string, data: unknown, ttl: number, bytes: number): void {
+    this.delete(vk);
+    if (bytes > MEMORY_CACHE_MAX_BYTES) return;
+    if (this.map.size >= MEMORY_CACHE_MAX_KEYS) {
+      const now = Date.now();
+      for (const [k, item] of this.map) {
+        if (item.entry.e <= now) this.delete(k);
+        if (this.map.size < MEMORY_CACHE_MAX_KEYS) break;
+      }
+      if (this.map.size >= MEMORY_CACHE_MAX_KEYS) {
+        const oldest = this.map.keys().next();
+        if (!oldest.done) this.delete(oldest.value);
+      }
+    }
+    while (this.bytes + bytes > MEMORY_CACHE_MAX_BYTES) {
+      const oldest = this.map.keys().next();
+      if (!oldest.done) this.delete(oldest.value);
+      else break;
+    }
+    this.map.set(vk, { entry: { d: data, e: Date.now() + ttl }, bytes });
+    this.bytes += bytes;
+  }
+
+  clear(): void {
+    this.map.clear();
+    this.bytes = 0;
+  }
+}
 
 export class InflightRegistry {
   private map = new Map<string, Promise<unknown>>();
@@ -22,17 +95,18 @@ export class InflightRegistry {
 }
 
 function jitteredTtl(vk: string, ttl: number): number {
+  const base = Number.isFinite(ttl) && ttl > 0 ? ttl : 60_000;
+  // Deterministic hash jitter only (no Math.random): same key → same skew,
+  // still breaks the global :00/:30 thundering herd across keys.
   const h1 = (parseInt(fnv1aHash(vk), 36) % 50) / 1000;
-  const h2 = (parseInt(fnv1aHash(`${vk}:salt`), 36) % 50) / 1000;
-  const factor = 0.95 + h1 + h2;
-  if (ttl < 60_000) return Math.max(1000, Math.round(ttl * factor));
-  return Math.max(60_000, Math.round(ttl * factor));
+  const factor = 0.95 + h1;
+  if (base < 60_000) return Math.max(1000, Math.round(base * factor));
+  return Math.max(60_000, Math.round(base * factor));
 }
 
 function l1TtlFor(effective: number): number {
   if (!Number.isFinite(effective) || effective <= 0) return L1_MAX_TTL_MS;
-  const scaled = Math.floor(effective / 10);
-  return Math.min(effective, Math.max(L1_MAX_TTL_MS, Math.min(15 * 60_000, scaled)));
+  return Math.min(effective, 15 * 60_000);
 }
 
 const sharedL1 = new MemoryL1();
@@ -40,16 +114,11 @@ const sharedInflight = new InflightRegistry();
 
 const FAILURE_COOLDOWN_MS = 45_000;
 const FAILURE_COOLDOWN_MAX_KEYS = 512;
-
-// A persistently failing KV read is otherwise indistinguishable from an empty
-// store; throttle so a full outage logs once per interval instead of per hit.
-const KV_READ_WARN_THROTTLE_MS = 5 * 60_000;
-let lastKvReadWarnAt = 0;
+// Hang guard for the inflight registry: well past every upstream timeout
+// (10s default, 15s litellm, one retry each) — only fires on a stuck fn().
+const INFLIGHT_HANG_GUARD_MS = 60_000;
 
 function warnKvReadFailure(err: unknown): void {
-  const now = Date.now();
-  if (now - lastKvReadWarnAt < KV_READ_WARN_THROTTLE_MS) return;
-  lastKvReadWarnAt = now;
   console.warn(
     `[cache] KV read failed, degrading to refresh/stale path: ${err instanceof Error ? err.message : String(err)}`,
   );
@@ -69,7 +138,7 @@ class FailureCooldown {
     return false;
   }
 
-  /** Whether the recorded failure for key was timeout-caused (for 504 fidelity). */
+  /** Whether the recorded failure for key was timeout-caused. */
   wasTimeout(key: string): boolean {
     return this.lastFail.get(key)?.timeout === true;
   }
@@ -101,7 +170,6 @@ export function resetModuleCachesForTests(): void {
   sharedL1.clear();
   sharedInflight.clear();
   refreshFailureCooldown.clear();
-  lastKvReadWarnAt = 0;
 }
 
 export interface CacheStores {
@@ -110,16 +178,6 @@ export interface CacheStores {
   failureCooldownMs?: number;
 }
 
-/**
- * Two-tier cache (memory L1 + KV L2) with per-key TTL envelopes.
- *
- * Version policy is a hard cut: every key is prefixed with the active
- * CACHE_VERSION, and a version bump is an ABI break — entries under an old
- * prefix are never read, rewritten, or migrated; they just expire unused
- * (≤30d KV retention). The read path stays single-generation (exactly one
- * candidate key per lookup), and payload-shape changes are safe by
- * construction: no legacy-read or adoption machinery exists, by design.
- */
 export class CacheService {
   private l1: MemoryL1;
   private inflight: InflightRegistry;
@@ -144,7 +202,6 @@ export class CacheService {
     try {
       raw = await this.kv!.get(key, { type: "text" });
     } catch (err) {
-      // KV read failure should degrade to a refresh/stale path, not bubble a 502.
       warnKvReadFailure(err);
       return undefined;
     }
@@ -172,25 +229,26 @@ export class CacheService {
     await this.kv.put(k, serialized, { expirationTtl });
   }
 
-  /** Persist under the current key; write errors are logged, never fail the request. */
   private async storeCurrent<T>(vk: string, data: T, ttl: number): Promise<void> {
     const hasKv = this.kv != null;
-    const requested = ttl;
-    const effective = jitteredTtl(vk, Number.isFinite(requested) && requested > 0 ? requested : ttl);
+    const effective = jitteredTtl(vk, ttl);
     try {
       const serialized = JSON.stringify({ d: data, e: Date.now() + effective, t: effective });
       const bytes = utf8ByteLength(serialized);
       this.l1.set(vk, data, hasKv ? l1TtlFor(effective) : effective, bytes);
       await this.setSerialized(vk, serialized, effective);
     } catch (err) {
-      // KV write failures (quota, 413 too-large, transient) degrade this key
-      // to memory-only caching. Log so sustained write pressure — e.g. the
-      // free-plan 1000 writes/day cap — is observable in worker logs.
       console.warn(`[cache] KV write failed for ${vk}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  async withTtl<T>(k: string, ttl: number, fn: () => Promise<{ data: T; ttl?: number }>): Promise<T> {
+  async withTtl<T>(
+    k: string,
+    ttl: number,
+    fn: () => Promise<{ data: T; ttl?: number }>,
+    opts?: { memoryOnly?: boolean },
+  ): Promise<T> {
+    if (opts?.memoryOnly) return this.withMemory(k, ttl, fn);
     const vk = this.vk(k);
     const mem = this.l1.get<T>(vk);
     if (mem && mem.e > Date.now()) {
@@ -201,8 +259,6 @@ export class CacheService {
       try {
         return await this.refresh(vk, ttl, fn);
       } catch (err) {
-        // Memory-only mode still honors the stale budget so an isolate never
-        // serves arbitrarily old data (mirrors the KV stale path below).
         if (Date.now() - mem.e > maxStaleMs(ttl)) throw err;
         return mem.d;
       }
@@ -212,8 +268,6 @@ export class CacheService {
       try {
         return await this.refresh(vk, ttl, fn);
       } catch (err) {
-        // KV read failed (getVersioned swallows) or upstream down: serve the
-        // bounded stale L1 copy when one exists instead of failing the request.
         if (mem) return mem.d;
         throw err;
       }
@@ -232,29 +286,63 @@ export class CacheService {
     }
   }
 
-  private async refresh<T>(vk: string, ttl: number, fn: () => Promise<{ data: T; ttl?: number }>): Promise<T> {
+  private async withMemory<T>(k: string, ttl: number, fn: () => Promise<{ data: T; ttl?: number }>): Promise<T> {
+    const vk = this.vk(k);
+    const mem = this.l1.get<T>(vk);
+    if (mem && mem.e > Date.now()) {
+      return mem.d;
+    }
+    if (!mem) return this.refresh(vk, ttl, fn, true);
+    try {
+      return await this.refresh(vk, ttl, fn, true);
+    } catch (err) {
+      if (Date.now() - mem.e > maxStaleMs(ttl)) throw err;
+      return mem.d;
+    }
+  }
+
+  private async refresh<T>(
+    vk: string,
+    ttl: number,
+    fn: () => Promise<{ data: T; ttl?: number }>,
+    memoryOnly = false,
+  ): Promise<T> {
     const existing = this.inflight.get<T>(vk);
     if (existing) return existing;
     if (refreshFailureCooldown.shouldSkip(vk, this.failureCooldownMs)) {
-      // Preserve the original failure class so a timed-out upstream keeps
-      // surfacing 504 (not 502) while the cooldown is armed.
       const timeout = refreshFailureCooldown.wasTimeout(vk);
       throw new UpstreamError(`Upstream refresh skipped (failure cooldown) for ${vk}`, { timeout });
     }
-    const p = this.inflight.run(
-      vk,
-      (async () => {
-        const { data, ttl: t } = await fn();
+    let p!: Promise<T>;
+    const task = (async () => {
+      const { data, ttl: t } = await fn();
+      if (this.inflight.get(vk) !== p) return data;
+      if (memoryOnly) {
+        const effective = jitteredTtl(vk, t ?? ttl);
+        const serialized = JSON.stringify({ d: data, e: Date.now() + effective, t: effective });
+        this.l1.set(vk, data, effective, utf8ByteLength(serialized));
+      } else {
         await this.storeCurrent(vk, data, t ?? ttl);
-        return data;
-      })(),
-    );
+      }
+      return data;
+    })();
+    p = this.inflight.run(vk, task);
+    let rejectGuard: (err: unknown) => void = () => {};
+    const guardRejection = new Promise<never>((_, reject) => {
+      rejectGuard = reject;
+    });
+    p.then(undefined, () => {});
+    const hangTimer = setTimeout(() => {
+      this.inflight.release(vk, p);
+      rejectGuard(new UpstreamError(`Upstream refresh timed out (inflight guard) for ${vk}`, { timeout: true }));
+    }, INFLIGHT_HANG_GUARD_MS);
     try {
-      return await p;
+      return await Promise.race([p, guardRejection]);
     } catch (err) {
       refreshFailureCooldown.record(vk, err);
       throw err;
     } finally {
+      clearTimeout(hangTimer);
       this.inflight.release(vk, p);
     }
   }

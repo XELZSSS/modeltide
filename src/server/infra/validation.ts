@@ -37,6 +37,34 @@ export const qStr = (o: { default?: string; maxLength?: number } = {}): StringSp
 type SpecValue<S extends QuerySpec> = S extends EnumSpec<infer V> ? V : S extends NumberSpec ? number : string;
 export type ValidatedQuery<S extends QuerySchema> = { [K in keyof S]: SpecValue<S[K]> };
 
+function parseSingle(name: string, v: string, spec: QuerySpec): string | number {
+  if (v.length > 500) throw new ValidationError(`Query param "${name}" is too long`);
+  if (spec.type === "string") {
+    if (spec.maxLength != null && v.length > spec.maxLength) {
+      throw new ValidationError(`Query param "${name}" must be <= ${spec.maxLength} chars`);
+    }
+    return v;
+  }
+  if (spec.type === "number") {
+    if (!/^[+-]?(\d+(\.\d+)?)$/.test(v)) {
+      throw new ValidationError(`Query param "${name}" must be a number`);
+    }
+    if (spec.integer && /[.eE]/.test(v)) {
+      throw new ValidationError(`Query param "${name}" must be an integer`);
+    }
+    const n = Number(v);
+    if (!Number.isFinite(n)) throw new ValidationError(`Query param "${name}" must be a number`);
+    if (spec.integer && !Number.isInteger(n)) throw new ValidationError(`Query param "${name}" must be an integer`);
+    if (spec.min != null && n < spec.min) throw new ValidationError(`Query param "${name}" must be >= ${spec.min}`);
+    if (spec.max != null && n > spec.max) throw new ValidationError(`Query param "${name}" must be <= ${spec.max}`);
+    return n;
+  }
+  if (!(spec.values as readonly string[]).includes(v)) {
+    throw new ValidationError(`Query param "${name}" must be one of: ${spec.values.join(", ")}`);
+  }
+  return v;
+}
+
 export function validateQuery<S extends QuerySchema>(
   raw: Record<string, string | string[]>,
   schema: S,
@@ -44,32 +72,15 @@ export function validateQuery<S extends QuerySchema>(
   const out: Record<string, unknown> = {};
   for (const [name, spec] of Object.entries(schema)) {
     const rawVal = raw[name];
-    const rawStr = Array.isArray(rawVal) ? (rawVal[0] ?? "") : (rawVal ?? "");
-    let v: string | undefined = rawStr.trim();
-    if (!v) v = spec.default;
-    if (v === undefined) continue;
-    if (v.length > 500) throw new ValidationError(`Query param "${name}" is too long`);
-    if (spec.type === "string") {
-      if (spec.maxLength != null && v.length > spec.maxLength) {
-        throw new ValidationError(`Query param "${name}" must be <= ${spec.maxLength} chars`);
-      }
-      out[name] = v;
-    } else if (spec.type === "number") {
-      if (!/^[+-]?(\d+(\.\d+)?)$/.test(v)) {
-        throw new ValidationError(`Query param "${name}" must be a number`);
-      }
-      if (spec.integer && /[.eE]/.test(v)) {
-        throw new ValidationError(`Query param "${name}" must be an integer`);
-      }
-      const n = Number(v);
-      if (!Number.isFinite(n)) throw new ValidationError(`Query param "${name}" must be a number`);
-      if (spec.integer && !Number.isInteger(n)) throw new ValidationError(`Query param "${name}" must be an integer`);
-      if (spec.min != null && n < spec.min) throw new ValidationError(`Query param "${name}" must be >= ${spec.min}`);
-      if (spec.max != null && n > spec.max) throw new ValidationError(`Query param "${name}" must be <= ${spec.max}`);
-      out[name] = n;
-    } else if (!(spec.values as readonly string[]).includes(v)) {
-      throw new ValidationError(`Query param "${name}" must be one of: ${spec.values.join(", ")}`);
-    } else out[name] = v;
+    if (rawVal === undefined) {
+      if (spec.default === undefined) throw new ValidationError(`Query param "${name}" is required`);
+      out[name] = parseSingle(name, spec.default, spec);
+      continue;
+    }
+    if (Array.isArray(rawVal)) throw new ValidationError(`Query param "${name}" must not be repeated`);
+    const v = rawVal.trim();
+    if (!v) throw new ValidationError(`Query param "${name}" must not be empty`);
+    out[name] = parseSingle(name, v, spec);
   }
   return out as ValidatedQuery<S>;
 }

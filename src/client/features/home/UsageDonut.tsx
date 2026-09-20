@@ -3,7 +3,7 @@ import { memo, useMemo } from "react";
 import type { ChartOptions } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
-import { Card, CardContent } from "@/client/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { formatShortNumber } from "@/client/utils/format";
 import { registerDoughnut } from "@/client/utils/charts-register";
 
@@ -59,8 +59,7 @@ export const UsageDonut = memo(function UsageDonut({ models }: { models: { task:
   return (
     <Card className="h-full">
       <CardContent className="flex flex-col h-full">
-        <p className="ui-card-title mb-1">{t("opensourceTaskShare")}</p>
-        <p className="ui-caption mb-4">{t("openSourceDataSource")}</p>
+        <CardHeader title={t("opensourceTaskShare")} subtitle={t("openSourceDataSource")} />
         {slices.length === 0 ? (
           <div
             className="flex min-h-[200px] h-[200px] sm:h-[240px] flex-1 items-center justify-center text-center ui-body-secondary"
@@ -69,8 +68,8 @@ export const UsageDonut = memo(function UsageDonut({ models }: { models: { task:
             {t("notAvailable")}
           </div>
         ) : (
-          <div className="w-full flex-1 min-h-[200px] h-[200px] sm:h-[240px]">
-            <figure className="h-full">
+          <div className="w-full flex-1 min-h-[200px] h-[200px] sm:h-[240px] min-w-0 overflow-hidden">
+            <figure className="h-full [&_canvas]:block">
               <Doughnut data={data} options={options} aria-label={t("opensourceTaskShare")} role="img" />
               <figcaption className="sr-only">
                 {slices.map((s) => {

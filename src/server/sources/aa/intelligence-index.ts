@@ -1,18 +1,23 @@
+import { byNumberDesc, isValidModelIdentity } from "@/server/parsers/primitives";
 import type { AppContext } from "@/server/context";
 import { DEFAULT_TTL_MS, ttlFor } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { parseRscPayloads, findNextData } from "@/server/parsers/rsc";
 import { zeroUpstream } from "@/server/infra/errors";
-import { byNumberDesc } from "@/server/parsers/shaping";
-import { isValidModelIdentity } from "@/server/parsers/data-filter";
+
 import { getModelDirectory } from "@/server/sources/openrouter/directory";
-import { compact, compactOmniscienceEnrich } from "@/server/parsers/aa-catalog";
-import { backfillFromMeta } from "@/server/parsers/aa-match-meta";
+import {
+  backfillFromMeta,
+  buildWeightsRecord,
+  compact,
+  compactOmniscienceEnrich,
+  findModelArray,
+  mergeBySlug,
+  type IntelligenceIndexResult,
+} from "@/server/parsers/aa";
 import { fetchAaRsc, fetchAndParseEnrich } from "@/server/sources/aa/fetch";
 import { upstreamEndpoints } from "@/server/config";
-import { buildWeightsRecord, findModelArray, mergeBySlug } from "@/server/parsers/aa-index";
-import type { IntelligenceIndexResult } from "@/server/parsers/aa-index";
 import { cachedSource, sourcePayload } from "@/server/sources/pipeline";
 
 async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceIndexResult> {
@@ -40,7 +45,7 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceInde
     ]),
     getModelDirectory(ctx)
       .then((d) => d.meta)
-      .catch(() => ({}) as Record<string, import("@/server/parsers/or-types").ModelMetaEntry>),
+      .catch(() => ({}) as Record<string, import("@/server/parsers/openrouter").ModelMetaEntry>),
   ]);
 
   const [indexModels, catalog] = parseRscPayloads(indexBody, ["intelligenceIndex", "models"], findModelArray) as [
@@ -53,8 +58,6 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceInde
   const merged = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
     .map(compact)
     .filter((m) => isValidModelIdentity(m.id, m.slug, m.name));
-  // Served in full: detail pages, search and the weights lookup resolve
-  // against this list, so truncating it would lose content.
   const weights = buildWeightsRecord(merged);
   const models = merged.sort(byNumberDesc((m) => m.intelligence_index));
   if (models.length === 0) {

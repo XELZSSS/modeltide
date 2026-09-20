@@ -5,7 +5,8 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel, HallucinationRankingEntry } from "@/shared/types";
 import { formatIndex, formatPercent } from "@/client/utils/format";
 import { normalizeModelKey } from "@/shared/utils";
-import { DetailSection, StatGrid } from "@/client/components/ui/grids";
+import { StatGrid } from "@/client/components/ui/grids";
+import { PageSection } from "@/client/components/layout";
 import { InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { NotFound } from "@/client/components/feedback";
@@ -41,31 +42,33 @@ function HallDetailContent({
         {aaModel?.release_date && <InfoRow label={t("releaseDate")} value={aaModel.release_date} />}
       </InfoCard>
       {aaModel && (
-        <DetailSection title={t("modelDetail")}>
+        <PageSection title={t("modelDetail")}>
           <ModelDetailContent model={aaModel} />
-        </DetailSection>
+        </PageSection>
       )}
     </div>
   );
+}
+
+/** Cross-match a hallucination entry against the AA index by normalized name keys. */
+function findAaModelForHall(
+  aaData: ArtificialAnalysisModel[],
+  entry: HallucinationRankingEntry,
+): ArtificialAnalysisModel | undefined {
+  const want = normalizeModelKey(entry.model);
+  const slugWant = normalizeModelKey(entry.slug);
+  const candidates = aaData.filter((m) => {
+    const keys = [m.name, m.short_name, m.slug].filter((v): v is string => !!v).map(normalizeModelKey);
+    return keys.includes(want) || keys.includes(slugWant);
+  });
+  return candidates.length === 1 ? candidates[0] : undefined;
 }
 
 export function HallDetail({ decodedId }: { decodedId: string }) {
   const aaData = useSuspenseArtificialRankings();
   const hallucinationRankings = useSuspenseHallucinationRankings();
   const entry = findModel(hallucinationRankings, decodedId, "id", "slug");
-  const aaModel =
-    findModel(aaData, decodedId, "id", "slug") ??
-    (entry
-      ? (() => {
-          const want = normalizeModelKey(entry.model);
-          const slugWant = normalizeModelKey(entry.slug);
-          const candidates = aaData.filter((m) => {
-            const keys = [m.name, m.short_name, m.slug].filter((v): v is string => !!v).map(normalizeModelKey);
-            return keys.includes(want) || keys.includes(slugWant);
-          });
-          return candidates.length === 1 ? candidates[0] : undefined;
-        })()
-      : undefined);
+  const aaModel = findModel(aaData, decodedId, "id", "slug") ?? (entry ? findAaModelForHall(aaData, entry) : undefined);
   if (!entry) return <NotFound />;
   return (
     <DetailShell source="hall" title={entry.model}>

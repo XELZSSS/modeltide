@@ -29,7 +29,9 @@ export function ExpandToggle({
         onToggle();
       }}
     >
-      <span className={cn("shrink-0 text-text-secondary transition-transform duration-200", isExpanded && "rotate-90")}>
+      <span
+        className={cn("shrink-0 text-text-secondary transition-transform duration-fast", isExpanded && "rotate-90")}
+      >
         <ChevronRight size={size} />
       </span>
     </Button>

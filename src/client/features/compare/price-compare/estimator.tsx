@@ -5,7 +5,7 @@ import { modelId } from "@/client/utils/model";
 import { formatDollar } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { Card, CardContent } from "@/client/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
 import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
 import { useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
@@ -17,8 +17,8 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   const { t } = useTranslation();
   const theme = useChartTheme();
 
-  const { getOfficial } = useOfficialPricing();
-  const { monthlyCosts, ...inputs } = useMonthlyCosts(models, getOfficial);
+  const { getOfficial, isPending: officialPending } = useOfficialPricing();
+  const { monthlyCosts, ...inputs } = useMonthlyCosts(models, getOfficial, { ready: !officialPending });
   const bestMonthlyCost = useMemo(() => {
     const valid = monthlyCosts.filter((v): v is number => v !== null);
     return valid.length > 0 ? Math.min(...valid) : null;
@@ -27,12 +27,21 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   return (
     <Card>
       <CardContent>
-        <p className="ui-card-title mb-4">{t("estimatedMonthlyCost")}</p>
+        <CardHeader title={t("estimatedMonthlyCost")} />
         <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-5">
           <CostEstimatorInputs state={inputs} layout="label-input-unit" />
         </div>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" aria-busy={officialPending}>
+          {officialPending && <span className="sr-only">{t("loading")}</span>}
           {models.map((model, index) => {
+            if (officialPending) {
+              return (
+                <div key={modelId(model) || `idx-${index}`} className="flex items-center justify-between gap-2">
+                  <span className="ui-skeleton inline-block h-4 w-32" aria-hidden="true" />
+                  <span className="ui-skeleton inline-block h-4 w-20" aria-hidden="true" />
+                </div>
+              );
+            }
             const cost = monthlyCosts[index];
             const isBest = cost != null && bestMonthlyCost != null && approxEq(cost, bestMonthlyCost);
             return (

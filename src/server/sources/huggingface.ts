@@ -1,12 +1,13 @@
+import { isOpenReleaseEntry, isValidRowId, keepOpenSourceRanking } from "@/server/parsers/primitives";
 import { ONE_MINUTE, SLOW_TTL_MS, SOURCE_LIMITS, normalizeModelLimit, sliceToLimit } from "@/shared/config";
 import { upstreamConfig, UPSTREAM_FETCH_OPTS, cacheKeys } from "@/server/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError, zeroUpstream } from "@/server/infra/errors";
 import { dedupeBy } from "@/shared/utils";
-import type { HFModel } from "@/server/parsers/hf-models";
-import { findUnknownLicenseTags, mapModel } from "@/server/parsers/hf-models";
-import { isOpenReleaseEntry, isValidRowId, keepOpenSourceRanking } from "@/server/parsers/data-filter";
+import { findUnknownLicenseTags, mapModel } from "@/server/parsers/huggingface";
+import type { HFModel } from "@/server/parsers/upstream";
+
 import type { SourcePayload } from "@/server/sources/types";
 import { cachedPayload } from "@/server/sources/pipeline";
 
@@ -35,10 +36,7 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
   return items;
 }
 
-export const getModels = async (
-  ctx: AppContext,
-  p: ModelQuery,
-): Promise<SourcePayload<OpenSourceModelEntry[]>> => {
+export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> => {
   const payload = await cachedPayload<OpenSourceModelEntry[]>(
     ctx,
     cacheKeys.openSourceModels(p.sort, p.direction, p.limit),
@@ -46,8 +44,6 @@ export const getModels = async (
     async () => {
       const bucketLimit = normalizeModelLimit(p.limit);
       const items = await fetchHFModels(ctx, p.sort, p.direction, bucketLimit);
-      // HF may cap `limit` server-side; log the shortfall so a silent
-      // truncation is visible in cron/worker logs instead of looking full.
       if (items.length < bucketLimit) {
         ctx.log("info", `[huggingface] short response: got ${items.length}/${bucketLimit} rows`);
       }
@@ -61,8 +57,7 @@ export const getModels = async (
       return { rows: bucket };
     },
   );
-  // The full bucket is cached so sibling limits never poison each other.
-  return { data: sliceToLimit(payload.data, p.limit), fetchedAt: payload.fetchedAt };
+  return { ...payload, data: sliceToLimit(payload.data, p.limit) };
 };
 
 export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
@@ -83,7 +78,6 @@ export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceMo
     return { rows: sorted };
   });
 
-// ── Single-model fetch (no list window): detail pages resolve any id ──
 export async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
   const trimmed = id.trim();
   if (!isValidRowId(trimmed)) throw new ValidationError(`Invalid Hugging Face model id "${id}"`);
@@ -99,7 +93,6 @@ export async function fetchHFModelById(ctx: AppContext, id: string): Promise<Ope
       ...(headers ? { headers } : {}),
     });
   } catch (err) {
-    // Missing upstream row is a detail NotFound, not a 502.
     if (err instanceof UpstreamError && err.statusCode === 404) return null;
     throw err;
   }
@@ -107,20 +100,10 @@ export async function fetchHFModelById(ctx: AppContext, id: string): Promise<Ope
 }
 
 export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload<OpenSourceModelEntry | null>> => {
-  // Validate before keying: garbage ids must not produce cache keys (and
-  // therefore KV writes) at all, not even for the failed lookup.
   const trimmed = id.trim();
   if (!isValidRowId(trimmed)) return Promise.reject(new ValidationError(`Invalid Hugging Face model id "${id}"`));
-  return cachedPayload<OpenSourceModelEntry | null>(
-    ctx,
-    cacheKeys.openSourceModel(trimmed),
-    SLOW_TTL_MS,
-    async () => {
-      const model = await fetchHFModelById(ctx, trimmed);
-      // 404 (null) is a lookup miss, not data: cache it for 60s only so a
-      // newly-published model becomes visible quickly instead of sticking to
-      // NotFound for the full 2h slow TTL.
-      return model == null ? { rows: model, ttl: ONE_MINUTE } : { rows: model };
-    },
-  );
+  return cachedPayload<OpenSourceModelEntry | null>(ctx, cacheKeys.openSourceModel(trimmed), SLOW_TTL_MS, async () => {
+    const model = await fetchHFModelById(ctx, trimmed);
+    return model == null ? { rows: model, ttl: ONE_MINUTE } : { rows: model };
+  });
 };

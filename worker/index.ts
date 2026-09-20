@@ -1,47 +1,39 @@
 import { buildContext, type AppContext, type Env } from "@/server/context";
-import { recordStatusSamples } from "@/server/sources/status/store";
+import { recordStatusSamples } from "@/server/sources/status";
 import { SOURCES, type WarmTier } from "@/server/sources/registry";
 import type { QuerySchema, ValidatedQuery } from "@/server/infra/validation";
 import { runCapped } from "@/server/infra/pool";
 import { applyApiHeaders } from "@/shared/config/security";
 import { handleApi } from "./router";
 
-const SAMPLE_TIMEOUT_MS = 25_000;
-// Batch-level backstop only; individual fetches carry their own timeouts
-// (10s default, 15s litellm, one retry each). Must fit two sequential
-// concurrency waves in the pathological all-slow case: ~30s (litellm retry
-// chain) + ~15s for the stragglers of the second wave.
+const SAMPLE_TIMEOUT_MS = 45_000;
 const WARM_CALL_TIMEOUT_MS = 45_000;
 const WARM_CONCURRENCY = 6;
 const PING_TIMEOUT_MS = 5_000;
 
-/**
- * Warmup tasks for one cadence tier, derived from the shared source manifest
- * (src/server/sources/registry.ts) so endpoints and warmup targets never drift.
- * Sources without a `warm` tier are intentionally never warmed.
- */
 function warmTasks(ctx: AppContext, tier: WarmTier): (() => Promise<unknown>)[] {
   const tasks: (() => Promise<unknown>)[] = [];
   for (const source of SOURCES) {
     if (source.warm !== tier) continue;
-    const paramSets = source.warmParams?.length
-      ? source.warmParams
-      : [{} as ValidatedQuery<QuerySchema>];
+    const paramSets = source.warmParams?.length ? source.warmParams : [{} as ValidatedQuery<QuerySchema>];
     for (const params of paramSets) tasks.push(() => source.handler(ctx, params));
   }
   return tasks;
 }
 
-// Dead-man's switch: Healthchecks.io (or compatible) alerts when pings stop
-// arriving. Covers the blind spot of never firing at all (config lost,
-// account issue) rather than firing and failing.
-// On top of that, a firing-but-failing cron pings the /fail endpoint so a
-// fully-broken sampling/warmup round pages immediately instead of looking
-// healthy. Convention: success URL + "/fail" (Healthchecks-compatible).
 async function pingCronMonitor(env: Env, healthy: boolean): Promise<void> {
   const url = env.STATUS_PING_URL;
   if (!url) return;
-  const target = healthy ? url : url.endsWith("/") ? `${url}fail` : `${url}/fail`;
+  let target = url;
+  try {
+    const parsed = new URL(url);
+    parsed.pathname = parsed.pathname.endsWith("/")
+      ? `${parsed.pathname}${healthy ? "" : "fail"}`
+      : `${parsed.pathname}${healthy ? "" : "/fail"}`;
+    target = parsed.toString();
+  } catch {
+    target = healthy ? url : url.endsWith("/") ? `${url}fail` : `${url}/fail`;
+  }
   try {
     const res = await fetch(target, { signal: AbortSignal.timeout(PING_TIMEOUT_MS) });
     if (!res.ok) console.warn(`[cron-monitor] ping responded ${res.status} (healthy=${healthy})`);
@@ -58,7 +50,7 @@ interface ScheduledResult {
 }
 
 async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: number): Promise<ScheduledResult> {
-  if (!env.CACHE) return { sampled: null, warmFailed: 0, warmTotal: 0, healthy: true };
+  if (!env.CACHE) return { sampled: null, warmFailed: 0, warmTotal: 0, healthy: false };
   const sampleJob = (async (): Promise<boolean | null> => {
     try {
       return await recordStatusSamples(buildContext(env, { signal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
@@ -67,20 +59,10 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
       return false;
     }
   })();
-  // Warmup: directly invoke data sources (no HTTP self-fetch).
-  // Split by KV write pressure (free-plan bottleneck: 1000 writes/day):
-  // - every pass warms the short-TTL core (30-min data);
-  // - the first pass of each hour additionally warms the 2h lists;
-  // - the 6h static archives (official pricing, closed releases) warm on the
-  //   first pass every 6h only — rewriting a 6h-TTL key hourly wastes 4x writes.
-  // status-history is noStore and intentionally skipped. Sampling and warmup
-  // run concurrently; warmup is concurrency-capped so one slow upstream
-  // doesn't abort the batch.
   const warmJob = (async (): Promise<{ failed: number; total: number }> => {
     try {
       const warmSignal = AbortSignal.timeout(WARM_CALL_TIMEOUT_MS);
       const ctx = buildContext(env, { signal: warmSignal });
-      // Per-source tiers/params live in the manifest; only cadence policy here.
       const coreTasks = warmTasks(ctx, "core");
       const hourlyTasks = warmTasks(ctx, "hourly");
       const tasks =
@@ -99,21 +81,15 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
     }
   })();
   const [sampled, warm] = await Promise.all([sampleJob, warmJob]);
-  // Healthy = sampling wrote (or was skipped due to lock contention) AND warmup
-  // didn't totally fail. Partial warmup failures are normal upstream flakiness
-  // and stay green; total failure or an empty sampling round pages via /fail.
   const warmOk = warm.total === 0 || warm.failed < warm.total;
   const healthy = sampled !== false && warmOk;
   return { sampled, warmFailed: warm.failed, warmTotal: warm.total, healthy };
 }
 
 function isApiRequest(url: URL): boolean {
-  return url.pathname === "/api" || url.pathname.startsWith("/api/");
+  return url.pathname.startsWith("/api/");
 }
 
-// The Worker only ever sees /api/* (run_worker_first in wrangler.jsonc) plus
-// the rare non-navigation asset miss (e.g. curl without Sec-Fetch-Mode), which
-// falls through to the asset layer's SPA handling.
 async function fetchHandler(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   if (!isApiRequest(url)) {
@@ -135,13 +111,23 @@ async function fetchHandler(req: Request, env: Env): Promise<Response> {
   }
   const isHead = req.method === "HEAD";
   const res = await handleApi(req, env, url);
-  if (res) return isHead ? new Response(null, { status: res.status, headers: res.headers }) : res;
+  if (res) {
+    if (!isHead) return res;
+    const headers = new Headers(res.headers);
+    headers.delete("content-length");
+    headers.delete("content-encoding");
+    return new Response(null, { status: res.status, headers });
+  }
   const notFound = Response.json(
     { error: { code: 404, message: "Not found" } },
     { status: 404, headers: { "content-type": "application/json" } },
   );
   applyApiHeaders(notFound.headers);
-  return isHead ? new Response(null, { status: notFound.status, headers: notFound.headers }) : notFound;
+  if (!isHead) return notFound;
+  const headers = new Headers(notFound.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  return new Response(null, { status: notFound.status, headers });
 }
 
 export default {

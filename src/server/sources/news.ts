@@ -1,20 +1,18 @@
+import { parseTs, isSuitableNewsItem } from "@/server/parsers/primitives";
 import { NEWS_TTL_MS, SOURCE_LIMITS, ttlForRatio } from "@/shared/config";
 import { rssConfig, FAST_FETCH_OPTS, MAX_FEED_BYTES, cacheKeys } from "@/server/config";
-import { runCapped } from "@/server/infra/pool";
+import { runCapped, errMsg } from "@/server/infra/pool";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError, zeroUpstream } from "@/server/infra/errors";
-import { formatSettleErrors } from "@/server/infra/pool";
 import { FEED_ACCEPT, parseFeed } from "@/server/parsers/feed";
-import { parseTs } from "@/server/parsers/shaping";
+
 import { fetchDailyPapersItems } from "@/server/sources/hf-papers";
 import { dedupeBy } from "@/shared/utils";
-import { isSuitableNewsItem } from "@/server/parsers/data-filter";
+
 import type { SourcePayload } from "@/server/sources/types";
 import { cachedPayload, requireParsed } from "@/server/sources/pipeline";
 
-// Dedupe key only (never served): collapse to a canonical origin+path+query
-// form. Inputs are pre-validated by isSuitableNewsItem -> isValidHttpUrl.
 function normalizeNewsLink(link: string): string {
   const trimmed = link.trim();
   try {
@@ -53,12 +51,12 @@ async function fetchNews(
   if (failCount > 0)
     ctx.log(
       "warn",
-      `[news] ${failCount}/${results.length} feeds failed for "${category}": ${formatSettleErrors(results, legLabels)}`,
+      `[news] ${failCount}/${results.length} feeds failed for "${category}": ${results
+        .map((r, i) => (r.status === "rejected" ? `${legLabels[i] ?? i}: ${errMsg(r.reason)}` : null))
+        .filter(Boolean)
+        .join("; ")}`,
     );
   let invalidDateCount = 0;
-  // HF daily papers arrive upvote-ranked and keep that order at the head of
-  // the feed (up to quota); RSS legs compete by date for the remaining seats.
-  // Without the quota the papers drown below the date-sorted cut.
   const isPaper = (i: NewsItem) => i.id.startsWith("hf-paper-");
   const dated = allItems
     .filter((i) => !isPaper(i))
@@ -85,8 +83,6 @@ async function fetchNews(
 export const getNews = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>
   cachedPayload(ctx, cacheKeys.news(category), NEWS_TTL_MS, async () => {
     const { items, failCount, total } = await fetchNews(ctx, category);
-    // Never cache an empty list: every other source throws zeroUpstream so the
-    // stale copy survives. An empty news array would otherwise poison KV for 30m.
     if (items.length === 0) throw zeroUpstream(`news "${category}"`, "usable items", "all filtered?");
     return { rows: items, partial: failCount > 0, ttl: ttlForRatio(failCount, total, NEWS_TTL_MS) };
   });

@@ -2,7 +2,7 @@ export function dedupeBy<T>(items: T[], keyFn: (item: T) => string | null | unde
   const seen = new Set<string>();
   return items.filter((item) => {
     const key = keyFn(item);
-    if (!key) return false;
+    if (!key) return true;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

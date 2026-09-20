@@ -14,15 +14,17 @@ export const API_DOMAINS = {
   homeDashboard: "home-dashboard",
 } as const;
 
-function apiPath(domain: keyof typeof API_DOMAINS): string {
+type Domain = keyof typeof API_DOMAINS;
+
+function apiPath(domain: Domain): string {
   return `/api/${API_DOMAINS[domain]}`;
 }
 
-export function cacheKey(domain: keyof typeof API_DOMAINS, ...parts: (string | number)[]): string {
+export function cacheKey(domain: Domain, ...parts: (string | number)[]): string {
   return [API_DOMAINS[domain], ...parts].join(":");
 }
 
-function queryKey(domain: keyof typeof API_DOMAINS, ...parts: (string | number)[]): readonly string[] {
+function queryKey(domain: Domain, ...parts: (string | number)[]): readonly string[] {
   return ["api", "v2", API_DOMAINS[domain], ...parts.map(String)] as const;
 }
 
@@ -45,7 +47,7 @@ export const queryKeys = {
   closedReleases: queryKey("closedReleases"),
 } as const;
 
-export const apiPaths = {
+export const apiPaths: Record<Domain, string> = {
   artificialIndex: apiPath("artificialIndex"),
   openSourceModels: apiPath("openSourceModels"),
   openSourceModel: apiPath("openSourceModel"),

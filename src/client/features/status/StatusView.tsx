@@ -7,7 +7,7 @@ import { useSuspenseStatusHistory } from "@/client/api/queries";
 import { PartialNotice, SuspenseQuery } from "@/client/components/feedback";
 import { PageContainer, PageHeader, PageSection } from "@/client/components/layout";
 import { Card, CardContent } from "@/client/components/ui/card";
-import { Dot } from "@/client/components/ui/primitives";
+import { Dot, LabeledDot } from "@/client/components/ui/primitives";
 import { cn } from "@/client/utils/cn";
 import { formatUptime, formatUptimePct } from "@/client/utils/format";
 import { SOURCE_LABELS } from "@/shared/config";
@@ -32,13 +32,12 @@ const SourceCard = memo(function SourceCard({
   return (
     <Link
       href={`/status/${summary.id}`}
-      className="group block border border-border bg-bg-card p-4 transition-colors duration-fast hover:border-text-tertiary/40 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group block ui-card p-4 transition-colors duration-fast hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
     >
       <div className="flex items-center justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Dot size="sm" color={style.dot} />
-          <span className="ui-body font-medium truncate">{label}</span>
-        </div>
+        <LabeledDot size="sm" color={style.dot} textClassName="ui-body" className="flex-1">
+          {label}
+        </LabeledDot>
         <span className={cn("ui-caption font-medium shrink-0", style.text)}>{t(style.labelKey)}</span>
       </div>
       <UptimeStrip buckets={buckets} />
@@ -76,7 +75,7 @@ function StatusContent() {
 
   return (
     <PageContainer>
-      <PageHeader title={t("statusPageTitle")} description={t("sourceStatus")} />
+      <PageHeader title={t("statusPageTitle")} kicker={t("kickerStatus")} description={t("sourceStatus")} />
 
       {data.persisted === false && (
         <div className="mb-4">

@@ -1,19 +1,13 @@
+import { num, isRecord, strOrNull, byNumberDesc, isUnsuitableContent } from "@/server/parsers/primitives";
 import { SOURCE_LIMITS } from "@/shared/config";
 import type { AgentRankEntry } from "@/shared/types";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
-import { num, isRecord, strOrNull } from "@/server/parsers/primitives";
+
 import { parseRscPayload, traverse } from "@/server/parsers/rsc";
-import { byNumberDesc } from "@/server/parsers/shaping";
-import { isUnsuitableContent } from "@/server/parsers/data-filter";
+
 import type { AgentSignalEntry } from "@/server/parsers/upstream";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
 
-/**
- * The five scored signals embedded in the agent board payload. The page
- * renders no standalone overall array: the overall board is the equally
- * weighted mean of these signals (verified 1:1 against the official
- * lmarena-ai/leaderboard-dataset `agent` overall ranking).
- */
 export const AGENT_SIGNALS = [
   "task_outcome_explicit",
   "praise_complaint",
@@ -63,6 +57,7 @@ function extractSignalEntries(signal: string) {
 }
 
 export function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[]): AgentRankEntry[] {
+  const required = boards.length;
   const acc = new Map<
     string,
     {
@@ -87,17 +82,18 @@ export function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow
       if (row.ciUpper != null) cur.ciUpper.push(row.ciUpper);
     }
   }
-  const ranked = [...acc.entries()].map(([id, v]) => ({
-    id,
-    name: v.name,
-    creator: v.creator,
-    license: v.license,
-    score: mean(v.scores),
-    ciLower: mean(v.ciLower),
-    ciUpper: mean(v.ciUpper),
-  }));
+  const ranked = [...acc.entries()]
+    .filter(([, v]) => v.scores.length === required)
+    .map(([id, v]) => ({
+      id,
+      name: v.name,
+      creator: v.creator,
+      license: v.license,
+      score: mean(v.scores),
+      ciLower: mean(v.ciLower),
+      ciUpper: mean(v.ciUpper),
+    }));
   ranked.sort(byNumberDesc((r) => r.score));
-  // ids come from the acc Map keys, so they are already unique.
   return ranked.map((r, i) => ({ rank: i + 1, ...r })).slice(0, SOURCE_LIMITS.agentRankings);
 }
 
@@ -108,8 +104,6 @@ export function parseAgentBoards(body: string): ParseResult<AgentRankEntry[]> {
     try {
       raw = parseRscPayload<AgentSignalEntry>(body, signal, extractSignalEntries(signal));
     } catch (err) {
-      // parseRscPayload is a throwing transport scanner; translate here so the
-      // domain parser itself never throws.
       return parseFail(
         `Agent board "${signal}" could not be extracted: ${err instanceof Error ? err.message : String(err)}`,
       );

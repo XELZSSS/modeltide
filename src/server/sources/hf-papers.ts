@@ -1,7 +1,7 @@
 import type { NewsItem } from "@/shared/types";
 import { UPSTREAM_FETCH_OPTS, upstreamConfig, upstreamEndpoints } from "@/server/config";
 import type { AppContext } from "@/server/context";
-import { parseDailyPapers } from "@/server/parsers/hf-papers";
+import { parseDailyPapers } from "@/server/parsers/huggingface";
 import { requireParsed } from "@/server/sources/pipeline";
 
 export async function fetchDailyPapersItems(ctx: AppContext): Promise<NewsItem[]> {

@@ -5,7 +5,7 @@ import type { DataTableColumn, RowListProps } from "@/client/components/data/col
 import { ExpandToggle, getRowExpandState } from "@/client/components/data/expand";
 
 function cellClasses<T>(col: DataTableColumn<T>): string {
-  return cn("px-4 py-3", col.hiddenMd && "hidden md:table-cell");
+  return cn("px-4 py-4", col.hiddenMd && "hidden md:table-cell");
 }
 function cellInnerClasses<T>(col: DataTableColumn<T>): string {
   return cn("flex items-center gap-2 min-w-0 [&>*]:min-w-0", col.align === "right" && "justify-end text-right");
@@ -13,12 +13,12 @@ function cellInnerClasses<T>(col: DataTableColumn<T>): string {
 export function TableHeader<T>({ columns, isExpandable }: { columns: DataTableColumn<T>[]; isExpandable: boolean }) {
   return (
     <thead>
-      <tr className="border-b border-border bg-bg-secondary/70">
+      <tr className="border-b border-border">
         {columns.map((col, colIdx) => (
           <th key={col.id} scope="col" className={cn(cellClasses(col), "ui-table-header")} style={{ width: col.width }}>
             <div className={cellInnerClasses(col)}>
               {isExpandable && colIdx === 0 && <span className="w-3.5 shrink-0" aria-hidden="true" />}
-              <span className="truncate uppercase tracking-wide">{col.header}</span>
+              <span className="truncate uppercase tracking-[0.14em]">{col.header}</span>
             </div>
           </th>
         ))}
@@ -45,8 +45,8 @@ function TableBodyInner<T>({
             <tr
               className={cn(
                 "border-b border-border last:border-b-0 transition-colors duration-fast bg-bg-card",
-                "hover:bg-hover",
-                isExpanded && "bg-accent-light/70",
+                "hoverable:hover:bg-bg-secondary/50",
+                isExpanded && "bg-bg-secondary/60",
               )}
             >
               {columns.map((col, colIdx) => (

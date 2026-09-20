@@ -175,10 +175,13 @@ function ClosedReleasesTab({ releases, partial }: { releases: ClosedReleaseEntry
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="group inline-flex items-center gap-1.5 text-sm text-accent w-fit"
+            className="group inline-flex items-center gap-1.5 text-sm text-accent w-fit underline-offset-4 transition-colors duration-fast hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 rounded-none"
           >
             {t("aaModelPage")}
-            <ExternalLink size={14} className="md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
+            <ExternalLink
+              size={14}
+              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-fast"
+            />
           </a>
         )}
       </div>
@@ -228,6 +231,7 @@ function ReleasesContent() {
   return (
     <TabbedPage
       title={t("releases")}
+      kicker={t("kickerReleases")}
       description={description}
       actions={<SearchInput />}
       countLabel={countLabel}

@@ -3,7 +3,6 @@ import { cacheKeys } from "@/server/config";
 import type { ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
-import { settled } from "@/server/infra/pool";
 import { getChangelogModels } from "@/server/sources/aa/changelog";
 import { getIntelligenceIndexResult } from "@/server/sources/aa/intelligence-index";
 import { toClosedReleases, toClosedReleasesFromIndex } from "@/server/parsers/closed-releases";
@@ -11,16 +10,10 @@ import type { SourcePayload } from "@/server/sources/types";
 import { cachedPayload } from "@/server/sources/pipeline";
 
 async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedReleaseEntry[]; partial: boolean }> {
-  const [indexRes, changelogRes] = await Promise.allSettled([getIntelligenceIndexResult(ctx), getChangelogModels(ctx)]);
-  const index = settled(indexRes, { models: [], weights: {}, enrichFailed: true });
+  const [index, changelog] = await Promise.all([getIntelligenceIndexResult(ctx), getChangelogModels(ctx)]);
   const models = index.models;
-  const changelog = settled(changelogRes, []);
-  if (indexRes.status === "rejected") ctx.log("warn", `[closed-releases] index failed, changelog-only`);
-  if (changelogRes.status === "rejected") ctx.log("warn", `[closed-releases] changelog failed, index-only`);
   if (models.length === 0 && changelog.length === 0)
     throw new UpstreamError(`Closed releases: both index and changelog failed`);
-  // Weights come from the full pre-slice index (not the capped serving list),
-  // so releases outside the top 100 still resolve exactly.
   const weights = new Map<string, boolean>(Object.entries(index.weights ?? {}));
   const entries = toClosedReleases(changelog, weights);
   ctx.log("info", `[closed-releases] closed=${entries.length} (changelog=${changelog.length}, index=${models.length})`);
@@ -31,14 +24,19 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
   }
   if (finalEntries.length === 0)
     throw new UpstreamError(`Closed releases yielded 0 rows (changelog=${changelog.length}, index=${models.length})`);
-  const partial = index.enrichFailed || indexRes.status === "rejected" || changelogRes.status === "rejected";
-  if (partial) ctx.log("warn", "[closed-releases] serving partial (source failure or degraded enrichment)");
+  const partial = index.enrichFailed;
+  if (partial) ctx.log("warn", "[closed-releases] serving partial (degraded enrichment)");
   return { entries: finalEntries, partial };
 }
 
 export const getClosedReleases = (ctx: AppContext): Promise<SourcePayload<ClosedReleaseEntry[]>> =>
-  cachedPayload(ctx, cacheKeys.closedReleases, STATIC_TTL_MS, async () => {
-    const { entries: finalEntries, partial } = await fetchClosedReleases(ctx);
-    // cachedPayload derives the partial-failure TTL downgrade automatically.
-    return { rows: finalEntries, partial };
-  });
+  cachedPayload(
+    ctx,
+    cacheKeys.closedReleases,
+    STATIC_TTL_MS,
+    async () => {
+      const { entries: finalEntries, partial } = await fetchClosedReleases(ctx);
+      return { rows: finalEntries, partial };
+    },
+    { memoryOnly: true },
+  );

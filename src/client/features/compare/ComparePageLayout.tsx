@@ -2,14 +2,15 @@
 import { useCallback, useMemo } from "react";
 import { useRouter } from "@/client/router";
 import { Button } from "@/client/components/ui/button";
-import { BackButton, EmptyState, Spinner } from "@/client/components/feedback";
+import { BackButton, CenteredPageState, EmptyState, Spinner } from "@/client/components/feedback";
 import { CompareChipBar } from "@/client/components/compare-tray";
 import { useTranslation } from "@/client/providers";
 import { useCompareStore, useCompareModels } from "@/client/stores";
 import { useArtificialRankings } from "@/client/api/queries";
 import type { TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { PageContainer, PageHeader } from "@/client/components/layout";
+import { PageContainer } from "@/client/components/layout";
+import { DetailPageLayout } from "@/client/features/models/model-details/detail-views";
 
 function useComparedRankings(): {
   compared: ArtificialAnalysisModel[] | null;
@@ -50,44 +51,44 @@ export function ComparePageLayout({ backLabelKey, backTo, title, children }: Com
 
   if (rankingsFailed) {
     return (
-      <PageContainer>
-        <div className="flex flex-col gap-4 items-center py-16 animate-fade-in">
-          <EmptyState variant="error" title={t("errorBoundaryTitle")} message={t("loadFailed")} />
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => refetchRankings()}>
-              {t("errorBoundaryRetry")}
-            </Button>
-            <BackButton labelKey="backToList" to={backTo} />
-          </div>
+      <CenteredPageState>
+        <EmptyState variant="error" title={t("errorBoundaryTitle")} message={t("loadFailed")} />
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => refetchRankings()}>
+            {t("errorBoundaryRetry")}
+          </Button>
+          <BackButton labelKey="backToList" to={backTo} />
         </div>
-      </PageContainer>
+      </CenteredPageState>
     );
   }
 
   if (models.length < 2) {
     return (
-      <PageContainer>
-        <div className="flex flex-col gap-3 items-center py-16 text-center animate-fade-in">
-          <EmptyState message={t("compareLimit")} compact />
-          {pruned && (
-            <p className="ui-caption" role="status">
-              {t("compareStale")}
-            </p>
-          )}
-          <BackButton labelKey="backToList" to={backTo} />
-        </div>
-      </PageContainer>
+      <CenteredPageState>
+        <EmptyState message={t("compareLimit")} compact />
+        {pruned && (
+          <p className="ui-caption" role="status">
+            {t("compareStale")}
+          </p>
+        )}
+        <BackButton labelKey="backToList" to={backTo} />
+      </CenteredPageState>
     );
   }
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-5 min-w-0 animate-fade-in">
-        <BackButton labelKey={backLabelKey} to={backTo} />
-        <PageHeader compact title={title} description={t("artificialSource")} />
+      <DetailPageLayout
+        backLabelKey={backLabelKey}
+        backTo={backTo}
+        title={title}
+        description={t("artificialSource")}
+        compact
+      >
         <CompareChipBar models={models} onRemove={removeCompareModel} onClear={handleClearAndBack} />
         {children(models)}
-      </div>
+      </DetailPageLayout>
     </PageContainer>
   );
 }

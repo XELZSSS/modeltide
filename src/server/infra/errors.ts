@@ -14,6 +14,13 @@ export class ValidationError extends ApiError {
   }
 }
 
+export class ClientAbortError extends ApiError {
+  constructor(msg: string) {
+    super(msg, 499);
+    this.name = "ClientAbortError";
+  }
+}
+
 export class UpstreamError extends ApiError {
   readonly causedByTimeout: boolean;
   /** Origin HTTP status when the failure came from an upstream response. */
@@ -26,19 +33,24 @@ export class UpstreamError extends ApiError {
   }
 }
 
-/**
- * Canonical message for "upstream parsed but kept nothing" failures:
- * `${label} yielded 0 ${unit} (${detail})`. `detail` is verbatim so callers
- * keep their source-specific counts (raw/kept/body/...).
- *
- * Parsers (which must not throw) use this pure formatter and hand the message
- * to the source layer, which raises it via `zeroUpstream` or `requireParsed`.
- */
 export function zeroUpstreamMessage(label: string, unit: string, detail?: string): string {
   return `${label} yielded 0 ${unit}${detail ? ` (${detail})` : ""}`;
 }
 
-/** `zeroUpstreamMessage` wrapped as the canonical 502 error. */
 export function zeroUpstream(label: string, unit: string, detail?: string): UpstreamError {
   return new UpstreamError(zeroUpstreamMessage(label, unit, detail));
+}
+
+function isTimeoutLike(err: unknown): boolean {
+  if (err instanceof UpstreamError) return err.causedByTimeout;
+  return err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+}
+
+export function wrapUpstream(prefix: string, err: unknown): UpstreamError {
+  const msg = err instanceof Error ? err.message : String(err);
+  const status = err instanceof UpstreamError ? err.statusCode : undefined;
+  return new UpstreamError(`${prefix}: ${msg}`, {
+    ...(isTimeoutLike(err) ? { timeout: true } : {}),
+    ...(status != null ? { status } : {}),
+  });
 }

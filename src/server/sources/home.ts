@@ -1,6 +1,6 @@
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
-import { settled, formatSettleErrors } from "@/server/infra/pool";
+import { errMsg } from "@/server/infra/pool";
 import { getTextToImageLeaderboard } from "@/server/sources/aa/text-to-image";
 import { getModels } from "@/server/sources/huggingface";
 import { getOpenRouterRankings } from "@/server/sources/openrouter";
@@ -16,13 +16,15 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
     getTextToImageLeaderboard(ctx),
     getModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS }),
   ]);
-  const reasons = formatSettleErrors(
-    [orRankingsRes, textToImageRes, opensourceRes],
-    ["openrouter", "textToImage", "opensource"],
-  );
-  const orRankings = settled(orRankingsRes, null);
-  const textToImage = settled(textToImageRes, null);
-  const opensource = settled(opensourceRes, null) as SourcePayload<
+  const reasons = [orRankingsRes, textToImageRes, opensourceRes]
+    .map((r, i) =>
+      r.status === "rejected" ? `${["openrouter", "textToImage", "opensource"][i]}: ${errMsg(r.reason)}` : null,
+    )
+    .filter(Boolean)
+    .join("; ");
+  const orRankings = orRankingsRes.status === "fulfilled" ? orRankingsRes.value : null;
+  const textToImage = textToImageRes.status === "fulfilled" ? textToImageRes.value : null;
+  const opensource = (opensourceRes.status === "fulfilled" ? opensourceRes.value : null) as SourcePayload<
     import("@/shared/types").OpenSourceModelEntry[]
   > | null;
   if (!orRankings && !textToImage && !opensource)
@@ -33,9 +35,15 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
 }
 
 export async function getHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
-  return cachedSource(ctx, cacheKeys.homeDashboard, FIVE_MINUTES, async () => {
-    const data = await fetchHomeDashboard(ctx);
-    const partial = data.orRankings == null || data.textToImage == null || data.opensource == null;
-    return { value: data, ttl: ttlFor(partial, FIVE_MINUTES) };
-  });
+  return cachedSource(
+    ctx,
+    cacheKeys.homeDashboard,
+    FIVE_MINUTES,
+    async () => {
+      const data = await fetchHomeDashboard(ctx);
+      const partial = data.orRankings == null || data.textToImage == null || data.opensource == null;
+      return { value: data, ttl: ttlFor(partial, FIVE_MINUTES) };
+    },
+    { memoryOnly: true },
+  );
 }

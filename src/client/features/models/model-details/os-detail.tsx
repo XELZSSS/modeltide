@@ -4,7 +4,8 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import { formatDate, formatShortNumber, orNA } from "@/client/utils/format";
 import { shortModelId } from "@/client/utils/model";
-import { DetailSection, InfoGrid, StatGrid } from "@/client/components/ui/grids";
+import { InfoGrid, StatGrid } from "@/client/components/ui/grids";
+import { PageSection } from "@/client/components/layout";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { NotFound } from "@/client/components/feedback";
@@ -42,7 +43,7 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
                 .join("/")}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-accent hover:underline break-all"
+              className="text-sm text-accent break-all underline-offset-4 transition-colors duration-fast hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 rounded-none"
             >
               {model.id}
             </a>
@@ -52,13 +53,13 @@ export function OsDetail({ model }: { model: OpenSourceModelEntry }) {
         </InfoCard>
       </InfoGrid>
       {(model.tags ?? []).length > 0 && (
-        <DetailSection title={t("tags")}>
+        <PageSection title={t("tags")}>
           <div className="flex flex-wrap gap-2">
             {(model.tags ?? []).map((tag) => (
               <Badge key={tag}>{tag}</Badge>
             ))}
           </div>
-        </DetailSection>
+        </PageSection>
       )}
     </div>
   );

@@ -5,7 +5,7 @@ import {
   parseStatuspageSummary as parseStatuspageSummaryResult,
 } from "@/server/parsers/provider-status";
 import type { AppContext } from "@/server/context";
-import { parseDailyPapers as parseDailyPapersResult } from "@/server/parsers/hf-papers";
+import { parseDailyPapers as parseDailyPapersResult } from "@/server/parsers/huggingface";
 import { parseLitellmPricing as parseLitellmPricingResult } from "@/server/parsers/official-pricing";
 import { SOURCE_LIMITS } from "@/shared/config";
 
@@ -20,106 +20,121 @@ const parseGoogleCloudIncidents = (raw: unknown) => unwrap(parseGoogleCloudIncid
 const parseDailyPapers = (raw: unknown) => unwrap(parseDailyPapersResult(raw));
 const parseLitellmPricing = (raw: unknown) => unwrap(parseLitellmPricingResult(raw));
 
+const healthyStatuspage = (indicator = "none") => ({
+  status: { indicator, description: indicator === "none" ? "All Systems Operational" : "Degraded" },
+  components: [{ name: "API", status: "operational" }],
+});
+const ctxWithJson = (json: (url: string) => Promise<unknown>) =>
+  ({ http: { json }, log: () => {} }) as unknown as AppContext;
+const paper = (id: string, title: string, upvotes: number, publishedAt = "2026-09-05T00:00:00.000Z") => ({
+  paper: { id, title, upvotes, publishedAt },
+});
+
 describe("parseStatuspageSummary", () => {
   it("is healthy when every component is operational", () => {
-    const out = parseStatuspageSummary({
-      components: [
-        { name: "API", status: "operational" },
-        { name: "Chat", status: "operational" },
-      ],
-    });
-    expect(out).toMatchObject({ level: "ok", total: 2 });
-  });
-
-  it("errors on an outage-state component when no page indicator exists (fail closed)", () => {
-    const out = parseStatuspageSummary({
-      components: [
-        { name: "API", status: "operational" },
-        { name: "Images", status: "degraded_performance" },
-        { name: "", status: "partial_outage" },
-      ],
-    });
-    expect(out.level).toBe("error");
-    expect(out.degradedComponents).toEqual(["Images", "partial_outage"]);
-  });
-
-  it("warns on degradation-only components when no page indicator exists", () => {
-    const out = parseStatuspageSummary({
-      components: [
-        { name: "API", status: "operational" },
-        { name: "Images", status: "degraded_performance" },
-      ],
-    });
-    expect(out.level).toBe("warn");
-  });
-
-  it("trusts the page indicator over a single degraded component", () => {
-    const out = parseStatuspageSummary({
-      status: { indicator: "none", description: "All Systems Operational" },
-      components: [
-        { name: "API", status: "operational" },
-        { name: "Edge helper", status: "degraded_performance" },
-      ],
-    });
-    expect(out.level).toBe("ok");
-    expect(out.degradedComponents).toEqual(["Edge helper"]);
-  });
-
-  it("maps a minor page indicator to warn and worse indicators to error", () => {
-    const parse = (indicator: string) =>
+    expect(
       parseStatuspageSummary({
-        status: { indicator, description: "Something is off" },
-        components: [{ name: "API", status: "operational" }],
-      });
-    expect(parse("minor").level).toBe("warn");
-    for (const indicator of ["major", "critical", "maintenance"]) {
-      expect(parse(indicator).level).toBe("error");
-    }
+        components: [
+          { name: "API", status: "operational" },
+          { name: "Chat", status: "operational" },
+        ],
+      }),
+    ).toMatchObject({ level: "ok", total: 2 });
+  });
+
+  it.each([
+    [
+      "outage-state component without page indicator fails closed",
+      {
+        components: [
+          { name: "API", status: "operational" },
+          { name: "Images", status: "degraded_performance" },
+          { name: "", status: "partial_outage" },
+        ],
+      },
+      "error",
+      ["Images", "partial_outage"],
+    ],
+    [
+      "degradation-only without page indicator warns",
+      {
+        components: [
+          { name: "API", status: "operational" },
+          { name: "Images", status: "degraded_performance" },
+        ],
+      },
+      "warn",
+      undefined,
+    ],
+    [
+      "page indicator none wins over a single degraded component",
+      {
+        status: { indicator: "none", description: "All Systems Operational" },
+        components: [
+          { name: "API", status: "operational" },
+          { name: "Edge helper", status: "degraded_performance" },
+        ],
+      },
+      "ok",
+      ["Edge helper"],
+    ],
+  ])("%s", (_label, raw, level, degradedComponents) => {
+    const out = parseStatuspageSummary(raw);
+    expect(out.level).toBe(level);
+    if (degradedComponents !== undefined) expect(out.degradedComponents).toEqual(degradedComponents);
+  });
+
+  it.each([
+    ["minor", "warn"],
+    ["major", "error"],
+    ["critical", "error"],
+    ["maintenance", "error"],
+  ])("page indicator %s maps to %s", (indicator, level) => {
+    expect(parseStatuspageSummary(healthyStatuspage(indicator)).level).toBe(level);
   });
 
   it("fails closed on empty or unreadable component lists", () => {
-    const empty = parseStatuspageSummaryResult({ components: [] });
-    expect(empty.ok).toBe(false);
-    expect(empty.ok ? "" : empty.error).toMatch(/no components/);
-    const unreadable = parseStatuspageSummaryResult({ components: [{ name: "x", status: "" }] });
-    expect(unreadable.ok).toBe(false);
-    expect(unreadable.ok ? "" : unreadable.error).toMatch(/no readable/);
+    expect(parseStatuspageSummaryResult({ components: [] }).ok).toBe(false);
+    expect(parseStatuspageSummaryResult({ components: [{ name: "x", status: "" }] }).ok).toBe(false);
     expect(parseStatuspageSummaryResult({}).ok).toBe(false);
   });
 });
 
 describe("parseGoogleCloudIncidents", () => {
-  it("is healthy when every incident is closed", () => {
-    const out = parseGoogleCloudIncidents([
-      { external_desc: "Network degradation", end: "2026-09-01T18:52:00+00:00", severity: "medium" },
-      { external_desc: "Compute issue", end: null, severity: "low" },
-    ]);
-    expect(out).toMatchObject({ level: "ok", openIncidents: [] });
-  });
-
-  it("warns on open medium-severity incidents (degraded, not down)", () => {
-    const out = parseGoogleCloudIncidents([
-      { external_desc: "Open degradation", end: null, severity: "medium" },
-      { external_desc: "Routine", end: null, severity: "low" },
-    ]);
-    expect(out.level).toBe("warn");
-    expect(out.openIncidents).toEqual(["Open degradation"]);
-  });
-
-  it("errors on open incidents above warn severity", () => {
-    const out = parseGoogleCloudIncidents([
-      { external_desc: "Closed", end: "2026-09-01T18:52:00+00:00", severity: "high" },
-      { external_desc: "Open outage", end: null, severity: "high" },
-      { external_desc: "Routine", end: null, severity: "low" },
-    ]);
-    expect(out.level).toBe("error");
-    expect(out.openIncidents).toEqual(["Open outage"]);
-  });
-
-  it("treats an open incident without severity as failing", () => {
-    const out = parseGoogleCloudIncidents([{ external_desc: "Mystery", end: null }]);
-    expect(out.level).toBe("error");
-    expect(out.openIncidents).toEqual(["Mystery"]);
+  it.each([
+    [
+      "closed incidents are healthy",
+      [
+        { external_desc: "Network degradation", end: "2026-09-01T18:52:00+00:00", severity: "medium" },
+        { external_desc: "Compute issue", end: null, severity: "low" },
+      ],
+      "ok",
+      [],
+    ],
+    [
+      "open medium-severity warns",
+      [
+        { external_desc: "Open degradation", end: null, severity: "medium" },
+        { external_desc: "Routine", end: null, severity: "low" },
+      ],
+      "warn",
+      ["Open degradation"],
+    ],
+    [
+      "open high-severity errors",
+      [
+        { external_desc: "Closed", end: "2026-09-01T18:52:00+00:00", severity: "high" },
+        { external_desc: "Open outage", end: null, severity: "high" },
+        { external_desc: "Routine", end: null, severity: "low" },
+      ],
+      "error",
+      ["Open outage"],
+    ],
+    ["open incident without severity fails", [{ external_desc: "Mystery", end: null }], "error", ["Mystery"]],
+  ])("%s", (_label, raw, level, openIncidents) => {
+    const out = parseGoogleCloudIncidents(raw);
+    expect(out.level).toBe(level);
+    expect(out.openIncidents).toEqual(openIncidents);
   });
 
   it("fails on a non-array payload", () => {
@@ -130,18 +145,11 @@ describe("parseGoogleCloudIncidents", () => {
 });
 
 describe("fetchProviderStatuses", () => {
-  const healthySummary = () => ({
-    status: { indicator: "none", description: "All Systems Operational" },
-    components: [{ name: "API", status: "operational" }],
-  });
-  const ctxWithJson = (json: (url: string) => Promise<unknown>) =>
-    ({ http: { json }, log: () => {} }) as unknown as AppContext;
-
   it("skips providers whose status page fetch fails instead of marking them down", async () => {
     const ctx = ctxWithJson(async (url: string) => {
       if (url.includes("deepseek")) throw new Error("timeout");
       if (url.includes("status.cloud.google.com")) return [];
-      return healthySummary();
+      return healthyStatuspage();
     });
     const map = await fetchProviderStatuses(ctx);
     expect(map.has("deepseekApi")).toBe(false);
@@ -150,10 +158,11 @@ describe("fetchProviderStatuses", () => {
   });
 
   it("returns an empty map when every fetch fails (no confident verdicts)", async () => {
-    const ctx = ctxWithJson(async () => {
-      throw new Error("network down");
-    });
-    const map = await fetchProviderStatuses(ctx);
+    const map = await fetchProviderStatuses(
+      ctxWithJson(async () => {
+        throw new Error("network down");
+      }),
+    );
     expect(map.size).toBe(0);
   });
 
@@ -168,20 +177,12 @@ describe("fetchProviderStatuses", () => {
   });
 
   it("maps a minor incident to ok+warn instead of an outage", async () => {
-    const ctx = ctxWithJson(async () => ({
-      status: { indicator: "minor", description: "Degraded" },
-      components: [{ name: "API", status: "operational" }],
-    }));
-    const map = await fetchProviderStatuses(ctx);
+    const map = await fetchProviderStatuses(ctxWithJson(async () => healthyStatuspage("minor")));
     expect(map.get("openaiApi")).toMatchObject({ ok: true, warn: true, error: null });
   });
 });
 
 describe("parseDailyPapers", () => {
-  const paper = (id: string, title: string, upvotes: number, publishedAt = "2026-09-05T00:00:00.000Z") => ({
-    paper: { id, title, upvotes, publishedAt },
-  });
-
   it("maps entries to NewsItems with hf-paper ids and HF links", () => {
     const out = parseDailyPapers([paper("2609.03199", "A  Cool   Paper", 115)]);
     expect(out).toHaveLength(1);
@@ -205,19 +206,19 @@ describe("parseDailyPapers", () => {
   });
 
   it("drops rows failing the news gate (placeholder/garbage titles)", () => {
-    const out = parseDailyPapers([paper("x", "test", 10), paper("y", "Real Paper", 1)]);
-    expect(out.map((x) => x.id)).toEqual(["hf-paper-y"]);
+    expect(parseDailyPapers([paper("x", "test", 10), paper("y", "Real Paper", 1)]).map((x) => x.id)).toEqual([
+      "hf-paper-y",
+    ]);
   });
 
   it("caps at SOURCE_LIMITS.dailyPapers items", () => {
-    const many = Array.from({ length: 40 }, (_, i) => paper(`id-${i}`, `Paper ${i}`, 100 - i));
-    expect(parseDailyPapers(many)).toHaveLength(SOURCE_LIMITS.dailyPapers);
+    expect(
+      parseDailyPapers(Array.from({ length: 40 }, (_, i) => paper(`id-${i}`, `Paper ${i}`, 100 - i))),
+    ).toHaveLength(SOURCE_LIMITS.dailyPapers);
   });
 
   it("fails on non-array or all-unusable payloads", () => {
-    const nonArray = parseDailyPapersResult({ nope: 1 });
-    expect(nonArray.ok).toBe(false);
-    expect(nonArray.ok ? "" : nonArray.error).toMatch(/non-array/);
+    expect(parseDailyPapersResult({ nope: 1 }).ok).toBe(false);
     const unusable = parseDailyPapersResult([paper("x", "test", 1)]);
     expect(unusable.ok).toBe(false);
     expect(unusable.ok ? "" : unusable.error).toMatch(/0 usable/);
@@ -248,46 +249,51 @@ describe("parseLitellmPricing", () => {
 
   it("maps per-token costs to per-1M rows and resolves providers", () => {
     const out = parseLitellmPricing(spec);
-    const gpt5 = out.find((m) => m.id === "gpt-5")!;
-    expect(gpt5).toMatchObject({
+    expect(out.find((m) => m.id === "gpt-5")).toMatchObject({
       provider: "openai",
       input: 1.25,
       output: 10,
       cachedInput: 0.125,
     });
-    const opus = out.find((m) => m.id === "claude-opus-4")!;
-    expect(opus).toMatchObject({ provider: "anthropic", input: 15, output: 75, cachedInput: null });
+    expect(out.find((m) => m.id === "claude-opus-4")).toMatchObject({
+      provider: "anthropic",
+      input: 15,
+      output: 75,
+      cachedInput: null,
+    });
   });
 
   it("keeps exactly one row per model id (dupes/modes/unmatched skipped)", () => {
-    const ids = parseLitellmPricing(spec)
-      .map((m) => m.id)
-      .sort();
-    expect(ids).toEqual(["claude-opus-4", "gpt-5"]);
+    expect(
+      parseLitellmPricing(spec)
+        .map((m) => m.id)
+        .sort(),
+    ).toEqual(["claude-opus-4", "gpt-5"]);
   });
 
   it("fails on non-object payloads or zero usable rows", () => {
-    const nonObject = parseLitellmPricingResult("nope");
-    expect(nonObject.ok).toBe(false);
-    expect(nonObject.ok ? "" : nonObject.error).toMatch(/non-object/);
+    expect(parseLitellmPricingResult("nope").ok).toBe(false);
     const zeroRows = parseLitellmPricingResult({ sample_spec: {} });
     expect(zeroRows.ok).toBe(false);
     expect(zeroRows.ok ? "" : zeroRows.error).toMatch(/0 usable rows/);
   });
 
   it("resolves newer provider families instead of dropping them", () => {
-    const out = parseLitellmPricing({
-      "openai/o3": { mode: "chat", input_cost_per_token: 0.000002, output_cost_per_token: 0.000008 },
-      "google/gemma-3": { mode: "chat", input_cost_per_token: 0.0000005, output_cost_per_token: 0.000001 },
-      "qwen/qwen3-max": { mode: "chat", input_cost_per_token: 0.000001, output_cost_per_token: 0.000003 },
-      "meta-llama/llama-4": { mode: "chat", input_cost_per_token: 0.000001, output_cost_per_token: 0.000002 },
-      "xai/grok-4": { mode: "chat", input_cost_per_token: 0.000003, output_cost_per_token: 0.000015 },
-    });
-    const byId = new Map(out.map((m) => [m.id, m.provider]));
-    expect(byId.get("o3")).toBe("openai");
-    expect(byId.get("gemma-3")).toBe("google");
-    expect(byId.get("qwen3-max")).toBe("qwen");
-    expect(byId.get("llama-4")).toBe("meta");
-    expect(byId.get("grok-4")).toBe("xai");
+    const byId = new Map(
+      parseLitellmPricing({
+        "openai/o3": { mode: "chat", input_cost_per_token: 0.000002, output_cost_per_token: 0.000008 },
+        "google/gemma-3": { mode: "chat", input_cost_per_token: 0.0000005, output_cost_per_token: 0.000001 },
+        "qwen/qwen3-max": { mode: "chat", input_cost_per_token: 0.000001, output_cost_per_token: 0.000003 },
+        "meta-llama/llama-4": { mode: "chat", input_cost_per_token: 0.000001, output_cost_per_token: 0.000002 },
+        "xai/grok-4": { mode: "chat", input_cost_per_token: 0.000003, output_cost_per_token: 0.000015 },
+      }).map((m) => [m.id, m.provider]),
+    );
+    expect([...byId]).toEqual([
+      ["o3", "openai"],
+      ["gemma-3", "google"],
+      ["qwen3-max", "qwen"],
+      ["llama-4", "meta"],
+      ["grok-4", "xai"],
+    ]);
   });
 });

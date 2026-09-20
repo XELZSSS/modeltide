@@ -1,24 +1,12 @@
 "use client";
 import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
 
-// Minimal dependency-free client router (replaces the next/navigation surface
-// the app actually uses: Link, useRouter().push/back, usePathname,
-// useSearchParams, useParams). Navigation is push-state based; every mutation
-// dispatches a "routechange" event so all useSyncExternalStore subscribers
-// re-render together. Deep links work because Cloudflare's static-asset layer
-// serves index.html for navigation requests (not_found_handling: SPA).
-
 const ROUTE_CHANGE = "routechange";
 
 function emitRouteChange(): void {
   window.dispatchEvent(new Event(ROUTE_CHANGE));
 }
 
-/**
- * Router-owned position of the current entry. Written on every navigate and
- * carried through popstate by the history machinery, so BackButton can tell
- * an in-app trail (idx > 0) from a fresh landing (idx 0 / absent).
- */
 function historyIndex(): number {
   const raw = (window.history.state as { idx?: unknown } | null)?.idx;
   return typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : 0;
@@ -44,7 +32,6 @@ function subscribe(onChange: () => void): () => void {
   };
 }
 
-/** useRouter(): push/replace/back cover every navigation the app consumes. */
 export function useRouter(): { push: (to: string) => void; replace: (to: string) => void; back: () => void } {
   return useMemo(
     () => ({
@@ -64,7 +51,6 @@ export function usePathname(): string {
   );
 }
 
-/** String snapshot (stable across calls) parsed into URLSearchParams on demand. */
 export function useSearchParams(): URLSearchParams {
   const search = useSyncExternalStore(
     subscribe,
@@ -74,18 +60,10 @@ export function useSearchParams(): URLSearchParams {
   return useMemo(() => new URLSearchParams(search), [search]);
 }
 
-/**
- * useParams(pattern): parse dynamic segments of a path pattern such as
- * "/model/:source/*" against the current location. ":name" captures one
- * segment; "*" captures the remaining path joined by "/" under "wildcard".
- * Re-parses on every pathname change, not just on mount.
- */
 function safeDecodeSegment(value: string): string {
   try {
     return decodeURIComponent(value);
   } catch {
-    // Malformed percent-encoding: keep the raw segment so the route can
-    // resolve to NotFound instead of crashing on a URIError.
     return value;
   }
 }
@@ -96,11 +74,6 @@ export function useParams<T extends Record<string, string>>(pattern: string): T 
     const params: Record<string, string> = {};
     const patternParts = pattern.split("/").filter(Boolean);
     const pathParts = pathname.split("/").filter(Boolean);
-    // Lenient by design: static segments are NOT validated here. Callers are
-    // only rendered behind a pathname guard in main.tsx (startsWith), so a
-    // cross-route match (e.g. /status/x against /model/:source/*) can't occur
-    // in practice. Strict validation broke the "/" -> { wildcard: "" } case
-    // codified in client.test.ts.
     patternParts.forEach((seg, i) => {
       if (seg.startsWith(":")) {
         const value = pathParts[i];
@@ -113,12 +86,6 @@ export function useParams<T extends Record<string, string>>(pattern: string): T 
   }, [pattern, pathname]);
 }
 
-/**
- * Drop-in replacement for next/link: renders a real <a> (accessibility,
- * middle-click, copy-link), intercepts plain same-origin left-clicks for
- * push-state navigation, and leaves everything else (external URLs, anchors,
- * modifier keys, new tabs) to the browser.
- */
 export function SafeLink({
   href,
   children,

@@ -61,10 +61,6 @@ const MOBILE_BREAKPOINT = 768;
 
 function useIsMobile(breakpoint = 768): boolean {
   const query = `(max-width: ${breakpoint - 1}px)`;
-  // Read matchMedia synchronously on first render: this app is CSR-only (no
-  // SSR HTML), so there is no hydration snapshot to honor — defaulting to
-  // `false` would paint the desktop table on phones for a frame before
-  // flipping to cards. The effect below keeps the value live afterwards.
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false,
   );
@@ -105,8 +101,6 @@ function createQueryClient(): QueryClient {
           if (isAbortError(err)) return false;
           if (err instanceof ApiClientError) {
             const status = err.status;
-            // Never retry permanent request errors; rate-limit and timeout
-            // signals are retriable under the exponential backoff below.
             if (status >= 400 && status < 500 && status !== 429 && status !== 408) return false;
           }
           return count < 2;

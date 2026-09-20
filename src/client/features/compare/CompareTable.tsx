@@ -4,67 +4,16 @@ import { TrendingDown, TrendingUp } from "lucide-react";
 import { useTranslation, useDevice } from "@/client/providers";
 import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
 import { Card, CardContent } from "@/client/components/ui/card";
+import { CompareTd, CompareTh, CompareTr } from "@/client/components/data/columns";
 import { Dot } from "@/client/components/ui/primitives";
 import { cn } from "@/client/utils/cn";
 import { modelId } from "@/client/utils/model";
 import { computeWinners, rowKey, type CompareRow, type Winner } from "./logic";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
-interface ThProps {
-  align?: "left" | "right";
-  className?: string;
-  style?: React.CSSProperties;
-  children?: ReactNode;
-  scope?: "col" | "row";
-}
-
-const Th = memo(function Th({ align = "left", className, style, children, scope }: ThProps) {
-  return (
-    <th
-      scope={scope}
-      className={cn(
-        "px-4 py-2.5 text-xs font-medium text-text-tertiary",
-        align === "right" ? "text-right" : "text-left",
-        className,
-      )}
-      style={style}
-    >
-      {children}
-    </th>
-  );
-});
-
-interface TdProps {
-  align?: "left" | "right";
-  mono?: boolean;
-  className?: string;
-  style?: React.CSSProperties;
-  children?: ReactNode;
-}
-
-const Td = memo(function Td({ align = "left", mono, className, style, children }: TdProps) {
-  return (
-    <td
-      className={cn(
-        "px-4 py-2.5 text-sm",
-        mono && "font-mono tabular-nums",
-        align === "right" && "text-right",
-        className,
-      )}
-      style={style}
-    >
-      {children}
-    </td>
-  );
-});
-
-const Tr = memo(function Tr({ className, children, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
-  return (
-    <tr className={cn("border-b border-border last:border-b-0", className)} {...props}>
-      {children}
-    </tr>
-  );
-});
+const Th = CompareTh;
+const Td = CompareTd;
+const Tr = CompareTr;
 
 interface CompareTableProps {
   rows: CompareRow<ArtificialAnalysisModel>[];
@@ -137,7 +86,7 @@ function DesktopTable({ rows, models, getKey, getName, getColor, renderValue, wi
             </thead>
             <tbody>
               {rows.map((row) => (
-                <Tr key={rowKey(row)} className="hover:bg-hover transition-colors">
+                <Tr key={rowKey(row)} className="hoverable:hover:bg-hover transition-colors">
                   <Th scope="row" className="text-text-secondary sticky left-0 bg-bg-card z-10">
                     {row.label}
                   </Th>

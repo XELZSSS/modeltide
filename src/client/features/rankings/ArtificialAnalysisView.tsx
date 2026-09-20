@@ -5,7 +5,6 @@ import { useTranslation } from "@/client/providers";
 import { useClientTab } from "@/client/hooks/use-client-tab";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelId } from "@/client/utils/model";
-import { indexRankMap, rankCol } from "@/client/components/data/columns";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { useCompareModels, useCompareStore } from "@/client/stores";
 import { useEffectivePricingMap, useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
@@ -41,14 +40,19 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const clearCompare = useCompareStore((s) => s.clearCompare);
   const [viewMode, setViewMode] = useClientTab("view", VIEW_MODES, VIEW_MODES[0]);
 
-  const { getOfficial } = useOfficialPricing(viewMode === "pricing");
+  const { getOfficial, isPending: officialPending } = useOfficialPricing(viewMode === "pricing");
+  const pricingMode = viewMode === "pricing";
+  const pricingReady = !pricingMode || !officialPending;
   const effectivePricingMap = useEffectivePricingMap(
-    viewMode === "pricing" ? rankings : [],
-    viewMode === "pricing" ? getOfficial : undefined,
+    pricingMode ? rankings : [],
+    pricingMode ? getOfficial : undefined,
   );
   const { monthlyCosts, ...costInputs } = useMonthlyCosts(
-    viewMode === "pricing" ? rankings : [],
-    viewMode === "pricing" ? getOfficial : undefined,
+    pricingMode ? rankings : [],
+    pricingMode ? getOfficial : undefined,
+    {
+      ready: pricingReady,
+    },
   );
   const comparedModels = useCompareModels(rankings);
 
@@ -59,27 +63,24 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
 
   const compareIds = useCompareStore((s) => s.compareIds);
   const compareSet = useMemo(() => new Set(compareIds), [compareIds]);
-  const rankMap = useMemo(() => indexRankMap(rankings, (m) => modelId(m)), [rankings]);
   const rankingColumns = useMemo(
-    () => [
-      rankCol((m: ArtificialAnalysisModel) => rankMap.get(modelId(m)) ?? null),
-      ...buildRankingColumns(t, compareSet, toggleCompareModel),
-    ],
-    [t, compareSet, toggleCompareModel, rankMap],
+    () => [...buildRankingColumns(t, compareSet, toggleCompareModel)],
+    [t, compareSet, toggleCompareModel],
   );
   const pricingColumns = useMemo(
     () => [
-      rankCol((row: PricingRow) => rankMap.get(modelId(row.model)) ?? null),
-      ...buildPricingColumns(t, compareSet, toggleCompareModel, effectivePricingMap, getOfficial),
+      ...buildPricingColumns(t, compareSet, toggleCompareModel, effectivePricingMap, getOfficial, {
+        pending: !pricingReady,
+      }),
     ],
-    [t, compareSet, toggleCompareModel, rankMap, effectivePricingMap, getOfficial],
+    [t, compareSet, toggleCompareModel, effectivePricingMap, getOfficial, pricingReady],
   );
 
   const pricingRows = useMemo(
     () => rankings.map((model, index) => ({ model, monthlyCost: monthlyCosts[index] ?? null })),
     [rankings, monthlyCosts],
   );
-  const handleRemove = useCallback((model: ArtificialAnalysisModel) => toggleCompareModel(model), [toggleCompareModel]);
+  // toggleCompareModel from the store is already referentially stable — no wrapper needed.
   const handleCompare = useCallback(
     () => navigate(viewMode === "pricing" ? "/price-compare" : "/compare"),
     [navigate, viewMode],
@@ -108,13 +109,13 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
 
       {viewMode === "pricing" && (
         <div className="flex gap-4 flex-wrap items-center">
-          <CostEstimatorInputs state={costInputs} layout="input-label" avgCost={avgCost} />
+          <CostEstimatorInputs state={costInputs} layout="input-label" avgCost={avgCost} pending={!pricingReady} />
         </div>
       )}
 
       <CompareChipBar
         models={comparedModels}
-        onRemove={handleRemove}
+        onRemove={toggleCompareModel}
         onClear={clearCompare}
         onCompare={handleCompare}
         leading={pricingLeading}
