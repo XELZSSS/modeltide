@@ -61,6 +61,7 @@ export function EmptyState({
 interface ErrorBoundaryProps {
   errorTitle?: string;
   retryLabel?: string;
+  offlineMessage?: string;
   children: ReactNode;
   onReset?: () => void;
 }
@@ -75,6 +76,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   override state: ErrorBoundaryState = { hasError: false, error: null, resetKey: 0 };
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error };
+  }
+  private handleOnline = () => {
+    // Re-render so the disabled retry button enables without a second click.
+    this.forceUpdate();
+  };
+  override componentDidMount() {
+    window.addEventListener("online", this.handleOnline);
+    window.addEventListener("offline", this.handleOnline);
+  }
+  override componentWillUnmount() {
+    window.removeEventListener("online", this.handleOnline);
+    window.removeEventListener("offline", this.handleOnline);
   }
   override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary]", error, info.componentStack);
@@ -94,7 +107,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <EmptyState variant="error" icon={TriangleAlert} title={title} message={this.state.error?.message ?? retry} />
           {offline && (
             <p className="ui-caption" role="status">
-              Offline — reconnect and reload to retry
+              {this.props.offlineMessage ?? "Offline — reconnect and reload to retry"}
             </p>
           )}
           <Button variant="outline" size="sm" onClick={this.handleRetry} disabled={offline}>
@@ -136,19 +149,6 @@ export const Spinner = memo(function Spinner() {
   );
 });
 
-export const Skeleton = memo(function Skeleton({ className, lines = 3 }: { className?: string; lines?: number }) {
-  return (
-    <div className={className} role="status" aria-live="polite" aria-label="loading">
-      <div className="flex flex-col gap-3">
-        {Array.from({ length: lines }).map((_, i) => (
-          <div key={i} className="ui-skeleton h-16 w-full" style={{ opacity: 1 - i * 0.15 }} />
-        ))}
-        <span className="sr-only">loading</span>
-      </div>
-    </div>
-  );
-});
-
 export function PartialNotice({ message }: { message: string }) {
   return (
     <div
@@ -181,6 +181,7 @@ export function SuspenseQuery({ children, resetKey: extraKey }: { children: Reac
           key={resetKey}
           errorTitle={t("errorBoundaryTitle")}
           retryLabel={t("errorBoundaryRetry")}
+          offlineMessage={t("offlineRetry")}
           onReset={reset}
         >
           <Suspense fallback={<Spinner />}>{children}</Suspense>

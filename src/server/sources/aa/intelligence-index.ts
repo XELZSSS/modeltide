@@ -17,10 +17,11 @@ import {
   type IntelligenceIndexResult,
 } from "@/server/parsers/aa";
 import { fetchAaRsc, fetchAndParseEnrich } from "@/server/sources/aa/fetch";
+import { nowIso, type SourcePayload } from "@/server/sources/types";
 import { upstreamEndpoints } from "@/server/config";
-import { cachedSource, sourcePayload } from "@/server/sources/pipeline";
+import { cachedSource } from "@/server/sources/pipeline";
 
-async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceIndexResult> {
+async function fetchIntelligenceIndex(ctx: AppContext): Promise<Omit<IntelligenceIndexResult, "fetchedAt">> {
   const [indexBody, [modelsPageModels, omniscienceEnrich], openRouterMeta] = await Promise.all([
     fetchAaRsc(ctx, upstreamEndpoints.aaIndex),
     Promise.all([
@@ -75,12 +76,13 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<IntelligenceInde
 export const getIntelligenceIndexResult = (ctx: AppContext): Promise<IntelligenceIndexResult> =>
   cachedSource(ctx, cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async () => {
     const { models, weights, enrichFailed } = await fetchIntelligenceIndex(ctx);
-    return { value: { models, weights, enrichFailed }, ttl: ttlFor(enrichFailed) };
+    return {
+      value: { models, weights, enrichFailed, fetchedAt: nowIso() },
+      ttl: ttlFor(enrichFailed),
+    };
   });
 
-export const getIntelligenceIndex = async (
-  ctx: AppContext,
-): Promise<import("@/server/sources/types").SourcePayload<ArtificialAnalysisModel[]>> => {
-  const { models, enrichFailed } = await getIntelligenceIndexResult(ctx);
-  return sourcePayload(models, { partial: enrichFailed });
+export const getIntelligenceIndex = async (ctx: AppContext): Promise<SourcePayload<ArtificialAnalysisModel[]>> => {
+  const { models, enrichFailed, fetchedAt } = await getIntelligenceIndexResult(ctx);
+  return { data: models, fetchedAt, ...(enrichFailed ? { partial: true } : {}) };
 };

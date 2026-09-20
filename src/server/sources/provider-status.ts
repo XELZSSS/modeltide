@@ -1,6 +1,7 @@
 import type { AppContext } from "@/server/context";
 import { UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
 import { errMsg, runCapped } from "@/server/infra/pool";
+import { PROVIDER_CONCURRENCY } from "@/server/config";
 import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/provider-status";
 import { parseOk, type ParseResult } from "@/server/parsers/result";
 import type { SourceLevel } from "@/shared/types";
@@ -97,7 +98,7 @@ export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<Provid
       (target) => () =>
         fetchProviderHealth(ctx, target.url, target.label, target.parse).then((result) => [target.id, result] as const),
     ),
-    6,
+    PROVIDER_CONCURRENCY,
   );
   const results: (readonly [ProviderStatusId, ProviderStatusResult])[] = [];
   for (let i = 0; i < settled.length; i++) {

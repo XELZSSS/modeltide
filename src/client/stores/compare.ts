@@ -6,8 +6,9 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { STORAGE_KEYS } from "@/shared/config";
 import { modelId } from "@/client/utils/model";
 import { sessionJsonStorage } from "@/client/stores/storage";
+import { cleanStringList, logRehydrate } from "@/client/stores/persist-helpers";
 
-const MAX_COMPARE = 2;
+export const MAX_COMPARE = 2;
 
 interface CompareState {
   compareIds: string[];
@@ -53,15 +54,9 @@ export const useCompareStore = create<CompareState>()(
       partialize: (state) => ({ compareIds: state.compareIds }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as { compareIds?: unknown };
-        const raw = Array.isArray(p.compareIds) ? p.compareIds : [];
-        const clean = Array.from(
-          new Set(raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0)),
-        ).slice(0, MAX_COMPARE);
-        return { ...current, compareIds: clean };
+        return { ...current, compareIds: cleanStringList(p.compareIds, MAX_COMPARE) };
       },
-      onRehydrateStorage: () => (_state, error) => {
-        if (error) console.warn("[compare] rehydrate failed", error);
-      },
+      onRehydrateStorage: () => logRehydrate("compare"),
     },
   ),
 );

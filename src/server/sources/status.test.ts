@@ -2,7 +2,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache-service";
 import { testCtx } from "@/server/test-helpers";
 import {
-  HISTORY_BACKUP_KEY,
   HISTORY_KEY,
   SAMPLE_LOCK_KEY,
   aggregateProbes,
@@ -501,20 +500,11 @@ describe("readStore", () => {
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
   });
 
-  it("backs up the raw payload before clearing an unsalvageable store", async () => {
+  it("drops a corrupt history entry without retaining a backup", async () => {
     const raw = "truncated-json{{{";
-    const putOptions: unknown[] = [];
-    const { ctx, kvStore } = testCtx(new Map<string, string>([[HISTORY_KEY, raw]]), {
-      kvHooks: {
-        onPut: (_key, _value, opts) => {
-          putOptions.push(opts);
-        },
-      },
-    });
+    const { ctx, kvStore } = testCtx(new Map<string, string>([[HISTORY_KEY, raw]]));
     await expect(readStore(ctx)).resolves.toEqual({ sources: {} });
-    expect(kvStore.get(HISTORY_BACKUP_KEY)).toBe(JSON.stringify([raw]));
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
-    expect(putOptions[0]).toMatchObject({ expirationTtl: 90 * 24 * 60 * 60 });
   });
 
   it("salvages the readable per-source entries of a partially corrupt store", async () => {
@@ -523,9 +513,8 @@ describe("readStore", () => {
       daily: [{ day: "2026-01-01", total: 3, ok: 2 }],
     };
     const raw = JSON.stringify({ sources: { openrouter: good, news: "garbage-not-an-entry" } });
-    const { ctx, kvStore } = testCtx(new Map<string, string>([[HISTORY_KEY, raw]]));
+    const { ctx } = testCtx(new Map<string, string>([[HISTORY_KEY, raw]]));
     await expect(readStore(ctx)).resolves.toEqual({ sources: { openrouter: good } });
-    expect(kvStore.has(HISTORY_BACKUP_KEY)).toBe(false);
   });
 
   it("reports the newest sample across all sources", () => {

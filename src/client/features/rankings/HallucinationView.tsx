@@ -2,7 +2,7 @@
 import { formatIndex, formatPercent } from "@/client/utils/format";
 import type { HallucinationRankingEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/components/data/ranked";
-import type { DataTableColumn } from "@/client/components/data/columns";
+import { monoCol, type DataTableColumn } from "@/client/components/data/columns";
 import type { useTranslation } from "@/client/providers";
 
 function buildHallColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColumn<HallucinationRankingEntry>[] {
@@ -12,33 +12,14 @@ function buildHallColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableC
       (item) => item.model,
       (item) => item.model,
     ),
-    {
-      id: "hallucinationRate",
-      header: t("hallucinationRate"),
-      align: "right",
-      cell: (item) => <span className="ui-mono-value font-semibold">{formatPercent(t, item.hallucinationRate)}</span>,
-    },
-    {
-      id: "accuracy",
-      header: t("accuracy"),
-      align: "right",
+    monoCol("hallucinationRate", t("hallucinationRate"), (item) => formatPercent(t, item.hallucinationRate), {
+      semibold: true,
+    }),
+    monoCol("accuracy", t("accuracy"), (item) => formatPercent(t, item.accuracy), { hiddenMd: true }),
+    monoCol("attemptRate", t("attemptRate"), (item) => formatPercent(t, item.attemptRate), { hiddenMd: true }),
+    monoCol("omniscienceIndex", t("omniscienceIndex"), (item) => formatIndex(item.omniscienceIndex), {
       hiddenMd: true,
-      cell: (item) => <span className="ui-mono-value font-normal">{formatPercent(t, item.accuracy)}</span>,
-    },
-    {
-      id: "attemptRate",
-      header: t("attemptRate"),
-      align: "right",
-      hiddenMd: true,
-      cell: (item) => <span className="ui-mono-value font-normal">{formatPercent(t, item.attemptRate)}</span>,
-    },
-    {
-      id: "omniscienceIndex",
-      header: t("omniscienceIndex"),
-      align: "right",
-      hiddenMd: true,
-      cell: (item) => <span className="ui-mono-value font-normal">{formatIndex(item.omniscienceIndex)}</span>,
-    },
+    }),
   ];
 }
 

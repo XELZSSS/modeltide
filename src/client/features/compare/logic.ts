@@ -3,6 +3,8 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq, normalizePercent } from "@/shared/utils";
 import { formatBoolean, formatScore, formatPercent, formatSpeed } from "@/client/utils/format";
 import { getOutputSpeed } from "@/client/utils/cost-estimator";
+import { modelId } from "@/client/utils/model";
+import { resolveEffectivePricing, type EffectivePricing, type OfficialGetter } from "@/client/utils/pricing-merge";
 import { ceilToStep } from "@/client/theme/chart-theme";
 export interface CompareRow<T> {
   id?: string;
@@ -23,28 +25,48 @@ export function computeWinners<T>(
   getKey: (m: T, index: number) => string,
 ): Map<string, Map<string, Winner>> {
   const winners = new Map<string, Map<string, Winner>>();
-  const atDisplayPrecision = (v: number) => Math.round(v * 100) / 100;
   for (const row of rows) {
-    const accessor = row.getNumeric;
-    if (!accessor || !row.bestIs) continue;
-    const rowKeyStr = rowKey(row);
-    const values = models
-      .map((model, index) => ({ key: getKey(model, index), val: accessor(model) }))
-      .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val))
-      .map((v) => ({ ...v, val: atDisplayPrecision(v.val) }));
-    if (values.length < 2) continue;
-    const best = row.bestIs === "min" ? Math.min(...values.map((v) => v.val)) : Math.max(...values.map((v) => v.val));
-    if (values.every((v) => approxEq(v.val, best))) continue;
-    const perModel = new Map<string, Winner>();
-    for (const v of values) if (approxEq(v.val, best)) perModel.set(v.key, "win");
-    if (row.worstIs) {
-      const worst =
-        row.worstIs === "min" ? Math.min(...values.map((v) => v.val)) : Math.max(...values.map((v) => v.val));
-      for (const v of values) if (!perModel.has(v.key) && approxEq(v.val, worst)) perModel.set(v.key, "loss");
-    }
-    winners.set(rowKeyStr, perModel);
+    const perModel = decideRowWinners(row, models, getKey);
+    if (perModel) winners.set(rowKey(row), perModel);
   }
   return winners;
+}
+
+function collectNumeric<T>(
+  row: CompareRow<T>,
+  models: T[],
+  getKey: (m: T, index: number) => string,
+): { key: string; val: number }[] | null {
+  if (!row.getNumeric || !row.bestIs) return null;
+  const atDisplayPrecision = (v: number) => Math.round(v * 100) / 100;
+  const values = models
+    .map((model, index) => ({ key: getKey(model, index), val: row.getNumeric!(model) }))
+    .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val))
+    .map((v) => ({ ...v, val: atDisplayPrecision(v.val) }));
+  return values.length >= 2 ? values : null;
+}
+
+function pickExtreme(values: { val: number }[], which: "max" | "min"): number {
+  const nums = values.map((v) => v.val);
+  return which === "min" ? Math.min(...nums) : Math.max(...nums);
+}
+
+function decideRowWinners<T>(
+  row: CompareRow<T>,
+  models: T[],
+  getKey: (m: T, index: number) => string,
+): Map<string, Winner> | null {
+  const values = collectNumeric(row, models, getKey);
+  if (!values || !row.bestIs) return null;
+  const best = pickExtreme(values, row.bestIs);
+  if (values.every((v) => approxEq(v.val, best))) return null;
+  const perModel = new Map<string, Winner>();
+  for (const v of values) if (approxEq(v.val, best)) perModel.set(v.key, "win");
+  if (row.worstIs) {
+    const worst = pickExtreme(values, row.worstIs);
+    for (const v of values) if (!perModel.has(v.key) && approxEq(v.val, worst)) perModel.set(v.key, "loss");
+  }
+  return perModel;
 }
 
 function metric(
@@ -70,7 +92,13 @@ function rawScore(v: number | null | undefined): number | null {
   return Math.max(0, scaled);
 }
 
-export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]) {
+export interface RadarRow {
+  metric: string;
+  /** Keyed by modelId() so a filtered or reordered model list can't shift values onto the wrong model. */
+  values: Record<string, number | null>;
+}
+
+export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
   return [
     { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => rawScore(m.intelligence_index) },
     { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => rawScore(m.coding_index) },
@@ -79,41 +107,55 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]) 
     { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.hle) },
     { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.scicode) },
     { metric: t("ifbench"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.ifbench) },
-  ].map((metric) => {
-    const row: Record<string, string | number | null> = { metric: metric.metric };
-    models.forEach((model, index) => {
-      const val = metric.getValue(model);
-      row[`model_${index}`] = val != null ? Number(val.toFixed(2)) : null;
-    });
-    return row;
+  ].map(({ metric, getValue }) => {
+    const values: Record<string, number | null> = {};
+    for (const model of models) {
+      const key = modelId(model);
+      if (!key || key in values) continue;
+      const val = getValue(model);
+      values[key] = val != null ? Number(val.toFixed(2)) : null;
+    }
+    return { metric, values };
   });
 }
 
-export function radarMaxFor(data: Record<string, string | number | null>[], fallback = 100): number {
+export function radarMaxFor(rows: RadarRow[], fallback = 100): number {
   let peak = fallback;
-  for (const row of data) {
-    for (const [k, v] of Object.entries(row)) {
-      if (k === "metric" || typeof v !== "number" || !Number.isFinite(v)) continue;
-      if (v > peak) peak = v;
+  for (const row of rows) {
+    for (const value of Object.values(row.values)) {
+      if (typeof value !== "number" || !Number.isFinite(value)) continue;
+      if (value > peak) peak = value;
     }
   }
   return ceilToStep(peak, 20);
 }
 
-export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
-  const cacheOf = (m: ArtificialAnalysisModel) => m.pricing?.cacheHit;
-  const cacheWriteOf = (m: ArtificialAnalysisModel) => m.pricing?.cacheWrite;
+export function buildPriceRows(t: TFunction, getOfficial?: OfficialGetter): CompareRow<ArtificialAnalysisModel>[] {
+  const leg = (pick: (pricing: EffectivePricing) => number | null) => (m: ArtificialAnalysisModel) =>
+    pick(resolveEffectivePricing(m.pricing, getOfficial?.(m)));
   return [
-    { id: "promptPrice", label: t("promptPrice"), getNumeric: (m) => m.pricing?.input, bestIs: "min", worstIs: "max" },
+    { id: "promptPrice", label: t("promptPrice"), getNumeric: leg((p) => p.input), bestIs: "min", worstIs: "max" },
     {
       id: "completionPrice",
       label: t("completionPrice"),
-      getNumeric: (m) => m.pricing?.output,
+      getNumeric: leg((p) => p.output),
       bestIs: "min",
       worstIs: "max",
     },
-    { id: "cacheHitPrice", label: t("cacheHitPrice"), getNumeric: cacheOf, bestIs: "min", worstIs: "max" },
-    { id: "cacheWritePrice", label: t("cacheWritePrice"), getNumeric: cacheWriteOf, bestIs: "min", worstIs: "max" },
+    {
+      id: "cacheHitPrice",
+      label: t("cacheHitPrice"),
+      getNumeric: leg((p) => p.cacheHit),
+      bestIs: "min",
+      worstIs: "max",
+    },
+    {
+      id: "cacheWritePrice",
+      label: t("cacheWritePrice"),
+      getNumeric: leg((p) => p.cacheWrite),
+      bestIs: "min",
+      worstIs: "max",
+    },
   ];
 }
 

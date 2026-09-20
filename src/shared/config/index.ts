@@ -5,3 +5,4 @@ export * from "@/shared/config/navigation";
 export * from "@/shared/config/sources";
 export * from "@/shared/config/benchmarks";
 export * from "@/shared/config/security";
+export * from "@/shared/config/routes";

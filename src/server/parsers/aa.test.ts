@@ -363,15 +363,15 @@ function changelogPayload(models: unknown[]): string {
 }
 
 describe("parseChangelogModels", () => {
-  it("extracts the models array from flight-escaped HTML", () => {
+  it("extracts the models array from flight-escaped HTML, skipping deprecated variants", () => {
     const models = parseChangelogModels(changelogHtml());
-    expect(models).toHaveLength(3);
+    expect(models).toHaveLength(1);
     expect(models[0]).toMatchObject({
-      slug: "claude-opus-4-5-thinking",
-      releaseSlug: "claude-opus-4-5",
-      releaseName: "Claude Opus 4.5",
-      releaseDate: "2025-11-24",
-      creatorName: "Anthropic",
+      slug: "llama-3-3-70b",
+      releaseSlug: "llama-3-3",
+      releaseName: "Llama 3.3",
+      releaseDate: "2024-12-06",
+      creatorName: "Meta",
     });
   });
 

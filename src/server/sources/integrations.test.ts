@@ -39,7 +39,7 @@ describe("parseStatuspageSummary", () => {
           { name: "Chat", status: "operational" },
         ],
       }),
-    ).toMatchObject({ level: "ok", total: 2 });
+    ).toMatchObject({ level: "ok", degradedComponents: [] });
   });
 
   it.each([

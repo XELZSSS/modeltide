@@ -16,15 +16,17 @@ import type {
   OpenSourceModelEntry,
 } from "@/shared/types";
 import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/shared/config";
-import { matchTerm } from "@/shared/utils";
+import { matchTerm, normalizeModelKey } from "@/shared/utils";
 
-interface SourceConfig<T> {
+type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
+
+interface SourceConfig<T extends SearchItem> {
   items: T[];
   getFields: (item: T) => (string | undefined | null)[];
   map: (item: T) => SearchResult;
 }
 
-function collect<T>(config: SourceConfig<T>, term: string): { result: SearchResult; match: number }[] {
+function collect<T extends SearchItem>(config: SourceConfig<T>, term: string): { result: SearchResult; match: number }[] {
   const out: { result: SearchResult; match: number }[] = [];
   const missed: T[] = [];
   for (const item of config.items) {
@@ -68,7 +70,7 @@ export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: bo
 
   const error = [artificialQ.error, openSourceQ.error, orQ.error].find((e): e is Error | null => e != null) ?? null;
 
-  const sources = useMemo<SourceConfig<unknown>[]>(
+  const sources = useMemo<SourceConfig<SearchItem>[]>(
     () => [
       {
         items: artificialData,
@@ -151,7 +153,16 @@ export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: bo
     if (!enabled || !term) return [];
     const collected = sources.flatMap((source) => collect(source, term));
     collected.sort((a, b) => b.match - a.match || (b.result.score ?? -Infinity) - (a.result.score ?? -Infinity));
-    return collected.map((c) => c.result).slice(0, MAX_RESULTS);
+    const seen = new Set<string>();
+    const deduped: SearchResult[] = [];
+    for (const c of collected) {
+      const key = normalizeModelKey(c.result.name || c.result.id) || c.result.id.toLowerCase();
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      deduped.push(c.result);
+      if (deduped.length >= MAX_RESULTS) break;
+    }
+    return deduped;
   }, [enabled, searchTerm, sources]);
 
   return {

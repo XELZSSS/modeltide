@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { useSearchParams } from "@/client/router";
+import { replaceRoute, useSearchParams } from "@/client/router";
 
 export function resolveInitialTab<T extends string>(validTabs: readonly T[], raw: string | null, fallback: T): T {
   return raw != null && (validTabs as readonly string[]).includes(raw) ? (raw as T) : fallback;
@@ -26,8 +26,7 @@ export function useClientTab<T extends string>(
         const url = new URL(window.location.href);
         if (url.searchParams.get(paramKey) !== tabId) {
           url.searchParams.set(paramKey, tabId);
-          window.history.replaceState(window.history.state, "", url.href);
-          window.dispatchEvent(new Event("routechange"));
+          replaceRoute(url.pathname + url.search + url.hash);
         }
       } catch {}
       startTransition(() => {

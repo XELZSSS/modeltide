@@ -1,6 +1,7 @@
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
 import { ApiError, ClientAbortError } from "@/server/infra/errors";
+import { isTimeoutLike } from "@/server/infra/http-error";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/validation";
 import type { AppContext } from "@/server/context";
 import { BROWSER_CACHE_HEADER, BROWSER_NO_STORE_HEADER, CDN_CACHE_HEADER, CDN_NO_STORE_HEADER } from "@/server/config";
@@ -42,19 +43,43 @@ function collectQueryParams(url: URL): Record<string, string | string[]> {
   return raw;
 }
 
-function isTimeoutLike(err: unknown): boolean {
-  return err instanceof Error && err.name === "TimeoutError";
-}
-
-function timeoutResponse(): Response {
+export function timeoutResponse(): Response {
   return Response.json(
     { error: { code: 504, message: "Upstream request timed out" } },
     { status: 504, headers: errorHeaders() },
   );
 }
 
+export function methodNotAllowedResponse(): Response {
+  const res = Response.json(
+    { error: { code: 405, message: "Method not allowed" } },
+    { status: 405, headers: { "content-type": "application/json" } },
+  );
+  applyApiHeaders(res.headers);
+  return res;
+}
+
+export function notFoundResponse(): Response {
+  const res = Response.json(
+    { error: { code: 404, message: "Not found" } },
+    { status: 404, headers: { "content-type": "application/json" } },
+  );
+  applyApiHeaders(res.headers);
+  return res;
+}
+
+export function stripBodyForHead(res: Response): Response {
+  const headers = new Headers(res.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  return new Response(null, { status: res.status, headers });
+}
+
 function mapApiError(err: unknown, method: string, path: string): Response {
-  if (err instanceof ClientAbortError) return new Response(null, { status: 499 });
+  if (err instanceof ClientAbortError) {
+    const headers = errorHeaders();
+    return new Response(null, { status: 499, headers });
+  }
   if (isTimeoutLike(err)) return timeoutResponse();
   if (err instanceof ApiError) {
     const status = clampStatus(err.status);
@@ -95,7 +120,13 @@ export async function handleApiRoute<S extends QuerySchema>(
     const url = new URL(req.url);
 
     const context = buildContext(env, { signal: req.signal });
-    const params = validateQuery(collectQueryParams(url), (def.query ?? {}) as S);
+    const rawParams = collectQueryParams(url);
+    const schemaKeys = new Set(Object.keys(def.query ?? {}));
+    const unknownKeys = Object.keys(rawParams).filter((k) => !schemaKeys.has(k));
+    if (unknownKeys.length > 0) {
+      context.log("warn", `[query] ${path} ignoring unknown params: ${unknownKeys.join(", ")}`);
+    }
+    const params = validateQuery(rawParams, (def.query ?? {}) as S);
     const data = await def.handler(context, params);
     const headers = new Headers({ "content-type": "application/json" });
     applyCacheHeaders(headers, def.cache);

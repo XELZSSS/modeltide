@@ -91,6 +91,7 @@ export const zh = {
   perModelAvg: "（模型均值）",
   errorBoundaryTitle: "出错了",
   errorBoundaryRetry: "重试",
+  offlineRetry: "已离线 — 重新连接后刷新重试",
   priceComparison: "价格对比",
   priceBreakdown: "价格明细",
   perMTokens: "/百万 Token",

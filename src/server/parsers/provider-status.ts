@@ -12,7 +12,6 @@ const WARN_PAGE_INDICATORS = new Set(["minor"]);
 export interface StatuspageVerdict {
   level: SourceLevel;
   degradedComponents: string[];
-  total: number;
 }
 
 export function parseStatuspageSummary(raw: unknown): ParseResult<StatuspageVerdict> {
@@ -23,13 +22,13 @@ export function parseStatuspageSummary(raw: unknown): ParseResult<StatuspageVerd
   }
   const degradedComponents: string[] = [];
   let worst: SourceLevel = "ok";
-  let total = 0;
+  let readable = 0;
   for (const entry of componentsRaw as unknown[]) {
     const c = obj(entry);
     if (!c) continue;
     const status = str(c.status).trim().toLowerCase();
     if (!status) continue;
-    total += 1;
+    readable += 1;
     if (!HEALTHY_COMPONENT_STATES.has(status)) {
       const name = str(c.name).trim();
       degradedComponents.push(name || status);
@@ -37,7 +36,7 @@ export function parseStatuspageSummary(raw: unknown): ParseResult<StatuspageVerd
       else if (worst !== "error") worst = "warn";
     }
   }
-  if (total === 0) {
+  if (readable === 0) {
     return parseFail("Statuspage summary has no readable component states");
   }
   const indicator = str(obj(root?.status)?.indicator).trim().toLowerCase();
@@ -48,7 +47,7 @@ export function parseStatuspageSummary(raw: unknown): ParseResult<StatuspageVerd
         ? "warn"
         : "error"
     : worst;
-  return parseOk({ level, degradedComponents, total });
+  return parseOk({ level, degradedComponents });
 }
 
 const GCP_ROUTINE_SEVERITIES = new Set(["low"]);

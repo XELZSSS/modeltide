@@ -29,6 +29,16 @@ describe("getTextToImageLeaderboard (no upstream rank)", () => {
     });
     expect(payload.data[1]).toMatchObject({ slug: "model-b", rank: 2, elo: 1100 });
   });
+
+  it("surfaces the RSC scan diagnostic when the marker disappears", async () => {
+    const { ctx } = testCtx(new Map(), {
+      version: "v-t2i-drift",
+      http: { text: async () => '1:{"props":{"other":[1,2,3]}}' } as unknown as AppContext["http"],
+    });
+    await expect(getTextToImageLeaderboard(ctx)).rejects.toThrowError(
+      /Text-to-image parse failed: RSC marker "textToImage" not found .*hash=/,
+    );
+  });
 });
 
 describe("getAgentRankings (RSC flight path)", () => {

@@ -18,6 +18,7 @@ import { LabeledDot } from "@/client/components/ui/primitives";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { formatScore, formatPricePerMillion, formatSpeed } from "@/client/utils/format";
 import { computeProviderStats, type ProviderStats } from "@/client/utils/model";
+import { useOfficialPricing } from "@/client/features/pricing/official";
 import { RANKING_TABS, type RankingTabId } from "@/shared/config";
 import { MODEL_SOURCES } from "@/shared/config";
 
@@ -68,8 +69,9 @@ const getProviderSearchFields = (p: ProviderStats) => [p.name];
 
 const ProviderCompareTab = memo(function ProviderCompareTab() {
   const data = useSuspenseArtificialRankings();
+  const { getOfficial } = useOfficialPricing();
   const { t } = useTranslation();
-  const providerStats = useMemo(() => computeProviderStats(data, t("unknown")), [data, t]);
+  const providerStats = useMemo(() => computeProviderStats(data, t("unknown"), getOfficial), [data, t, getOfficial]);
   const columns = useMemo<DataTableColumn<ProviderStats>[]>(
     () => [
       {

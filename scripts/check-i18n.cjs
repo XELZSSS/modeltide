@@ -4,13 +4,15 @@ const path = require("path");
 
 function loadDict(file) {
   const src = fs.readFileSync(path.resolve(file), "utf8");
+  // Match runtime interpolate(): \{(\w+)\} — dotted placeholders like
+  // {user.name} never interpolate, so the checker must not accept them.
   const keys = [...src.matchAll(/^\s{2}([\w.-]+):/gm)].map((m) => m[1]);
   const placeholders = new Map();
-  const entryRE = /^\s{2}([\w.-]+):\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/gm;
+  const entryRE = /^\s{2}([\w.-]+):\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)')/gm;
   for (const m of src.matchAll(entryRE)) {
     const key = m[1];
-    const raw = m[2] ?? m[3] ?? "";
-    const params = [...raw.matchAll(/\{([\w.-]+)\}/g)]
+    const raw = m[2] ?? m[3] ?? m[4] ?? "";
+    const params = [...raw.matchAll(/\{(\w+)\}/g)]
       .map((p) => p[1])
       .sort()
       .join(",");

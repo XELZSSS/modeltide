@@ -1,6 +1,7 @@
 import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
 import { ClientAbortError, UpstreamError } from "@/server/infra/errors";
+import { isAbortError } from "@/server/infra/http-error";
 
 interface FetchOptions extends Omit<RequestInit, "headers"> {
   timeoutMs?: number;
@@ -46,8 +47,11 @@ function buildHeaders(userAgent: string, accept: string, extra?: Record<string, 
   return { "user-agent": userAgent, accept, ...extra };
 }
 
-function isTimeoutError(e: unknown): boolean {
-  return e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+async function fetchBodyText(url: string, res: Response, maxBytes: number): Promise<string> {
+  assertContentLength(url, res, res.headers.get("content-length"), maxBytes);
+  const body = await readBodyText(res, url, maxBytes);
+  assertBodySize(url, body, maxBytes);
+  return body;
 }
 
 const BACKOFF_BASE_MS = 500;
@@ -139,7 +143,7 @@ export class HttpClient {
         res = await fetch(url, { headers, signal, ...rest });
       } catch (e) {
         if (initSignal?.aborted) throw new ClientAbortError(`Client aborted request for ${url}`);
-        timedOut = isTimeoutError(e);
+        timedOut = isAbortError(e);
         failMsg = timedOut ? `Upstream timeout for ${url}` : `Upstream network error for ${url}`;
       }
       let retryAfter: number | null = null;
@@ -165,9 +169,7 @@ export class HttpClient {
 
   async json<T>(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<T> {
     const res = await this.doFetch(url, init ?? {}, "application/json");
-    assertContentLength(url, res, res.headers.get("content-length"), maxBytes);
-    const body = await readBodyText(res, url, maxBytes);
-    assertBodySize(url, body, maxBytes);
+    const body = await fetchBodyText(url, res, maxBytes);
     try {
       return JSON.parse(body) as T;
     } catch {
@@ -177,10 +179,7 @@ export class HttpClient {
 
   async text(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
     const res = await this.doFetch(url, init ?? {}, "text/html,application/xhtml+xml,*/*");
-    assertContentLength(url, res, res.headers.get("content-length"), maxBytes);
-    const body = await readBodyText(res, url, maxBytes);
-    assertBodySize(url, body, maxBytes);
-    return body;
+    return fetchBodyText(url, res, maxBytes);
   }
 
   async probe(url: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<ProbeResult> {
@@ -199,8 +198,7 @@ export class HttpClient {
     } catch (e) {
       const latencyMs = Date.now() - started;
       if (this.defaultSignal?.aborted) return { ok: false, status: null, latencyMs, error: "aborted" };
-      const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-      return { ok: false, status: null, latencyMs, error: timedOut ? "timeout" : "network error" };
+      return { ok: false, status: null, latencyMs, error: isAbortError(e) ? "timeout" : "network error" };
     }
   }
 }

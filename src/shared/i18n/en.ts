@@ -90,6 +90,7 @@ export const en = {
   perModelAvg: "(per-model avg)",
   errorBoundaryTitle: "Something went wrong",
   errorBoundaryRetry: "Try again",
+  offlineRetry: "Offline — reconnect and reload to retry",
   priceComparison: "Price Comparison",
   priceBreakdown: "Price Breakdown",
   perMTokens: "/1M tokens",

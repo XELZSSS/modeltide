@@ -80,6 +80,11 @@ function ModalitySection({
   );
 }
 
+function PriceValue({ value, pending }: { value: string; pending: boolean }) {
+  if (pending) return <span className="ui-skeleton inline-block h-4 w-20 rounded-none align-middle" aria-hidden="true" />;
+  return <>{value}</>;
+}
+
 export function ModelDetailContent({
   model,
   showBenchmarks = true,
@@ -92,12 +97,9 @@ export function ModelDetailContent({
   const official = useMemo(() => getOfficial?.(model), [getOfficial, model]);
   const pricing = useMemo(() => resolveEffectivePricing(model.pricing, official), [model.pricing, official]);
   const blended = useMemo(() => resolveBlendedPrice(model, official), [model, official]);
-  const priceValue = (v: number | null | undefined) =>
-    officialPending ? (
-      <span className="ui-skeleton inline-block h-4 w-20 rounded-none align-middle" aria-hidden="true" />
-    ) : (
-      formatPricePerMillion(v, t)
-    );
+  const priceValue = (v: number | null | undefined) => (
+    <PriceValue value={formatPricePerMillion(v, t)} pending={officialPending} />
+  );
   const hasAnyModality = MODALITIES.some(
     (m) =>
       model[`input_modality_${m.key}` as keyof ArtificialAnalysisModel] ||

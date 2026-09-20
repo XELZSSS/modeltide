@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { isInternalHref } from "@/shared/utils";
 
 const ROUTE_CHANGE = "routechange";
 
@@ -12,7 +13,12 @@ function historyIndex(): number {
   return typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : 0;
 }
 
-function navigate(to: string, replace = false): void {
+export function normalizePathname(pathname: string): string {
+  if (pathname.length > 1 && pathname.endsWith("/")) return pathname.replace(/\/+$/, "") || "/";
+  return pathname;
+}
+
+export function navigate(to: string, replace = false): void {
   const url = new URL(to, window.location.href);
   if (url.origin !== window.location.origin) {
     window.location.assign(url.href);
@@ -43,10 +49,14 @@ export function useRouter(): { push: (to: string) => void; replace: (to: string)
   );
 }
 
+export function replaceRoute(to: string): void {
+  navigate(to, true);
+}
+
 export function usePathname(): string {
   return useSyncExternalStore(
     subscribe,
-    () => window.location.pathname,
+    () => normalizePathname(window.location.pathname),
     () => "/",
   );
 }
@@ -73,7 +83,7 @@ export function useParams<T extends Record<string, string>>(pattern: string): T 
   return useMemo(() => {
     const params: Record<string, string> = {};
     const patternParts = pattern.split("/").filter(Boolean);
-    const pathParts = pathname.split("/").filter(Boolean);
+    const pathParts = normalizePathname(pathname).split("/").filter(Boolean);
     patternParts.forEach((seg, i) => {
       if (seg.startsWith(":")) {
         const value = pathParts[i];
@@ -104,9 +114,7 @@ export function SafeLink({
       const anchor = e.currentTarget as HTMLAnchorElement;
       if (anchor.target && anchor.target !== "_self") return;
       if (anchor.hasAttribute("download")) return;
-      if (!href || href.startsWith("#") || href.startsWith("//")) return;
-      const url = new URL(href, window.location.href);
-      if (url.origin !== window.location.origin) return;
+      if (!isInternalHref(href, window.location.origin)) return;
       e.preventDefault();
       navigate(href);
     },

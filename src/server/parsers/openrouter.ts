@@ -73,9 +73,8 @@ export function parseDirectoryRows(rows: PricingRow[]): DirectoryCacheEntry {
     if (pricingEntry) {
       const keys = [m.id.trim(), m.canonical_slug?.trim()].filter((v): v is string => !!v);
       for (const key of keys) {
-        pricingRecord[key] = pricingEntry;
-        const lower = key.toLowerCase();
-        if (lower !== key) pricingRecord[lower] = pricingEntry;
+        const norm = key.toLowerCase();
+        if (!Object.hasOwn(pricingRecord, norm)) pricingRecord[norm] = pricingEntry;
       }
     }
     const aaBenchmarks = m.benchmarks?.artificial_analysis;
@@ -107,6 +106,13 @@ const CREATORS: Record<string, string> = {
   openai: "OpenAI",
   qwen: "Qwen",
   xiaomi: "Xiaomi",
+  groq: "Groq",
+  cerebras: "Cerebras",
+  fireworks: "Fireworks",
+  moonshot: "Moonshot",
+  zhipu: "Zhipu",
+  stepfun: "StepFun",
+  xai: "xAI",
 };
 export function creatorFromSlug(slug: string): string {
   const p = slug.split("/")[0]?.trim() || "Unknown";
@@ -184,15 +190,14 @@ function resolvePricing(
   id: string,
   variantKey: string | undefined,
 ): PricingEntry | undefined {
+  // PricingRecord keys are stored lowercased (see parseDirectoryRows), so all
+  // lookups normalize — one canonical form per model instead of dual entries.
   return (
-    (variantKey ? pricingMap.get(variantKey) : undefined) ??
-    (variantKey ? pricingMap.get(variantKey.toLowerCase()) : undefined) ??
-    pricingMap.get(id) ??
-    pricingMap.get(id.toLowerCase())
+    (variantKey ? pricingMap.get(variantKey.toLowerCase()) : undefined) ?? pricingMap.get(id.toLowerCase())
   );
 }
 
-export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry>): OpenRouterRankEntry[] {
+function groupRows(rows: ModelRow[]): Map<string, Group> {
   const grouped = new Map<string, Group>();
   for (const row of rows) {
     const id = row.model_permaslug.trim();
@@ -219,6 +224,11 @@ export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry
       group.dominantTokens = tokens;
     }
   }
+  return grouped;
+}
+
+export function mapModels(rows: ModelRow[], pricingMap: Map<string, PricingEntry>): OpenRouterRankEntry[] {
+  const grouped = groupRows(rows);
   const merged = Array.from(grouped.values()).sort((a, b) => usageTotal(b.agg) - usageTotal(a.agg));
   const out: OpenRouterRankEntry[] = [];
   for (let i = 0; i < merged.length; i++) {

@@ -57,7 +57,7 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const comparedModels = useCompareModels(rankings);
 
   const avgCost = useMemo(() => {
-    const valid = monthlyCosts.filter((v): v is number => v != null);
+    const valid = [...monthlyCosts.values()].filter((v): v is number => v != null);
     return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
   }, [monthlyCosts]);
 
@@ -77,7 +77,7 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   );
 
   const pricingRows = useMemo(
-    () => rankings.map((model, index) => ({ model, monthlyCost: monthlyCosts[index] ?? null })),
+    () => rankings.map((model) => ({ model, monthlyCost: monthlyCosts.get(modelId(model)) ?? null })),
     [rankings, monthlyCosts],
   );
   // toggleCompareModel from the store is already referentially stable — no wrapper needed.

@@ -1,7 +1,7 @@
 "use client";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { usePathname, useRouter } from "@/client/router";
-import { Loader2, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { cn } from "@/client/utils/cn";
 import { Input } from "@/client/components/ui/input";
 import { useTranslation } from "@/client/providers";
@@ -9,16 +9,18 @@ import { useSearchStore } from "@/client/stores";
 import type { SearchResult } from "@/shared/types";
 import { useSearchAllRankings } from "@/client/search/use-search";
 import { useClickOutside, useListKeyboard } from "@/client/search/interaction";
+import { useDebouncedTerm } from "@/client/search/use-debounced-term";
+import { SearchDropdown } from "@/client/search/SearchDropdown";
 
-const DEBOUNCE_MS = 200;
+const MIN_QUERY = 2;
 
 export function SearchInput({ className }: { className?: string }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const navigate = (to: string) => router.push(to);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const inputId = useId();
   const listboxId = useId();
   const statusId = useId();
@@ -26,73 +28,42 @@ export function SearchInput({ className }: { className?: string }) {
   const searchTerm = useSearchStore((s) => s.searchTerm);
   const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
   const pathname = usePathname();
-  const [inputValue, setInputValue] = useState(searchTerm);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancelDebounce = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-  const debouncedSetTerm = useCallback(
-    (value: string) => {
-      cancelDebounce();
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
-        setSearchTerm(value);
-      }, DEBOUNCE_MS);
-    },
-    [cancelDebounce, setSearchTerm],
-  );
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    [],
-  );
+  const { inputValue, setInputValue, debounced, setDebouncedDirect, cancel } = useDebouncedTerm("", 200);
+
   // Pathname only: ?tab= switches (replaceState) must preserve the typed query.
   useEffect(() => {
-    cancelDebounce();
-    setInputValue("");
-  }, [pathname, cancelDebounce]);
+    cancel();
+    setDebouncedDirect("");
+  }, [pathname, cancel, setDebouncedDirect]);
   useEffect(() => {
-    if (inputValue !== searchTerm) debouncedSetTerm(inputValue);
-  }, [inputValue, searchTerm, debouncedSetTerm]);
+    if (debounced !== searchTerm) setSearchTerm(debounced);
+  }, [debounced, searchTerm, setSearchTerm]);
 
   const { results, isPending, isError } = useSearchAllRankings(searchTerm, { suspended: !isOpen });
 
-  const clearSearch = useCallback(() => {
-    cancelDebounce();
-    setSearchTerm("");
-    setInputValue("");
-  }, [setSearchTerm, cancelDebounce]);
+  const clearSearch = () => {
+    setDebouncedDirect("");
+  };
 
-  const goToResult = useCallback(
-    (result: SearchResult | undefined) => {
-      if (!result) return;
-      clearSearch();
-      navigate(result.link);
-      setIsOpen(false);
-      setActiveIndex(-1);
-    },
-    [navigate, clearSearch],
-  );
-
-  const handleSelect = useCallback(
-    (idx: number) => {
-      goToResult(results[idx]);
-    },
-    [results, goToResult],
-  );
-
-  const { clampedIndex, setActiveIndex, handleKeyDown } = useListKeyboard(results.length, handleSelect, () => {
+  const goToResult = (result: SearchResult | undefined) => {
+    if (!result) return;
+    clearSearch();
+    router.push(result.link);
     setIsOpen(false);
-    inputRef.current?.focus();
-  });
+    setActiveIndex(-1);
+  };
+
+  const { clampedIndex, setActiveIndex, handleKeyDown } = useListKeyboard(
+    results.length,
+    (idx) => goToResult(results[idx]),
+    () => {
+      setIsOpen(false);
+      inputRef.current?.focus();
+    },
+  );
 
   useClickOutside(containerRef, () => setIsOpen(false));
 
-  const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!isOpen || clampedIndex < 0) return;
     listRef.current
@@ -103,60 +74,11 @@ export function SearchInput({ className }: { className?: string }) {
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
-      if (inputValue.length >= 2) setIsOpen(true);
+      if (inputValue.length >= MIN_QUERY) setIsOpen(true);
       return;
     }
     if (!isOpen) return;
     handleKeyDown(e);
-  }
-
-  let dropdownBody: React.ReactNode;
-  if (isPending && results.length === 0) {
-    dropdownBody = (
-      <div className="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        {t("searching")}
-      </div>
-    );
-  } else if (isError && results.length === 0) {
-    dropdownBody = (
-      <div className="p-4 text-sm text-text-secondary" role="alert">
-        {t("searchFailed")}
-      </div>
-    );
-  } else if (results.length === 0) {
-    dropdownBody = (
-      <div className="p-4 text-sm text-text-secondary" role="status">
-        {t("noResults")}
-      </div>
-    );
-  } else {
-    dropdownBody = results.map((result, index) => (
-      <button
-        key={`${result.source}-${result.id}-${index}`}
-        id={`${listboxId}-option-${index}`}
-        type="button"
-        role="option"
-        aria-selected={clampedIndex === index}
-        className={cn(
-          "w-full text-left p-2.5 rounded-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          clampedIndex === index ? "bg-hover" : "hoverable:hover:bg-hover",
-        )}
-        onMouseEnter={() => setActiveIndex(index)}
-        onClick={() => goToResult(result)}
-      >
-        <span className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium text-text-primary truncate">{result.name}</span>
-          {typeof result.score === "number" && Number.isFinite(result.score) && (
-            <span className="text-xs text-text-secondary ml-2 shrink-0 font-mono">{result.score.toFixed(1)}</span>
-          )}
-        </span>
-        <span className="flex items-center gap-2 mt-1">
-          <span className="text-xs text-text-secondary">{t(result.source)}</span>
-          {result.provider && <span className="text-xs text-text-tertiary">{result.provider}</span>}
-        </span>
-      </button>
-    ));
   }
 
   return (
@@ -180,11 +102,11 @@ export function SearchInput({ className }: { className?: string }) {
           autoComplete="off"
           onChange={(e) => {
             setInputValue(e.target.value);
-            setIsOpen(e.target.value.length >= 2);
+            setIsOpen(e.target.value.length >= MIN_QUERY);
             setActiveIndex(-1);
           }}
           onFocus={() => {
-            if (inputValue.length >= 2) setIsOpen(true);
+            if (inputValue.length >= MIN_QUERY) setIsOpen(true);
           }}
           onKeyDown={onKeyDown}
           placeholder={t("searchPlaceholder")}
@@ -210,18 +132,28 @@ export function SearchInput({ className }: { className?: string }) {
         </button>
       </div>
 
-      {isOpen && inputValue.length >= 2 && (
+      {isOpen && inputValue.length >= MIN_QUERY && (
         <div
           id={listboxId}
           ref={listRef}
           role="listbox"
           className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay-md z-40 animate-fade-in"
         >
-          <div className="p-1.5">{dropdownBody}</div>
+          <div className="p-1.5">
+            <SearchDropdown
+              listboxId={listboxId}
+              results={results}
+              isPending={isPending}
+              isError={isError}
+              activeIndex={clampedIndex}
+              onHover={setActiveIndex}
+              onSelect={goToResult}
+            />
+          </div>
         </div>
       )}
       <div id={statusId} role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {isOpen && inputValue.length >= 2 && !isPending && t("searchResultsCount", { count: results.length })}
+        {isOpen && inputValue.length >= MIN_QUERY && !isPending && t("searchResultsCount", { count: results.length })}
       </div>
     </div>
   );

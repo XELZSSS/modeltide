@@ -19,9 +19,6 @@ export const RankingNameCell = memo(function RankingNameCell({ name, title, suff
   );
 });
 
-/** Canonical model-name cell; modelNameCol in ranked.tsx delegates to it. */
-export const ModelNameCell = RankingNameCell;
-
 interface RightAlignedTextProps {
   children: ReactNode;
   className?: string;
@@ -41,13 +38,24 @@ export interface DataTableColumn<T> {
   mobilePrimary?: boolean;
 }
 
+export interface ColOpts {
+  width?: number | string;
+  hiddenMd?: boolean;
+  mobilePrimary?: boolean;
+  align?: "left" | "center" | "right";
+}
+
+export function col<T>(id: string, header: string, cell: (row: T) => ReactNode, opts?: ColOpts): DataTableColumn<T> {
+  return { id, header, cell, align: opts?.align ?? "left", ...opts };
+}
+
 export function textCol<T>(
   id: string,
   header: string,
   cell: (row: T) => ReactNode,
   opts?: { width?: number | string },
 ): DataTableColumn<T> {
-  return { id, header, cell, ...opts };
+  return col(id, header, cell, { ...opts, align: "left" });
 }
 
 export function rightCol<T>(
@@ -56,7 +64,7 @@ export function rightCol<T>(
   cell: (row: T) => ReactNode,
   opts?: { hiddenMd?: boolean; width?: number | string },
 ): DataTableColumn<T> {
-  return { id, header, cell, align: "right", ...opts };
+  return col(id, header, cell, { ...opts, align: "right" });
 }
 
 export function mobilePrimaryCol<T>(
@@ -65,20 +73,21 @@ export function mobilePrimaryCol<T>(
   cell: (row: T) => ReactNode,
   opts?: { hiddenMd?: boolean },
 ): DataTableColumn<T> {
-  return { id, header, cell, align: "right", mobilePrimary: true, ...opts };
+  return col(id, header, cell, { ...opts, align: "right", mobilePrimary: true });
 }
 
 export function monoCol<T>(
   id: string,
   header: string,
   format: (row: T) => ReactNode,
-  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean },
+  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean; semibold?: boolean },
 ): DataTableColumn<T> {
   const col = opts?.mobilePrimary ? mobilePrimaryCol : rightCol;
+  const className = opts?.semibold ? "ui-mono-value font-semibold" : "ui-mono-value";
   return col(
     id,
     header,
-    (row) => <span className="ui-mono-value">{format(row)}</span>,
+    (row) => <span className={className}>{format(row)}</span>,
     opts?.hiddenMd ? { hiddenMd: true } : undefined,
   );
 }

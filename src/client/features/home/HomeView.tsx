@@ -14,7 +14,7 @@ import { SearchInput } from "@/client/search/SearchInput";
 import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { PageContainer, PageSection } from "@/client/components/layout";
 import { Dot } from "@/client/components/ui/primitives";
-import { EVENT_STYLES } from "@/client/components/status-events";
+import { resolveEventStyle } from "@/client/components/status-events";
 import { SOURCE_LABELS } from "@/shared/config";
 import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
@@ -25,16 +25,25 @@ const IndexLineChart = lazy(() => import("./charts").then((m) => ({ default: m.I
 const UsageDonut = lazy(() => import("./UsageDonut").then((m) => ({ default: m.UsageDonut })));
 const StatisticsSection = lazy(() => import("./statistics-section").then((m) => ({ default: m.StatisticsSection })));
 
-function HomeLatestEvents() {
-  const { t, lang } = useTranslation();
+function useLatestEventSummary() {
   const { data } = useSuspenseStatusHistory();
   const latest = (data.events ?? [])[0] ?? null;
-  const eventStyle = latest ? EVENT_STYLES[latest.type] : null;
+  if (!latest) return { latest: null as null, summary: undefined, lastSample: undefined, level: "unknown" as const, data };
+  const summary = data.sources.find((s) => s.id === latest.id);
+  const samples = data.recent?.[latest.id] ?? [];
+  const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
+  return { latest, summary, lastSample, level: resolveLevel(summary), data };
+}
+
+function HomeLatestEvents() {
+  const { t, lang } = useTranslation();
+  const { latest, summary, lastSample, level } = useLatestEventSummary();
+  const eventStyle = latest ? resolveEventStyle(latest.type) : null;
   const labelKey =
     latest && Object.hasOwn(SOURCE_LABELS, latest.id)
       ? (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[latest.id]
       : undefined;
-  if (!latest) {
+  if (!latest || !eventStyle) {
     return (
       <Link
         href="/status"
@@ -44,10 +53,6 @@ function HomeLatestEvents() {
       </Link>
     );
   }
-  const summary = data.sources.find((s) => s.id === latest.id);
-  const samples = data.recent?.[latest.id] ?? [];
-  const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
-  const level = resolveLevel(summary);
   const latencyMs = summary?.avgLatency24h ?? summary?.latencyMs ?? lastSample?.latencyMs ?? null;
   const errorText = lastSample?.error ?? null;
   const statusCode = lastSample?.status ?? null;
@@ -57,9 +62,9 @@ function HomeLatestEvents() {
       href="/status"
       className="flex h-9 items-center gap-2 min-w-0 w-full overflow-hidden ui-card rounded-none px-3.5 hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
     >
-      <Dot size="sm" color={eventStyle!.color} aria-hidden="true" />
+      <Dot size="sm" color={eventStyle.color} aria-hidden="true" />
       <span className="ui-body truncate min-w-0 flex-1 whitespace-nowrap">
-        <span className={`font-medium ${eventStyle!.text}`}>{t(eventStyle!.labelKey)}</span>
+        <span className={`font-medium ${eventStyle.text}`}>{t(eventStyle.labelKey)}</span>
         <span className="text-text-secondary mx-1.5">·</span>
         <span className="text-text-secondary">{labelKey ? t(labelKey) : latest.id}</span>
         <span className="text-text-secondary mx-1.5">·</span>

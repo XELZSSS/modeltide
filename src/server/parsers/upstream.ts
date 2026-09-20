@@ -68,7 +68,6 @@ export interface DailyPaperEntry {
     title?: unknown;
     upvotes?: unknown;
     publishedAt?: unknown;
-    summary?: unknown;
   };
 }
 
@@ -90,6 +89,7 @@ export interface ChangelogRawEntry {
   release?: unknown;
   releaseDate?: unknown;
   creator?: unknown;
+  deprecated?: unknown;
 }
 
 /** Statuspage `summary.json`. */

@@ -2,6 +2,7 @@
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import type { TranslationKey } from "@/shared/i18n";
 import { calcMonthlyCost } from "@/client/utils/cost-estimator";
+import { modelId } from "@/client/utils/model";
 import { resolveEffectivePricing, type OfficialGetter } from "@/client/utils/pricing-merge";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
@@ -129,6 +130,12 @@ export function getCachedMonthlyCost(
   return result;
 }
 
+export type MonthlyCostMap = Map<string, number | null>;
+
+/**
+ * Monthly cost per modelId(). Keyed rather than positional so a filtered or
+ * reordered model list can never pair a cost with the wrong row.
+ */
 export function useMonthlyCosts(
   models: ArtificialAnalysisModel[],
   getOfficial?: OfficialGetter,
@@ -137,10 +144,15 @@ export function useMonthlyCosts(
   const estimator = useCostEstimator();
   const { calc } = estimator;
   const ready = opts?.ready ?? true;
-  const monthlyCosts = useMemo(() => {
-    if (models.length === 0) return [] as (number | null)[];
-    if (!ready) return models.map(() => null);
-    return models.map((model) => getCachedMonthlyCost(model, calc, getOfficial));
+  const monthlyCosts = useMemo<MonthlyCostMap>(() => {
+    const map: MonthlyCostMap = new Map();
+    if (!ready) return map;
+    for (const model of models) {
+      const key = modelId(model);
+      if (!key || map.has(key)) continue;
+      map.set(key, getCachedMonthlyCost(model, calc, getOfficial));
+    }
+    return map;
   }, [models, calc, getOfficial, ready]);
   return { ...estimator, monthlyCosts };
 }
@@ -148,7 +160,10 @@ export function useMonthlyCosts(
 export function useEffectivePricingMap(models: ArtificialAnalysisModel[], getOfficial?: OfficialGetter) {
   return useMemo(() => {
     const map = new Map<string, ReturnType<typeof resolveEffectivePricing>>();
-    for (const m of models) map.set(m.id, resolveEffectivePricing(m.pricing, getOfficial?.(m)));
+    for (const m of models) {
+      const key = modelId(m);
+      if (key) map.set(key, resolveEffectivePricing(m.pricing, getOfficial?.(m)));
+    }
     return map;
   }, [models, getOfficial]);
 }

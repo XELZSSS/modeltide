@@ -33,16 +33,28 @@ function isSourceId(value: string | undefined): value is SourceStatus["id"] {
 }
 
 const BEIJING_OFFSET_MS = 8 * ONE_HOUR;
-const beijingHHMM = (ts: number): string => new Date(ts + BEIJING_OFFSET_MS).toISOString().slice(11, 16);
+export const formatBeijingHHMM = (ts: number): string =>
+  new Date(ts + BEIJING_OFFSET_MS).toISOString().slice(11, 16);
 
 const EMPTY_SAMPLES: { t: number; latencyMs: number | null }[] = [];
 const EMPTY_BUCKETS: import("@/shared/types").DayBucket[] = [];
 
-function decimateSamples<T extends { t: number }>(samples: T[], max = 300): T[] {
+export function decimateSamples<T extends { t: number; latencyMs?: number | null }>(samples: T[], max = 300): T[] {
   if (samples.length <= max) return samples;
-  const step = samples.length / max;
+  // Peak-preserving stride: keep the max-latency sample per bucket so
+  // spikes survive decimation instead of being skipped by uniform sampling.
+  const bucketSize = samples.length / max;
   const out: T[] = [];
-  for (let i = 0; i < max; i++) out.push(samples[Math.floor(i * step)]!);
+  for (let i = 0; i < max; i++) {
+    const start = Math.floor(i * bucketSize);
+    const end = Math.floor((i + 1) * bucketSize);
+    let best = samples[start]!;
+    for (let j = start + 1; j < end && j < samples.length; j++) {
+      const cur = samples[j]!;
+      if ((cur.latencyMs ?? -1) > (best.latencyMs ?? -1)) best = cur;
+    }
+    out.push(best);
+  }
   return out;
 }
 
@@ -62,7 +74,7 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
   );
   const data = useMemo(
     () => ({
-      labels: decimated.map((s) => beijingHHMM(s.t)),
+      labels: decimated.map((s) => formatBeijingHHMM(s.t)),
       datasets: [
         {
           label: `${t("latencyHistory")} (GMT+8)`,

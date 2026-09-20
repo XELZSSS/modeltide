@@ -2,7 +2,7 @@ import { isSuitableNewsItem, isRecord } from "@/server/parsers/primitives";
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
 import { MAX_FEED_BYTES } from "@/server/config";
-import { utf8ByteLength } from "@/shared/utils";
+import { utf8ByteLength, sourceNameFromUrl as channelHost } from "@/shared/utils";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
 
 import { decodeEntities } from "@/server/parsers/entities";
@@ -27,12 +27,9 @@ const parser = new XMLParser({
   htmlEntities: false,
 });
 
-function sourceNameFrom(sourceUrl: string): string {
-  try {
-    return new URL(sourceUrl).hostname;
-  } catch {
-    return "Unknown";
-  }
+function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string {
+  const text = textOf(channel.title) ?? "";
+  return cleanTitle(text) || channelHost(sourceUrl);
 }
 
 function textOf(v: unknown): string | null {
@@ -59,11 +56,6 @@ function cleanTitle(raw: string): string {
   const decoded = decodeEntities(stripped);
   const clean = decoded.includes("<") ? stripHtml(decoded) : decoded;
   return truncateSafe(clean, MAX_TITLE_CHARS).trim();
-}
-
-function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string {
-  const text = textOf(channel.title) ?? "";
-  return cleanTitle(text) || sourceNameFrom(sourceUrl);
 }
 
 function linkHref(link: unknown): string | null {

@@ -1,6 +1,7 @@
-import type { ArtificialAnalysisModel } from "@/shared/types";
+import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 import { isFiniteNumber } from "@/shared/utils";
 import { getOutputSpeed } from "@/client/utils/cost-estimator";
+import { resolveEffectivePricing } from "@/client/utils/pricing-merge";
 import type { ModelSource } from "@/shared/config";
 
 export function modelId(m: { id?: string; slug?: string }): string {
@@ -48,12 +49,17 @@ export interface ProviderStats {
   avgIntelligence: number | null;
 }
 
-export function computeProviderStats(models: ArtificialAnalysisModel[], unknownLabel = "Unknown"): ProviderStats[] {
+export function computeProviderStats(
+  models: ArtificialAnalysisModel[],
+  unknownLabel = "Unknown",
+  getOfficial?: (m: ArtificialAnalysisModel) => OfficialPriceModel | undefined,
+): ProviderStats[] {
   const finite = isFiniteNumber;
   return groupByProvider(models, unknownLabel)
     .map(({ name, color, models: group }) => {
       const count = group.length;
-      const avgPrice = avg(group.map((m) => m.pricing?.input).filter(finite));
+      const prices = group.map((m) => resolveEffectivePricing(m.pricing, getOfficial?.(m)).input).filter(finite);
+      const avgPrice = avg(prices);
       const avgSpeed = avg(group.map(getOutputSpeed).filter(finite));
       const avgIntelligence = avg(group.map((m) => m.intelligence_index).filter(finite));
       return { name, color, count, avgPrice, avgSpeed, avgIntelligence };

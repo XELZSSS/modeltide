@@ -1,16 +1,17 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { getOpenRouterRankings } from "@/server/sources/openrouter";
+import { getModelDirectory } from "@/server/sources/openrouter/directory";
 import { resetModuleCachesForTests } from "@/server/infra/cache-service";
-import {
-  categoryFrom,
-  creatorFromSlug,
-  mapModels,
-  parseDirectoryRows,
-  titleFromSlug,
-  type PricingEntry,
-} from "@/server/parsers/openrouter";
-import type { ModelRow } from "@/server/parsers/upstream";
+import { testCtx } from "@/server/test-helpers";
+import { UpstreamError } from "@/server/infra/errors";
+import { upstreamConfig, upstreamEndpoints } from "@/server/config";
+import { PARTIAL_FAIL_TTL_MS } from "@/shared/config";
+import type { AppContext } from "@/server/context";
+import type { ModelRow, PricingRow } from "@/server/parsers/upstream";
 
-beforeEach(() => resetModuleCachesForTests());
+const RANKINGS_URL = `${upstreamConfig.openrouter}${upstreamEndpoints.openRouterRankings}`;
+const DIRECTORY_URL = `${upstreamConfig.openrouter}${upstreamEndpoints.openRouterDirectory}`;
+const RANKINGS_KEY = "v-test:openrouter-rankings";
 
 function row(over: Partial<ModelRow> = {}): ModelRow {
   return {
@@ -29,208 +30,155 @@ function row(over: Partial<ModelRow> = {}): ModelRow {
   };
 }
 
-const pricing = new Map<string, PricingEntry>([
-  ["openai/gpt-5", { input: 1, output: 2, cacheHit: 0.5, cacheWrite: 1.5 }],
-]);
+function directoryRow(id: string): PricingRow {
+  return { id, pricing: { prompt: "0.000001", completion: "0.000002" } } as unknown as PricingRow;
+}
 
-describe("creatorFromSlug / titleFromSlug / categoryFrom", () => {
-  it.each([
-    ["openai/gpt-5", "OpenAI"],
-    ["meta-llama/llama-4", "Meta"],
-    ["some-org/model_x", "Some Org"],
-    ["constructor/x", "Constructor"],
-  ])("creatorFromSlug(%s) -> %s", (slug, expected) => {
-    expect(creatorFromSlug(slug)).toBe(expected);
+/** Routes ctx.http.json by URL and records how often each endpoint was hit. */
+function orCtx(responses: Record<string, unknown>) {
+  const hits: Record<string, number> = {};
+  const http = {
+    json: async (url: string) => {
+      hits[url] = (hits[url] ?? 0) + 1;
+      const entry = responses[url];
+      if (entry instanceof Error) throw entry;
+      if (entry === undefined) throw new Error(`unexpected request to ${url}`);
+      return entry;
+    },
+  } as unknown as AppContext["http"];
+  const logs: [string, string][] = [];
+  const { ctx, kvStore } = testCtx(new Map<string, string>(), {
+    http,
+    log: (level, msg) => logs.push([level, msg]),
+  });
+  return { ctx, kvStore, hits, logs };
+}
+
+const storedTtl = (kvStore: Map<string, string>) => (JSON.parse(kvStore.get(RANKINGS_KEY) ?? "{}") as { t?: number }).t;
+
+describe("getOpenRouterRankings", () => {
+  beforeEach(() => resetModuleCachesForTests());
+
+  it("joins directory pricing onto the ranked rows", async () => {
+    const { ctx } = orCtx({
+      [RANKINGS_URL]: {
+        data: [row(), row({ model_permaslug: "acme/coder", total_prompt_tokens: 10, total_completion_tokens: 5 })],
+      },
+      [DIRECTORY_URL]: { data: [directoryRow("openai/gpt-5"), directoryRow("acme/coder")] },
+    });
+    const payload = await getOpenRouterRankings(ctx);
+    expect(payload.partial).toBeUndefined();
+    expect(payload.tokenUsageRankings.map((r) => r.id)).toEqual(["openai/gpt-5", "acme/coder"]);
+    expect(payload.tokenUsageRankings[0]?.pricing).toEqual({ input: 1, output: 2, cacheHit: null, cacheWrite: null });
+    expect(payload.tokenUsageRankings[0]?.rank).toBe(1);
+    expect(payload.tokenUsageRankings[0]?.change).toBe(100);
   });
 
-  it.each([
-    ["openai/gpt-5", "GPT 5"],
-    ["solo-model", "Solo Model"],
-    ["openai/gpt-4o", "GPT 4o"],
-    ["meta-llama/llama-3-405b", "Llama 3 405b"],
-    ["openai/gpt-5.6-sol-20260709", "GPT 5.6 SOL 20260709"],
-    ["openai/gpt-4.1-mini-2025-04-14", "GPT 4.1 Mini 2025 04 14"],
-    ["openai/gpt-3.5-turbo", "GPT 3.5 Turbo"],
-  ])("titleFromSlug(%s) -> %s", (slug, expected) => {
-    expect(titleFromSlug(slug)).toBe(expected);
+  it("sums variants of the same permaslug into one ranked entry", async () => {
+    const { ctx } = orCtx({
+      [RANKINGS_URL]: {
+        data: [
+          row({ total_prompt_tokens: 100, total_completion_tokens: 50 }),
+          row({ variant: "thinking", variant_permaslug: "openai/gpt-5:thinking", total_prompt_tokens: 30 }),
+        ],
+      },
+      [DIRECTORY_URL]: { data: [directoryRow("openai/gpt-5")] },
+    });
+    const payload = await getOpenRouterRankings(ctx);
+    expect(payload.tokenUsageRankings).toHaveLength(1);
+    expect(payload.tokenUsageRankings[0]?.promptTokens).toBe(130);
+    expect(payload.tokenUsageRankings[0]?.totalTokens).toBe(230);
   });
 
-  it.each([
-    ["deepseek/deepseek-coder-v2", "DeepSeek Coder V2", "coding"],
-    ["deepseek/deepseek-r1", "DeepSeek R1", "reasoning"],
-    ["qwen/qwen3-max", "Qwen3 Max", "general"],
-  ])("categoryFrom(%s) -> %s", (slug, name, expected) => {
-    expect(categoryFrom(slug, name)).toBe(expected);
+  it("serves rankings without pricing when the directory fails", async () => {
+    const { ctx, kvStore, logs } = orCtx({
+      [RANKINGS_URL]: { data: [row()] },
+      [DIRECTORY_URL]: new Error("directory down"),
+    });
+    const payload = await getOpenRouterRankings(ctx);
+    expect(payload.partial).toBe(true);
+    expect(payload.tokenUsageRankings[0]?.pricing).toBeUndefined();
+    expect(logs.some(([level, msg]) => level === "warn" && msg.includes("directory empty"))).toBe(true);
+    expect(storedTtl(kvStore)).toBeLessThanOrEqual(PARTIAL_FAIL_TTL_MS);
+  });
+
+  it("fails when the rankings leg is rejected, preserving the prefix", async () => {
+    const { ctx } = orCtx({ [RANKINGS_URL]: new Error("socket hang up"), [DIRECTORY_URL]: { data: [] } });
+    await expect(getOpenRouterRankings(ctx)).rejects.toThrowError("OpenRouter: rankings fetch failed: socket hang up");
+  });
+
+  it("keeps the timeout marker so the route answers 504 rather than 502", async () => {
+    const { ctx } = orCtx({
+      [RANKINGS_URL]: new UpstreamError("upstream timed out", { timeout: true }),
+      [DIRECTORY_URL]: { data: [] },
+    });
+    const err = await getOpenRouterRankings(ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(UpstreamError);
+    expect((err as UpstreamError).causedByTimeout).toBe(true);
+    expect((err as UpstreamError).status).toBe(504);
+  });
+
+  it("rejects a non-array rankings response", async () => {
+    const { ctx } = orCtx({ [RANKINGS_URL]: { data: null }, [DIRECTORY_URL]: { data: [] } });
+    await expect(getOpenRouterRankings(ctx)).rejects.toThrowError(/non-array response/);
+  });
+
+  it("rejects an empty rankings array", async () => {
+    const { ctx } = orCtx({ [RANKINGS_URL]: { data: [] }, [DIRECTORY_URL]: { data: [] } });
+    await expect(getOpenRouterRankings(ctx)).rejects.toThrowError(/empty array/);
+  });
+
+  it("rejects when every ranking row has an unusable permaslug", async () => {
+    const { ctx } = orCtx({
+      [RANKINGS_URL]: { data: [row({ model_permaslug: "" }), row({ model_permaslug: "javascript:alert(1)" })] },
+      [DIRECTORY_URL]: { data: [directoryRow("openai/gpt-5")] },
+    });
+    await expect(getOpenRouterRankings(ctx)).rejects.toThrowError(/all 2 ranking rows had invalid model_permaslug/);
+  });
+
+  it("caches the payload so the second call hits no upstream", async () => {
+    const { ctx, hits, kvStore } = orCtx({
+      [RANKINGS_URL]: { data: [row()] },
+      [DIRECTORY_URL]: { data: [directoryRow("openai/gpt-5")] },
+    });
+    const first = await getOpenRouterRankings(ctx);
+    const second = await getOpenRouterRankings(ctx);
+    expect(second).toEqual(first);
+    expect(hits[RANKINGS_URL]).toBe(1);
+    expect(hits[DIRECTORY_URL]).toBe(1);
+    expect(storedTtl(kvStore)).toBeGreaterThan(0);
+  });
+
+  it("keeps the cached fetchedAt on a cache hit", async () => {
+    const { ctx } = orCtx({
+      [RANKINGS_URL]: { data: [row()] },
+      [DIRECTORY_URL]: { data: [directoryRow("openai/gpt-5")] },
+    });
+    const first = await getOpenRouterRankings(ctx);
+    const second = await getOpenRouterRankings(ctx);
+    expect(second.fetchedAt).toBe(first.fetchedAt);
   });
 });
 
-describe("parseDirectoryRows", () => {
-  it("drops -1 sentinel cache legs but keeps valid pricing legs", () => {
-    const entry = parseDirectoryRows([
-      {
-        id: "acme/dynamic-model",
-        pricing: {
-          prompt: "0.000001",
-          completion: "0.000002",
-          input_cache_read: "-1",
-          input_cache_write: "-1",
-        },
-      },
-    ]);
-    expect(entry.pricing["acme/dynamic-model"]).toEqual({
-      input: 1,
-      output: 2,
-      cacheHit: null,
-      cacheWrite: null,
-    });
+describe("getModelDirectory", () => {
+  beforeEach(() => resetModuleCachesForTests());
+
+  it("indexes pricing by normalized lowercase id", async () => {
+    const { ctx, hits } = orCtx({ [DIRECTORY_URL]: { data: [directoryRow("OpenAI/GPT-5")] } });
+    const entry = await getModelDirectory(ctx);
+    expect(Object.keys(entry.pricing)).toEqual(["openai/gpt-5"]);
+    expect(entry.pricing["openai/gpt-5"]).toMatchObject({ input: 1, output: 2 });
+    await getModelDirectory(ctx);
+    expect(hits[DIRECTORY_URL]).toBe(1);
   });
 
-  it("keeps non-negative cache legs scaled to per-million", () => {
-    const entry = parseDirectoryRows([
-      {
-        id: "acme/cached-model",
-        pricing: {
-          prompt: "0.000003",
-          completion: "0.000015",
-          input_cache_read: "0.0000003",
-          input_cache_write: "0.00000375",
-        },
-      },
-    ]);
-    expect(entry.pricing["acme/cached-model"]).toEqual({
-      input: 3,
-      output: 15,
-      cacheHit: 0.3,
-      cacheWrite: 3.75,
-    });
+  it("degrades a non-array directory body to an empty pricing error", async () => {
+    const { ctx } = orCtx({ [DIRECTORY_URL]: { data: "nope" } });
+    await expect(getModelDirectory(ctx)).rejects.toThrowError(/empty pricing response \(raw=0, kept=0\)/);
   });
 
-  it("rejects rows whose prompt/completion sentinel is negative", () => {
-    const entry = parseDirectoryRows([
-      {
-        id: "acme/valid-model",
-        pricing: { prompt: "0.000001", completion: "0.000002" },
-      },
-      {
-        id: "acme/dynamic-model",
-        pricing: { prompt: "-1", completion: "0.000002" },
-      },
-    ]);
-    expect(entry.pricing["acme/dynamic-model"]).toBeUndefined();
-    expect(entry.pricing["acme/valid-model"]).toEqual({ input: 1, output: 2, cacheHit: null, cacheWrite: null });
-  });
-});
-
-describe("mapModels", () => {
-  it("aggregates rows by permaslug, keeping the latest change, and attaches pricing", () => {
-    const models = mapModels(
-      [
-        row(),
-        row({
-          date: "2026-08-02",
-          total_prompt_tokens: 10,
-          change: null,
-          total_native_tokens_cached: 7,
-          total_tool_calls: 3,
-        }),
-      ],
-      pricing,
-    );
-    expect(models).toHaveLength(1);
-    expect(models[0]).toMatchObject({
-      rank: 1,
-      id: "openai/gpt-5",
-      name: "GPT 5",
-      creator: "OpenAI",
-      promptTokens: 110,
-      completionTokens: 100,
-      totalTokens: 210,
-      requestCount: 4,
-      reasoningTokens: 20,
-      cachedTokens: 7,
-      toolCalls: 3,
-      change: 100,
-      pricing: pricing.get("openai/gpt-5"),
-    });
-    expect(models[0]!.isFree).toBe(false);
-  });
-
-  it("marks free models and leaves pricing undefined when absent", () => {
-    const free = new Map([["a/b", { input: 0, output: 0, cacheHit: 0, cacheWrite: 0 }]]);
-    const [m] = mapModels([row({ model_permaslug: "a/b", variant_permaslug: "a/b" })], free);
-    expect(m!.isFree).toBe(true);
-
-    const [noPricing] = mapModels([row({ model_permaslug: "x/y", variant_permaslug: "x/y" })], new Map());
-    expect(noPricing!.pricing).toBeUndefined();
-    expect(noPricing!.isFree).toBeUndefined();
-  });
-
-  it("sorts by total tokens descending and ranks sequentially", () => {
-    const models = mapModels(
-      [
-        row({ model_permaslug: "a/small", variant_permaslug: "a/small", total_prompt_tokens: 1 }),
-        row({ model_permaslug: "b/big", variant_permaslug: "b/big", total_prompt_tokens: 999 }),
-      ],
-      new Map(),
-    );
-    expect(models.map((m) => m.id)).toEqual(["b/big", "a/small"]);
-    expect(models.map((m) => m.rank)).toEqual([1, 2]);
-  });
-
-  it("keeps multi-variant rows without token data below genuine zero usage", () => {
-    const missing = {
-      total_prompt_tokens: undefined,
-      total_completion_tokens: undefined,
-    } as unknown as Partial<ModelRow>;
-    const models = mapModels(
-      [
-        row({ model_permaslug: "u/unknown", variant_permaslug: "u/unknown:a", ...missing }),
-        row({ model_permaslug: "u/unknown", variant_permaslug: "u/unknown:b", ...missing }),
-        row({
-          model_permaslug: "z/zero",
-          variant_permaslug: "z/zero",
-          total_prompt_tokens: 0,
-          total_completion_tokens: 0,
-        }),
-      ],
-      new Map(),
-    );
-    expect(models.map((m) => m.id)).toEqual(["z/zero", "u/unknown"]);
-  });
-
-  it("merges variant rows of one model into a single entry with dominant-variant pricing", () => {
-    const variantPricing = new Map<string, PricingEntry>([
-      ["a/b:standard", { input: 2, output: 3, cacheHit: 1, cacheWrite: 2 }],
-      ["a/b:free", { input: 0, output: 0, cacheHit: 0, cacheWrite: 0 }],
-    ]);
-    const models = mapModels(
-      [
-        row({
-          model_permaslug: "a/b",
-          variant: "free",
-          variant_permaslug: "a/b:free",
-          total_prompt_tokens: 5,
-          count: 1,
-        }),
-        row({
-          model_permaslug: "a/b",
-          variant: "standard",
-          variant_permaslug: "a/b:standard",
-          total_prompt_tokens: 900,
-          count: 2,
-          change: 0.5,
-        }),
-      ],
-      variantPricing,
-    );
-    expect(models).toHaveLength(1);
-    expect(models[0]).toMatchObject({
-      id: "a/b",
-      promptTokens: 905,
-      requestCount: 3,
-      variant: "standard",
-      pricing: variantPricing.get("a/b:standard"),
-    });
-    expect(models[0]!.isFree).toBe(false);
+  it("throws when no row survives pricing validation", async () => {
+    const { ctx } = orCtx({ [DIRECTORY_URL]: { data: [{ id: "acme/x" }] } });
+    await expect(getModelDirectory(ctx)).rejects.toThrowError(/raw=1, kept=0/);
   });
 });

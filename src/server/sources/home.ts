@@ -7,7 +7,6 @@ import { getOpenRouterRankings } from "@/server/sources/openrouter";
 import { FIVE_MINUTES, OPEN_SOURCE_MODELS_DEFAULTS, ttlFor } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import type { HomeDashboardData } from "@/shared/types";
-import type { SourcePayload } from "@/server/sources/types";
 import { cachedSource } from "@/server/sources/pipeline";
 
 async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
@@ -24,9 +23,7 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
     .join("; ");
   const orRankings = orRankingsRes.status === "fulfilled" ? orRankingsRes.value : null;
   const textToImage = textToImageRes.status === "fulfilled" ? textToImageRes.value : null;
-  const opensource = (opensourceRes.status === "fulfilled" ? opensourceRes.value : null) as SourcePayload<
-    import("@/shared/types").OpenSourceModelEntry[]
-  > | null;
+  const opensource = opensourceRes.status === "fulfilled" ? opensourceRes.value : null;
   if (!orRankings && !textToImage && !opensource)
     throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`);
   const partial = orRankings == null || textToImage == null || opensource == null;

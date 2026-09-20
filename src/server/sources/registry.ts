@@ -1,4 +1,5 @@
 import type { AppContext } from "@/server/context";
+import { buildContext, type Env } from "@/server/context";
 import { qEnum, qNum, qStr, type QuerySchema, type ValidatedQuery } from "@/server/infra/validation";
 import { apiPaths, MAX_MODEL_LIMIT, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
 import { getAgentRankings } from "@/server/sources/agent-arena";
@@ -103,3 +104,17 @@ export const SOURCES: readonly SourceManifestEntry[] = [
     handler: (ctx) => getStatusHistory(ctx),
   }),
 ];
+
+export function warmTasks(env: Env, tier: WarmTier, taskTimeoutMs: number): (() => Promise<unknown>)[] {
+  const tasks: (() => Promise<unknown>)[] = [];
+  for (const source of SOURCES) {
+    if (source.warm !== tier) continue;
+    const paramSets = source.warmParams?.length ? source.warmParams : [{} as ValidatedQuery<QuerySchema>];
+    for (const params of paramSets) {
+      // Each warmup call gets an independent timeout so slow upstreams can't
+      // starve later tasks sharing one deadline.
+      tasks.push(() => source.handler(buildContext(env, { signal: AbortSignal.timeout(taskTimeoutMs) }), params));
+    }
+  }
+  return tasks;
+}

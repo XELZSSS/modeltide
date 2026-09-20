@@ -1,25 +1,17 @@
-import { buildContext, type AppContext, type Env } from "@/server/context";
+import { buildContext, type Env } from "@/server/context";
 import { recordStatusSamples } from "@/server/sources/status";
-import { SOURCES, type WarmTier } from "@/server/sources/registry";
-import type { QuerySchema, ValidatedQuery } from "@/server/infra/validation";
+import { warmTasks } from "@/server/sources/registry";
 import { runCapped } from "@/server/infra/pool";
+import {
+  SAMPLE_TIMEOUT_MS,
+  WARM_TASK_TIMEOUT_MS,
+  WARM_BATCH_TIMEOUT_MS,
+  WARM_CONCURRENCY,
+  PING_TIMEOUT_MS,
+} from "@/server/config";
 import { applyApiHeaders } from "@/shared/config/security";
+import { methodNotAllowedResponse, notFoundResponse, stripBodyForHead } from "@/server/routes/define-route";
 import { handleApi } from "./router";
-
-const SAMPLE_TIMEOUT_MS = 45_000;
-const WARM_CALL_TIMEOUT_MS = 45_000;
-const WARM_CONCURRENCY = 6;
-const PING_TIMEOUT_MS = 5_000;
-
-function warmTasks(ctx: AppContext, tier: WarmTier): (() => Promise<unknown>)[] {
-  const tasks: (() => Promise<unknown>)[] = [];
-  for (const source of SOURCES) {
-    if (source.warm !== tier) continue;
-    const paramSets = source.warmParams?.length ? source.warmParams : [{} as ValidatedQuery<QuerySchema>];
-    for (const params of paramSets) tasks.push(() => source.handler(ctx, params));
-  }
-  return tasks;
-}
 
 async function pingCronMonitor(env: Env, healthy: boolean): Promise<void> {
   const url = env.STATUS_PING_URL;
@@ -61,15 +53,14 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
   })();
   const warmJob = (async (): Promise<{ failed: number; total: number }> => {
     try {
-      const warmSignal = AbortSignal.timeout(WARM_CALL_TIMEOUT_MS);
-      const ctx = buildContext(env, { signal: warmSignal });
-      const coreTasks = warmTasks(ctx, "core");
-      const hourlyTasks = warmTasks(ctx, "hourly");
+      const batchSignal = AbortSignal.timeout(WARM_BATCH_TIMEOUT_MS);
+      const coreTasks = warmTasks(env, "core", WARM_TASK_TIMEOUT_MS);
+      const hourlyTasks = warmTasks(env, "hourly", WARM_TASK_TIMEOUT_MS);
       const tasks =
         fireMinuteUtc < 30
-          ? [...coreTasks, ...hourlyTasks, ...(fireHourUtc % 6 === 0 ? warmTasks(ctx, "static") : [])]
+          ? [...coreTasks, ...hourlyTasks, ...(fireHourUtc % 6 === 0 ? warmTasks(env, "static", WARM_TASK_TIMEOUT_MS) : [])]
           : coreTasks;
-      const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: warmSignal });
+      const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: batchSignal });
       const failed = results.filter((r) => r.status === "rejected").length;
       if (failed > 0) {
         console.warn(`[warm] ${failed}/${results.length} warmup calls failed`);
@@ -102,32 +93,17 @@ async function fetchHandler(req: Request, env: Env): Promise<Response> {
     return res;
   }
   if (req.method !== "GET" && req.method !== "HEAD") {
-    const res = Response.json(
-      { error: { code: 405, message: "Method not allowed" } },
-      { status: 405, headers: { "content-type": "application/json" } },
-    );
-    applyApiHeaders(res.headers);
-    return res;
+    return methodNotAllowedResponse();
   }
   const isHead = req.method === "HEAD";
   const res = await handleApi(req, env, url);
   if (res) {
     if (!isHead) return res;
-    const headers = new Headers(res.headers);
-    headers.delete("content-length");
-    headers.delete("content-encoding");
-    return new Response(null, { status: res.status, headers });
+    return stripBodyForHead(res);
   }
-  const notFound = Response.json(
-    { error: { code: 404, message: "Not found" } },
-    { status: 404, headers: { "content-type": "application/json" } },
-  );
-  applyApiHeaders(notFound.headers);
+  const notFound = notFoundResponse();
   if (!isHead) return notFound;
-  const headers = new Headers(notFound.headers);
-  headers.delete("content-length");
-  headers.delete("content-encoding");
-  return new Response(null, { status: notFound.status, headers });
+  return stripBodyForHead(notFound);
 }
 
 export default {

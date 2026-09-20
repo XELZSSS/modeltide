@@ -14,6 +14,13 @@ export const EVENT_STYLES = {
   up: { color: "var(--success)", text: "text-success", labelKey: "eventUp" },
 } as const;
 
+export type EventType = keyof typeof EVENT_STYLES;
+
+/** Unknown future event types fall back to "up" styling so a backend addition can't crash the UI. */
+export function resolveEventStyle(type: string): (typeof EVENT_STYLES)[EventType] {
+  return Object.hasOwn(EVENT_STYLES, type) ? EVENT_STYLES[type as EventType] : EVENT_STYLES.up;
+}
+
 export const StatusEventRow = memo(function StatusEventRow({
   event,
   showSource = false,
@@ -24,7 +31,7 @@ export const StatusEventRow = memo(function StatusEventRow({
   showTime?: boolean;
 }) {
   const { t, lang } = useTranslation();
-  const style = EVENT_STYLES[event.type];
+  const style = resolveEventStyle(event.type);
   const labelKey = Object.hasOwn(SOURCE_LABELS, event.id)
     ? (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[event.id]
     : undefined;

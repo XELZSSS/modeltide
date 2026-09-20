@@ -3,7 +3,7 @@ import { formatShortNumber } from "@/client/utils/format";
 import { shortModelId } from "@/client/utils/model";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/components/data/ranked";
-import type { DataTableColumn } from "@/client/components/data/columns";
+import { monoCol, type DataTableColumn } from "@/client/components/data/columns";
 import type { useTranslation } from "@/client/providers";
 
 function buildOpenSourceColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColumn<OpenSourceModelEntry>[] {
@@ -13,19 +13,8 @@ function buildOpenSourceColumns(t: ReturnType<typeof useTranslation>["t"]): Data
       (item) => item.id,
       (item) => shortModelId(item.id),
     ),
-    {
-      id: "downloads",
-      header: t("downloads"),
-      align: "right",
-      cell: (item) => <span className="ui-mono-value font-semibold">{formatShortNumber(item.downloads)}</span>,
-    },
-    {
-      id: "likes",
-      header: t("likes"),
-      align: "right",
-      hiddenMd: true,
-      cell: (item) => <span className="ui-mono-value font-normal">{formatShortNumber(item.likes)}</span>,
-    },
+    monoCol("downloads", t("downloads"), (item) => formatShortNumber(item.downloads), { semibold: true }),
+    monoCol("likes", t("likes"), (item) => formatShortNumber(item.likes), { hiddenMd: true }),
     {
       id: "license",
       header: t("license"),

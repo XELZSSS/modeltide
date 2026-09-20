@@ -1,5 +1,6 @@
 import { CacheService } from "@/server/infra/cache-service";
 import { HttpClient } from "@/server/infra/http-client";
+import { createLogger } from "@/server/infra/logger";
 import { CACHE_VERSION } from "@/shared/config";
 
 export interface Env {
@@ -17,15 +18,6 @@ export interface AppContext {
   kv: KVNamespace | undefined;
   hfToken?: string;
   log(level: LogLevel, msg: string, meta?: Record<string, unknown>): void;
-}
-
-function createLogger(): AppContext["log"] {
-  return (level, msg, meta) => {
-    const line = meta ? `${msg} ${JSON.stringify(meta)}` : msg;
-    if (level === "error") console.error(line);
-    else if (level === "warn") console.warn(line);
-    else console.log(line);
-  };
 }
 
 let warnedMissingKv = false;

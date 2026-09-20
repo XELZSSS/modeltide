@@ -47,6 +47,13 @@ export default defineConfig({
           environment: "node",
         },
       },
+      {
+        test: {
+          name: "worker",
+          include: ["worker/**/*.{test,spec}.{ts,tsx}"],
+          environment: "node",
+        },
+      },
     ],
   },
 });

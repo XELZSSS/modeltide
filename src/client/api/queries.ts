@@ -98,13 +98,19 @@ const qOpenSourceModelsRaw = createApiQuery<SourcePayload<OpenSourceModelEntry[]
   { ttl: SLOW_TTL_MS },
 );
 
+const qNewsCache = new Map<NewsCategory, ReturnType<typeof createApiQuery<SourcePayload<NewsItem[]>>>>();
 const qNewsRaw = (c: NewsCategory) => {
   const safe = (NEWS_CATEGORIES.includes(c) ? c : NEWS_CATEGORIES[0]) as NewsCategory;
-  return createApiQuery<SourcePayload<NewsItem[]>>(queryKeys.news(safe), apiPaths.news(safe), {
-    ttl: THIRTY_MINUTES,
-    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
-    isPartialData: (d) => d?.partial === true,
-  });
+  let q = qNewsCache.get(safe);
+  if (!q) {
+    q = createApiQuery<SourcePayload<NewsItem[]>>(queryKeys.news(safe), apiPaths.news(safe), {
+      ttl: THIRTY_MINUTES,
+      partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+      isPartialData: (d) => d?.partial === true,
+    });
+    qNewsCache.set(safe, q);
+  }
+  return q;
 };
 
 const qStatusHistory = createApiQuery<StatusHistoryPayload>(queryKeys.statusHistory, apiPaths.statusHistory, {
@@ -128,8 +134,6 @@ const qClosedReleasesRaw = createApiQuery<SourcePayload<ClosedReleaseEntry[]>>(
     isPartialData: (d) => d?.partial === true,
   },
 );
-
-// ── Strict list hooks: unwrap at the boundary, components receive T[] only ──
 
 // ── Strict list hooks: unwrap at the boundary, components receive T[] only ──
 
@@ -165,12 +169,20 @@ export function useSuspenseOpenSourceReleases(): OpenSourceModelEntry[] {
   return unwrapList<OpenSourceModelEntry>(data, "openSourceReleases");
 }
 
-const qOpenSourceModel = (id: string) =>
-  createApiQuery<SourcePayload<OpenSourceModelEntry | null>>(
-    queryKeys.openSourceModel(id),
-    apiPaths.openSourceModel(id),
-    { ttl: SLOW_TTL_MS },
-  );
+const qOpenSourceModelCache = new Map<string, ReturnType<typeof createApiQuery<SourcePayload<OpenSourceModelEntry | null>>>>();
+const qOpenSourceModel = (id: string) => {
+  let q = qOpenSourceModelCache.get(id);
+  if (!q) {
+    q = createApiQuery<SourcePayload<OpenSourceModelEntry | null>>(
+      queryKeys.openSourceModel(id),
+      apiPaths.openSourceModel(id),
+      { ttl: SLOW_TTL_MS },
+    );
+    if (qOpenSourceModelCache.size > 200) qOpenSourceModelCache.clear();
+    qOpenSourceModelCache.set(id, q);
+  }
+  return q;
+};
 
 export function useSuspenseOpenSourceModel(id: string): OpenSourceModelEntry | null {
   const { data } = qOpenSourceModel(id).useSuspense();
@@ -205,18 +217,24 @@ interface OpenSourceModelsQuery {
   error: Error | null;
 }
 
+// ── Shared unwrapped-list state: single place for partial/malformed/error logic ──
+
+interface UnwrappedListState<T> {
+  data: T[];
+  partial: boolean;
+  malformed: boolean;
+}
+
+function useUnwrappedPartial<T>(raw: unknown, label: string): UnwrappedListState<T> {
+  return useMemo(() => unwrapListPartial<T>(raw, label), [raw, label]);
+}
+
 export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
   const trending = qOpenSourceModelsRaw.use(enabled);
   const releases = qOpenSourceReleasesRaw.use(enabled);
 
-  const trendingUnwrapped = useMemo(
-    () => unwrapListPartial<OpenSourceModelEntry>(trending.data, "openSourceModels"),
-    [trending.data],
-  );
-  const releasesUnwrapped = useMemo(
-    () => unwrapListPartial<OpenSourceModelEntry>(releases.data, "openSourceReleases"),
-    [releases.data],
-  );
+  const trendingUnwrapped = useUnwrappedPartial<OpenSourceModelEntry>(trending.data, "openSourceModels");
+  const releasesUnwrapped = useUnwrappedPartial<OpenSourceModelEntry>(releases.data, "openSourceReleases");
   const trendingList = trendingUnwrapped.data;
   const releasesList = releasesUnwrapped.data;
 
@@ -257,26 +275,68 @@ export function useSuspenseHallucinationRankings(): HallucinationRankingEntry[] 
 
 // ── Navigation prefetch: route → queries to warm on hover/focus ──
 
+type PrefetchFn = (qc: QueryClient) => void;
+interface RoutePrefetchEntry {
+  match: (path: string) => boolean;
+  run: PrefetchFn[];
+}
+
+const ROUTE_PREFETCH_MAP: RoutePrefetchEntry[] = [
+  {
+    match: (p) => p === "/",
+    run: [
+      (qc) => void qArtificialRaw.prefetch(qc),
+      (qc) => void qHomeDashboardRaw.prefetch(qc),
+      (qc) => void qClosedReleasesRaw.prefetch(qc),
+      (qc) => void qStatusHistory.prefetch(qc),
+    ],
+  },
+  {
+    match: (p) => p === "/models",
+    run: [
+      (qc) => void qArtificialRaw.prefetch(qc),
+      (qc) => void qOpenRouter.prefetch(qc),
+      (qc) => void qOpenSourceModelsRaw.prefetch(qc),
+      (qc) => void qAgent.prefetch(qc),
+      (qc) => void qOfficialPricing.prefetch(qc),
+    ],
+  },
+  {
+    match: (p) => p === "/releases",
+    run: [(qc) => void qOpenSourceReleasesRaw.prefetch(qc), (qc) => void qClosedReleasesRaw.prefetch(qc)],
+  },
+  {
+    match: (p) => p === "/news",
+    run: [
+      (qc) => {
+        for (const c of NEWS_CATEGORIES) void qNewsRaw(c).prefetch(qc);
+      },
+    ],
+  },
+  {
+    match: (p) => p === "/status" || p.startsWith("/status/"),
+    run: [(qc) => void qStatusHistory.prefetch(qc)],
+  },
+  {
+    match: (p) => p === "/price-compare" || p === "/compare",
+    run: [(qc) => void qArtificialRaw.prefetch(qc), (qc) => void qOfficialPricing.prefetch(qc)],
+  },
+  {
+    match: (p) => p.startsWith("/model/"),
+    run: [
+      (qc) => void qArtificialRaw.prefetch(qc),
+      (qc) => void qOpenRouter.prefetch(qc),
+      (qc) => void qOfficialPricing.prefetch(qc),
+    ],
+  },
+];
+
 export const prefetchQueriesForRoute = (qc: QueryClient, pathname: string): void => {
-  if (pathname === "/") {
-    void qArtificialRaw.prefetch(qc);
-    void qHomeDashboardRaw.prefetch(qc);
-    void qClosedReleasesRaw.prefetch(qc);
-    void qStatusHistory.prefetch(qc);
-  } else if (pathname === "/models") {
-    void qArtificialRaw.prefetch(qc);
-    void qOpenRouter.prefetch(qc);
-    void qOpenSourceModelsRaw.prefetch(qc);
-    void qAgent.prefetch(qc);
-  } else if (pathname === "/releases") {
-    void qOpenSourceReleasesRaw.prefetch(qc);
-    void qClosedReleasesRaw.prefetch(qc);
-  } else if (pathname === "/status") {
-    void qStatusHistory.prefetch(qc);
-  } else if (pathname === "/price-compare") {
-    void qArtificialRaw.prefetch(qc);
-    void qOfficialPricing.prefetch(qc);
-  } else if (pathname === "/compare") {
-    void qArtificialRaw.prefetch(qc);
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  for (const entry of ROUTE_PREFETCH_MAP) {
+    if (entry.match(path)) {
+      for (const fn of entry.run) fn(qc);
+      return;
+    }
   }
 };

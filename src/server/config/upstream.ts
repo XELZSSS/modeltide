@@ -35,7 +35,7 @@ export const upstreamEndpoints = {
   openRouterRankings: "/api/frontend/v1/rankings/models",
   openRouterDirectory: "/api/v1/models",
   hfDailyPapers: "/api/daily_papers",
-  litellmPricing: "/BerriAI/litellm/30f33a949b8a2bb890a2baee18e2ab7ab015a4f7/model_prices_and_context_window.json",
+  litellmPricing: "/BerriAI/litellm/main/model_prices_and_context_window.json",
 } as const;
 
 export const providerStatusEndpoints = {
@@ -57,7 +57,10 @@ export const CDN_NO_STORE_HEADER = "no-store";
 
 export const MEMORY_CACHE_MAX_KEYS = 200;
 export const MEMORY_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+/** Fallback L1 TTL when the effective TTL is missing/invalid. */
 export const L1_MAX_TTL_MS = 60_000;
+/** Cap for L1 residency regardless of origin TTL (STATIC 6h stays 15min in L1). */
+export const L1_TTL_CAP_MS = 15 * 60_000;
 
 export const MAX_KV_RETENTION_TTL_S = 30 * 24 * 60 * 60;
 

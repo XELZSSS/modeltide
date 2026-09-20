@@ -17,6 +17,7 @@ import {
   seriesColor,
 } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
+import { modelId } from "@/client/utils/model";
 import { buildCompareRows, buildRadarData, radarMaxFor, type CompareRow } from "./logic";
 import { CompareTable, WinnerValue } from "./CompareTable";
 
@@ -37,12 +38,13 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
 
   const data = useMemo(
     () => ({
-      labels: radarData.map((row) => String(row.metric)),
+      labels: radarData.map((row) => row.metric),
       datasets: models.map((model, index) => {
         const color = seriesColor(theme, index);
+        const key = modelId(model);
         return {
           label: model.short_name || model.name,
-          data: radarData.map((row) => (typeof row[`model_${index}`] === "number" ? row[`model_${index}`] : null)),
+          data: radarData.map((row) => (key ? (row.values[key] ?? null) : null)),
           borderColor: color,
           backgroundColor: hexToRgba(color, 0.06),
           borderWidth: 2,
@@ -90,11 +92,12 @@ export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }
               <Radar data={data} options={options} role="img" aria-label={t("modelComparison")} />
               <figcaption className="sr-only">
                 {radarData.map((row) => {
-                  const values = models.map((m, i) => {
-                    const v = row[`model_${i}`];
+                  const values = models.map((m) => {
+                    const key = modelId(m);
+                    const v = key ? row.values[key] : null;
                     return `${m.short_name || m.name}: ${typeof v === "number" ? v.toFixed(1) : "—"}`;
                   });
-                  return `${String(row.metric)} — ${values.join(", ")}`;
+                  return `${row.metric} — ${values.join(", ")}`;
                 })}
               </figcaption>
             </figure>

@@ -37,9 +37,10 @@ export interface DataTableProps<T> {
   getRowId: (row: T) => string;
   renderExpandedRow?: (row: T) => ReactNode;
   resetKey?: string | number;
+  pageSize?: number;
 }
 
-function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKey }: DataTableProps<T>) {
+function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKey, pageSize }: DataTableProps<T>) {
   const { isMobile } = useDevice();
   const { t } = useTranslation();
   const [ownExpandedId, setOwnExpandedId] = useState<string | null>(null);
@@ -47,7 +48,7 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
   const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(
     data,
     getRowId,
-    DEFAULT_PAGE_SIZE,
+    pageSize ?? DEFAULT_PAGE_SIZE,
     resetKey,
   );
   const rootRef = useRef<HTMLDivElement>(null);

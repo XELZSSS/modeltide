@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { walkTs: walk, stripComments } = require("./_util.cjs");
 
-const CLIENT_APP_RE = /^src\/client\/(main|router)\.tsx$/;
+const CLIENT_APP_RE = /^src\/client\/.*\.tsx$/;
 
 let ROUTE_FEATURES = ["home", "rankings", "releases", "news", "status", "compare", "models"];
 try {
@@ -13,6 +13,8 @@ try {
 } catch {}
 
 const ALLOW = new Set([
+  // Intentional reuse: ranking views embed the model detail content.
+  // Kept as an explicit allowlist so new cross-feature imports still fail.
   "src/client/features/rankings/aa/cells.tsx|models",
   "src/client/features/rankings/OpenRouterRankingsView.tsx|models",
 ]);

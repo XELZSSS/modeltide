@@ -15,19 +15,19 @@ function barClass(ratio: number | null): string {
   return BAR_THRESHOLDS.find((band) => ratio >= band.min)?.className ?? "bg-destructive";
 }
 
+export function getLast30Days(now = Date.now()): string[] {
+  const out: string[] = [];
+  for (let i = 29; i >= 0; i--) {
+    out.push(new Date(now - i * ONE_DAY).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
 export const UptimeStrip = memo(function UptimeStrip({ buckets }: { buckets: DayBucket[] }) {
   const { t } = useTranslation();
   const byDay = useMemo(() => new Map(buckets.map((b) => [b.day, b])), [buckets]);
   const dayKey = Math.floor(Date.now() / ONE_DAY);
-  const days = useMemo(() => {
-    const out: string[] = [];
-    const now = Date.now();
-    for (let i = 29; i >= 0; i--) {
-      out.push(new Date(now - i * ONE_DAY).toISOString().slice(0, 10));
-    }
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayKey]);
+  const days = useMemo(() => getLast30Days(), [dayKey]);
   return (
     <div className="flex items-end gap-0.5 h-7" role="img" aria-label={t("last30Days")}>
       {days.map((day) => {

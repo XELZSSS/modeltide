@@ -24,17 +24,19 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<SourcePayloa
     if (!body) {
       throw new UpstreamError("Text-to-image returned an empty body");
     }
-    let rawModels: Record<string, unknown>[] | null = null;
+    let rawModels: Record<string, unknown>[];
     try {
       rawModels = parseRscPayload<Record<string, unknown>>(
         body,
         "textToImage",
         (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
       );
-    } catch {
-      rawModels = null;
+    } catch (err) {
+      // Surfaced rather than swallowed: the parse error carries the body length
+      // and content hash that diagnose an upstream markup change.
+      throw wrapUpstream("Text-to-image parse failed", err);
     }
-    if (!rawModels || rawModels.length === 0) {
+    if (rawModels.length === 0) {
       throw zeroUpstream("Text-to-image", "raw rows", `raw=0, kept=0, body=${body.length}B`);
     }
     const mapped = rawModels

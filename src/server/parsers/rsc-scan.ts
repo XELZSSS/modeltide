@@ -143,17 +143,24 @@ function parseWindowCandidates(
   }
 }
 
+/**
+ * Pulls the payload for one marker out of a parsed flight tree. `marker` lets a
+ * caller resolve several markers from a single body scan; 1-arg extractors stay
+ * assignable.
+ */
+export type RscExtractor<T> = (data: unknown, marker: string) => T[] | null;
+
 function offerTreeToMarkers<T>(
   tree: unknown,
   markers: readonly string[],
   results: (T[] | null)[],
-  extract: (data: unknown) => T[] | null,
+  extract: RscExtractor<T>,
   anchorMi: number,
 ): boolean {
   let anchored = false;
   for (let mj = 0; mj < markers.length; mj++) {
     if (results[mj]) continue;
-    const res = extract(tree);
+    const res = extract(tree, markers[mj]!);
     if (res && res.length > 0) {
       results[mj] = res;
       if (mj === anchorMi) anchored = true;
@@ -166,7 +173,7 @@ export function scanOversizedMarkers<T>(
   line: string,
   markers: readonly string[],
   results: (T[] | null)[],
-  extract: (data: unknown) => T[] | null,
+  extract: RscExtractor<T>,
 ): number {
   const positions = collectNeedlePositions(line, markers, results);
   positions.sort((a, b) => a.idx - b.idx);
@@ -202,6 +209,11 @@ function unescapeEmbedded(window: string): string {
   return window.replace(/\\(.)/g, (m, c: string) => (c === '"' ? '"' : c === "\\" ? "\\" : m));
 }
 
+function skipWs(text: string, pos: number): number {
+  while (pos < text.length && /\s/.test(text[pos]!)) pos++;
+  return pos;
+}
+
 function collectNeedleCandidates(text: string, locators: readonly string[]): NeedleCandidate[] {
   const candidates: NeedleCandidate[] = [];
   for (const locator of locators) {
@@ -210,11 +222,9 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
       const at = text.indexOf(locator, from);
       if (at === -1) break;
       from = at + 1;
-      let c = at + locator.length;
-      while (c < text.length && /\s/.test(text[c]!)) c++;
+      let c = skipWs(text, at + locator.length);
       if (text[c] !== ":") continue;
-      c++;
-      while (c < text.length && /\s/.test(text[c]!)) c++;
+      c = skipWs(text, c + 1);
       candidates.push({ start: at, valueAt: c });
     }
   }
@@ -237,11 +247,9 @@ function scanNeedleWindow(window: string, needle: string, unescape: boolean, fou
   let parsed = false;
   let at = haystack.indexOf(needle);
   while (at !== -1) {
-    let c = at + needle.length;
-    while (c < haystack.length && /\s/.test(haystack[c]!)) c++;
+    let c = skipWs(haystack, at + needle.length);
     if (haystack[c] === ":") {
-      c++;
-      while (c < haystack.length && /\s/.test(haystack[c]!)) c++;
+      c = skipWs(haystack, c + 1);
       if (haystack[c] === "[" && parseJsonArrayAt(haystack, c, found)) parsed = true;
     }
     at = haystack.indexOf(needle, at + needle.length);

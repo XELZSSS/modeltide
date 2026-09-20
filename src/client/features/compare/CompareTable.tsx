@@ -92,7 +92,7 @@ function DesktopTable({ rows, models, getKey, getName, getColor, renderValue, wi
                   </Th>
                   {models.map((model, index) => (
                     <Td key={getKey(model, index)} align="right">
-                      {renderValue(row, model, winners.get(rowKey(row))?.get(getKey(model, index)) ?? null)}
+                      {renderValue(row, model, getWinner(winners, row, model, index))}
                     </Td>
                   ))}
                 </Tr>
@@ -129,7 +129,7 @@ function MobileTable({
                 {rows.map((row) => (
                   <div key={rowKey(row)} className="flex items-center justify-between gap-3">
                     <span className="ui-caption">{row.label}</span>
-                    {renderValue(row, model, winners.get(rowKey(row))?.get(getKey(model, index)) ?? null)}
+                    {renderValue(row, model, getWinner(winners, row, model, index))}
                   </div>
                 ))}
               </div>
@@ -145,7 +145,6 @@ function MobileTable({
       <CardContent className="sm:p-4">
         <div className="flex flex-col divide-y divide-border">
           {rows.map((row) => {
-            const perModel = winners.get(rowKey(row));
             return (
               <div key={rowKey(row)} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="text-xs font-medium text-text-secondary shrink-0">{row.label}</span>
@@ -153,7 +152,7 @@ function MobileTable({
                   {models.map((model, index) => (
                     <span key={getKey(model, index)} className="flex items-center gap-1">
                       <Dot size="sm" color={getColor(index)} />
-                      {renderValue(row, model, perModel?.get(getKey(model, index)) ?? null)}
+                      {renderValue(row, model, getWinner(winners, row, model, index))}
                     </span>
                   ))}
                 </div>
@@ -180,6 +179,15 @@ function CompareTableInner({ rows, models, renderValue, mobileLayout = "metric-r
   }
 
   return <DesktopTable {...parts} />;
+}
+
+export function getWinner(
+  winners: Map<string, Map<string, Winner>>,
+  row: CompareRow<ArtificialAnalysisModel>,
+  model: ArtificialAnalysisModel,
+  index: number,
+): Winner | null {
+  return winners.get(rowKey(row))?.get(modelKeyOf(model, index)) ?? null;
 }
 
 export const CompareTable = memo(CompareTableInner) as typeof CompareTableInner;

@@ -22,10 +22,6 @@ import {
   type FeedEntryType,
 } from "@/client/features/releases/feed-entries";
 
-function useReleaseFeedEntries(openSourceReleases: Parameters<typeof buildReleaseFeedEntries>[0]): FeedEntry[] {
-  return useMemo(() => buildReleaseFeedEntries(openSourceReleases), [openSourceReleases]);
-}
-
 function ReleaseModelCell({
   title,
   name,
@@ -214,7 +210,11 @@ function ReleasesContent() {
   const openSourceReleases = useSuspenseOpenSourceReleases();
   const { items: closedReleases, partial: closedPartial } = useSuspenseClosedReleasesState();
 
-  const allEntries = useReleaseFeedEntries(openSourceReleases);
+  const allEntries = useMemo(() => buildReleaseFeedEntries(openSourceReleases), [openSourceReleases]);
+  const validClosedCount = useMemo(
+    () => closedReleases.filter((entry) => parseTs(entry.releaseDate) != null).length,
+    [closedReleases],
+  );
 
   const tabs: TabItem[] = useMemo(
     () => [
@@ -225,7 +225,7 @@ function ReleasesContent() {
   );
 
   const countLabel =
-    mode === "feed" ? t("events", { count: allEntries.length }) : t("modelsTotal", { count: closedReleases.length });
+    mode === "feed" ? t("events", { count: allEntries.length }) : t("modelsTotal", { count: validClosedCount });
   const description = mode === "feed" ? t("releaseDataSource") : t("closedReleasesSource");
 
   return (

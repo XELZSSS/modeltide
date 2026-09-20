@@ -19,10 +19,14 @@ export interface ModelQuery {
 
 const HF_API = upstreamConfig.huggingface;
 
+function hfHeaders(ctx: AppContext): { authorization: string } | undefined {
+  return ctx.hfToken ? { authorization: `Bearer ${ctx.hfToken}` } : undefined;
+}
+
 async function fetchHFModels(ctx: AppContext, sort: string, direction: string, limit: number): Promise<HFModel[]> {
   const params = new URLSearchParams({ sort, direction, limit: String(limit), full: "true" });
   const url = `${HF_API}?${params.toString()}`;
-  const headers = ctx.hfToken ? { authorization: `Bearer ${ctx.hfToken}` } : undefined;
+  const headers = hfHeaders(ctx);
   const items = await ctx.http.json<HFModel[]>(url, {
     ...UPSTREAM_FETCH_OPTS,
     ...(headers ? { headers } : {}),
@@ -87,7 +91,7 @@ export async function fetchHFModelById(ctx: AppContext, id: string): Promise<Ope
     .join("/");
   let raw: HFModel;
   try {
-    const headers = ctx.hfToken ? { authorization: `Bearer ${ctx.hfToken}` } : undefined;
+    const headers = hfHeaders(ctx);
     raw = await ctx.http.json<HFModel>(`${HF_API}/${encoded}`, {
       ...UPSTREAM_FETCH_OPTS,
       ...(headers ? { headers } : {}),

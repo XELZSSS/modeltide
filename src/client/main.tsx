@@ -52,65 +52,33 @@ function Shell({ children }: { children: ReactNode }) {
 
 function Routes() {
   const pathname = usePathname();
-  if (pathname === "/")
+  const route =
+    pathname === "/"
+      ? { el: <HomeView />, key: "home" }
+      : pathname === "/models"
+        ? { el: <RankingsHubView />, key: "models" }
+        : pathname === "/compare"
+          ? { el: <CompareView />, key: "compare" }
+          : pathname === "/price-compare"
+            ? { el: <PriceCompareView />, key: "price" }
+            : pathname === "/releases"
+              ? { el: <ReleasesView />, key: "releases" }
+              : pathname === "/news"
+                ? { el: <NewsView />, key: "news" }
+                : pathname === "/status"
+                  ? { el: <StatusView />, key: "status" }
+                  : pathname.startsWith("/model/")
+                    ? { el: <ModelDetailView />, key: "model" }
+                    : pathname.startsWith("/status/")
+                      ? { el: <SourceDetailView />, key: "source" }
+                      : null;
+  if (!route)
     return (
       <Shell>
-        <HomeView />
+        <NotFound />
       </Shell>
     );
-  if (pathname === "/models")
-    return (
-      <Shell>
-        <RankingsHubView />
-      </Shell>
-    );
-  if (pathname === "/compare")
-    return (
-      <Shell>
-        <CompareView />
-      </Shell>
-    );
-  if (pathname === "/price-compare")
-    return (
-      <Shell>
-        <PriceCompareView />
-      </Shell>
-    );
-  if (pathname === "/releases")
-    return (
-      <Shell>
-        <ReleasesView />
-      </Shell>
-    );
-  if (pathname === "/news")
-    return (
-      <Shell>
-        <NewsView />
-      </Shell>
-    );
-  if (pathname === "/status")
-    return (
-      <Shell>
-        <StatusView />
-      </Shell>
-    );
-  if (pathname.startsWith("/model/"))
-    return (
-      <Shell>
-        <ModelDetailView />
-      </Shell>
-    );
-  if (pathname.startsWith("/status/"))
-    return (
-      <Shell>
-        <SourceDetailView />
-      </Shell>
-    );
-  return (
-    <Shell>
-      <NotFound />
-    </Shell>
-  );
+  return <Shell key={route.key}>{route.el}</Shell>;
 }
 
 function App() {

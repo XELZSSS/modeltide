@@ -8,6 +8,7 @@ import {
   STREAM_LINE_RE,
   MAX_RSC_BYTES,
   MAX_RSC_LINE_CHARS,
+  type RscExtractor,
 } from "@/server/parsers/rsc-scan";
 
 export { balancedJsonEnd, MAX_SCAN_CHARS } from "@/server/parsers/rsc-scan";
@@ -68,11 +69,7 @@ export function findLongestData<T>(root: unknown, key: string): T[] | null {
   return best && best.length > 0 ? best : null;
 }
 
-export function parseRscPayloads<T>(
-  body: string,
-  markers: readonly string[],
-  extract: (data: unknown) => T[] | null,
-): T[][] {
+export function parseRscPayloads<T>(body: string, markers: readonly string[], extract: RscExtractor<T>): T[][] {
   const byteLength = utf8ByteLength(body);
   if (byteLength > MAX_RSC_BYTES)
     throw new UpstreamError(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);
@@ -114,7 +111,7 @@ export function parseRscPayloads<T>(
       for (const raw of raws) {
         const tree = treeOf(raw);
         if (tree === undefined) continue;
-        const res = extract(tree);
+        const res = extract(tree, markers[mi]!);
         if (res && res.length > 0) {
           results[mi] = res;
           unresolved--;
@@ -130,6 +127,6 @@ export function parseRscPayloads<T>(
   return results as T[][];
 }
 
-export function parseRscPayload<T>(body: string, marker: string, extract: (data: unknown) => T[] | null): T[] {
+export function parseRscPayload<T>(body: string, marker: string, extract: RscExtractor<T>): T[] {
   return parseRscPayloads(body, [marker], extract)[0]!;
 }

@@ -3,7 +3,7 @@ import { SOURCE_LIMITS } from "@/shared/config";
 import type { AgentRankEntry } from "@/shared/types";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
 
-import { parseRscPayload, traverse } from "@/server/parsers/rsc";
+import { parseRscPayloads, traverse } from "@/server/parsers/rsc";
 
 import type { AgentSignalEntry } from "@/server/parsers/upstream";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
@@ -98,21 +98,22 @@ export function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow
 }
 
 export function parseAgentBoards(body: string): ParseResult<AgentRankEntry[]> {
-  const boards: { signal: string; rows: AgentSignalRow[] }[] = [];
-  for (const signal of AGENT_SIGNALS) {
-    let raw: AgentSignalEntry[];
-    try {
-      raw = parseRscPayload<AgentSignalEntry>(body, signal, extractSignalEntries(signal));
-    } catch (err) {
-      return parseFail(
-        `Agent board "${signal}" could not be extracted: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    const rows = raw.map(toAgentSignalRow).filter((r): r is AgentSignalRow => r !== null);
-    if (rows.length === 0) {
-      return parseFail(zeroUpstreamMessage(`Agent board "${signal}"`, "usable rows", "markup changed?"));
-    }
-    boards.push({ signal, rows });
+  // One body scan resolves all five signal boards: the flight payload is ~1.8 MB.
+  let perSignal: AgentSignalEntry[][];
+  try {
+    perSignal = parseRscPayloads<AgentSignalEntry>(body, AGENT_SIGNALS, (tree, marker) =>
+      extractSignalEntries(marker)(tree),
+    );
+  } catch (err) {
+    return parseFail(`Agent board could not be extracted: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const boards = AGENT_SIGNALS.map((signal, i) => ({
+    signal,
+    rows: (perSignal[i] ?? []).map(toAgentSignalRow).filter((r): r is AgentSignalRow => r !== null),
+  }));
+  const empty = boards.find((b) => b.rows.length === 0);
+  if (empty) {
+    return parseFail(zeroUpstreamMessage(`Agent board "${empty.signal}"`, "usable rows", "markup changed?"));
   }
   return parseOk(buildAgentOverall(boards));
 }

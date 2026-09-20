@@ -38,6 +38,9 @@ const PROVIDER_PREFIX_RULES: readonly (readonly [label: string, pattern: RegExp]
   ["stepfun", /^step/i],
   ["cohere", /^command/i],
   ["moonshot", /^moonshot/i],
+  ["groq", /^(groq|llama-groq|mixtral-groq)/i],
+  ["cerebras", /^cerebras/i],
+  ["fireworks", /^fireworks/i],
 ];
 
 const LITELLM_PROVIDER_ALIASES: Record<string, string> = {

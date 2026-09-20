@@ -1,6 +1,6 @@
 import { parseTs, isSuitableNewsItem } from "@/server/parsers/primitives";
 import { NEWS_TTL_MS, SOURCE_LIMITS, ttlForRatio } from "@/shared/config";
-import { rssConfig, FAST_FETCH_OPTS, MAX_FEED_BYTES, cacheKeys } from "@/server/config";
+import { rssConfig, FAST_FETCH_OPTS, MAX_FEED_BYTES, NEWS_LEG_CONCURRENCY, cacheKeys } from "@/server/config";
 import { runCapped, errMsg } from "@/server/infra/pool";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import type { AppContext } from "@/server/context";
@@ -8,20 +8,10 @@ import { UpstreamError, ValidationError, zeroUpstream } from "@/server/infra/err
 import { FEED_ACCEPT, parseFeed } from "@/server/parsers/feed";
 
 import { fetchDailyPapersItems } from "@/server/sources/hf-papers";
-import { dedupeBy } from "@/shared/utils";
+import { dedupeBy, normalizeNewsLink } from "@/shared/utils";
 
 import type { SourcePayload } from "@/server/sources/types";
 import { cachedPayload, requireParsed } from "@/server/sources/pipeline";
-
-function normalizeNewsLink(link: string): string {
-  const trimmed = link.trim();
-  try {
-    const u = new URL(trimmed);
-    return `${u.protocol}//${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}${u.hash}`;
-  } catch {
-    return trimmed.replace(/\/+$/, "");
-  }
-}
 
 async function fetchNews(
   ctx: AppContext,
@@ -43,7 +33,7 @@ async function fetchNews(
     legTasks.push(() => fetchDailyPapersItems(ctx));
     legLabels.push("hf-daily-papers");
   }
-  const results = await runCapped(legTasks, 5);
+  const results = await runCapped(legTasks, NEWS_LEG_CONCURRENCY);
   const allItems: NewsItem[] = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
   const failCount = results.filter((r) => r.status === "rejected").length;
   if (failCount === results.length)

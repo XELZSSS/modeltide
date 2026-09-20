@@ -10,6 +10,7 @@ import {
   type DataTableColumn,
 } from "@/client/components/data/columns";
 import { computeBlendPrice } from "@/shared/utils";
+import { modelId } from "@/client/utils/model";
 import { resolveEffectivePricing, type OfficialGetter } from "@/client/utils/pricing-merge";
 import { CompareModelCell } from "@/client/features/rankings/aa/cells";
 import type { EffectivePricing } from "@/client/utils/pricing-merge";
@@ -32,7 +33,7 @@ export function buildPricingColumns(
     <span className="ui-skeleton inline-block h-4 rounded-none align-middle" style={{ width }} aria-hidden="true" />
   );
   const getEff = (model: ArtificialAnalysisModel): EffectivePricing =>
-    effectiveMap?.get(model.id) ?? resolveEffectivePricing(model.pricing, getOfficial?.(model));
+    effectiveMap?.get(modelId(model)) ?? resolveEffectivePricing(model.pricing, getOfficial?.(model));
   const pricingLegCol = (
     id: string,
     header: string,

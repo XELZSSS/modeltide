@@ -33,6 +33,7 @@ import {
   computeWinners,
   radarMaxFor,
   type CompareRow,
+  type RadarRow,
 } from "@/client/features/compare/logic";
 import { aggregateTaskShare, formatTaskLabel, taskLabel } from "@/client/features/home/usage";
 import { pickLatestReleaseName } from "@/client/features/home/use-home-stats";
@@ -415,39 +416,44 @@ describe("buildRadarData / radarMaxFor", () => {
   it("builds radar data for a single model", () => {
     const data = buildRadarData(tKey, [makeCompareModel()]);
     expect(data).toHaveLength(7);
-    expect(data[0]).toEqual({ metric: "intelligence", model_0: 80 });
-    expect(data[1]).toEqual({ metric: "coding", model_0: 70 });
-    expect(data[2]).toEqual({ metric: "agentic", model_0: 60 });
-    expect(data[3]).toEqual({ metric: "gpqa", model_0: 85 });
-    expect(data[6]).toEqual({ metric: "ifbench", model_0: 88 });
+    expect(data[0]).toEqual({ metric: "intelligence", values: { m: 80 } });
+    expect(data[1]).toEqual({ metric: "coding", values: { m: 70 } });
+    expect(data[2]).toEqual({ metric: "agentic", values: { m: 60 } });
+    expect(data[3]).toEqual({ metric: "gpqa", values: { m: 85 } });
+    expect(data[6]).toEqual({ metric: "ifbench", values: { m: 88 } });
   });
 
-  it("builds radar data for multiple models, nulls missing benchmarks, empty models", () => {
-    const multi = buildRadarData(tKey, [makeCompareModel(), makeCompareModel({ intelligence_index: 90 })]);
-    expect(multi[0]!.model_0).toBe(80);
-    expect(multi[0]!.model_1).toBe(90);
-    expect(buildRadarData(tKey, [makeCompareModel({ benchmarks: {} })])[3]!.model_0).toBeNull();
-    expect(buildRadarData(tKey, [])[0]).toEqual({ metric: "intelligence" });
+  it("keys values by model id, nulls missing benchmarks and handles an empty list", () => {
+    const multi = buildRadarData(tKey, [makeCompareModel(), makeCompareModel({ id: "b", intelligence_index: 90 })]);
+    expect(multi[0]!.values["m"]).toBe(80);
+    expect(multi[0]!.values["b"]).toBe(90);
+    expect(buildRadarData(tKey, [makeCompareModel({ benchmarks: {} })])[3]!.values["m"]).toBeNull();
+    expect(buildRadarData(tKey, [])[0]).toEqual({ metric: "intelligence", values: {} });
+  });
+
+  it("ignores a keyless model instead of colliding every keyless row onto one entry", () => {
+    const data = buildRadarData(tKey, [makeCompareModel({ id: "", slug: "", intelligence_index: 50 })]);
+    expect(data[0]!.values).toEqual({});
   });
 
   it.each([
     [[], 100, 100],
-    [[{ metric: "intelligence" }], 100, 100],
-    [[{ metric: "intelligence", model_0: null }], 100, 100],
+    [[{ metric: "intelligence", values: {} }], 100, 100],
+    [[{ metric: "intelligence", values: { m: null } }], 100, 100],
     [
       [
-        { metric: 150, model_0: 80 },
-        { metric: "x", model_0: Infinity },
+        { metric: "x", values: { m: 80 } },
+        { metric: "y", values: { m: Infinity } },
       ],
       100,
       100,
     ],
-    [[{ metric: "x", model_0: 101 }], 100, 120],
-    [[{ metric: "x", model_0: 120 }], 100, 120],
-    [[{ metric: "x", model_0: 121 }], 100, 140],
-    [[{ metric: "x", model_0: 10 }], 20, 20],
+    [[{ metric: "x", values: { m: 101 } }], 100, 120],
+    [[{ metric: "x", values: { m: 120 } }], 100, 120],
+    [[{ metric: "x", values: { m: 121 } }], 100, 140],
+    [[{ metric: "x", values: { m: 10 } }], 20, 20],
   ])("radarMaxFor(%j, %s) -> %s", (data, fallback, expected) => {
-    expect(radarMaxFor(data as never, fallback)).toBe(expected);
+    expect(radarMaxFor(data as RadarRow[], fallback)).toBe(expected);
   });
 });
 
@@ -487,6 +493,19 @@ describe("buildCompareRows / buildPriceRows", () => {
     expect(winners.get("promptPrice")?.get("deep")).toBe("loss");
     expect(winners.get("completionPrice")?.get("cheap")).toBe("win");
     expect(winners.get("completionPrice")?.get("deep")).toBe("loss");
+  });
+
+  it("ranks on official prices once they arrive instead of the router catalogue", () => {
+    const getOfficial: OfficialGetter = (m) =>
+      m.id === "cheap" ? makeOfficial({ input: 9, output: 90, cachedInput: 9, cacheWrite: 9 }) : undefined;
+    const officialRows = buildPriceRows(tKey, getOfficial);
+    const cheap = makeCompareModel({ id: "cheap", pricing: { input: 1, output: 10 } });
+    const mid = makeCompareModel({ id: "mid", pricing: { input: 2, output: 20 } });
+    const winners = computeWinners(officialRows, [cheap, mid], (m) => m.id);
+    expect(winners.get("promptPrice")?.get("mid")).toBe("win");
+    expect(winners.get("promptPrice")?.get("cheap")).toBe("loss");
+    expect(officialRows[0]?.getNumeric?.(cheap)).toBe(9);
+    expect(officialRows[1]?.getNumeric?.(mid)).toBe(20);
   });
 });
 
@@ -591,25 +610,34 @@ describe("monthly cost default fast path", () => {
 });
 
 describe("useMonthlyCosts", () => {
+  const gpt = () => makeModel({ id: "gpt-5", name: "GPT-5", pricing: { input: 10, output: 50, cacheHit: null } });
+  const cheap = () => makeModel({ id: "cheap", name: "Cheap", pricing: { input: 1, output: 2, cacheHit: null } });
+
   it("recomputes monthly costs when official pricing arrives after mount", () => {
-    const hookModels = [makeModel({ name: "GPT-5", pricing: { input: 10, output: 50, cacheHit: null } })];
+    const hookModels = [gpt()];
     const { result, rerender } = renderHook(({ getOfficial }) => useMonthlyCosts(hookModels, getOfficial), {
       initialProps: { getOfficial: undefined as OfficialGetter | undefined },
     });
-    expect(result.current.monthlyCosts[0]).toBe(3740);
+    expect(result.current.monthlyCosts.get("gpt-5")).toBe(3740);
     rerender({ getOfficial: makeOfficialGetter([makeOfficial({})]) });
-    expect(result.current.monthlyCosts[0]).toBeCloseTo(1773.75, 5);
+    expect(result.current.monthlyCosts.get("gpt-5")).toBeCloseTo(1773.75, 5);
   });
 
   it("emits no catalog numbers before pricing is ready", () => {
-    const hookModels = [makeModel({ name: "GPT-5", pricing: { input: 10, output: 50, cacheHit: null } })];
+    const hookModels = [gpt()];
     const { result, rerender } = renderHook(
       ({ getOfficial, ready }) => useMonthlyCosts(hookModels, getOfficial, { ready }),
       { initialProps: { getOfficial: undefined as OfficialGetter | undefined, ready: false } },
     );
-    expect(result.current.monthlyCosts).toEqual([null]);
+    expect(result.current.monthlyCosts.size).toBe(0);
     rerender({ getOfficial: makeOfficialGetter([makeOfficial({})]), ready: true });
-    expect(result.current.monthlyCosts[0]).toBeCloseTo(1773.75, 5);
+    expect(result.current.monthlyCosts.get("gpt-5")).toBeCloseTo(1773.75, 5);
+  });
+
+  it("keys costs by model id so list order cannot shift a cost onto another model", () => {
+    const { result } = renderHook(() => useMonthlyCosts([cheap(), gpt()]));
+    expect(result.current.monthlyCosts.get("gpt-5")).toBe(3740);
+    expect(result.current.monthlyCosts.get("cheap")).not.toBe(result.current.monthlyCosts.get("gpt-5"));
   });
 });
 

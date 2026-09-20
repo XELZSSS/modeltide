@@ -10,6 +10,10 @@ export function requireParsed<T>(result: ParseResult<T>): T {
   throw new UpstreamError(result.error);
 }
 
+// Single caching primitive: cachedPayload (SourcePayload<T>) and
+// cachedSource (arbitrary Value) are thin adapters over cached() so all
+// KV/L1/stale logic lives in CacheService.withTtl.
+
 export interface CacheScope {
   memoryOnly?: boolean;
 }

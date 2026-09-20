@@ -6,6 +6,7 @@ import type { ThemeMode } from "@/shared/types";
 import type { Lang } from "@/shared/i18n";
 import { STORAGE_KEYS } from "@/shared/config";
 import { localJsonStorage } from "@/client/stores/storage";
+import { logRehydrate } from "@/client/stores/persist-helpers";
 
 const toggleLang = (lang: Lang): Lang => (lang === "en" ? "zh" : "en");
 const toggleThemeMode = (mode: ThemeMode): ThemeMode => (mode === "light" ? "dark" : "light");
@@ -52,9 +53,7 @@ export const useSettingsStore = create<SettingsState>()(
       name: STORAGE_KEYS.settings,
       version: 1,
       storage: localJsonStorage,
-      onRehydrateStorage: () => (_state, error) => {
-        if (error) console.warn("[settings] rehydrate failed", error);
-      },
+      onRehydrateStorage: () => logRehydrate("settings"),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SettingsState>;
         return {

@@ -23,27 +23,29 @@ function buildApiUrl(path: string): string {
   return apiBase && path.startsWith("/") ? apiBase + path : path;
 }
 
-function timeoutSignal(ms: number): { signal: AbortSignal; cleanup: () => void } {
-  if (typeof AbortSignal.timeout === "function") return { signal: AbortSignal.timeout(ms), cleanup: () => {} };
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ms);
-  return { signal: ctrl.signal, cleanup: () => clearTimeout(timer) };
-}
-
-function combineSignals(a: AbortSignal, b: AbortSignal): { signal: AbortSignal; cleanup: () => void } {
-  if (typeof AbortSignal.any === "function") return { signal: AbortSignal.any([a, b]), cleanup: () => {} };
+function withTimeout(signal: AbortSignal | undefined, ms: number): { signal: AbortSignal; cleanup: () => void } {
+  const timeout =
+    typeof AbortSignal.timeout === "function"
+      ? { signal: AbortSignal.timeout(ms), cleanup: () => {} }
+      : (() => {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), ms);
+          return { signal: ctrl.signal, cleanup: () => clearTimeout(timer) };
+        })();
+  if (!signal) return timeout;
+  if (typeof AbortSignal.any === "function") return { signal: AbortSignal.any([signal, timeout.signal]), cleanup: timeout.cleanup };
   const ctrl = new AbortController();
   const onAbort = (): void => ctrl.abort();
-  if (a.aborted || b.aborted) ctrl.abort();
+  if (signal.aborted || timeout.signal.aborted) ctrl.abort();
   else {
-    a.addEventListener("abort", onAbort, { once: true });
-    b.addEventListener("abort", onAbort, { once: true });
+    signal.addEventListener("abort", onAbort, { once: true });
+    timeout.signal.addEventListener("abort", onAbort, { once: true });
   }
   return {
     signal: ctrl.signal,
     cleanup: () => {
-      a.removeEventListener("abort", onAbort);
-      b.removeEventListener("abort", onAbort);
+      signal.removeEventListener("abort", onAbort);
+      timeout.cleanup();
     },
   };
 }
@@ -67,12 +69,11 @@ async function parseErrorMessage(res: Response): Promise<string> {
 
 async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { cache?: RequestCache }): Promise<T> {
   const url = buildApiUrl(path);
-  const timeout = timeoutSignal(FETCH_TIMEOUT_MS);
-  const combined = signal ? combineSignals(signal, timeout.signal) : null;
+  const combined = withTimeout(signal, FETCH_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       headers: { accept: "application/json" },
-      signal: combined ? combined.signal : timeout.signal,
+      signal: combined.signal,
       cache: opts?.cache,
     });
     if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
@@ -82,8 +83,7 @@ async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { cache?: 
     }
     return ((await res.json()) as { data: T }).data;
   } finally {
-    combined?.cleanup();
-    timeout.cleanup();
+    combined.cleanup();
   }
 }
 

@@ -1,6 +1,7 @@
 "use client";
 import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
+import { Card, CardContent } from "./card";
 
 export const Badge = memo(function Badge({ className, children }: { className?: string; children?: ReactNode }) {
   return (
@@ -57,8 +58,6 @@ export const LabeledDot = memo(function LabeledDot({
     </span>
   );
 });
-
-import { Card, CardContent } from "./card";
 
 export const InfoCard = memo(function InfoCard({ title, children }: { title: string; children: ReactNode }) {
   return (

@@ -20,7 +20,7 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   const { getOfficial, isPending: officialPending } = useOfficialPricing();
   const { monthlyCosts, ...inputs } = useMonthlyCosts(models, getOfficial, { ready: !officialPending });
   const bestMonthlyCost = useMemo(() => {
-    const valid = monthlyCosts.filter((v): v is number => v !== null);
+    const valid = [...monthlyCosts.values()].filter((v): v is number => v !== null);
     return valid.length > 0 ? Math.min(...valid) : null;
   }, [monthlyCosts]);
 
@@ -42,7 +42,7 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
                 </div>
               );
             }
-            const cost = monthlyCosts[index];
+            const cost = monthlyCosts.get(modelId(model)) ?? null;
             const isBest = cost != null && bestMonthlyCost != null && approxEq(cost, bestMonthlyCost);
             return (
               <div key={modelId(model) || `idx-${index}`} className="flex items-center justify-between gap-2">
