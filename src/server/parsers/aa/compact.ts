@@ -1,13 +1,4 @@
-import {
-  bool,
-  isoDate,
-  num,
-  numNonNegative,
-  numPositive,
-  obj,
-  str,
-  strOr,
-} from "@/server/parsers/primitives";
+import { bool, isoDate, num, numNonNegative, numPositive, obj, str, strOr } from "@/server/parsers/primitives";
 import { BENCHMARK_KEYS, type BenchmarkKey } from "@/shared/config";
 import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
 import { normalizePercent } from "@/shared/utils";
@@ -54,9 +45,7 @@ function compactPricing(m: Record<string, unknown>): ModelPricing | undefined {
   return Object.keys(pricing).length > 0 ? pricing : undefined;
 }
 
-// Default monthly cost model: 50% cache-hit, 5% cache-write, rest fresh;
-// 2M input + 3M output tokens x 22 workdays. Centralized here so the
-// assumption is documented in one place instead of inline magic.
+// Default cost model: 50% cache-hit, 5% write, 2M in + 3M out x 22 workdays.
 const CACHE_HIT_RATE = 0.5;
 const CACHE_WRITE_RATE = 0.05;
 const DAILY_INPUT_TOKENS_M = 2;

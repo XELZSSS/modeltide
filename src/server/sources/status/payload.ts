@@ -1,12 +1,6 @@
 import { SOURCE_IDS } from "@/shared/config";
-import type { DayBucket, StatusHistoryPayload, StatusEvent, UptimeSample } from "@/shared/types";
-import {
-  buildSourceSummary,
-  deriveEvents,
-  emptyEntry,
-  type HistoryStore,
-  type SourceId,
-} from "./history-math";
+import type { SourceId, StatusHistoryPayload, StatusEvent } from "@/shared/types";
+import { buildSourceSummary, deriveEvents, emptyEntry, type HistoryStore } from "./history-math";
 import type { UptimePayload } from "./uptime";
 
 const MAX_EVENTS = 50;
@@ -39,9 +33,6 @@ export function buildHistoryPayload(
     recent,
     daily,
     events: events.slice(0, MAX_EVENTS),
-    generatedAt: new Date(now).toISOString(),
     persisted,
   };
 }
-
-export type { DayBucket, UptimeSample };

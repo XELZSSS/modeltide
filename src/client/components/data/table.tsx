@@ -1,5 +1,5 @@
 "use client";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDevice, useTranslation } from "@/client/providers";
 import { EmptyState } from "@/client/components/feedback";
 import { Pagination } from "@/client/components/ui/pagination";
@@ -21,10 +21,14 @@ export function usePagedData<T>(
   const [page, setPage] = useState(1);
   const totalPages = Math.ceil(dedupedData.length / safeSize);
   const safeTotal = Math.max(1, totalPages);
-  useEffect(() => setPage((p) => Math.min(p, safeTotal)), [safeTotal]);
-  useEffect(() => {
+  const resetToken = `${resetKey ?? ""}|${safeSize}`;
+  const [prevResetToken, setPrevResetToken] = useState(resetToken);
+  if (prevResetToken !== resetToken) {
+    setPrevResetToken(resetToken);
     setPage(1);
-  }, [resetKey, safeSize]);
+  } else if (page > safeTotal) {
+    setPage(safeTotal);
+  }
   const cur = totalPages === 0 ? 1 : Math.min(page, totalPages);
   const paged = dedupedData.length > safeSize ? dedupedData.slice((cur - 1) * safeSize, cur * safeSize) : dedupedData;
   const goToPage = useCallback((p: number) => setPage(Math.max(1, Math.min(p, safeTotal))), [safeTotal]);
@@ -53,10 +57,9 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
   );
   const rootRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (ownExpandedId == null) return;
-    if (!dedupedData.some((row) => getRowId(row) === ownExpandedId)) setOwnExpandedId(null);
-  }, [dedupedData, getRowId]);
+  if (ownExpandedId != null && !dedupedData.some((row) => getRowId(row) === ownExpandedId)) {
+    setOwnExpandedId(null);
+  }
 
   const handlePageChange = (p: number) => {
     goToPage(p);

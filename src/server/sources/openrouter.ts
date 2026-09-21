@@ -9,7 +9,6 @@ import { mapModels, type ModelMetaEntry, type PricingEntry } from "@/server/pars
 import type { ModelRow } from "@/server/parsers/upstream";
 import { getModelDirectory } from "@/server/sources/openrouter/directory";
 import { cachedSource } from "@/server/sources/pipeline";
-import { nowIso } from "@/server/sources/types";
 
 export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankingsPayload> =>
   cachedSource(ctx, cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async () => {
@@ -53,7 +52,7 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<OpenRouterRankin
     return {
       value: {
         tokenUsageRankings: models,
-        fetchedAt: nowIso(),
+        fetchedAt: new Date().toISOString(),
         ...(partialFailure ? { partial: true } : {}),
       },
       ttl: ttlFor(partialFailure),

@@ -1,25 +1,19 @@
-export interface SourceStatus {
-  id:
-    | "artificialAnalysis"
-    | "huggingface"
-    | "openrouter"
-    | "news"
-    | "arena"
-    | "openaiApi"
-    | "anthropicApi"
-    | "googleCloudApi"
-    | "groqApi"
-    | "cohereApi"
-    | "fireworksApi"
-    | "cerebrasApi"
-    | "deepseekApi"
-    | "moonshotApi";
-  ok: boolean;
-  status: number | null;
-  latencyMs: number | null;
-  error: string | null;
-  checkedAt: string;
-}
+/** Stable identifier of a probed upstream source; also the key of `SOURCE_LABELS`. */
+export type SourceId =
+  | "artificialAnalysis"
+  | "huggingface"
+  | "openrouter"
+  | "news"
+  | "arena"
+  | "openaiApi"
+  | "anthropicApi"
+  | "googleCloudApi"
+  | "groqApi"
+  | "cohereApi"
+  | "fireworksApi"
+  | "cerebrasApi"
+  | "deepseekApi"
+  | "moonshotApi";
 
 /** Decisive health verdict: fully working (ok), degraded but up (warn), or failing (error). */
 export type SourceLevel = "ok" | "warn" | "error";
@@ -43,14 +37,14 @@ export interface DayBucket {
 }
 
 export interface StatusEvent {
-  id: SourceStatus["id"];
+  id: SourceId;
   type: "down" | "up" | "degraded";
   at: string;
   durationMin: number | null;
 }
 
 export interface SourceHistorySummary {
-  id: SourceStatus["id"];
+  id: SourceId;
   ok: boolean;
   /** Tri-level health derived server-side; absent in payloads cached before it existed. */
   level?: SourceHealthLevel;
@@ -58,7 +52,6 @@ export interface SourceHistorySummary {
   checkedAt: string | null;
   uptime24h: number | null;
   uptime7d: number | null;
-  uptime30d: number | null;
   avgLatency24h: number | null;
 }
 
@@ -66,9 +59,8 @@ export interface StatusHistoryPayload {
   firstLaunchAt: string;
   uptimeMs: number;
   sources: SourceHistorySummary[];
-  recent: Partial<Record<SourceStatus["id"], UptimeSample[]>>;
-  daily: Partial<Record<SourceStatus["id"], DayBucket[]>>;
+  recent: Partial<Record<SourceId, UptimeSample[]>>;
+  daily: Partial<Record<SourceId, DayBucket[]>>;
   events: StatusEvent[];
-  generatedAt: string;
   persisted: boolean;
 }

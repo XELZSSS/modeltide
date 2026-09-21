@@ -3,7 +3,7 @@ import type { AppContext } from "@/server/context";
 import { DEFAULT_TTL_MS } from "@/shared/config";
 import { cacheKeys, upstreamEndpoints } from "@/server/config";
 import type { TextToImageModel } from "@/shared/types";
-import type { SourcePayload } from "@/server/sources/types";
+import type { SourcePayload } from "@/shared/types";
 import { findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc";
 import { UpstreamError, wrapUpstream, zeroUpstream } from "@/server/infra/errors";
 import { dedupeBy } from "@/shared/utils";
@@ -32,8 +32,6 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<SourcePayloa
         (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
       );
     } catch (err) {
-      // Surfaced rather than swallowed: the parse error carries the body length
-      // and content hash that diagnose an upstream markup change.
       throw wrapUpstream("Text-to-image parse failed", err);
     }
     if (rawModels.length === 0) {

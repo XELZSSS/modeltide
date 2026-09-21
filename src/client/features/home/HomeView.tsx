@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { PageContainer, PageSection } from "@/client/components/layout";
 import { Dot } from "@/client/components/ui/primitives";
 import { resolveEventStyle } from "@/client/components/status-events";
-import { SOURCE_LABELS } from "@/shared/config";
+import { sourceLabelKey } from "@/shared/config";
 import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { useHomeStats } from "./use-home-stats";
@@ -28,7 +28,8 @@ const StatisticsSection = lazy(() => import("./statistics-section").then((m) => 
 function useLatestEventSummary() {
   const { data } = useSuspenseStatusHistory();
   const latest = (data.events ?? [])[0] ?? null;
-  if (!latest) return { latest: null as null, summary: undefined, lastSample: undefined, level: "unknown" as const, data };
+  if (!latest)
+    return { latest: null as null, summary: undefined, lastSample: undefined, level: "unknown" as const, data };
   const summary = data.sources.find((s) => s.id === latest.id);
   const samples = data.recent?.[latest.id] ?? [];
   const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
@@ -39,10 +40,7 @@ function HomeLatestEvents() {
   const { t, lang } = useTranslation();
   const { latest, summary, lastSample, level } = useLatestEventSummary();
   const eventStyle = latest ? resolveEventStyle(latest.type) : null;
-  const labelKey =
-    latest && Object.hasOwn(SOURCE_LABELS, latest.id)
-      ? (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[latest.id]
-      : undefined;
+  const labelKey = latest ? sourceLabelKey(latest.id) : undefined;
   if (!latest || !eventStyle) {
     return (
       <Link

@@ -1,32 +1,13 @@
 "use client";
-import { SafeLink as Link, usePathname, useRouter, useSearchParams } from "@/client/router";
+import { SafeLink as Link, usePathname, useSearchParams } from "@/client/router";
 import { ArrowLeft, TriangleAlert, type LucideIcon, Loader2 } from "lucide-react";
 import { Button, buttonVariants } from "@/client/components/ui/button";
 import { Card } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
-import type { TranslationKey } from "@/shared/i18n";
 import { Component, Fragment, type ReactNode, type ErrorInfo, memo, Suspense } from "react";
 import { PageContainer } from "@/client/components/layout";
 import { cn } from "@/client/utils/cn";
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
-
-export function BackButton({ labelKey, to }: { labelKey: TranslationKey; to: string }) {
-  const router = useRouter();
-  const { t } = useTranslation();
-  const goBack = () => {
-    const raw = typeof window !== "undefined" ? (window.history.state as { idx?: unknown } | null)?.idx : undefined;
-    const idx = typeof raw === "number" && Number.isInteger(raw) ? raw : undefined;
-    if (idx != null && idx > 0) router.back();
-    // Fallback replaces instead of pushing: no extra history entry when the
-    // user landed here directly (deep link, reload, new tab).
-    else router.replace(to);
-  };
-  return (
-    <Button size="sm" variant="outline" onClick={goBack} className="self-start">
-      <ArrowLeft className="size-4" /> {t(labelKey)}
-    </Button>
-  );
-}
 
 export function EmptyState({
   icon: Icon,

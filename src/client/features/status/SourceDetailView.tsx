@@ -6,8 +6,7 @@ import { Line } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
 import { useSuspenseStatusHistory } from "@/client/api/queries";
 import { NotFound, SuspenseQuery } from "@/client/components/feedback";
-import { PageContainer, PageSection, SectionCard } from "@/client/components/layout";
-import { DetailPageLayout } from "@/client/features/models/model-details/detail-views";
+import { PageContainer, PageSection, SectionCard, DetailPageLayout } from "@/client/components/layout";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { StatGrid } from "@/client/components/ui/grids";
 import { formatUptimePct } from "@/client/utils/format";
@@ -23,26 +22,24 @@ import {
   axisDashedBorderStyle,
 } from "@/client/utils/charts";
 import { SOURCE_LABELS, SOURCE_IDS, ONE_HOUR } from "@/shared/config";
-import type { SourceStatus } from "@/shared/types";
+import type { SourceId } from "@/shared/types";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./StatusParts";
 import { StatusEventList } from "@/client/components/status-events";
 
-function isSourceId(value: string | undefined): value is SourceStatus["id"] {
+function isSourceId(value: string | undefined): value is SourceId {
   return value != null && (SOURCE_IDS as readonly string[]).includes(value);
 }
 
 const BEIJING_OFFSET_MS = 8 * ONE_HOUR;
-export const formatBeijingHHMM = (ts: number): string =>
-  new Date(ts + BEIJING_OFFSET_MS).toISOString().slice(11, 16);
+export const formatBeijingHHMM = (ts: number): string => new Date(ts + BEIJING_OFFSET_MS).toISOString().slice(11, 16);
 
 const EMPTY_SAMPLES: { t: number; latencyMs: number | null }[] = [];
 const EMPTY_BUCKETS: import("@/shared/types").DayBucket[] = [];
 
 export function decimateSamples<T extends { t: number; latencyMs?: number | null }>(samples: T[], max = 300): T[] {
   if (samples.length <= max) return samples;
-  // Peak-preserving stride: keep the max-latency sample per bucket so
-  // spikes survive decimation instead of being skipped by uniform sampling.
+  // Peak-preserving stride: keep the max-latency sample per bucket so spikes survive.
   const bucketSize = samples.length / max;
   const out: T[] = [];
   for (let i = 0; i < max; i++) {
@@ -126,7 +123,7 @@ const LatencyChart = memo(function LatencyChart({ samples }: { samples: { t: num
   );
 });
 
-const CONTENT = memo(function Content({ id }: { id: SourceStatus["id"] }) {
+const CONTENT = memo(function Content({ id }: { id: SourceId }) {
   const { t } = useTranslation();
   const { data } = useSuspenseStatusHistory();
   const summary = data.sources.find((s) => s.id === id);

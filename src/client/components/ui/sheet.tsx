@@ -15,7 +15,9 @@ let sheetPrevPaddingRight = "";
 
 function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.RefObject<HTMLDivElement | null>) {
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;

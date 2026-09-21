@@ -3,7 +3,7 @@
   "rules": {
     "rules-of-hooks": "error",
     "exhaustive-deps": "error",
-    "only-export-components": ["warn", { "allowConstantExport": true }],
+    "only-export-components": "off",
     "jsx-key": "error",
     "no-children-prop": "error",
     "no-direct-mutation-state": "error",

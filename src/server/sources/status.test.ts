@@ -20,16 +20,16 @@ import {
 } from "@/server/sources/status";
 import { getStatusHistory } from "./status-history";
 import type { ProbeResult } from "@/server/infra/http-client";
-import { SOURCE_IDS } from "@/shared/config";
+import { SOURCE_IDS, UPTIME_WARN_RATIO } from "@/shared/config";
 import { upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
-import type { DayBucket, SourceStatus, UptimeSample } from "@/shared/types";
+import type { DayBucket, SourceId, UptimeSample } from "@/shared/types";
 
 beforeEach(() => resetModuleCachesForTests());
 
 const MIN = 60_000;
 const NOW = Date.UTC(2026, 7, 30, 12, 0, 0);
-const historyId: SourceStatus["id"] = "openrouter";
+const historyId: SourceId = "openrouter";
 
 const sample = (minAgo: number, ok: boolean, latencyMs: number | null = ok ? 900 : null): UptimeSample => ({
   t: NOW - minAgo * MIN,
@@ -145,7 +145,7 @@ describe("uptimeRatio / avgLatency", () => {
   });
 });
 
-const target = (id: SourceStatus["id"]): ProbeTarget => ({ id, url: `https://upstream.test/${id}` });
+const target = (id: SourceId): ProbeTarget => ({ id, url: `https://upstream.test/${id}` });
 const okProbe = (status = 200, latencyMs = 500) => ({ ok: true, status, latencyMs, error: null });
 const failProbe = (error = "network error") => ({ ok: false, status: null, latencyMs: null, error });
 
@@ -284,20 +284,17 @@ describe("buildHistoryPayload", () => {
     expect(or).toMatchObject({
       uptime24h: null,
       uptime7d: null,
-      uptime30d: null,
       avgLatency24h: null,
       ok: false,
       level: "unknown",
     });
     expect(payload.events).toHaveLength(0);
     expect(payload.uptimeMs).toBe(0);
-    expect(payload.generatedAt).toBe(new Date(NOW).toISOString());
   });
 
-  it("derives recent uptime from samples and 7d/30d from daily buckets", () => {
+  it("derives recent uptime from samples and 7d from the trailing daily buckets", () => {
     const recent: UptimeSample[] = [sample(20, true), sample(10, true), sample(1, false)];
-    // 10 stale buckets outside the 30-day window: counted by an unbounded
-    // average, excluded by the retained-window slice.
+    // 10 stale April buckets: must not feed the trailing-7 slice used for 7d.
     const stale: DayBucket[] = Array.from({ length: 10 }, (_, i) => ({
       day: `2026-04-${String(i + 21).padStart(2, "0")}`,
       total: 200,
@@ -316,14 +313,13 @@ describe("buildHistoryPayload", () => {
     const or = payload.sources.find((s) => s.id === historyId)!;
     expect(or.uptime24h).toBeCloseTo(2 / 3);
     expect(or.uptime7d).toBeCloseTo(0.99);
-    expect(or.uptime30d).toBeCloseTo(0.99);
     expect(or.ok).toBe(false);
     expect(or.level).toBe("error");
     expect(or.checkedAt).toBe(new Date(NOW - MIN).toISOString());
     expect(payload.uptimeMs).toBe(5 * MIN);
   });
 
-  it("warns when currently up but an outage hit the last 24h", () => {
+  it("errors when an outage pushed 24h uptime below the error band", () => {
     const payload = buildHistoryPayload(
       { sources: { [historyId]: { recent: [sample(30, true), sample(20, false), sample(10, true)], daily: [] } } },
       { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
@@ -331,6 +327,24 @@ describe("buildHistoryPayload", () => {
     );
     const or = payload.sources.find((s) => s.id === historyId)!;
     expect(or.ok).toBe(true);
+    // 2/3 of samples up is below UPTIME_ERROR_RATIO, so the summary is red like
+    // the 30-day strip; it previously stopped at "warn" however low it fell.
+    expect(or.uptime24h).toBeCloseTo(2 / 3, 5);
+    expect(or.level).toBe("error");
+  });
+
+  it("warns when a brief outage kept 24h uptime inside the error band", () => {
+    // 198/199 up = 0.9950 in [UPTIME_ERROR_RATIO, UPTIME_WARN_RATIO).
+    const recent = [sample(199, false), ...Array.from({ length: 198 }, (_, i) => sample(198 - i, true))];
+    const payload = buildHistoryPayload(
+      { sources: { [historyId]: { recent, daily: [] } } },
+      { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
+      NOW,
+    );
+    const or = payload.sources.find((s) => s.id === historyId)!;
+    expect(or.ok).toBe(true);
+    expect(or.uptime24h).toBeGreaterThanOrEqual(0.95);
+    expect(or.uptime24h).toBeLessThan(UPTIME_WARN_RATIO);
     expect(or.level).toBe("warn");
   });
 
@@ -346,13 +360,13 @@ describe("buildHistoryPayload", () => {
     expect(or.level).toBe("warn");
   });
 
-  it("reports uptime30d as null (not 0%) when daily buckets carry no samples", () => {
+  it("reports uptime7d as null (not 0%) when daily buckets carry no samples", () => {
     const payload = buildHistoryPayload(
       { sources: { [historyId]: { recent: [], daily: [{ day: "2026-08-30", total: 0, ok: 0 }] } } },
       { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
       NOW,
     );
-    expect(payload.sources.find((s) => s.id === historyId)!.uptime30d).toBeNull();
+    expect(payload.sources.find((s) => s.id === historyId)!.uptime7d).toBeNull();
   });
 });
 

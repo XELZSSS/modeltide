@@ -43,7 +43,3 @@ export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
     uptimeMs: Math.max(0, now - firstLaunchMs),
   };
 }
-
-export function resetUptimeForTests(): void {
-  memoryFirstLaunch = null;
-}

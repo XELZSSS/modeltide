@@ -7,7 +7,19 @@ const HEALTHY_COMPONENT_STATES = new Set(["operational"]);
 
 const ERROR_COMPONENT_STATES = new Set(["partial_outage", "major_outage", "critical_outage"]);
 
-const WARN_PAGE_INDICATORS = new Set(["minor"]);
+/**
+ * Statuspage's indicator enum is `none | maintenance | minor | major | critical`.
+ * `maintenance` is scheduled work (components stay operational) and an unknown
+ * value is no evidence of an outage, so neither may be treated as an error.
+ */
+const ERROR_PAGE_INDICATORS = new Set(["major", "critical"]);
+
+function indicatorLevel(indicator: string): SourceLevel {
+  if (indicator === "none") return "ok";
+  if (ERROR_PAGE_INDICATORS.has(indicator)) return "error";
+  // "minor", "maintenance" and anything unrecognised: degraded, not down.
+  return "warn";
+}
 
 export interface StatuspageVerdict {
   level: SourceLevel;
@@ -40,18 +52,13 @@ export function parseStatuspageSummary(raw: unknown): ParseResult<StatuspageVerd
     return parseFail("Statuspage summary has no readable component states");
   }
   const indicator = str(obj(root?.status)?.indicator).trim().toLowerCase();
-  const level: SourceLevel = indicator
-    ? indicator === "none"
-      ? "ok"
-      : WARN_PAGE_INDICATORS.has(indicator)
-        ? "warn"
-        : "error"
-    : worst;
+  // The coarser page indicator wins when present, mapped via explicit bands.
+  const level: SourceLevel = indicator ? indicatorLevel(indicator) : worst;
   return parseOk({ level, degradedComponents });
 }
 
 const GCP_ROUTINE_SEVERITIES = new Set(["low"]);
-const GCP_WARN_SEVERITIES = new Set(["medium"]);
+const GCP_ERROR_SEVERITIES = new Set(["high", "critical"]);
 
 export function parseGoogleCloudIncidents(raw: unknown): ParseResult<{ level: SourceLevel; openIncidents: string[] }> {
   if (!Array.isArray(raw)) {
@@ -66,8 +73,9 @@ export function parseGoogleCloudIncidents(raw: unknown): ParseResult<{ level: So
     const severity = str(incident.severity).trim().toLowerCase();
     if (GCP_ROUTINE_SEVERITIES.has(severity)) continue;
     openIncidents.push(str(incident.external_desc).trim().slice(0, 120) || severity || "open incident");
-    if (!GCP_WARN_SEVERITIES.has(severity)) worst = "error";
-    else if (worst === "ok") worst = "warn";
+    // Only explicit error bands are outages; medium or unknown is degraded.
+    if (GCP_ERROR_SEVERITIES.has(severity)) worst = "error";
+    else if (worst !== "error") worst = "warn";
   }
   return parseOk({ level: worst, openIncidents });
 }

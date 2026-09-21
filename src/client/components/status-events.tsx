@@ -4,7 +4,7 @@ import { useTranslation } from "@/client/providers";
 import type { StatusEvent } from "@/shared/types";
 import { cn } from "@/client/utils/cn";
 import { formatRelativeTime } from "@/client/utils/format";
-import { SOURCE_LABELS } from "@/shared/config";
+import { sourceLabelKey } from "@/shared/config";
 import { Dot } from "@/client/components/ui/primitives";
 import { EmptyState } from "@/client/components/feedback";
 
@@ -32,9 +32,7 @@ export const StatusEventRow = memo(function StatusEventRow({
 }) {
   const { t, lang } = useTranslation();
   const style = resolveEventStyle(event.type);
-  const labelKey = Object.hasOwn(SOURCE_LABELS, event.id)
-    ? (SOURCE_LABELS as Record<string, (typeof SOURCE_LABELS)[keyof typeof SOURCE_LABELS]>)[event.id]
-    : undefined;
+  const labelKey = sourceLabelKey(event.id);
   const sourceLabel = labelKey ? t(labelKey) : event.id;
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">

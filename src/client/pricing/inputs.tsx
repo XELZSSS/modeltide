@@ -3,7 +3,7 @@ import { memo, useMemo } from "react";
 import { formatDollar } from "@/client/utils/format";
 import { Input } from "@/client/components/ui/input";
 import { useTranslation } from "@/client/providers";
-import { COST_FIELDS, type CostFieldId, type CostInputState } from "@/client/features/pricing/cost-inputs";
+import { COST_FIELDS, type CostFieldId, type CostInputState } from "@/client/pricing/cost-inputs";
 
 interface CostFieldDef {
   id: CostFieldId;
@@ -55,17 +55,17 @@ export const CostEstimatorInputs = memo(function CostEstimatorInputs({
   pending = false,
 }: CostEstimatorInputsProps) {
   const { t } = useTranslation();
-  const { values } = state;
+  const { values, setField } = state;
   const fields = useMemo(
     () =>
       COST_FIELDS.map((def) => ({
         id: def.id,
-        value: state.values[def.id],
-        onChange: (v: string) => state.setField(def.id, v),
+        value: values[def.id],
+        onChange: (v: string) => setField(def.id, v),
         label: t(def.labelKey),
         unit: def.unit,
       })),
-    [values, t],
+    [values, setField, t],
   );
 
   return (

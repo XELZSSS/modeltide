@@ -15,7 +15,7 @@ import type {
   OpenRouterRankEntry,
   OpenSourceModelEntry,
 } from "@/shared/types";
-import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/shared/config";
+import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/navigation";
 import { matchTerm, normalizeModelKey } from "@/shared/utils";
 
 type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
@@ -26,7 +26,10 @@ interface SourceConfig<T extends SearchItem> {
   map: (item: T) => SearchResult;
 }
 
-function collect<T extends SearchItem>(config: SourceConfig<T>, term: string): { result: SearchResult; match: number }[] {
+function collect<T extends SearchItem>(
+  config: SourceConfig<T>,
+  term: string,
+): { result: SearchResult; match: number }[] {
   const out: { result: SearchResult; match: number }[] = [];
   const missed: T[] = [];
   for (const item of config.items) {

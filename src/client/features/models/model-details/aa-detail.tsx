@@ -19,7 +19,7 @@ import { InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { PageSection } from "@/client/components/layout";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
-import { useOfficialPricing } from "@/client/features/pricing/official";
+import { useOfficialPricing } from "@/client/pricing/official";
 import { createDetailView } from "./detail-views";
 import { useSuspenseArtificialRankings } from "@/client/api/queries";
 
@@ -81,7 +81,8 @@ function ModalitySection({
 }
 
 function PriceValue({ value, pending }: { value: string; pending: boolean }) {
-  if (pending) return <span className="ui-skeleton inline-block h-4 w-20 rounded-none align-middle" aria-hidden="true" />;
+  if (pending)
+    return <span className="ui-skeleton inline-block h-4 w-20 rounded-none align-middle" aria-hidden="true" />;
   return <>{value}</>;
 }
 

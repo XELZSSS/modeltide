@@ -8,7 +8,7 @@ import { dedupeBy } from "@/shared/utils";
 import { findUnknownLicenseTags, mapModel } from "@/server/parsers/huggingface";
 import type { HFModel } from "@/server/parsers/upstream";
 
-import type { SourcePayload } from "@/server/sources/types";
+import type { SourcePayload } from "@/shared/types";
 import { cachedPayload } from "@/server/sources/pipeline";
 
 export interface ModelQuery {

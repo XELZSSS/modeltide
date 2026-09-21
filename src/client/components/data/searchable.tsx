@@ -22,8 +22,6 @@ interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
 function SearchableDataTableInner<T>({ data, getSearchFields, ...tableProps }: SearchableDataTableProps<T>) {
   const searchTerm = useSearchStore((s) => s.searchTerm);
   const { filtered, deferredTerm } = useFilteredData(data, getSearchFields, searchTerm);
-  // resetKey tracks the deferred term so pagination resets in the same frame
-  // the visible list actually changes (no one-keystroke flash).
   return <DataTable data={filtered} resetKey={deferredTerm} {...tableProps} />;
 }
 

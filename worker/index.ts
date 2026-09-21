@@ -41,11 +41,24 @@ interface ScheduledResult {
   healthy: boolean;
 }
 
+/**
+ * Cron health verdict, exported so it is directly testable.
+ *
+ * `sampled === null` means the round was SKIPPED because another isolate held
+ * the sample lock — normal, so it stays healthy. A KV outage no longer arrives
+ * here as null (acquireSampleLock rethrows), so it correctly surfaces as false
+ * and pings the /fail endpoint instead of leaving the monitor green.
+ */
+export function cronHealthy(sampled: boolean | null, warmFailed: number, warmTotal: number): boolean {
+  const warmOk = warmTotal === 0 || warmFailed < warmTotal;
+  return sampled !== false && warmOk;
+}
+
 async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: number): Promise<ScheduledResult> {
   if (!env.CACHE) return { sampled: null, warmFailed: 0, warmTotal: 0, healthy: false };
   const sampleJob = (async (): Promise<boolean | null> => {
     try {
-      return await recordStatusSamples(buildContext(env, { signal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
+      return await recordStatusSamples(buildContext(env, { workSignal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
     } catch (err) {
       console.warn(`[status-history] sampling failed: ${err instanceof Error ? err.message : String(err)}`);
       return false;
@@ -58,7 +71,11 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
       const hourlyTasks = warmTasks(env, "hourly", WARM_TASK_TIMEOUT_MS);
       const tasks =
         fireMinuteUtc < 30
-          ? [...coreTasks, ...hourlyTasks, ...(fireHourUtc % 6 === 0 ? warmTasks(env, "static", WARM_TASK_TIMEOUT_MS) : [])]
+          ? [
+              ...coreTasks,
+              ...hourlyTasks,
+              ...(fireHourUtc % 6 === 0 ? warmTasks(env, "static", WARM_TASK_TIMEOUT_MS) : []),
+            ]
           : coreTasks;
       const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: batchSignal });
       const failed = results.filter((r) => r.status === "rejected").length;
@@ -72,9 +89,12 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
     }
   })();
   const [sampled, warm] = await Promise.all([sampleJob, warmJob]);
-  const warmOk = warm.total === 0 || warm.failed < warm.total;
-  const healthy = sampled !== false && warmOk;
-  return { sampled, warmFailed: warm.failed, warmTotal: warm.total, healthy };
+  return {
+    sampled,
+    warmFailed: warm.failed,
+    warmTotal: warm.total,
+    healthy: cronHealthy(sampled, warm.failed, warm.total),
+  };
 }
 
 function isApiRequest(url: URL): boolean {
@@ -96,14 +116,8 @@ async function fetchHandler(req: Request, env: Env): Promise<Response> {
     return methodNotAllowedResponse();
   }
   const isHead = req.method === "HEAD";
-  const res = await handleApi(req, env, url);
-  if (res) {
-    if (!isHead) return res;
-    return stripBodyForHead(res);
-  }
-  const notFound = notFoundResponse();
-  if (!isHead) return notFound;
-  return stripBodyForHead(notFound);
+  const res = (await handleApi(req, env, url)) ?? notFoundResponse();
+  return isHead ? stripBodyForHead(res) : res;
 }
 
 export default {

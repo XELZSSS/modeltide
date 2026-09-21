@@ -1,6 +1,6 @@
 import { humanizeId, isRecord, numCoerce, str, isUsablePricing } from "@/server/parsers/primitives";
 import type { OfficialPriceModel } from "@/shared/types";
-import { MAX_PLAUSIBLE_RATE, PER_MILLION } from "@/shared/config/limits";
+import { MAX_PLAUSIBLE_RATE, perMillionOrNull } from "@/shared/config/limits";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
 
 import type { LitellmEntry } from "@/server/parsers/upstream";
@@ -86,12 +86,15 @@ function resolveProvider(id: string): string | null {
   return null;
 }
 
+/** LiteLLM keys are `provider/model`; the leading segment is dropped. */
+const bareId = (key: string): string => key.split("/").pop() ?? key;
+
 function toPricingModel(key: string, value: unknown, seen: Set<string>): OfficialPriceModel | null {
   if (!isRecord(value)) return null;
   const entry = value as LitellmEntry;
   const mode = str(entry.mode).trim().toLowerCase();
   if (mode && !CHAT_MODES.has(mode)) return null;
-  const id = key.includes("/") ? (key.split("/").pop() ?? "") : key;
+  const id = bareId(key);
   if (!id || id.includes(":")) return null;
   const provider = resolveProviderFromLitellm(entry.litellm_provider) ?? resolveProvider(id);
   if (!provider) return null;
@@ -103,10 +106,10 @@ function toPricingModel(key: string, value: unknown, seen: Set<string>): Officia
     provider,
     id,
     humanizeId(id),
-    input == null ? null : input * PER_MILLION,
-    output == null ? null : output * PER_MILLION,
-    cachedInput == null ? null : cachedInput * PER_MILLION,
-    cacheWrite == null ? null : cacheWrite * PER_MILLION,
+    perMillionOrNull(input),
+    perMillionOrNull(output),
+    perMillionOrNull(cachedInput),
+    perMillionOrNull(cacheWrite),
   );
   if (!model) return null;
   const dedupeKey = `${provider}:${id.toLowerCase()}`;
@@ -129,10 +132,7 @@ export function parseLitellmPricing(raw: unknown): ParseResult<OfficialPriceMode
     const model = toPricingModel(key, value, seen);
     if (model) {
       models.push(model);
-    } else if (
-      models.length === before &&
-      resolveProvider(key.includes("/") ? (key.split("/").pop() ?? "") : key) == null
-    ) {
+    } else if (models.length === before && resolveProvider(bareId(key)) == null) {
       skippedUnknownProvider += 1;
     }
   }

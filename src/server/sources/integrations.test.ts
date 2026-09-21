@@ -88,7 +88,9 @@ describe("parseStatuspageSummary", () => {
     ["minor", "warn"],
     ["major", "error"],
     ["critical", "error"],
-    ["maintenance", "error"],
+    // Maintenance and unrecognised indicators are degraded, not down.
+    ["maintenance", "warn"],
+    ["something-new", "warn"],
   ])("page indicator %s maps to %s", (indicator, level) => {
     expect(parseStatuspageSummary(healthyStatuspage(indicator)).level).toBe(level);
   });
@@ -130,7 +132,12 @@ describe("parseGoogleCloudIncidents", () => {
       "error",
       ["Open outage"],
     ],
-    ["open incident without severity fails", [{ external_desc: "Mystery", end: null }], "error", ["Mystery"]],
+    [
+      "open incident without severity warns (an unreadable severity is not an outage)",
+      [{ external_desc: "Mystery", end: null }],
+      "warn",
+      ["Mystery"],
+    ],
   ])("%s", (_label, raw, level, openIncidents) => {
     const out = parseGoogleCloudIncidents(raw);
     expect(out.level).toBe(level);

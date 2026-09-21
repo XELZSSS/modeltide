@@ -2,11 +2,10 @@ import type { AppContext } from "@/server/context";
 import { PROBE_CONCURRENCY, rssConfig, upstreamConfig, upstreamEndpoints } from "@/server/config";
 import type { ProbeResult } from "@/server/infra/http-client";
 import { runCapped } from "@/server/infra/pool";
-import type { SourceStatus } from "@/shared/types";
-import type { SourceId } from "./history-math";
+import type { SourceId } from "@/shared/types";
 
 export interface ProbeTarget {
-  id: SourceStatus["id"];
+  id: SourceId;
   url: string;
 }
 
@@ -51,15 +50,11 @@ export interface SourceAggregate {
   error: string | null;
 }
 
-export function aggregateProbes(
-  probed: { target: ProbeTarget; probe: ProbeResult }[],
-): Map<SourceStatus["id"], SourceAggregate> {
+export function aggregateProbes(probed: { target: ProbeTarget; probe: ProbeResult }[]): Map<SourceId, SourceAggregate> {
   type Mutable = SourceAggregate & { total: number; failures: number; firstError: string | null };
-  const grouped = new Map<SourceStatus["id"], Mutable>();
+  const grouped = new Map<SourceId, Mutable>();
 
-  // Probes with status == null (timeout/DNS/abort) are "unknown, not down":
-  // they are skipped so a broken prober network can't flip every source red.
-  // A source with only unknown probes yields no sample and keeps prior state.
+  // status == null (timeout/DNS/abort) is "unknown, not down": skipped, prior state kept.
   for (const { target, probe } of probed) {
     if (!probe.ok && probe.status == null) continue;
     let g = grouped.get(target.id);
@@ -80,13 +75,16 @@ export function aggregateProbes(
     }
   }
 
-  const aggregated = new Map<SourceStatus["id"], SourceAggregate>();
+  const aggregated = new Map<SourceId, SourceAggregate>();
   for (const [id, g] of grouped) {
+    // Partial loss stays visible; one healthy feed used to hide the failure count.
+    const degraded = g.failures > 0;
     aggregated.set(id as SourceId, {
       ok: g.ok,
+      ...(degraded && g.ok ? { warn: true } : {}),
       status: g.status,
       latencyMs: g.latencyMs,
-      error: g.ok ? null : g.total > 1 ? `${g.failures}/${g.total} feeds failed` : g.firstError,
+      error: degraded ? (g.ok || g.total > 1 ? `${g.failures}/${g.total} feeds failed` : g.firstError) : null,
     });
   }
   return aggregated;

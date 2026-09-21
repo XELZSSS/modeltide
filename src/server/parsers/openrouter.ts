@@ -1,12 +1,5 @@
-import {
-  num,
-  numCoerce,
-  numOr,
-  titleCase,
-  isUsableOpenRouterPricing,
-  isValidOpenRouterDirectoryRow,
-} from "@/server/parsers/primitives";
-import { PER_MILLION } from "@/shared/config";
+import { num, numCoerce, numOr, titleCase, isValidOpenRouterDirectoryRow } from "@/server/parsers/primitives";
+import { PER_MILLION, perMillionOrNull } from "@/shared/config";
 import type { OpenRouterRankEntry } from "@/shared/types";
 
 import { normalizeModelKey } from "@/shared/utils";
@@ -20,7 +13,7 @@ export interface PricingEntry {
   cacheWrite: number | null;
 }
 
-export type PricingRecord = Record<string, PricingEntry>;
+type PricingRecord = Record<string, PricingEntry>;
 
 export interface ModelMetaEntry {
   intelligenceIndex?: number;
@@ -39,12 +32,11 @@ function buildPricingEntry(
   cacheWrite: number | null,
 ): PricingEntry | null {
   if (input == null || output == null) return null;
-  if (!isUsableOpenRouterPricing(input, output)) return null;
   return {
     input: input * PER_MILLION,
     output: output * PER_MILLION,
-    cacheHit: cacheHit == null ? null : cacheHit * PER_MILLION,
-    cacheWrite: cacheWrite == null ? null : cacheWrite * PER_MILLION,
+    cacheHit: perMillionOrNull(cacheHit),
+    cacheWrite: perMillionOrNull(cacheWrite),
   };
 }
 
@@ -190,11 +182,8 @@ function resolvePricing(
   id: string,
   variantKey: string | undefined,
 ): PricingEntry | undefined {
-  // PricingRecord keys are stored lowercased (see parseDirectoryRows), so all
-  // lookups normalize — one canonical form per model instead of dual entries.
-  return (
-    (variantKey ? pricingMap.get(variantKey.toLowerCase()) : undefined) ?? pricingMap.get(id.toLowerCase())
-  );
+  // Pricing keys are stored lowercased (see parseDirectoryRows); lookups normalize.
+  return (variantKey ? pricingMap.get(variantKey.toLowerCase()) : undefined) ?? pricingMap.get(id.toLowerCase());
 }
 
 function groupRows(rows: ModelRow[]): Map<string, Group> {

@@ -8,7 +8,7 @@ import { parseRscPayloads, traverse } from "@/server/parsers/rsc";
 import type { AgentSignalEntry } from "@/server/parsers/upstream";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
 
-export const AGENT_SIGNALS = [
+const AGENT_SIGNALS = [
   "task_outcome_explicit",
   "praise_complaint",
   "steerability",
@@ -16,7 +16,7 @@ export const AGENT_SIGNALS = [
   "tool_hallucination",
 ] as const;
 
-export interface AgentSignalRow {
+interface AgentSignalRow {
   id: string;
   name: string;
   creator: string;
@@ -45,15 +45,13 @@ function toAgentSignalRow(e: AgentSignalEntry): AgentSignalRow | null {
   };
 }
 
-function extractSignalEntries(signal: string) {
-  return (tree: unknown): AgentSignalEntry[] | null => {
-    for (const node of traverse(tree)) {
-      if (!isRecord(node) || node.name !== signal) continue;
-      const entries = node.entries;
-      if (Array.isArray(entries) && entries.length > 0) return entries as AgentSignalEntry[];
-    }
-    return null;
-  };
+function extractSignalEntries(tree: unknown, signal: string): AgentSignalEntry[] | null {
+  for (const node of traverse(tree)) {
+    if (!isRecord(node) || node.name !== signal) continue;
+    const entries = node.entries;
+    if (Array.isArray(entries) && entries.length > 0) return entries as AgentSignalEntry[];
+  }
+  return null;
 }
 
 export function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[]): AgentRankEntry[] {
@@ -98,12 +96,9 @@ export function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow
 }
 
 export function parseAgentBoards(body: string): ParseResult<AgentRankEntry[]> {
-  // One body scan resolves all five signal boards: the flight payload is ~1.8 MB.
   let perSignal: AgentSignalEntry[][];
   try {
-    perSignal = parseRscPayloads<AgentSignalEntry>(body, AGENT_SIGNALS, (tree, marker) =>
-      extractSignalEntries(marker)(tree),
-    );
+    perSignal = parseRscPayloads<AgentSignalEntry>(body, AGENT_SIGNALS, extractSignalEntries);
   } catch (err) {
     return parseFail(`Agent board could not be extracted: ${err instanceof Error ? err.message : String(err)}`);
   }

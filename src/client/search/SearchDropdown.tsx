@@ -41,14 +41,14 @@ export function SearchDropdown({ listboxId, results, isPending, isError, activeI
   return (
     <>
       {results.map((result, index) => (
-        <button
+        // A <div>: the combobox input drives selection via aria-activedescendant.
+        <div
           key={`${result.source}-${result.id}-${index}`}
           id={`${listboxId}-option-${index}`}
-          type="button"
           role="option"
           aria-selected={activeIndex === index}
           className={cn(
-            "w-full text-left p-2.5 rounded-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+            "w-full text-left p-2.5 cursor-pointer rounded-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
             activeIndex === index ? "bg-hover" : "hoverable:hover:bg-hover",
           )}
           onMouseEnter={() => onHover(index)}
@@ -64,7 +64,7 @@ export function SearchDropdown({ listboxId, results, isPending, isError, activeI
             <span className="text-xs text-text-secondary">{t(result.source)}</span>
             {result.provider && <span className="text-xs text-text-tertiary">{result.provider}</span>}
           </span>
-        </button>
+        </div>
       ))}
     </>
   );

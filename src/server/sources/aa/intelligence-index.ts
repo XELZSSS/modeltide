@@ -17,7 +17,7 @@ import {
   type IntelligenceIndexResult,
 } from "@/server/parsers/aa";
 import { fetchAaRsc, fetchAndParseEnrich } from "@/server/sources/aa/fetch";
-import { nowIso, type SourcePayload } from "@/server/sources/types";
+import type { SourcePayload } from "@/shared/types";
 import { upstreamEndpoints } from "@/server/config";
 import { cachedSource } from "@/server/sources/pipeline";
 
@@ -77,7 +77,7 @@ export const getIntelligenceIndexResult = (ctx: AppContext): Promise<Intelligenc
   cachedSource(ctx, cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async () => {
     const { models, weights, enrichFailed } = await fetchIntelligenceIndex(ctx);
     return {
-      value: { models, weights, enrichFailed, fetchedAt: nowIso() },
+      value: { models, weights, enrichFailed, fetchedAt: new Date().toISOString() },
       ttl: ttlFor(enrichFailed),
     };
   });

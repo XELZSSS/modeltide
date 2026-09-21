@@ -8,7 +8,7 @@ import { modelId } from "@/client/utils/model";
 import { sessionJsonStorage } from "@/client/stores/storage";
 import { cleanStringList, logRehydrate } from "@/client/stores/persist-helpers";
 
-export const MAX_COMPARE = 2;
+const MAX_COMPARE = 2;
 
 interface CompareState {
   compareIds: string[];

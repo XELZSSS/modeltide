@@ -32,6 +32,7 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
 }
 
 export async function getHomeDashboard(ctx: AppContext): Promise<HomeDashboardData> {
+  // memoryOnly is deliberate: cheap join over three KV-cached legs.
   return cachedSource(
     ctx,
     cacheKeys.homeDashboard,

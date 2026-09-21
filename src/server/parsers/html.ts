@@ -27,13 +27,12 @@ const BLOCK_TAGS = new Set([
 ]);
 
 function tagNameOf(tagInner: string): string {
-  const m = /^[^\s/>]+/.exec(tagInner.trim());
+  // Optional leading `/`: closing block tags need a separator too.
+  const m = /^\/?[^\s/>]+/.exec(tagInner.trim());
   return (m?.[0] ?? "").toLowerCase().replace(/^\//, "");
 }
 
-// Hoisted module constants: stripHtml runs over every feed description and
-// title; allocating a fresh regex per script/style tag is pure GC pressure.
-// Single-threaded + lastIndex reset before each exec keeps reuse safe.
+// Hoisted regexes: stripHtml runs per feed item, so reset lastIndex before each exec.
 const SCRIPT_CLOSE_RE = /<\/script\s*>/gi;
 const STYLE_CLOSE_RE = /<\/style\s*>/gi;
 

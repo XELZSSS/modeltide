@@ -19,7 +19,8 @@ function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string
 }
 
 function clampStatus(status: number): number {
-  return status >= 100 && status < 600 ? status : 500;
+  // `new Response` accepts only 200-599: clamp or a RangeError escapes the catch.
+  return status >= 200 && status < 600 ? status : 500;
 }
 
 function errorHeaders(): Headers {
@@ -33,9 +34,10 @@ function errorHeaders(): Headers {
 }
 
 function collectQueryParams(url: URL): Record<string, string | string[]> {
-  const raw: Record<string, string | string[]> = {};
+  // Null-prototype: `?__proto__=x` would otherwise rewrite this object's prototype.
+  const raw: Record<string, string | string[]> = Object.create(null) as Record<string, string | string[]>;
   url.searchParams.forEach((value, key) => {
-    const existing = raw[key];
+    const existing = Object.hasOwn(raw, key) ? raw[key] : undefined;
     if (existing === undefined) raw[key] = value;
     else if (Array.isArray(existing)) existing.push(value);
     else raw[key] = [existing, value];
@@ -119,7 +121,7 @@ export async function handleApiRoute<S extends QuerySchema>(
   try {
     const url = new URL(req.url);
 
-    const context = buildContext(env, { signal: req.signal });
+    const context = buildContext(env, { callerSignal: req.signal });
     const rawParams = collectQueryParams(url);
     const schemaKeys = new Set(Object.keys(def.query ?? {}));
     const unknownKeys = Object.keys(rawParams).filter((k) => !schemaKeys.has(k));

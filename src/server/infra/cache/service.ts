@@ -1,5 +1,5 @@
 import { utf8ByteLength, fnv1aHash } from "@/shared/utils";
-import { UpstreamError } from "@/server/infra/errors";
+import { ClientAbortError, UpstreamError } from "@/server/infra/errors";
 import { MAX_KV_RETENTION_TTL_S } from "@/server/config";
 import { isEnvelope, maxStaleMs, type StaleEnvelope } from "./envelope";
 import { l1TtlFor, sharedL1, type MemoryL1 } from "./memory-l1";
@@ -8,16 +8,14 @@ import { FAILURE_COOLDOWN_MS, refreshFailureCooldown } from "./cooldown";
 
 function jitteredTtl(vk: string, ttl: number): number {
   const base = Number.isFinite(ttl) && ttl > 0 ? ttl : 60_000;
-  // Deterministic hash jitter only (no Math.random): same key → same skew,
-  // still breaks the global :00/:30 thundering herd across keys.
+  // Deterministic jitter (no Math.random) so the :00/:30 herd is still broken.
   const h1 = (parseInt(fnv1aHash(vk), 36) % 50) / 1000;
   const factor = 0.95 + h1;
   if (base < 60_000) return Math.max(1000, Math.round(base * factor));
   return Math.max(60_000, Math.round(base * factor));
 }
 
-// Hang guard for the inflight registry: well past every upstream timeout
-// (10s default, 15s litellm, one retry each) — only fires on a stuck fn().
+// Past every upstream timeout (10s default, 15s litellm, 1 retry): stuck fn only.
 const INFLIGHT_HANG_GUARD_MS = 60_000;
 
 function warnKvReadFailure(err: unknown): void {
@@ -36,12 +34,19 @@ export interface CacheStores {
   l1?: MemoryL1;
   inflight?: InflightRegistry;
   failureCooldownMs?: number;
+  /**
+   * The requesting client's liveness. Held per instance (a fresh CacheService
+   * is built per request) and used only to detach this caller; it never
+   * cancels the shared refresh.
+   */
+  callerSignal?: AbortSignal;
 }
 
 export class CacheService {
   private l1: MemoryL1;
   private inflight: InflightRegistry;
   private failureCooldownMs: number;
+  private callerSignal?: AbortSignal;
 
   constructor(
     private kv: KVNamespace | undefined,
@@ -51,6 +56,7 @@ export class CacheService {
     this.l1 = stores?.l1 ?? sharedL1;
     this.inflight = stores?.inflight ?? sharedInflight;
     this.failureCooldownMs = stores?.failureCooldownMs ?? FAILURE_COOLDOWN_MS;
+    this.callerSignal = stores?.callerSignal;
   }
 
   private vk(k: string): string {
@@ -94,6 +100,7 @@ export class CacheService {
     const effective = jitteredTtl(vk, ttl);
     try {
       const serialized = JSON.stringify({ d: data, e: Date.now() + effective, t: effective });
+      // Serialized-bytes accounting vs parsed objects: treat the budget as a floor.
       const bytes = utf8ByteLength(serialized);
       this.l1.set(vk, data, hasKv ? l1TtlFor(effective) : effective, bytes);
       await this.setSerialized(vk, serialized, effective);
@@ -126,7 +133,51 @@ export class CacheService {
     }
   }
 
+  /**
+   * Detach the caller from the shared refresh: an abort rejects only THIS caller
+   * (mapped to 499) while the work keeps running and still populates the cache.
+   * The race must live here, not inside `refresh` — whose `finally` would then
+   * release the inflight slot and clear the hang guard while the shared promise
+   * is still pending.
+   */
   async withTtl<T>(
+    k: string,
+    ttl: number,
+    fn: () => Promise<{ data: T; ttl?: number }>,
+    opts?: { memoryOnly?: boolean },
+  ): Promise<T> {
+    const signal = this.callerSignal;
+    if (!signal) return this.withTtlInner(k, ttl, fn, opts);
+    if (signal.aborted) throw new ClientAbortError(`Client aborted request for ${k}`);
+    const work = this.withTtlInner(k, ttl, fn, opts);
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const onAbort = (): void => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        reject(new ClientAbortError(`Client aborted request for ${k}`));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      // Both settle paths handled: detached work can't become an unhandled rejection.
+      work.then(
+        (value) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          resolve(value);
+        },
+        (err: unknown) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          reject(err);
+        },
+      );
+    });
+  }
+
+  private async withTtlInner<T>(
     k: string,
     ttl: number,
     fn: () => Promise<{ data: T; ttl?: number }>,
@@ -202,7 +253,8 @@ export class CacheService {
     try {
       return await Promise.race([p, guardRejection]);
     } catch (err) {
-      refreshFailureCooldown.record(vk, err);
+      // A caller abort isn't an upstream failure; recording it cools down the key.
+      if (!(err instanceof ClientAbortError)) refreshFailureCooldown.record(vk, err);
       throw err;
     } finally {
       clearTimeout(hangTimer);

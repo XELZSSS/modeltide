@@ -1,12 +1,12 @@
 "use client";
-import { memo, useMemo } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import { formatDollar } from "@/client/utils/format";
 import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 import { useTranslation } from "@/client/providers";
 import { modelId } from "@/client/utils/model";
 import { DataTable } from "@/client/components/data/table";
 import type { DataTableColumn } from "@/client/components/data/columns";
-import { useOfficialPricing } from "@/client/features/pricing/official";
+import { useOfficialPricing } from "@/client/pricing/official";
 import { EmptyState } from "@/client/components/feedback";
 
 interface OfficialRow {
@@ -92,27 +92,17 @@ export const LiteLLMVsRouterTable = memo(function LiteLLMVsRouterTable({
       .filter((r): r is OfficialRow => r !== null);
   }, [getOfficial, models]);
 
-  if (isPending) {
-    return (
-      <div className="flex flex-col gap-3">
-        <p className="text-sm font-semibold">{t("officialVsRouter")}</p>
-        <EmptyState message={t("loading")} />
-      </div>
-    );
-  }
-  if (isError) {
-    return (
-      <div className="flex flex-col gap-3">
-        <p className="text-sm font-semibold">{t("officialVsRouter")}</p>
-        <EmptyState message={t("loadFailed")} variant="error" />
-      </div>
-    );
-  }
   if (rows.length === 0) return null;
+
+  let body: ReactNode;
+  if (isPending) body = <EmptyState message={t("loading")} />;
+  else if (isError) body = <EmptyState message={t("loadFailed")} variant="error" />;
+  else body = <DataTable data={rows} columns={columns} getRowId={getRowId} />;
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm font-semibold">{t("officialVsRouter")}</p>
-      <DataTable data={rows} columns={columns} getRowId={getRowId} />
+      {body}
     </div>
   );
 });

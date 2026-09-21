@@ -1,18 +1,19 @@
+/**
+ * Naming rule for `src/server/sources/*`: `fetch*` never touches cache;
+ * `get*` always caches through the helpers below (`cachedSource` /
+ * `cachedPayload`).
+ */
+
 import type { AppContext } from "@/server/context";
-import type { SourcePayload } from "@/shared/types/payload";
+import type { SourcePayload } from "@/shared/types";
 import type { ParseResult } from "@/server/parsers/result";
 import { UpstreamError } from "@/server/infra/errors";
 import { ttlFor } from "@/shared/config";
-import { nowIso } from "@/server/sources/types";
 
 export function requireParsed<T>(result: ParseResult<T>): T {
   if (result.ok) return result.data;
   throw new UpstreamError(result.error);
 }
-
-// Single caching primitive: cachedPayload (SourcePayload<T>) and
-// cachedSource (arbitrary Value) are thin adapters over cached() so all
-// KV/L1/stale logic lives in CacheService.withTtl.
 
 export interface CacheScope {
   memoryOnly?: boolean;
@@ -25,7 +26,7 @@ export interface PayloadBuild<T> {
 }
 
 export function sourcePayload<T>(rows: T, opts?: { partial?: boolean }): SourcePayload<T> {
-  return { data: rows, fetchedAt: nowIso(), ...(opts?.partial ? { partial: true } : {}) };
+  return { data: rows, fetchedAt: new Date().toISOString(), ...(opts?.partial ? { partial: true } : {}) };
 }
 
 export function cached<T>(

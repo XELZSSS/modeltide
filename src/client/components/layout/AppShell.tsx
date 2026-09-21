@@ -34,8 +34,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeMore = useCallback(() => setMobileMoreOpen(false), []);
-  // Sheets are mutually exclusive: opening one closes the other so two
-  // z-50 dialogs never stack and focus/background locking stays unambiguous.
   const openSettings = useCallback(() => {
     setMobileMoreOpen(false);
     setSettingsOpen(true);

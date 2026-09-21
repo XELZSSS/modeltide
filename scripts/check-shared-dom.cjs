@@ -10,9 +10,11 @@ function check(file) {
   const src = fs.readFileSync(file, "utf8");
   const code = stripComments(src);
   const patterns = [
-    /\btypeof\s+(document|window|navigator|localStorage|sessionStorage|location|globalThis|self|caches|indexedDB)\b/,
-    /\b(document|window|navigator|localStorage|sessionStorage|location|globalThis|self|caches|indexedDB|matchMedia|customElements)\s*\./,
-    /\b(document|window|navigator|localStorage|sessionStorage|location|globalThis|self|caches|indexedDB)\s*\[/,
+    /\btypeof\s+(document|window|navigator|localStorage|sessionStorage|location|globalThis|self|caches|indexedDB|history|screen)\b/,
+    // `\??\.` also catches optional chaining (`window?.matchMedia`), which
+    // reaches the identical runtime global.
+    /\b(document|window|navigator|localStorage|sessionStorage|location|globalThis|self|caches|indexedDB|matchMedia|customElements|history|screen)\s*\??\./,
+    /\b(document|window|navigator|localStorage|sessionStorage|location|globalThis|self|caches|indexedDB|history|screen)\s*\??\.?\s*\[/,
     /\b(new\s+(HTMLElement|Image|Audio|XMLHttpRequest|IntersectionObserver|ResizeObserver|MutationObserver)|requestAnimationFrame|cancelAnimationFrame)\b/,
     /\bHTMLElement\b/,
     /\b(process\s*\.\s*env|process\s*\.\s*argv|global\s*\.\s*process)\b/,

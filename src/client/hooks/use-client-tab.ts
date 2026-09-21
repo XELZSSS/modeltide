@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { replaceRoute, useSearchParams } from "@/client/router";
 
 export function resolveInitialTab<T extends string>(validTabs: readonly T[], raw: string | null, fallback: T): T {
@@ -15,10 +15,11 @@ export function useClientTab<T extends string>(
   const paramValue = searchParams.get(paramKey);
   const [tab, setTab] = useState<T>(() => resolveInitialTab(validTabs, paramValue, fallback));
   const [, startTransition] = useTransition();
-  useEffect(() => {
-    const next = resolveInitialTab(validTabs, paramValue, fallback);
-    setTab((prev) => (prev === next ? prev : next));
-  }, [paramValue, validTabs, fallback]);
+  const [prevParamValue, setPrevParamValue] = useState(paramValue);
+  if (prevParamValue !== paramValue) {
+    setPrevParamValue(paramValue);
+    setTab(resolveInitialTab(validTabs, paramValue, fallback));
+  }
   const setTabTransition = useCallback(
     (tabId: string) => {
       if (!(validTabs as readonly string[]).includes(tabId)) return;

@@ -1,6 +1,6 @@
 "use client";
 import { useTranslation } from "@/client/providers";
-import { MODEL_SOURCES } from "@/shared/config";
+import { MODEL_SOURCES } from "@/client/config/navigation";
 import { ComparePageLayout } from "./ComparePageLayout";
 import { CompareContent } from "./radar";
 

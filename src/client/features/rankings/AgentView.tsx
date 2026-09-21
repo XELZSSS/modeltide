@@ -22,8 +22,7 @@ function buildAgentColumns(t: ReturnType<typeof useTranslation>["t"]): DataTable
       id: "score",
       header: t("trend"),
       align: "right",
-      // Mirrors the official board: Arena reports signal scores as ratios, the
-      // site shows them ×100 as % with ▲/▼ by sign and the ± confidence band.
+      // Arena reports ratios; the board shows ×100 as % with ▲/▼ and a ± band.
       cell: (item) => {
         if (item.score == null || !Number.isFinite(item.score)) {
           return <span className="ui-mono-value font-semibold">{t("notAvailable")}</span>;

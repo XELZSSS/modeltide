@@ -4,9 +4,9 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatDollar } from "@/client/utils/format";
 import {
   RightAlignedText,
+  col,
   mobilePrimaryCol,
   rightCol,
-  textCol,
   type DataTableColumn,
 } from "@/client/components/data/columns";
 import { computeBlendPrice } from "@/shared/utils";
@@ -47,7 +47,7 @@ export function buildPricingColumns(
       opts,
     );
   return [
-    textCol(
+    col(
       "model",
       t("model"),
       (row) => <CompareModelCell model={row.model} compareSet={compareSet} onToggleCompare={onToggleCompare} />,

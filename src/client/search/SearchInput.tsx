@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
-import { usePathname, useRouter } from "@/client/router";
+import { useRouter } from "@/client/router";
 import { Search, X } from "lucide-react";
 import { cn } from "@/client/utils/cn";
 import { Input } from "@/client/components/ui/input";
@@ -27,14 +27,8 @@ export function SearchInput({ className }: { className?: string }) {
 
   const searchTerm = useSearchStore((s) => s.searchTerm);
   const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
-  const pathname = usePathname();
-  const { inputValue, setInputValue, debounced, setDebouncedDirect, cancel } = useDebouncedTerm("", 200);
+  const { inputValue, setInputValue, debounced, setDebouncedDirect } = useDebouncedTerm("", 200);
 
-  // Pathname only: ?tab= switches (replaceState) must preserve the typed query.
-  useEffect(() => {
-    cancel();
-    setDebouncedDirect("");
-  }, [pathname, cancel, setDebouncedDirect]);
   useEffect(() => {
     if (debounced !== searchTerm) setSearchTerm(debounced);
   }, [debounced, searchTerm, setSearchTerm]);
@@ -45,13 +39,12 @@ export function SearchInput({ className }: { className?: string }) {
     setDebouncedDirect("");
   };
 
-  const goToResult = (result: SearchResult | undefined) => {
+  function goToResult(result: SearchResult | undefined): void {
     if (!result) return;
     clearSearch();
     router.push(result.link);
     setIsOpen(false);
-    setActiveIndex(-1);
-  };
+  }
 
   const { clampedIndex, setActiveIndex, handleKeyDown } = useListKeyboard(
     results.length,
@@ -106,7 +99,10 @@ export function SearchInput({ className }: { className?: string }) {
             setActiveIndex(-1);
           }}
           onFocus={() => {
-            if (inputValue.length >= MIN_QUERY) setIsOpen(true);
+            if (inputValue.length >= MIN_QUERY) {
+              setIsOpen(true);
+              setActiveIndex(-1);
+            }
           }}
           onKeyDown={onKeyDown}
           placeholder={t("searchPlaceholder")}

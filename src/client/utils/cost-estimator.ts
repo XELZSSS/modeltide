@@ -24,7 +24,6 @@ function calcCost(
   if (cacheWriteRaw != null && !Number.isFinite(cacheWriteRaw)) return null;
   if (!Number.isFinite(promptTokens) || !Number.isFinite(completionTokens)) return null;
   const hitRate = clamp01(opts?.cacheHitRate ?? 0);
-  // The write tier exists only when the upstream interface reports a write price.
   const hasWriteTier = typeof cacheWriteRaw === "number";
   const writeRate = hasWriteTier ? clamp01(Math.min(opts?.cacheWriteRate ?? 0, 1 - hitRate)) : 0;
   const freshRate = 1 - hitRate - writeRate;

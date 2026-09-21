@@ -8,9 +8,6 @@ import { STORAGE_KEYS } from "@/shared/config";
 import { localJsonStorage } from "@/client/stores/storage";
 import { logRehydrate } from "@/client/stores/persist-helpers";
 
-const toggleLang = (lang: Lang): Lang => (lang === "en" ? "zh" : "en");
-const toggleThemeMode = (mode: ThemeMode): ThemeMode => (mode === "light" ? "dark" : "light");
-
 /**
  * First-render theme, resolved from the same source as the pre-hydration
  * inline script in `index.html` (stored value → system preference).
@@ -24,17 +21,13 @@ function initialThemeMode(): ThemeMode {
     const raw = window.localStorage.getItem(STORAGE_KEYS.settings);
     const stored = raw ? (JSON.parse(raw) as { state?: Partial<SettingsState> }).state?.themeMode : undefined;
     if (stored === "dark" || stored === "light") return stored;
-  } catch {
-    // Corrupt storage falls through to the system preference below.
-  }
+  } catch {}
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 interface SettingsState {
   themeMode: ThemeMode;
   lang: Lang;
-  toggleTheme: () => void;
-  toggleLang: () => void;
   setLang: (lang: Lang) => void;
   setThemeMode: (mode: ThemeMode) => void;
 }
@@ -44,8 +37,6 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       themeMode: initialThemeMode(),
       lang: "zh",
-      toggleTheme: () => set((s) => ({ themeMode: toggleThemeMode(s.themeMode) })),
-      toggleLang: () => set((s) => ({ lang: toggleLang(s.lang) })),
       setLang: (lang) => set(() => ({ lang })),
       setThemeMode: (themeMode) => set(() => ({ themeMode })),
     }),

@@ -49,15 +49,6 @@ export function col<T>(id: string, header: string, cell: (row: T) => ReactNode, 
   return { id, header, cell, align: opts?.align ?? "left", ...opts };
 }
 
-export function textCol<T>(
-  id: string,
-  header: string,
-  cell: (row: T) => ReactNode,
-  opts?: { width?: number | string },
-): DataTableColumn<T> {
-  return col(id, header, cell, { ...opts, align: "left" });
-}
-
 export function rightCol<T>(
   id: string,
   header: string,

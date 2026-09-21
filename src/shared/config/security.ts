@@ -14,7 +14,6 @@ const BASE_SECURITY_HEADERS = {
 
 const API_SECURITY_HEADERS: Record<string, string> = {
   ...BASE_SECURITY_HEADERS,
-  // JSON API is never framed and carries no referrer-sensitive URLs; lock both.
   "Referrer-Policy": "no-referrer",
   "X-Frame-Options": "DENY",
 };

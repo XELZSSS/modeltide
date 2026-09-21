@@ -11,15 +11,11 @@ export const buttonVariants = cva(
         primary: "bg-accent text-accent-contrast hoverable:hover:bg-accent/90 border border-transparent",
         outline: "border border-border bg-transparent text-text-primary hoverable:hover:border-text-primary",
         ghost: "text-text-primary hoverable:hover:bg-hover",
-        link: "text-text-primary underline-offset-4 hoverable:hover:underline px-0",
-        destructive:
-          "bg-destructive text-destructive-contrast hoverable:hover:bg-destructive/90 border border-transparent",
       },
       size: {
         sm: "h-8 px-3 text-xs rounded-none",
         md: "h-9 px-4 text-sm rounded-none",
         icon: "size-9 rounded-none",
-        xs: "h-7 px-2 text-xs rounded-none",
       },
     },
     defaultVariants: { variant: "ghost", size: "sm" },

@@ -10,7 +10,6 @@ import { createT } from "@/shared/i18n";
 interface I18nContextValue {
   lang: Lang;
   t: TFunction;
-  toggleLang: () => void;
   setLang: (lang: Lang) => void;
 }
 
@@ -33,7 +32,6 @@ function syncDocumentMeta(lang: Lang) {
 
 function I18nProvider({ children }: { children: ReactNode }) {
   const lang = useSettingsStore((s) => s.lang);
-  const toggleLang = useSettingsStore((s) => s.toggleLang);
   const setLang = useSettingsStore((s) => s.setLang);
 
   useEffect(() => {
@@ -49,18 +47,15 @@ function I18nProvider({ children }: { children: ReactNode }) {
     [lang],
   );
 
-  const contextValue = useMemo<I18nContextValue>(
-    () => ({ lang, t, toggleLang, setLang }),
-    [lang, t, toggleLang, setLang],
-  );
+  const contextValue = useMemo<I18nContextValue>(() => ({ lang, t, setLang }), [lang, t, setLang]);
 
   return <I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>;
 }
 
 const MOBILE_BREAKPOINT = 768;
 
-function useIsMobile(breakpoint = 768): boolean {
-  const query = `(max-width: ${breakpoint - 1}px)`;
+function useIsMobile(): boolean {
+  const query = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false,
   );
@@ -82,7 +77,7 @@ interface DeviceContextValue {
 const DeviceContext = createContext<DeviceContextValue | null>(null);
 
 function DeviceProvider({ children }: { children: ReactNode }) {
-  const isMobile = useIsMobile(MOBILE_BREAKPOINT);
+  const isMobile = useIsMobile();
   const value = useMemo(() => ({ isMobile }), [isMobile]);
   return <DeviceContext.Provider value={value}>{children}</DeviceContext.Provider>;
 }
@@ -106,7 +101,8 @@ function createQueryClient(): QueryClient {
           return count < 2;
         },
         retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
-        refetchOnWindowFocus: false,
+        // Default refetch-on-focus: otherwise an observed query never becomes fresh again.
+        refetchOnWindowFocus: true,
         staleTime: FIVE_MINUTES,
         gcTime: THIRTY_MINUTES,
       },

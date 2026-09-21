@@ -1,3 +1,5 @@
+import { isTimeoutLike } from "@/server/infra/http-error";
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -39,11 +41,6 @@ export function zeroUpstreamMessage(label: string, unit: string, detail?: string
 
 export function zeroUpstream(label: string, unit: string, detail?: string): UpstreamError {
   return new UpstreamError(zeroUpstreamMessage(label, unit, detail));
-}
-
-function isTimeoutLike(err: unknown): boolean {
-  if (err instanceof UpstreamError) return err.causedByTimeout;
-  return err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
 }
 
 export function wrapUpstream(prefix: string, err: unknown): UpstreamError {

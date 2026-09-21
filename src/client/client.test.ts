@@ -16,7 +16,7 @@ import {
   safeHref,
 } from "@/client/utils/format";
 import { calcMonthlyCost } from "@/client/utils/cost-estimator";
-import { getCachedMonthlyCost, useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
+import { getCachedMonthlyCost, useMonthlyCosts } from "@/client/pricing/cost-inputs";
 import {
   indexOfficialPricing,
   makeOfficialGetter,

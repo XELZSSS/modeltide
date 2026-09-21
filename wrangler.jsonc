@@ -14,7 +14,13 @@
     // output automatically); kept for `wrangler deploy` parity.
     "directory": "./dist/client",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"],
+    // The Worker's non-API branch calls env.ASSETS.fetch, and wrangler only wires
+    // that binding when a name is declared here — without it the binding is
+    // undefined and any non-API request reaching the Worker answers a plain-text
+    // 500. "/api" is listed explicitly because "/api/*" does not match the bare
+    // path, which would otherwise fall through to the SPA shell (HTML, 200).
+    "binding": "ASSETS",
+    "run_worker_first": ["/api", "/api/*"],
   },
 
   "triggers": {

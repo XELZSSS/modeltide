@@ -1,7 +1,7 @@
 "use client";
 import { lazy } from "react";
 import { useParams } from "@/client/router";
-import { MODEL_SOURCES, type ModelSource } from "@/shared/config";
+import { MODEL_SOURCES, type ModelSource } from "@/client/config/navigation";
 import { NotFound, SuspenseQuery } from "@/client/components/feedback";
 import { PageContainer } from "@/client/components/layout";
 

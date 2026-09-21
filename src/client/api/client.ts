@@ -1,4 +1,4 @@
-export interface QueryCtx {
+interface QueryCtx {
   signal?: AbortSignal;
 }
 
@@ -33,7 +33,8 @@ function withTimeout(signal: AbortSignal | undefined, ms: number): { signal: Abo
           return { signal: ctrl.signal, cleanup: () => clearTimeout(timer) };
         })();
   if (!signal) return timeout;
-  if (typeof AbortSignal.any === "function") return { signal: AbortSignal.any([signal, timeout.signal]), cleanup: timeout.cleanup };
+  if (typeof AbortSignal.any === "function")
+    return { signal: AbortSignal.any([signal, timeout.signal]), cleanup: timeout.cleanup };
   const ctrl = new AbortController();
   const onAbort = (): void => ctrl.abort();
   if (signal.aborted || timeout.signal.aborted) ctrl.abort();
@@ -45,6 +46,8 @@ function withTimeout(signal: AbortSignal | undefined, ms: number): { signal: Abo
     signal: ctrl.signal,
     cleanup: () => {
       signal.removeEventListener("abort", onAbort);
+      // Both sides, or every request leaks a listener on the throwaway timeout.
+      timeout.signal.removeEventListener("abort", onAbort);
       timeout.cleanup();
     },
   };
@@ -67,14 +70,13 @@ async function parseErrorMessage(res: Response): Promise<string> {
   return message;
 }
 
-async function apiFetch<T>(path: string, signal?: AbortSignal, opts?: { cache?: RequestCache }): Promise<T> {
+async function apiFetch<T>(path: string, signal?: AbortSignal): Promise<T> {
   const url = buildApiUrl(path);
   const combined = withTimeout(signal, FETCH_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       headers: { accept: "application/json" },
       signal: combined.signal,
-      cache: opts?.cache,
     });
     if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
     const ct = res.headers.get("content-type") ?? "";

@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, vi, afterEach } from "vitest";
 import { CacheService, resetModuleCachesForTests } from "@/server/infra/cache-service";
 import { HttpClient } from "@/server/infra/http-client";
-import { UpstreamError, wrapUpstream } from "@/server/infra/errors";
+import { ClientAbortError, UpstreamError, wrapUpstream } from "@/server/infra/errors";
 import { mapKV } from "@/server/test-helpers";
 import { MEMORY_CACHE_MAX_BYTES } from "@/server/config";
 import { validateQuery, qEnum, qNum, qStr } from "@/server/infra/validation";
@@ -106,6 +106,118 @@ describe("cache-service", () => {
       });
       await expect(Promise.all([first, second])).resolves.toEqual(["slow", "slow"]);
       expect(calls.n).toBe(1);
+    });
+  });
+
+  describe("caller isolation", () => {
+    it("a leader abort rejects only that caller while the joiner still succeeds", async () => {
+      const leaderAbort = new AbortController();
+      const leader = new CacheService(undefined, "v-iso", { callerSignal: leaderAbort.signal });
+      const joiner = new CacheService(undefined, "v-iso", { callerSignal: new AbortController().signal });
+      const calls = { n: 0 };
+      const slow = async () => {
+        calls.n += 1;
+        await sleep(20);
+        return { data: "shared" };
+      };
+      // The leader claims the inflight slot synchronously, so the joiner joins.
+      const leaderP = leader.withTtl("ik", 60_000, slow);
+      const joinerP = joiner.withTtl("ik", 60_000, async () => ({ data: "never" }));
+      leaderAbort.abort();
+      await expect(leaderP).rejects.toThrow(/aborted/);
+      await expect(leaderP).rejects.toHaveProperty("name", "ClientAbortError");
+      await expect(joinerP).resolves.toBe("shared");
+      expect(calls.n).toBe(1);
+    });
+
+    it("keeps the shared work running so the next caller is served without a second fetch", async () => {
+      const leaderAbort = new AbortController();
+      const leader = new CacheService(undefined, "v-iso1b", { callerSignal: leaderAbort.signal });
+      const calls = { n: 0 };
+      const p = leader.withTtl("sk", 60_000, async () => {
+        calls.n += 1;
+        await sleep(20);
+        return { data: "populated" };
+      });
+      leaderAbort.abort();
+      await expect(p).rejects.toThrow(/aborted/);
+      // Waits for the detached work to finish and populate the L1.
+      await sleep(40);
+      await expect(new CacheService(undefined, "v-iso1b").withTtl("sk", 60_000, countingFn("x", calls))).resolves.toBe(
+        "populated",
+      );
+      expect(calls.n).toBe(1);
+    });
+
+    it("never arms the cooldown from a ClientAbortError", async () => {
+      const cache = new CacheService(undefined, "v-iso2");
+      await expect(
+        cache.withTtl("cab", 60_000, async () => {
+          throw new ClientAbortError("caller gone");
+        }),
+      ).rejects.toThrow(/caller gone/);
+      const calls = { n: 0 };
+      await expect(cache.withTtl("cab", 60_000, countingFn("ok", calls))).resolves.toBe("ok");
+      expect(calls.n).toBe(1);
+    });
+
+    it("still arms the cooldown for a genuine failure", async () => {
+      const cache = new CacheService(undefined, "v-iso2b", { failureCooldownMs: 30 });
+      await expect(
+        cache.withTtl("gb", 60_000, async () => {
+          throw new UpstreamError("upstream down", { timeout: true });
+        }),
+      ).rejects.toThrow(/upstream down/);
+      await expect(cache.withTtl("gb", 60_000, async () => ({ data: "x" }))).rejects.toThrow(/cooldown/);
+    });
+
+    it("a detached rejection never surfaces as an unhandled rejection", async () => {
+      const rejections: unknown[] = [];
+      const onRejection = (reason: unknown): void => {
+        rejections.push(reason);
+      };
+      process.on("unhandledRejection", onRejection);
+      try {
+        const abort = new AbortController();
+        const cache = new CacheService(undefined, "v-iso3", { callerSignal: abort.signal });
+        const p = cache.withTtl("uk", 60_000, async () => {
+          await sleep(20);
+          throw new Error("detached failure");
+        });
+        abort.abort();
+        await expect(p).rejects.toThrow(/aborted/);
+        await sleep(50);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(rejections).toHaveLength(0);
+      } finally {
+        process.off("unhandledRejection", onRejection);
+      }
+    });
+
+    it("a late-resolving abandoned refresh cannot clobber newer data", async () => {
+      vi.useFakeTimers();
+      try {
+        const cache = new CacheService(undefined, "v-identity");
+        let releaseAbandoned: (() => void) | undefined;
+        const abandoned = cache.withTtl("idk", 60_000, async () => {
+          await new Promise<void>((r) => {
+            releaseAbandoned = r;
+          });
+          return { data: "stale-1" };
+        });
+        const guardAssertion = expect(abandoned).rejects.toThrow(/inflight guard/);
+        await vi.advanceTimersByTimeAsync(60_000);
+        await guardAssertion;
+        // The guard arms the cooldown on the fake clock; clear it so the newer
+        // refresh can run.
+        resetModuleCachesForTests();
+        await expect(cache.withTtl("idk", 60_000, async () => ({ data: "fresh-2" }))).resolves.toBe("fresh-2");
+        releaseAbandoned?.();
+        await vi.advanceTimersByTimeAsync(0);
+        await expect(cache.withTtl("idk", 60_000, async () => ({ data: "never" }))).resolves.toBe("fresh-2");
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -283,6 +395,37 @@ describe("http-client retry policy", () => {
     try {
       await expect(new HttpClient().json("https://x.example/a", { retries: 1 })).resolves.toEqual({ ok: 1 });
       expect(calls).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("http-client deadline semantics", () => {
+  it("classifies a work-deadline abort as a timeout, not a client abort", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            });
+          }),
+      ),
+    );
+    try {
+      const abort = new AbortController();
+      const http = new HttpClient({ signal: abort.signal });
+      const pending = http.text("https://x.example/slow");
+      abort.abort();
+      const err = await pending.then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(UpstreamError);
+      expect((err as UpstreamError).causedByTimeout).toBe(true);
+      expect((err as UpstreamError).status).toBe(504);
     } finally {
       vi.unstubAllGlobals();
     }

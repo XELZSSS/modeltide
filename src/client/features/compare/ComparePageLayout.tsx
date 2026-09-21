@@ -2,15 +2,14 @@
 import { useCallback, useMemo } from "react";
 import { useRouter } from "@/client/router";
 import { Button } from "@/client/components/ui/button";
-import { BackButton, CenteredPageState, EmptyState, Spinner } from "@/client/components/feedback";
+import { CenteredPageState, EmptyState, Spinner } from "@/client/components/feedback";
 import { CompareChipBar } from "@/client/components/compare-tray";
 import { useTranslation } from "@/client/providers";
 import { useCompareStore, useCompareModels } from "@/client/stores";
 import { useArtificialRankings } from "@/client/api/queries";
 import type { TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { PageContainer } from "@/client/components/layout";
-import { DetailPageLayout } from "@/client/features/models/model-details/detail-views";
+import { BackButton, DetailPageLayout, PageContainer } from "@/client/components/layout";
 
 function useComparedRankings(): {
   compared: ArtificialAnalysisModel[] | null;

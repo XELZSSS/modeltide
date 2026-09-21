@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/client/components/ui/card";
 import { Dot, LabeledDot } from "@/client/components/ui/primitives";
 import { cn } from "@/client/utils/cn";
 import { formatUptime, formatUptimePct } from "@/client/utils/format";
-import { SOURCE_LABELS } from "@/shared/config";
+import { sourceLabelKey } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary } from "@/shared/types";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./StatusParts";
@@ -26,7 +26,8 @@ const SourceCard = memo(function SourceCard({
   buckets: DayBucket[];
 }) {
   const { t } = useTranslation();
-  const label = t(SOURCE_LABELS[summary.id]);
+  const labelKey = sourceLabelKey(summary.id);
+  const label = labelKey ? t(labelKey) : summary.id;
   const level = resolveLevel(summary);
   const style = LEVEL_STYLES[level];
   return (
@@ -69,8 +70,7 @@ function StatusContent() {
   const erroring = levels.filter((l) => l === "error").length;
   const warning = levels.filter((l) => l === "warn").length;
   const hasData = data.sources.some((s) => s.checkedAt != null);
-  // Unprobed sources must not read as healthy: with 1 probed-OK + 13 silent
-  // the header would otherwise claim "all operational".
+  // Unprobed sources must not read as healthy (1 probed-OK + 13 silent).
   const unprobed = levels.filter((l) => l === "unknown").length;
 
   return (

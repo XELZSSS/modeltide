@@ -1,10 +1,10 @@
-import { ONE_DAY, ONE_MINUTE, UPTIME_WARN_RATIO } from "@/shared/config";
+import { ONE_DAY, ONE_MINUTE, UPTIME_ERROR_RATIO, UPTIME_WARN_RATIO } from "@/shared/config";
 import type {
   DayBucket,
   SourceHealthLevel,
   SourceHistorySummary,
+  SourceId,
   SourceLevel,
-  SourceStatus,
   StatusEvent,
   UptimeSample,
 } from "@/shared/types";
@@ -12,8 +12,6 @@ import type {
 export const SAMPLE_UPSERT_WINDOW_MS = 4 * ONE_MINUTE;
 export const RECENT_WINDOW_MS = ONE_DAY;
 export const RETAINED_DAYS = 30;
-
-export type SourceId = SourceStatus["id"];
 
 export interface HistorySourceEntry {
   recent: UptimeSample[];
@@ -135,12 +133,11 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
   const buckets = entry.daily.slice(-7);
   const sumOk = buckets.reduce((a, b) => a + b.ok, 0);
   const sumTotal = buckets.reduce((a, b) => a + b.total, 0);
-  const retained = entry.daily.slice(-RETAINED_DAYS);
-  const total30 = retained.reduce((a, b) => a + b.total, 0);
   const uptime24h = uptimeRatio(entry.recent, now - RECENT_WINDOW_MS);
   let level: SourceHealthLevel;
+  // Same bands as the 30-day strip: most of the last 24h down is not "warn".
   if (!last) level = "unknown";
-  else if (!last.ok) level = "error";
+  else if (!last.ok || (uptime24h != null && uptime24h < UPTIME_ERROR_RATIO)) level = "error";
   else if (last.warn === true || (uptime24h != null && uptime24h < UPTIME_WARN_RATIO)) level = "warn";
   else level = "ok";
   return {
@@ -151,7 +148,6 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
     checkedAt: last ? new Date(last.t).toISOString() : null,
     uptime24h,
     uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
-    uptime30d: total30 > 0 ? retained.reduce((a, b) => a + b.ok, 0) / total30 : null,
     avgLatency24h: avgLatency(entry.recent, now - RECENT_WINDOW_MS),
   };
 }

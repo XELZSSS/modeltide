@@ -1,7 +1,5 @@
 "use client";
-// Pure chart helpers. No runtime chart.js import here so helper-only imports
-// never pull chart.js elements into the bundle. Call applyChartDefaults()
-// from each charts-*/registration module after importing Chart.
+// No chart.js import here: helper-only imports must not pull chart.js in.
 import type { Chart as ChartJS, TooltipOptions } from "chart.js";
 import type { ChartTheme } from "@/client/theme/chart-theme";
 

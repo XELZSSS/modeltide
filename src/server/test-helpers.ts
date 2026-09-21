@@ -30,8 +30,6 @@ export function mapKV(store = new Map<string, string>(), hooks: MapKVHooks = {})
       store.delete(key);
     },
   };
-  // KVNamespace.get carries text/json/arrayBuffer/stream overloads the mock
-  // intentionally doesn't implement (tests only use text reads).
   return kv as unknown as MapKV;
 }
 

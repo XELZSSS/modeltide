@@ -42,6 +42,11 @@ export const SOURCE_LIMITS = {
 
 export const PER_MILLION = 1_000_000;
 
+/** Upstream rates are quoted per token; payloads carry dollars per million. */
+export function perMillionOrNull(rate: number | null): number | null {
+  return rate == null ? null : rate * PER_MILLION;
+}
+
 /**
  * Uptime-ratio bands shared by the 30-day strip and the per-source health
  * level: >= warn band renders green/ok, >= error band yellow/warn, below red.

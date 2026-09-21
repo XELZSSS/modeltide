@@ -6,7 +6,7 @@ import { useTranslation } from "@/client/providers";
 import { prefetchQueriesForRoute } from "@/client/api/queries";
 import { SafeLink as Link, usePathname } from "@/client/router";
 import { Sheet, SheetBody, SheetHeader } from "@/client/components/ui/sheet";
-import { REPO_URL } from "@/shared/config";
+import { REPO_URL } from "@/client/config/navigation";
 
 interface NavItem {
   path: string;
@@ -53,44 +53,7 @@ function usePrefetch(): (path: string) => void {
   return useMemo(() => (path: string) => prefetchQueriesForRoute(qc, path), [qc]);
 }
 
-export function NavLink({
-  item,
-  active,
-  onPrefetch,
-  className,
-  children,
-}: {
-  item?: NavItem;
-  active: boolean;
-  onPrefetch?: (path: string) => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  const href = item?.path ?? "";
-  return (
-    <Link
-      href={href}
-      aria-label={item?.label ?? undefined}
-      aria-current={active ? "page" : undefined}
-      onMouseEnter={item && onPrefetch ? () => onPrefetch(item.path) : undefined}
-      onFocus={item && onPrefetch ? () => onPrefetch(item.path) : undefined}
-      onTouchStart={item && onPrefetch ? () => onPrefetch(item.path) : undefined}
-      className={className}
-    >
-      {children}
-    </Link>
-  );
-}
-
-export function IconButton({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick?: () => void;
-  children: ReactNode;
-}) {
+export function IconButton({ label, onClick, children }: { label: string; onClick?: () => void; children: ReactNode }) {
   return (
     <button type="button" aria-label={label} onClick={onClick} className={DESKTOP_ICON_BUTTON}>
       {children}

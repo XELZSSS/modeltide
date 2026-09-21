@@ -44,10 +44,7 @@ function isModelArray(arr: unknown): arr is Record<string, unknown>[] {
 
 const PROTO_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-function mergeEntry(
-  cur: Record<string, unknown>,
-  patch: Record<string, unknown>,
-): Record<string, unknown> {
+function mergeEntry(cur: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
   const mergedEntry: Record<string, unknown> = { ...cur };
   for (const [key, value] of Object.entries(patch)) {
     if (PROTO_KEYS.has(key)) continue;
@@ -55,7 +52,9 @@ function mergeEntry(
   }
   if (cur.omniscienceBreakdown && patch.omniscienceBreakdown) {
     const patchBreakdown = Object.fromEntries(
-      Object.entries(obj(patch.omniscienceBreakdown) ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== ""),
+      Object.entries(obj(patch.omniscienceBreakdown) ?? {}).filter(
+        ([, v]) => v !== null && v !== undefined && v !== "",
+      ),
     );
     mergedEntry.omniscienceBreakdown = { ...obj(cur.omniscienceBreakdown), ...patchBreakdown };
   }

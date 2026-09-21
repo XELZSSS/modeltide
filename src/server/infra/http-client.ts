@@ -1,6 +1,6 @@
 import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
-import { ClientAbortError, UpstreamError } from "@/server/infra/errors";
+import { UpstreamError } from "@/server/infra/errors";
 import { isAbortError } from "@/server/infra/http-error";
 
 interface FetchOptions extends Omit<RequestInit, "headers"> {
@@ -20,10 +20,17 @@ function parseRetryAfterMs(res: Response): number | null {
   const raw = res.headers.get("retry-after");
   if (!raw) return null;
   const CAP_MS = 2_000;
-  const secs = Number(raw.trim());
-  if (Number.isFinite(secs) && secs >= 0) return Math.min(secs, CAP_MS / 1000) * 1000;
+  // `Retry-After: 0`/blank means retry now, skipping backoff when it's needed most.
+  const trimmed = raw.trim();
+  const secs = Number(trimmed);
+  if (trimmed !== "" && Number.isFinite(secs) && secs > 0) {
+    return Math.min(secs, CAP_MS / 1000) * 1000;
+  }
   const date = Date.parse(raw);
-  if (Number.isFinite(date)) return Math.min(Math.max(date - Date.now(), 0), CAP_MS);
+  if (Number.isFinite(date)) {
+    const delay = Math.min(Math.max(date - Date.now(), 0), CAP_MS);
+    return delay > 0 ? delay : null;
+  }
   return null;
 }
 
@@ -86,7 +93,11 @@ async function readBodyText(res: Response, url: string, maxBytes: number): Promi
     try {
       return await res.text();
     } catch (e) {
-      throw new UpstreamError(`Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`);
+      const timedOut = isAbortError(e);
+      throw new UpstreamError(
+        `Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+        timedOut ? { timeout: true } : undefined,
+      );
     }
   }
   const reader = body.getReader();
@@ -108,7 +119,12 @@ async function readBodyText(res: Response, url: string, maxBytes: number): Promi
   } catch (e) {
     if (e instanceof UpstreamError) throw e;
     await reader.cancel().catch(() => {});
-    throw new UpstreamError(`Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`);
+    // Keep the timeout flag, or a stalled body reports 502 and cools down as non-timeout.
+    const timedOut = isAbortError(e);
+    throw new UpstreamError(
+      `Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+      timedOut ? { timeout: true } : undefined,
+    );
   } finally {
     reader.releaseLock();
   }
@@ -142,7 +158,7 @@ export class HttpClient {
       try {
         res = await fetch(url, { headers, signal, ...rest });
       } catch (e) {
-        if (initSignal?.aborted) throw new ClientAbortError(`Client aborted request for ${url}`);
+        // This signal is the cron's deadline, never a client disconnect → timeout.
         timedOut = isAbortError(e);
         failMsg = timedOut ? `Upstream timeout for ${url}` : `Upstream network error for ${url}`;
       }
@@ -162,7 +178,9 @@ export class HttpClient {
         throw new UpstreamError(failMsg!, timedOut ? { timeout: true } : { status: failStatus ?? undefined });
       const delay = retryAfter ?? computeBackoff(attempt);
       await sleepAbortable(delay, initSignal);
-      if (initSignal?.aborted) throw new ClientAbortError(`Client aborted request for ${url}`);
+      if (initSignal?.aborted) {
+        throw new UpstreamError(`Upstream deadline exceeded for ${url}`, { timeout: true });
+      }
     }
     throw new UpstreamError(`HTTP failed for ${url}`);
   }

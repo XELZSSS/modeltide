@@ -66,7 +66,6 @@ function ensureObserver(): void {
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
   const observer = new MutationObserver(notify);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-  // Accent switches (body[data-accent]) re-derive chart vars via color-mix.
   observer.observe(document.body, { attributes: true, attributeFilter: ["data-accent"] });
   media?.addEventListener?.("change", notify);
 }
@@ -103,8 +102,6 @@ export function hexToRgba(hex: string, alpha: number): string {
   if (!hex || !hex.trim()) return `rgba(136, 136, 136, ${alpha})`;
   const value = hex.replace("#", "");
   if (!/^[0-9a-f]{3}$/i.test(value) && !/^[0-9a-f]{6}$/i.test(value)) {
-    // Non-hex (var()/rgb()/named): leave blending to CSS. Empty input is
-    // guarded above so this never emits an invalid color-mix().
     const pct = Math.round(alpha * 100);
     return `color-mix(in srgb, ${hex.trim()} ${pct}%, transparent)`;
   }

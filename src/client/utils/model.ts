@@ -2,7 +2,7 @@ import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types
 import { isFiniteNumber } from "@/shared/utils";
 import { getOutputSpeed } from "@/client/utils/cost-estimator";
 import { resolveEffectivePricing } from "@/client/utils/pricing-merge";
-import type { ModelSource } from "@/shared/config";
+import type { ModelSource } from "@/client/config/navigation";
 
 export function modelId(m: { id?: string; slug?: string }): string {
   return m.id || m.slug || "";

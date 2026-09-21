@@ -1,4 +1,4 @@
-import { parseTs, isSuitableNewsItem } from "@/server/parsers/primitives";
+import { parseTs } from "@/server/parsers/primitives";
 import { NEWS_TTL_MS, SOURCE_LIMITS, ttlForRatio } from "@/shared/config";
 import { rssConfig, FAST_FETCH_OPTS, MAX_FEED_BYTES, NEWS_LEG_CONCURRENCY, cacheKeys } from "@/server/config";
 import { runCapped, errMsg } from "@/server/infra/pool";
@@ -10,7 +10,7 @@ import { FEED_ACCEPT, parseFeed } from "@/server/parsers/feed";
 import { fetchDailyPapersItems } from "@/server/sources/hf-papers";
 import { dedupeBy, normalizeNewsLink } from "@/shared/utils";
 
-import type { SourcePayload } from "@/server/sources/types";
+import type { SourcePayload } from "@/shared/types";
 import { cachedPayload, requireParsed } from "@/server/sources/pipeline";
 
 async function fetchNews(
@@ -58,11 +58,13 @@ async function fetchNews(
   dated.sort((a, b) => b.ts - a.ts);
   if (invalidDateCount > 0)
     ctx.log("info", `[news] ${invalidDateCount}/${allItems.length} items with invalid dates for "${category}"`);
-  const suitable = dated.map((d) => d.item).filter((i) => isSuitableNewsItem(i.title, i.link));
-  const paperPicked = dedupeBy(
-    allItems.filter(isPaper).filter((i) => isSuitableNewsItem(i.title, i.link)),
-    (i) => normalizeNewsLink(i.link),
-  ).slice(0, SOURCE_LIMITS.hfPapersQuota);
+  // Every leg's parser already drops unsuitable titles/links before returning
+  // (feed.ts / huggingface.ts), so items reaching here are pre-validated.
+  const suitable = dated.map((d) => d.item);
+  const paperPicked = dedupeBy(allItems.filter(isPaper), (i) => normalizeNewsLink(i.link)).slice(
+    0,
+    SOURCE_LIMITS.hfPapersQuota,
+  );
   const paperLinks = new Set(paperPicked.map((i) => normalizeNewsLink(i.link)));
   const restPicked = dedupeBy(suitable, (i) => normalizeNewsLink(i.link))
     .filter((i) => !paperLinks.has(normalizeNewsLink(i.link)))

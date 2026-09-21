@@ -18,9 +18,8 @@ import { LabeledDot } from "@/client/components/ui/primitives";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { formatScore, formatPricePerMillion, formatSpeed } from "@/client/utils/format";
 import { computeProviderStats, type ProviderStats } from "@/client/utils/model";
-import { useOfficialPricing } from "@/client/features/pricing/official";
-import { RANKING_TABS, type RankingTabId } from "@/shared/config";
-import { MODEL_SOURCES } from "@/shared/config";
+import { useOfficialPricing } from "@/client/pricing/official";
+import { MODEL_SOURCES, RANKING_TABS, type RankingTabId } from "@/client/config/navigation";
 
 const ArtificialAnalysisView = lazy(() =>
   import("./ArtificialAnalysisView").then((m) => ({ default: m.ArtificialAnalysisView })),

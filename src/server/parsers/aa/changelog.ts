@@ -28,7 +28,6 @@ function extractModelsArrays(html: string): unknown[] {
 function isChangelogRaw(e: unknown): e is ChangelogRawEntry {
   if (!isRecord(e)) return false;
   const r = e as ChangelogRawEntry;
-  if (Array.isArray(r.slug) || Array.isArray(r.name) || Array.isArray(r.releaseDate)) return false;
   if (typeof r.slug !== "string" || typeof r.name !== "string" || typeof r.releaseDate !== "string") return false;
   if (!isRecord(r.release) || !isRecord(r.creator)) return false;
   return true;

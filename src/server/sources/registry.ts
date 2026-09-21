@@ -26,8 +26,6 @@ export interface SourceManifestEntry<Q extends QuerySchema = QuerySchema> {
 const OPEN_SOURCE_SORTS = ["trendingScore", "downloads", "likes", "createdAt", "lastModified"] as const;
 const SORT_DIRECTIONS = ["-1", "1"] as const;
 
-// Identity helper with a purpose: preserves each entry's QuerySchema generic
-// so handler params stay narrowly typed.
 function defineSource<S extends QuerySchema>(entry: SourceManifestEntry<S>): SourceManifestEntry {
   return entry as SourceManifestEntry;
 }
@@ -111,9 +109,8 @@ export function warmTasks(env: Env, tier: WarmTier, taskTimeoutMs: number): (() 
     if (source.warm !== tier) continue;
     const paramSets = source.warmParams?.length ? source.warmParams : [{} as ValidatedQuery<QuerySchema>];
     for (const params of paramSets) {
-      // Each warmup call gets an independent timeout so slow upstreams can't
-      // starve later tasks sharing one deadline.
-      tasks.push(() => source.handler(buildContext(env, { signal: AbortSignal.timeout(taskTimeoutMs) }), params));
+      // Per-call timeout so a slow upstream can't starve tasks sharing a deadline.
+      tasks.push(() => source.handler(buildContext(env, { workSignal: AbortSignal.timeout(taskTimeoutMs) }), params));
     }
   }
   return tasks;

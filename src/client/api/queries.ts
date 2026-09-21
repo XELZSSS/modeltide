@@ -33,16 +33,15 @@ import { normalizeHomeDashboard, unwrapList, unwrapListPartial } from "@/client/
 
 interface ApiQueryOptions<T> {
   ttl?: number;
-  staleTime?: number;
   gcTime?: number;
   partialRefetchMs?: number;
   isPartialData?: (data: T | undefined) => boolean;
 }
 
 function createApiQuery<T>(key: readonly (string | number)[], path: string, opts?: ApiQueryOptions<T>) {
-  const { ttl, staleTime, gcTime, partialRefetchMs, isPartialData } = opts ?? {};
+  const { ttl, gcTime, partialRefetchMs, isPartialData } = opts ?? {};
   const queryFn = fetcher<T>(path);
-  const ttlMs = ttl ?? staleTime ?? THIRTY_MINUTES;
+  const ttlMs = ttl ?? THIRTY_MINUTES;
   const partialPoll: false | ((query: unknown) => number | false) =
     partialRefetchMs != null && isPartialData != null
       ? (query: unknown) => {
@@ -53,7 +52,7 @@ function createApiQuery<T>(key: readonly (string | number)[], path: string, opts
   const timing = {
     gcTime: gcTime ?? Math.min(Math.max(ttlMs, THIRTY_MINUTES), STATIC_TTL_MS),
     refetchInterval: partialPoll,
-    staleTime: staleTime ?? ttlMs,
+    staleTime: ttlMs,
   };
   return {
     use: (enabled = true) => useQuery<T>({ queryKey: key, queryFn, ...timing, enabled }),
@@ -135,8 +134,6 @@ const qClosedReleasesRaw = createApiQuery<SourcePayload<ClosedReleaseEntry[]>>(
   },
 );
 
-// ── Strict list hooks: unwrap at the boundary, components receive T[] only ──
-
 export function useArtificialRankings(enabled = true) {
   const q = qArtificialRaw.use(enabled);
   const unwrapped = useMemo(() => unwrapListPartial<ArtificialAnalysisModel>(q.data, "artificialIndex"), [q.data]);
@@ -169,7 +166,10 @@ export function useSuspenseOpenSourceReleases(): OpenSourceModelEntry[] {
   return unwrapList<OpenSourceModelEntry>(data, "openSourceReleases");
 }
 
-const qOpenSourceModelCache = new Map<string, ReturnType<typeof createApiQuery<SourcePayload<OpenSourceModelEntry | null>>>>();
+const qOpenSourceModelCache = new Map<
+  string,
+  ReturnType<typeof createApiQuery<SourcePayload<OpenSourceModelEntry | null>>>
+>();
 const qOpenSourceModel = (id: string) => {
   let q = qOpenSourceModelCache.get(id);
   if (!q) {
@@ -216,8 +216,6 @@ interface OpenSourceModelsQuery {
   isError: boolean;
   error: Error | null;
 }
-
-// ── Shared unwrapped-list state: single place for partial/malformed/error logic ──
 
 interface UnwrappedListState<T> {
   data: T[];
@@ -272,8 +270,6 @@ export function useSuspenseHallucinationRankings(): HallucinationRankingEntry[] 
   const models = useSuspenseArtificialRankings();
   return useHallucinationRankings(models);
 }
-
-// ── Navigation prefetch: route → queries to warm on hover/focus ──
 
 type PrefetchFn = (qc: QueryClient) => void;
 interface RoutePrefetchEntry {

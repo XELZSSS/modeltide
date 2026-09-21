@@ -6,6 +6,9 @@ const { walkTs, stripComments } = require("./_util.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "src", "shared", "config", "cache-version.gen.ts");
+// `--check` verifies the committed artifact instead of silently rewriting it, so
+// CI can fail on drift.
+const CHECK_ONLY = process.argv.includes("--check");
 
 const HASH_INPUT_DIRS = [
   path.join(ROOT, "src", "server", "sources"),
@@ -27,21 +30,24 @@ function collectFiles() {
   const files = [];
   for (const input of HASH_INPUT_DIRS) {
     if (!fs.existsSync(input)) {
-      console.warn(`gen:cache-version warn missing input (skipped): ${path.relative(ROOT, input)}`);
-      continue;
+      // Fatal, not a warning: a moved input would silently stop the hash from
+      // covering real data-layer code while the gate still passed.
+      console.error(`gen:cache-version missing input: ${path.relative(ROOT, input)}`);
+      process.exit(1);
     }
     let stat;
     try {
       stat = fs.statSync(input);
     } catch (err) {
-      console.warn(`gen:cache-version warn unreadable input (skipped): ${input}: ${err.message}`);
-      continue;
+      console.error(`gen:cache-version unreadable input ${input}: ${err.message}`);
+      process.exit(1);
     }
     if (stat.isFile()) {
       files.push(input);
       continue;
     }
-    files.push(...walkTs(input));
+    // Excluded: a test-only change must not flip CACHE_VERSION.
+    files.push(...walkTs(input).filter((f) => !/\.test\.tsx?$/.test(f)));
   }
   return [...new Set(files)].filter((f) => f !== OUT).sort();
 }
@@ -66,6 +72,14 @@ function main() {
   if (existing === content) {
     console.log(`gen:cache-version ok (${version})`);
     return;
+  }
+  if (CHECK_ONLY) {
+    const committed = /sha-[0-9a-f]+/.exec(existing)?.[0] ?? "(no generated file)";
+    console.error(
+      `gen:cache-version stale: committed ${committed}, sources hash to ${version}. ` +
+        `Run \`node scripts/gen-cache-version.cjs\` and commit the result.`,
+    );
+    process.exit(1);
   }
   fs.writeFileSync(OUT, content);
   console.log(`gen:cache-version updated (${version})`);

@@ -51,8 +51,7 @@ export function useHomeStats(
   closedReleases?: ClosedReleaseEntry[],
 ) {
   const openSourceRankings = dashboardData.opensource;
-  // Trending order inherited from the upstream pool, mirroring the official
-  // models page (Sort: Trending). Download counts are shown as reference.
+  // Trending order mirrors the official models page; downloads are reference only.
   const trendingPool = openSourceRankings;
   const t2iModels = useMemo(() => dashboardData.textToImage?.data ?? [], [dashboardData.textToImage?.data]);
   const latestOpenRouterModel = dashboardData.orRankings?.tokenUsageRankings?.[0] ?? null;

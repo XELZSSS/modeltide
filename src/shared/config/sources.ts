@@ -1,4 +1,4 @@
-import type { SourceStatus } from "@/shared/types";
+import type { SourceId } from "@/shared/types";
 import type { TranslationKey } from "@/shared/i18n";
 import type { NewsCategory } from "@/shared/types/news";
 
@@ -10,7 +10,7 @@ export const NEWS_CATEGORIES = [
   "research",
 ] as const satisfies readonly NewsCategory[];
 
-export const SOURCE_LABELS: Record<SourceStatus["id"], TranslationKey> = {
+export const SOURCE_LABELS: Record<SourceId, TranslationKey> = {
   artificialAnalysis: "sourceNameArtificial",
   huggingface: "sourceNameHuggingFace",
   openrouter: "sourceNameOpenRouter",
@@ -27,4 +27,13 @@ export const SOURCE_LABELS: Record<SourceStatus["id"], TranslationKey> = {
   moonshotApi: "sourceNameMoonshotApi",
 };
 
-export const SOURCE_IDS: readonly SourceStatus["id"][] = Object.keys(SOURCE_LABELS) as SourceStatus["id"][];
+export const SOURCE_IDS: readonly SourceId[] = Object.keys(SOURCE_LABELS) as SourceId[];
+
+/**
+ * Label key for a source id, or undefined when the id is unknown — a payload
+ * cached before a deploy can carry a source that has since been renamed away.
+ * Callers fall back to rendering the raw id.
+ */
+export function sourceLabelKey(id: string): TranslationKey | undefined {
+  return Object.hasOwn(SOURCE_LABELS, id) ? SOURCE_LABELS[id as SourceId] : undefined;
+}

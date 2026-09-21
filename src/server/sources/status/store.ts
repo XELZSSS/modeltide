@@ -1,17 +1,13 @@
 import { API_DOMAINS } from "@/shared/config";
 import { HISTORY_KV_RETENTION_TTL_S } from "@/server/config";
 import type { AppContext } from "@/server/context";
-import type { DayBucket, UptimeSample } from "@/shared/types";
+import { errMsg } from "@/server/infra/pool";
+import type { DayBucket, SourceId, UptimeSample } from "@/shared/types";
 import { fetchProviderStatuses } from "@/server/sources/provider-status";
-import {
-  mergeSample,
-  type HistorySourceEntry,
-  type HistoryStore,
-  type SourceId,
-} from "./history-math";
+import { mergeSample, type HistorySourceEntry, type HistoryStore } from "./history-math";
 import { aggregateProbes, probeTargets, type ProbeTarget, type SourceAggregate } from "./probe";
 
-export type { HistorySourceEntry, HistoryStore, SourceId, ProbeTarget, SourceAggregate };
+export type { HistorySourceEntry, HistoryStore, ProbeTarget, SourceAggregate };
 
 const SAMPLE_LOCK_TTL_S = 120;
 export const SAMPLE_LOCK_KEY = `${API_DOMAINS.statusHistory}:lock`;
@@ -37,20 +33,16 @@ async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
     const heldExpiry = Number(held.split(":").at(-1));
     return Number.isFinite(heldExpiry) && heldExpiry > Date.now();
   };
-  // Best-effort lock: KV is eventually consistent with no CAS, so duplicate
-  // samples are tolerated downstream via the 2-minute upsert window in
-  // mergeSample. No confirm-delay sleep on the cron critical path.
+  // Best-effort lock (KV has no CAS); duplicates merge downstream. No confirm sleep.
   try {
     const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
     if (held && isLiveLock(held)) return null;
     await ctx.kv.put(SAMPLE_LOCK_KEY, value, { expirationTtl: SAMPLE_LOCK_TTL_S });
     return token;
   } catch (err) {
-    ctx.log(
-      "warn",
-      `[status-history] sample lock acquire failed, skipping round: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return null;
+    // Rethrow: "lock held elsewhere" (normal) must differ from "KV unreachable".
+    ctx.log("warn", `[status-history] sample lock acquire failed: ${errMsg(err)}`);
+    throw err;
   }
 }
 
@@ -85,12 +77,6 @@ function warnKvReadFailure(ctx: AppContext, err: unknown): void {
   );
 }
 
-export function resetStatusWarnThrottleForTests(): void {
-  lastKvReadWarnAt = 0;
-  lastStaleWarnAt = 0;
-  memoryStore = { sources: {} };
-}
-
 export async function readStore(ctx: AppContext): Promise<HistoryStore> {
   if (!ctx.kv) return memoryStore;
   let raw: string | null;
@@ -105,8 +91,7 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
     const salvaged = salvageStore(JSON.parse(raw));
     if (salvaged) return salvaged;
   } catch {
-    // Corrupt payload: drop it so the next cron starts clean.
-    // No backup retained by design — CACHE_VERSION hard-cuts stale shapes.
+    // Corrupt payload: drop it (no backup by design — CACHE_VERSION hard-cuts shapes).
   }
   try {
     await ctx.kv.delete(HISTORY_KEY);
@@ -196,12 +181,9 @@ async function mergeSamplesIntoStore(
 }
 
 export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore> {
-  let store: HistoryStore;
-  try {
-    store = await readStore(ctx);
-  } catch {
-    return memoryStore;
-  }
+  // readStore never rejects: every KV read/write is caught and degrades to
+  // memoryStore internally.
+  const store = await readStore(ctx);
   if (ctx.kv) warnStaleSamples(ctx, store);
   return store;
 }
@@ -229,10 +211,4 @@ function warnStaleSamples(ctx: AppContext, store: HistoryStore): void {
     latestSampleAt: new Date(latest).toISOString(),
     ageHours: Math.round((now - latest) / 3_600_000),
   });
-}
-
-export function staleSampleMessage(store: HistoryStore, now = Date.now()): string | null {
-  const latest = latestSampleAt(store);
-  if (latest === 0 || now - latest <= STALE_SAMPLE_WARN_MS) return null;
-  return `[status-history] samples are stale: sampling cron may be dead (ageHours=${Math.round((now - latest) / 3_600_000)})`;
 }

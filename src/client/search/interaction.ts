@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 
 export function useClickOutside(ref: RefObject<HTMLElement | null>, onOutside: () => void) {
   const onOutsideRef = useRef(onOutside);
-  onOutsideRef.current = onOutside;
+  useEffect(() => {
+    onOutsideRef.current = onOutside;
+  });
 
   useEffect(() => {
     function handle(e: PointerEvent) {
@@ -23,20 +25,17 @@ export function useClickOutside(ref: RefObject<HTMLElement | null>, onOutside: (
 
 export function useListKeyboard(itemCount: number, onSelect: (index: number) => void, onClose?: () => void) {
   const [activeIndex, setActiveIndex] = useState(-1);
-  const selectRef = useRef(onSelect);
-  selectRef.current = onSelect;
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  const activeRef = useRef(activeIndex);
-  activeRef.current = activeIndex;
-
-  useEffect(() => setActiveIndex(-1), [itemCount]);
+  const [prevItemCount, setPrevItemCount] = useState(itemCount);
+  if (prevItemCount !== itemCount) {
+    setPrevItemCount(itemCount);
+    setActiveIndex(-1);
+  }
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         setActiveIndex(-1);
-        closeRef.current?.();
+        onClose?.();
         return;
       }
       if (itemCount === 0) {
@@ -51,12 +50,12 @@ export function useListKeyboard(itemCount: number, onSelect: (index: number) => 
         setActiveIndex((i) => (i <= 0 ? itemCount - 1 : i - 1));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const clamped = activeRef.current < 0 ? -1 : Math.min(activeRef.current, itemCount - 1);
-        if (clamped >= 0) selectRef.current(clamped);
+        const clamped = activeIndex < 0 ? -1 : Math.min(activeIndex, itemCount - 1);
+        if (clamped >= 0) onSelect(clamped);
         setActiveIndex(-1);
       }
     },
-    [itemCount],
+    [itemCount, activeIndex, onSelect, onClose],
   );
 
   const clampedIndex = activeIndex < 0 ? -1 : Math.min(activeIndex, itemCount - 1);

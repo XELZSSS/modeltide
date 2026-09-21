@@ -15,7 +15,7 @@ import { getOpenLicense } from "@/server/parsers/licenses";
 import type { DailyPaperEntry, HFModel } from "@/server/parsers/upstream";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/result";
 
-export function resolveAuthor(m: HFModel, id: string): string | null {
+function resolveAuthor(m: HFModel, id: string): string | null {
   return strOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
 }
 

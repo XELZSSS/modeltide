@@ -26,7 +26,7 @@ function fail(msg) {
 }
 
 const IMPORT_RE =
-  /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|require\s*\(\s*['"]([^'"]+)['"]\s*\)|export\s*(?:\*|\{[^}]*\})\s*from\s*['"]([^'"]+)['"]/g;
+  /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|require\s*\(\s*['"]([^'"]+)['"]\s*\)|export\s*(?:\*|\{[^}]*\})\s*from\s*['"]([^'"]+)['"]|import\s*['"]([^'"]+)['"]/g;
 
 function resolveSpec(fromFile, spec) {
   if (spec.startsWith("@/")) return spec.slice(2);
@@ -34,6 +34,17 @@ function resolveSpec(fromFile, spec) {
     return path.relative(".", path.resolve(path.dirname(fromFile), spec)).replace(/\\/g, "/");
   }
   return null;
+}
+
+/**
+ * Map a specifier onto the repo-relative "src/..." shape, so alias form
+ * ("@/server/x" -> "server/x") and relative form ("../../server/x" ->
+ * "src/server/x") both compare against the same layer prefixes.
+ */
+function layerOf(fromFile, spec) {
+  const resolved = resolveSpec(fromFile, spec);
+  if (resolved == null) return null;
+  return resolved.startsWith("src/") ? resolved : `src/${resolved}`;
 }
 
 if (!fs.existsSync("src")) {
@@ -48,15 +59,22 @@ for (const file of [...walk("src"), ...(fs.existsSync("worker") ? walk("worker")
   let m;
   IMPORT_RE.lastIndex = 0;
   while ((m = IMPORT_RE.exec(code)) !== null) {
-    const spec = m[1] ?? m[2] ?? m[3] ?? m[4];
+    const spec = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5];
     if (!spec) continue;
     const isServerFile = rel.startsWith("src/server/") || rel.startsWith("worker/");
     const isClientFile = rel.startsWith("src/client/") || CLIENT_APP_RE.test(rel);
-    if (isClientFile && (spec === "@/server" || spec.startsWith("@/server/"))) {
-      fail(`${rel} imports server-only "${spec}" (client bundle leak)`);
-    }
-    if (isServerFile && (spec === "@/client" || spec.startsWith("@/client/"))) {
-      fail(`${rel} imports client code "${spec}"`);
+    if (isClientFile || isServerFile) {
+      // Resolved, not the raw specifier: matching only "@/server/..." let
+      // relative (and bare side-effect) cross-layer imports through unchecked.
+      const target = layerOf(file, spec);
+      const isServerTarget = target === "src/server" || (target?.startsWith("src/server/") ?? false);
+      const isClientTarget = target === "src/client" || (target?.startsWith("src/client/") ?? false);
+      if (isClientFile && isServerTarget) {
+        fail(`${rel} imports server-only "${spec}" (client bundle leak)`);
+      }
+      if (isServerFile && isClientTarget) {
+        fail(`${rel} imports client code "${spec}"`);
+      }
     }
     if (rel.startsWith("src/shared/")) {
       const resolved = resolveSpec(file, spec);
@@ -71,8 +89,9 @@ for (const file of [...walk("src"), ...(fs.existsSync("worker") ? walk("worker")
       }
     }
     if (ownFeature && ROUTE_FEATURES.includes(ownFeature)) {
-      const resolved = resolveSpec(file, spec);
-      const target = resolved ? (resolved.match(/^src\/client\/features\/([a-z-]+)\//) ?? [])[1] : undefined;
+      // layerOf, not resolveSpec: the alias form resolves to "client/features/..."
+      // without the "src/" prefix, which the pattern below would never match.
+      const target = layerOf(file, spec)?.match(/^src\/client\/features\/([a-z-]+)\//)?.[1];
       if (target && target !== ownFeature && ROUTE_FEATURES.includes(target)) {
         if (!ALLOW.has(`${rel}|${target}`)) {
           fail(`${rel} imports route feature "${target}" via "${spec}"`);

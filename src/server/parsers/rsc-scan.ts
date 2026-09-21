@@ -257,27 +257,33 @@ function scanNeedleWindow(window: string, needle: string, unescape: boolean, fou
   return parsed;
 }
 
+/**
+ * Work ceilings for the needle scan. Every candidate costs a ≥256KB slice plus
+ * a regex unescape and a full-window scan, so a hostile or regressed upstream
+ * body that repeats the needle (e.g. `"models":[0],` thousands of times inside
+ * the 2MB feed cap) could otherwise burn gigabytes of character work and abort
+ * on the Workers CPU limit. Mirrors the RSC path's MAX_OVERSIZED_WORK_CHARS.
+ */
+const MAX_NEEDLE_CANDIDATES = 256;
+const MAX_NEEDLE_WORK_CHARS = 64 * 1024 * 1024;
+
 export function extractNeedleJsonArrays(text: string, needle: string, opts: NeedleScanOptions): unknown[] {
   const found: unknown[] = [];
   const escaped = needle.replace(/"/g, '\\"');
   const locators = escaped === needle ? [needle] : [needle, escaped];
+  let candidates = 0;
+  let workLeft = MAX_NEEDLE_WORK_CHARS;
   for (const { start, valueAt } of collectNeedleCandidates(text, locators)) {
     if (text[valueAt] !== "[") continue;
+    if (candidates >= MAX_NEEDLE_CANDIDATES || workLeft <= 0) break;
+    candidates += 1;
     const windowStart = Math.max(0, start - opts.prefixChars);
-    if (
-      !scanNeedleWindow(
-        text.slice(windowStart, Math.min(text.length, start + opts.smallSuffixChars)),
-        needle,
-        opts.unescape === true,
-        found,
-      )
-    ) {
-      scanNeedleWindow(
-        text.slice(windowStart, Math.min(text.length, start + opts.maxSuffixChars)),
-        needle,
-        opts.unescape === true,
-        found,
-      );
+    const smallEnd = Math.min(text.length, start + opts.smallSuffixChars);
+    workLeft -= smallEnd - windowStart;
+    if (!scanNeedleWindow(text.slice(windowStart, smallEnd), needle, opts.unescape === true, found)) {
+      const maxEnd = Math.min(text.length, start + opts.maxSuffixChars);
+      workLeft -= maxEnd - windowStart;
+      scanNeedleWindow(text.slice(windowStart, maxEnd), needle, opts.unescape === true, found);
     }
   }
   return found;

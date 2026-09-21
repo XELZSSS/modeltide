@@ -8,8 +8,8 @@ import { CompareTable, WinnerValue } from "@/client/features/compare/CompareTabl
 import { PriceChart } from "@/client/features/compare/price-compare/price-chart";
 import { CostEstimator } from "@/client/features/compare/price-compare/estimator";
 import { LiteLLMVsRouterTable } from "@/client/features/compare/price-compare/litellm-vs-router-table";
-import { useOfficialPricing } from "@/client/features/pricing/official";
-import { MODEL_SOURCES } from "@/shared/config";
+import { useOfficialPricing } from "@/client/pricing/official";
+import { MODEL_SOURCES } from "@/client/config/navigation";
 import { ComparePageLayout } from "./ComparePageLayout";
 
 export const PriceCompareContent = memo(function PriceCompareContent({
@@ -20,7 +20,6 @@ export const PriceCompareContent = memo(function PriceCompareContent({
   const { t } = useTranslation();
   const { getOfficial } = useOfficialPricing();
   const priceRows = useMemo(() => buildPriceRows(t, getOfficial), [t, getOfficial]);
-  // Stable across renders (only `t` can change it) so CompareTable's parts memo survives.
   const renderPrice = useCallback(
     (row: CompareRow<ArtificialAnalysisModel>, model: ArtificialAnalysisModel, winner: Winner | null): ReactNode => {
       const value = row.getNumeric?.(model);

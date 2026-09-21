@@ -11,7 +11,7 @@ import {
   type RscExtractor,
 } from "@/server/parsers/rsc-scan";
 
-export { balancedJsonEnd, MAX_SCAN_CHARS } from "@/server/parsers/rsc-scan";
+export { balancedJsonEnd } from "@/server/parsers/rsc-scan";
 
 const MAX_RSC_NODES = 50_000;
 

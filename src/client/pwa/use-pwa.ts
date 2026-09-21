@@ -54,27 +54,57 @@ export interface PwaInstallState {
   promptInstall: () => Promise<InstallOutcome>;
 }
 
+const DISPLAY_STANDALONE = "(display-mode: standalone)";
+const DISPLAY_FULLSCREEN = "(display-mode: fullscreen)";
+
+let displayQueries: { standalone: MediaQueryList; fullscreen: MediaQueryList } | null = null;
+
+function getDisplayQueries(): { standalone: MediaQueryList; fullscreen: MediaQueryList } {
+  displayQueries ??= {
+    standalone: window.matchMedia(DISPLAY_STANDALONE),
+    fullscreen: window.matchMedia(DISPLAY_FULLSCREEN),
+  };
+  return displayQueries;
+}
+
 function readStandalone(): boolean {
+  const { standalone, fullscreen } = getDisplayQueries();
   return isStandaloneMode({
     navigatorStandalone: (navigator as Navigator & { standalone?: unknown }).standalone,
-    displayStandalone: window.matchMedia("(display-mode: standalone)").matches,
-    displayFullscreen: window.matchMedia("(display-mode: fullscreen)").matches,
+    displayStandalone: standalone.matches,
+    displayFullscreen: fullscreen.matches,
   });
+}
+
+function subscribeStandalone(onChange: () => void): () => void {
+  const { standalone, fullscreen } = getDisplayQueries();
+  standalone.addEventListener("change", onChange);
+  fullscreen.addEventListener("change", onChange);
+  return () => {
+    standalone.removeEventListener("change", onChange);
+    fullscreen.removeEventListener("change", onChange);
+  };
+}
+
+/**
+ * Display-mode install state as an external store, like `useOnlineStatus` above.
+ * A mount-time read in an effect both cascaded a render and missed any
+ * display-mode change while the page stayed open.
+ */
+function useStandaloneDisplayMode(): boolean {
+  return useSyncExternalStore(subscribeStandalone, readStandalone, () => false);
 }
 
 export function usePwaInstall(): PwaInstallState {
   const deferredRef = useRef<BeforeInstallPromptEvent | null>(null);
   const [canInstall, setCanInstall] = useState(false);
-  const [isInstalled, setIsInstalled] = useState<boolean>(() =>
-    typeof window === "undefined" || typeof navigator === "undefined" ? false : readStandalone(),
-  );
   const [isIos] = useState<boolean>(() =>
     typeof navigator === "undefined" ? false : isIosDevice(navigator.userAgent, navigator.maxTouchPoints),
   );
+  const [installedThisSession, setInstalledThisSession] = useState(false);
+  const isInstalled = useStandaloneDisplayMode() || installedThisSession;
 
   useEffect(() => {
-    setIsInstalled(readStandalone());
-
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       if (!isBeforeInstallPromptEvent(e)) return;
@@ -84,7 +114,7 @@ export function usePwaInstall(): PwaInstallState {
     const onInstalled = () => {
       deferredRef.current = null;
       setCanInstall(false);
-      setIsInstalled(true);
+      setInstalledThisSession(true);
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
@@ -101,7 +131,7 @@ export function usePwaInstall(): PwaInstallState {
     const choice = await evt.userChoice;
     deferredRef.current = null;
     setCanInstall(false);
-    if (choice.outcome === "accepted") setIsInstalled(true);
+    if (choice.outcome === "accepted") setInstalledThisSession(true);
     return choice.outcome;
   }, []);
 
@@ -125,26 +155,36 @@ export function useSwUpdate(): SwUpdateState {
       if (reloadRef.current && !disposed) window.location.reload();
     };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+    // getRegistration() is long-lived; remove these or they accumulate per mount.
+    let onUpdateFound: (() => void) | undefined;
+    let stateWorker: ServiceWorker | null = null;
+    let onStateChange: (() => void) | undefined;
     void navigator.serviceWorker
       .getRegistration()
       .then((reg) => {
         if (!reg || disposed) return;
         regRef.current = reg;
         if (reg.waiting) setUpdateAvailable(true);
-        reg.addEventListener("updatefound", () => {
+        onUpdateFound = () => {
           const worker = reg.installing;
           if (!worker) return;
-          worker.addEventListener("statechange", () => {
+          stateWorker = worker;
+          onStateChange = () => {
             if (worker.state === "installed" && navigator.serviceWorker.controller) {
               setUpdateAvailable(true);
             }
-          });
-        });
+          };
+          worker.addEventListener("statechange", onStateChange);
+        };
+        reg.addEventListener("updatefound", onUpdateFound);
       })
       .catch((err) => console.warn("[pwa] update check failed:", err));
     return () => {
       disposed = true;
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      const reg = regRef.current;
+      if (reg && onUpdateFound) reg.removeEventListener("updatefound", onUpdateFound);
+      if (stateWorker && onStateChange) stateWorker.removeEventListener("statechange", onStateChange);
     };
   }, []);
 
@@ -171,8 +211,7 @@ export function registerServiceWorker(): void {
       console.warn("[pwa] service worker registration failed:", err);
     });
   };
-  // Idle-time boot can run after `load` has already fired; gate on readyState
-  // so registration is never attached to an event that will not fire again.
+  // Idle boot can run after `load` already fired; gate on readyState.
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
 }

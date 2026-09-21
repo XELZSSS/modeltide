@@ -12,8 +12,7 @@ const AGENT_PATH = upstreamEndpoints.agentBoard;
 async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
   const body = await fetchRscText(ctx, upstreamConfig.arena, AGENT_PATH, {
     headers: { RSC: "1", accept: "*/*" },
-    // Board payloads are ~1.8MB and growing; keep the full JSON ceiling
-    // instead of the 2MB feed ceiling so growth doesn't cliff into 502s.
+    // ~1.8MB boards: keep the JSON ceiling so growth doesn't cliff into 502s.
     maxBytes: MAX_JSON_BYTES,
     retries: UPSTREAM_FETCH_OPTS.retries,
   });

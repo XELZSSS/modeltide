@@ -13,8 +13,7 @@ const safeStorage = (getStorage: () => Storage): StateStorage => ({
     try {
       if (typeof window !== "undefined") getStorage().setItem(name, value);
     } catch (err) {
-      // QuotaExceeded / private-mode: surface instead of silently dropping the
-      // theme/language choice the user just tapped.
+      // QuotaExceeded / private mode: surface rather than silently dropping the choice.
       console.warn(`[storage] persist failed for "${name}": ${err instanceof Error ? err.message : String(err)}`);
     }
   },

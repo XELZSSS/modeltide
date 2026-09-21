@@ -38,7 +38,8 @@ function collectNumeric<T>(
   getKey: (m: T, index: number) => string,
 ): { key: string; val: number }[] | null {
   if (!row.getNumeric || !row.bestIs) return null;
-  const atDisplayPrecision = (v: number) => Math.round(v * 100) / 100;
+  // 4 decimals, matching the formatter: rounding to 2 tied sub-cent prices.
+  const atDisplayPrecision = (v: number) => Math.round(v * 10000) / 10000;
   const values = models
     .map((model, index) => ({ key: getKey(model, index), val: row.getNumeric!(model) }))
     .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val))
@@ -86,10 +87,20 @@ function metric(
   };
 }
 
-function rawScore(v: number | null | undefined): number | null {
+function nonNegative(v: number | null | undefined): number | null {
   if (typeof v !== "number" || !Number.isFinite(v)) return null;
-  const scaled = v > 0 && v <= 1 ? v * 100 : v;
-  return Math.max(0, scaled);
+  return Math.max(0, v);
+}
+
+/**
+ * `intelligence_index` is the one AA metric the server stores raw.
+ * `coding_index` and `agentic_index` are already percent-normalized server-side
+ * (parsers/aa/compact.ts), so running the fraction heuristic on them again
+ * multiplied any sub-1% score by 100.
+ */
+function rawIndexScore(v: number | null | undefined): number | null {
+  const scaled = v != null && v > 0 && v <= 1 ? v * 100 : v;
+  return nonNegative(scaled);
 }
 
 export interface RadarRow {
@@ -100,9 +111,9 @@ export interface RadarRow {
 
 export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
   return [
-    { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => rawScore(m.intelligence_index) },
-    { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => rawScore(m.coding_index) },
-    { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => rawScore(m.agentic_index) },
+    { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => rawIndexScore(m.intelligence_index) },
+    { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.coding_index) },
+    { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.agentic_index) },
     { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.gpqa) },
     { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.hle) },
     { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.scicode) },

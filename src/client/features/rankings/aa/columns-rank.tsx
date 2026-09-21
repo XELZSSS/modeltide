@@ -4,9 +4,9 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatScore } from "@/client/utils/format";
 import {
   RightAlignedText,
+  col,
   mobilePrimaryCol,
   rightCol,
-  textCol,
   type DataTableColumn,
 } from "@/client/components/data/columns";
 import { CompareModelCell } from "@/client/features/rankings/aa/cells";
@@ -18,8 +18,8 @@ function scoreColumn(
   t: TFunction,
   opts?: { mobilePrimary?: boolean; hiddenMd?: boolean },
 ): DataTableColumn<ArtificialAnalysisModel> {
-  const col = opts?.mobilePrimary ? mobilePrimaryCol : rightCol;
-  return col(
+  const colFactory = opts?.mobilePrimary ? mobilePrimaryCol : rightCol;
+  return colFactory(
     id,
     header,
     (model) => {
@@ -40,7 +40,7 @@ export function buildRankingColumns(
   onToggleCompare: (m: ArtificialAnalysisModel) => void,
 ): DataTableColumn<ArtificialAnalysisModel>[] {
   return [
-    textCol(
+    col(
       "model",
       t("model"),
       (model) => <CompareModelCell model={model} compareSet={compareSet} onToggleCompare={onToggleCompare} />,

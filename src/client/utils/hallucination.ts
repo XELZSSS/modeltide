@@ -1,4 +1,3 @@
-import { normalizePercent } from "@/shared/utils";
 import type { ArtificialAnalysisModel, HallucinationRankingEntry } from "@/shared/types";
 
 export function buildHallucinationRankings(models: ArtificialAnalysisModel[]): HallucinationRankingEntry[] {
@@ -11,9 +10,10 @@ export function buildHallucinationRankings(models: ArtificialAnalysisModel[]): H
           id: model.id,
           slug: model.slug,
           model: model.name,
-          hallucinationRate: normalizePercent(total.hallucination_rate),
-          accuracy: normalizePercent(total.accuracy),
-          attemptRate: normalizePercent(total.attempt_rate),
+          // Already 0-100 (parsers/aa/compact.ts): re-normalizing inflated sub-1% by 100x.
+          hallucinationRate: total.hallucination_rate ?? null,
+          accuracy: total.accuracy ?? null,
+          attemptRate: total.attempt_rate ?? null,
           omniscienceIndex: total.omniscience,
         },
       ];

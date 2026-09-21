@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { RankingNameCell, type DataTableColumn } from "@/client/components/data/columns";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { useTranslation } from "@/client/providers";
@@ -26,20 +26,15 @@ export function modelNameCol<T>(
 }
 
 /**
- * Pin a per-render callback (inline column builder / rank accessor) in a ref
- * so column memos below only recompute when data-affecting inputs change —
- * not when the caller passes a fresh closure identity each render.
+ * Memoised on the builder's identity. Callers pass the builder inline, so in
+ * practice this recomputes with the render — the descriptors are cheap object
+ * literals, and correctness beats pinning the builder in a ref that had to be
+ * READ during render (which React 19 forbids and which could serve a stale
+ * builder).
  */
-function useStableCallback<T extends (...args: never[]) => unknown>(fn: T): React.RefObject<T> {
-  const ref = useRef(fn);
-  ref.current = fn;
-  return ref;
-}
-
 export function useRankedColumns<T>(buildBodyColumns: BodyBuilder<T>): DataTableColumn<T>[] {
   const { t } = useTranslation();
-  const buildRef = useStableCallback(buildBodyColumns);
-  return useMemo(() => buildRef.current(t), [buildRef, t]);
+  return useMemo(() => buildBodyColumns(t), [buildBodyColumns, t]);
 }
 
 export function RankedTableView<T>({

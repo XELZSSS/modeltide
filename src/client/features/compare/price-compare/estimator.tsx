@@ -8,9 +8,9 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
 import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
-import { useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
-import { CostEstimatorInputs } from "@/client/features/pricing/inputs";
-import { useOfficialPricing } from "@/client/features/pricing/official";
+import { useMonthlyCosts } from "@/client/pricing/cost-inputs";
+import { CostEstimatorInputs } from "@/client/pricing/inputs";
+import { useOfficialPricing } from "@/client/pricing/official";
 import { WinnerMark } from "@/client/features/compare/CompareTable";
 
 export const CostEstimator = memo(function CostEstimator({ models }: { models: ArtificialAnalysisModel[] }) {

@@ -7,9 +7,9 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelId } from "@/client/utils/model";
 import { SearchableDataTable } from "@/client/components/data/searchable";
 import { useCompareModels, useCompareStore } from "@/client/stores";
-import { useEffectivePricingMap, useMonthlyCosts } from "@/client/features/pricing/cost-inputs";
-import { CostEstimatorInputs } from "@/client/features/pricing/inputs";
-import { useOfficialPricing } from "@/client/features/pricing/official";
+import { useEffectivePricingMap, useMonthlyCosts } from "@/client/pricing/cost-inputs";
+import { CostEstimatorInputs } from "@/client/pricing/inputs";
+import { useOfficialPricing } from "@/client/pricing/official";
 import { CompareChipBar } from "@/client/components/compare-tray";
 import { ModelExpandedDetail } from "@/client/features/rankings/aa/cells";
 import { buildRankingColumns } from "@/client/features/rankings/aa/columns-rank";
@@ -18,6 +18,9 @@ import { SegmentedGroup } from "@/client/components/ui/grids";
 import { TabButton } from "@/client/components/ui/tabs";
 
 const VIEW_MODES = ["rankings", "pricing"] as const;
+
+/** Stable empty identity: a fresh `[]` literal per render defeated the pricing memos. */
+const EMPTY_MODELS: ArtificialAnalysisModel[] = [];
 
 const getAASearchFields = (model: ArtificialAnalysisModel) => [
   model.name,
@@ -33,8 +36,7 @@ const renderModelDetail = (model: ArtificialAnalysisModel) => <ModelExpandedDeta
 const renderPricingDetail = (row: PricingRow) => <ModelExpandedDetail model={row.model} />;
 
 export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnalysisModel[] }) {
-  const router = useRouter();
-  const navigate = (to: string) => router.push(to);
+  const { push: navigate } = useRouter();
   const { t } = useTranslation();
   const toggleCompareModel = useCompareStore((s) => s.toggleCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
@@ -44,11 +46,11 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const pricingMode = viewMode === "pricing";
   const pricingReady = !pricingMode || !officialPending;
   const effectivePricingMap = useEffectivePricingMap(
-    pricingMode ? rankings : [],
+    pricingMode ? rankings : EMPTY_MODELS,
     pricingMode ? getOfficial : undefined,
   );
   const { monthlyCosts, ...costInputs } = useMonthlyCosts(
-    pricingMode ? rankings : [],
+    pricingMode ? rankings : EMPTY_MODELS,
     pricingMode ? getOfficial : undefined,
     {
       ready: pricingReady,
@@ -80,7 +82,6 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
     () => rankings.map((model) => ({ model, monthlyCost: monthlyCosts.get(modelId(model)) ?? null })),
     [rankings, monthlyCosts],
   );
-  // toggleCompareModel from the store is already referentially stable — no wrapper needed.
   const handleCompare = useCallback(
     () => navigate(viewMode === "pricing" ? "/price-compare" : "/compare"),
     [navigate, viewMode],

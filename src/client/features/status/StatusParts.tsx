@@ -1,5 +1,5 @@
 "use client";
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "@/client/providers";
 import type { DayBucket } from "@/shared/types";
 import { cn } from "@/client/utils/cn";
@@ -26,8 +26,13 @@ export function getLast30Days(now = Date.now()): string[] {
 export const UptimeStrip = memo(function UptimeStrip({ buckets }: { buckets: DayBucket[] }) {
   const { t } = useTranslation();
   const byDay = useMemo(() => new Map(buckets.map((b) => [b.day, b])), [buckets]);
-  const dayKey = Math.floor(Date.now() / ONE_DAY);
-  const days = useMemo(() => getLast30Days(), [dayKey]);
+  const [dayKey, setDayKey] = useState(() => Math.floor(Date.now() / ONE_DAY));
+  useEffect(() => {
+    const msUntilNextDay = (dayKey + 1) * ONE_DAY - Date.now();
+    const timer = setTimeout(() => setDayKey(Math.floor(Date.now() / ONE_DAY)), msUntilNextDay + 1000);
+    return () => clearTimeout(timer);
+  }, [dayKey]);
+  const days = useMemo(() => getLast30Days(dayKey * ONE_DAY), [dayKey]);
   return (
     <div className="flex items-end gap-0.5 h-7" role="img" aria-label={t("last30Days")}>
       {days.map((day) => {

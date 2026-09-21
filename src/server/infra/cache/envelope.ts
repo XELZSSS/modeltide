@@ -17,9 +17,3 @@ export interface StaleEnvelope<T> {
 export function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
   return typeof v === "object" && v !== null && "d" in v && "e" in v && typeof (v as StaleEnvelope<T>).e === "number";
 }
-
-export function staleOrThrow<T>(mem: { d: T; e: number } | undefined, ttl: number): T {
-  if (!mem) throw new Error("cache miss with no stale fallback");
-  if (Date.now() - mem.e > maxStaleMs(ttl)) throw new Error("stale budget exceeded");
-  return mem.d;
-}

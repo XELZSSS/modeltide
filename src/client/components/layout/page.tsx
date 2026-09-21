@@ -1,8 +1,30 @@
 "use client";
 import { useId, type ReactNode } from "react";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "@/client/utils/cn";
 import { TabContainer, type TabItem } from "@/client/components/ui/tabs";
 import { Card, CardContent } from "@/client/components/ui/card";
+import { Button } from "@/client/components/ui/button";
+import { useRouter } from "@/client/router";
+import { useTranslation } from "@/client/providers";
+import type { TranslationKey } from "@/shared/i18n";
+
+export function BackButton({ labelKey, to }: { labelKey: TranslationKey; to: string }) {
+  const router = useRouter();
+  const { t } = useTranslation();
+  const goBack = () => {
+    const raw = typeof window !== "undefined" ? (window.history.state as { idx?: unknown } | null)?.idx : undefined;
+    const idx = typeof raw === "number" && Number.isInteger(raw) ? raw : undefined;
+    if (idx != null && idx > 0) router.back();
+    // replace, not push: no extra history entry for a direct landing.
+    else router.replace(to);
+  };
+  return (
+    <Button size="sm" variant="outline" onClick={goBack} className="self-start">
+      <ArrowLeft className="size-4" /> {t(labelKey)}
+    </Button>
+  );
+}
 
 export function PageContainer({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn("max-w-7xl mx-auto px-5 sm:px-8 lg:px-10 py-8 sm:py-12", className)}>{children}</div>;
@@ -34,6 +56,30 @@ export function PageHeader({
         <div className="flex w-full sm:w-auto min-w-0 max-w-full items-center gap-2 sm:shrink-0">{actions}</div>
       )}
     </header>
+  );
+}
+
+export function DetailPageLayout({
+  backLabelKey,
+  backTo,
+  title,
+  description,
+  compact,
+  children,
+}: {
+  backLabelKey: TranslationKey;
+  backTo: string;
+  title: string;
+  description?: string;
+  compact?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-5 min-w-0 animate-fade-in">
+      <BackButton labelKey={backLabelKey} to={backTo} />
+      <PageHeader compact={compact} title={title} description={description} />
+      <div className="flex flex-col gap-4 sm:gap-5">{children}</div>
+    </div>
   );
 }
 

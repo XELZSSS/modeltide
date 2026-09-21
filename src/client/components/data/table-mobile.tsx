@@ -39,8 +39,7 @@ function MobileTableBodyInner<T>({
           <Fragment key={rowId}>
             <div
               className={cn(
-                // Explicit border (not ui-card): isExpanded sets a same-specificity
-                // border-color that must win over the base border token.
+                // Explicit border (not ui-card): isExpanded's same-specificity border-color must win.
                 "border border-border bg-bg-card p-4 overflow-hidden transition-colors duration-fast",
                 "hoverable:hover:border-text-tertiary/40",
                 isExpanded && "border-text-tertiary/40",
