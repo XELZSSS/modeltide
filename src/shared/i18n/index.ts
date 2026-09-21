@@ -3,7 +3,7 @@ import { zh } from "./zh";
 
 export type Lang = "en" | "zh";
 export type TranslationKey = keyof typeof en;
-export type TranslationParams = Record<string, string | number>;
+type TranslationParams = Record<string, string | number>;
 export type TFunction = (key: TranslationKey, params?: TranslationParams) => string;
 
 const dictionaries: Record<Lang, Record<TranslationKey, string>> = { en, zh };

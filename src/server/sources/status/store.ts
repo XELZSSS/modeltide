@@ -1,9 +1,9 @@
-import { API_DOMAINS } from "@/shared/config";
+import { API_DOMAINS, ONE_MINUTE } from "@/shared/config";
 import { HISTORY_KV_RETENTION_TTL_S } from "@/server/config";
 import type { AppContext } from "@/server/context";
-import { errMsg } from "@/server/infra/pool";
+import { errMsg } from "@/server/infra/task-pool";
 import type { DayBucket, SourceId, UptimeSample } from "@/shared/types";
-import { fetchProviderStatuses } from "@/server/sources/provider-status";
+import { fetchProviderStatuses } from "@/server/sources/incident-source";
 import { mergeSample, type HistorySourceEntry, type HistoryStore } from "./history-math";
 import { aggregateProbes, probeTargets, type ProbeTarget, type SourceAggregate } from "./probe";
 
@@ -11,6 +11,8 @@ export type { HistorySourceEntry, HistoryStore, ProbeTarget, SourceAggregate };
 
 const SAMPLE_LOCK_TTL_S = 120;
 export const SAMPLE_LOCK_KEY = `${API_DOMAINS.statusHistory}:lock`;
+/** 1.5x the 30-min cron cadence: one missed round, then a read refills the gap. */
+const SAMPLE_SELF_HEAL_MS = 45 * 60 * 1000;
 
 function isValidSample(s: unknown): s is UptimeSample {
   if (!s || typeof s !== "object" || Array.isArray(s)) return false;
@@ -96,10 +98,7 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
   try {
     await ctx.kv.delete(HISTORY_KEY);
   } catch (err) {
-    ctx.log(
-      "warn",
-      `[status-history] corrupt history clear failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    ctx.log("warn", `[status-history] corrupt history clear failed: ${errMsg(err)}`);
   }
   return Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} };
 }
@@ -122,9 +121,16 @@ function salvageStore(parsed: unknown): HistoryStore | null {
 
 export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Promise<boolean | null> {
   const token = await acquireSampleLock(ctx);
-  if (!token) return null;
+  if (!token) {
+    ctx.log("info", "[status-history] round skipped: sample lock held by another invocation");
+    return null;
+  }
   try {
     const [probed, providerResults] = await Promise.all([probeTargets(ctx), fetchProviderStatuses(ctx)]);
+    // Every skip path used to be silent, which made multi-hour sample holes
+    // undiagnosable from the outside; log each leg and the empty round.
+    if (probed.length === 0) ctx.log("warn", "[status-history] probe leg returned no results");
+    if (providerResults.size === 0) ctx.log("warn", "[status-history] provider-status leg returned no results");
     const aggregates = aggregateProbes(probed);
     for (const [id, result] of providerResults) {
       aggregates.set(id, {
@@ -135,8 +141,12 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
         error: result.error,
       });
     }
-    if (aggregates.size === 0) return false;
+    if (aggregates.size === 0) {
+      ctx.log("warn", "[status-history] round produced no samples (probes aborted or all upstreams unreachable)");
+      return false;
+    }
     await mergeSamplesIntoStore(ctx, aggregates, now);
+    ctx.log("info", `[status-history] round recorded for ${aggregates.size} sources`);
     return true;
   } finally {
     await releaseSampleLock(ctx, token);
@@ -185,6 +195,26 @@ export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore>
   // memoryStore internally.
   const store = await readStore(ctx);
   if (ctx.kv) warnStaleSamples(ctx, store);
+  const latest = latestSampleAt(store);
+  const now = Date.now();
+  // Cron gaps used to leave multi-hour holes that anchored recovery events to
+  // the next surviving round, so a read now refills a stale history (fresh
+  // installs stay cron-only: latest === 0 never self-samples). One round, the
+  // same lock as the cron, bounded by SAMPLE_TIMEOUT_MS; on failure the
+  // existing history still serves.
+  if (latest > 0 && now - latest > SAMPLE_SELF_HEAL_MS) {
+    ctx.log(
+      "info",
+      `[status-history] ${Math.round((now - latest) / ONE_MINUTE)} min without samples, running self-heal round`,
+    );
+    try {
+      await recordStatusSamples(ctx, now);
+      return await readStore(ctx);
+    } catch (err) {
+      ctx.log("warn", `[status-history] self-heal round failed, serving existing history: ${errMsg(err)}`);
+      return store;
+    }
+  }
   return store;
 }
 

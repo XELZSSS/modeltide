@@ -30,7 +30,7 @@ export function resetModuleCachesForTests(): void {
   refreshFailureCooldown.clear();
 }
 
-export interface CacheStores {
+interface CacheStores {
   l1?: MemoryL1;
   inflight?: InflightRegistry;
   failureCooldownMs?: number;

@@ -8,13 +8,7 @@ export const SegmentedGroup = memo(function SegmentedGroup({
   ...rest
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div
-      className={cn(
-        "inline-flex max-w-full items-center gap-5 p-0 rounded-none border-0 border-b border-border bg-transparent",
-        className,
-      )}
-      {...rest}
-    >
+    <div className={cn("inline-flex max-w-full items-center gap-5 border-b border-border", className)} {...rest}>
       {children}
     </div>
   );

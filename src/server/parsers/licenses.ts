@@ -48,8 +48,8 @@ function isDeniedNoDerivatives(id: string): boolean {
 const matchesPrefix = (id: string, p: string): boolean => {
   if (id === p) return true;
   if (!id.startsWith(p)) return false;
-  const next = id[p.length];
-  return next === undefined || next === "-" || next === "." || next === "_" || (next >= "0" && next <= "9");
+  const next = id[p.length]!;
+  return next === "-" || next === "." || next === "_" || (next >= "0" && next <= "9");
 };
 function normalizeLicenseId(raw: string): string {
   return raw.toLowerCase().trim().replace(/_+/g, "-").replace(/\s+/g, "");

@@ -1,7 +1,7 @@
 import type { AppContext } from "@/server/context";
 import { PROBE_CONCURRENCY, rssConfig, upstreamConfig, upstreamEndpoints } from "@/server/config";
 import type { ProbeResult } from "@/server/infra/http-client";
-import { runCapped } from "@/server/infra/pool";
+import { runCapped } from "@/server/infra/task-pool";
 import type { SourceId } from "@/shared/types";
 
 export interface ProbeTarget {

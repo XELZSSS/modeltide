@@ -7,7 +7,7 @@ export const Badge = memo(function Badge({ className, children }: { className?: 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide leading-5 px-2 py-0.5 rounded-none transition-colors border border-border text-text-secondary bg-bg-secondary/60",
+        "inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide leading-5 px-2 py-0.5 transition-colors border border-border text-text-secondary bg-bg-secondary/60",
         className,
       )}
     >
@@ -32,7 +32,7 @@ export const Dot = memo(function Dot({
 }) {
   return (
     <span
-      className={cn("inline-block rounded-none shrink-0", dotSizeClass[size], className)}
+      className={cn("inline-block shrink-0", dotSizeClass[size], className)}
       style={color ? { backgroundColor: color } : undefined}
     />
   );
@@ -63,7 +63,7 @@ export const InfoCard = memo(function InfoCard({ title, children }: { title: str
   return (
     <Card>
       <CardContent>
-        <p className="ui-card-title mb-4 text-text-primary">{title}</p>
+        <p className="ui-card-title mb-4">{title}</p>
         <div className="flex flex-col gap-2 min-w-0">{children}</div>
       </CardContent>
     </Card>
@@ -72,11 +72,7 @@ export const InfoCard = memo(function InfoCard({ title, children }: { title: str
 
 export const InfoRow = memo(function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div
-      className={cn(
-        "flex flex-row items-baseline justify-between min-w-0 py-1.5 gap-3 border-b border-border/60 last:border-0",
-      )}
-    >
+    <div className="flex flex-row items-baseline justify-between min-w-0 py-1.5 gap-3 border-b border-border/60 last:border-0">
       <p className="ui-caption truncate shrink-0">{label}</p>
       <div className="ui-mono-value text-right truncate min-w-0 font-medium">{value}</div>
     </div>

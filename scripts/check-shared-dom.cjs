@@ -1,7 +1,7 @@
 // @ts-check
 const fs = require("fs");
 const path = require("path");
-const { stripComments, walkTs } = require("./_util.cjs");
+const { stripComments, walkTs } = require("./script-utils.cjs");
 
 const ROOT = path.resolve("src/shared");
 

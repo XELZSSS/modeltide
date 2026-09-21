@@ -29,7 +29,9 @@ export function useClientTab<T extends string>(
           url.searchParams.set(paramKey, tabId);
           replaceRoute(url.pathname + url.search + url.hash);
         }
-      } catch {}
+      } catch (err) {
+        console.warn(`[tab] failed to sync URL param "${paramKey}":`, err);
+      }
       startTransition(() => {
         setTab(tabId as T);
       });

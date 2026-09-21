@@ -98,10 +98,7 @@ export const Sheet = memo(function Sheet({ open, onClose, children, className, a
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className={cn(
-          "relative z-50 w-full max-w-md rounded-none ui-overlay-lg animate-sheet-up focus:outline-none",
-          className,
-        )}
+        className={cn("relative z-50 w-full max-w-md ui-overlay-lg animate-sheet-up focus:outline-none", className)}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

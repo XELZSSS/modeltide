@@ -1,4 +1,4 @@
-import type { SourceHealthLevel, SourceHistorySummary } from "@/shared/types";
+import type { SourceHealthLevel, SourceHistorySummary, SourceId, StatusEvent } from "@/shared/types";
 import type { TranslationKey } from "@/shared/i18n";
 
 /** Tri-level rendering map: dot color, text class and i18n label per health level. */
@@ -16,4 +16,15 @@ export const LEVEL_STYLES: Record<SourceHealthLevel, { dot: string; text: string
 export function resolveLevel(summary: SourceHistorySummary | undefined | null): SourceHealthLevel {
   if (summary == null || summary.checkedAt == null) return "unknown";
   return summary.level ?? (summary.ok ? "ok" : "error");
+}
+
+/**
+ * Sources with a degraded event in the payload window (the last 24h of
+ * samples), so a card can flag "recently degraded" even after the incident
+ * recovered and the current level went back to ok.
+ */
+export function recentlyDegradedIds(events: readonly StatusEvent[]): Set<SourceId> {
+  const ids = new Set<SourceId>();
+  for (const event of events) if (event.type === "degraded") ids.add(event.id);
+  return ids;
 }

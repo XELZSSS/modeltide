@@ -1,0 +1,104 @@
+"use client";
+import { useMemo } from "react";
+import type { ChartOptions } from "chart.js";
+import { Radar } from "react-chartjs-2";
+import { registerRadar } from "@/client/utils/charts-register";
+
+registerRadar();
+import { useTranslation } from "@/client/providers";
+import { useChartTheme, hexToRgba, legendStyle, seriesColor } from "@/client/theme/chart-theme";
+import { Card, CardContent } from "@/client/components/ui/card";
+import { ChartFrame } from "@/client/components/ui/chart-frame";
+import { axisTickStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
+import type { ArtificialAnalysisModel } from "@/shared/types";
+import { modelId } from "@/client/utils/model-utils";
+import { buildCompareRows, buildRadarData, radarMaxFor, type CompareRow } from "./compare-logic";
+import { CompareTable, WinnerValue } from "./compare-table";
+
+function renderMetricValue(
+  row: CompareRow<ArtificialAnalysisModel>,
+  model: ArtificialAnalysisModel,
+  winner: "win" | "loss" | null,
+) {
+  return <WinnerValue value={row.getValue?.(model) ?? ""} winner={winner} />;
+}
+
+export function CompareContent({ models }: { models: ArtificialAnalysisModel[] }) {
+  const { t } = useTranslation();
+  const theme = useChartTheme();
+  const rows = useMemo(() => buildCompareRows(t), [t]);
+  const radarData = useMemo(() => buildRadarData(t, models), [models, t]);
+  const radarMax = useMemo(() => radarMaxFor(radarData), [radarData]);
+
+  const data = useMemo(
+    () => ({
+      labels: radarData.map((row) => row.metric),
+      datasets: models.map((model, index) => {
+        const color = seriesColor(theme, index);
+        const key = modelId(model);
+        return {
+          label: model.short_name || model.name,
+          data: radarData.map((row) => (key ? (row.values[key] ?? null) : null)),
+          borderColor: color,
+          backgroundColor: hexToRgba(color, 0.06),
+          borderWidth: 2,
+          pointRadius: 2,
+          pointHoverRadius: 4,
+        };
+      }),
+    }),
+    [radarData, models, theme],
+  );
+
+  const options = useMemo<ChartOptions<"radar">>(
+    () => ({
+      ...chartBase,
+      interaction: { mode: "index", intersect: false },
+      layout: { padding: 8 },
+      scales: {
+        r: {
+          min: 0,
+          max: radarMax,
+          ticks: {
+            ...axisTickStyle(theme),
+            stepSize: 25,
+            backdropColor: "transparent",
+          },
+          grid: { color: theme.grid },
+          angleLines: { color: theme.grid },
+          pointLabels: { color: theme.tickSecondary, font: { size: 11 } },
+        },
+      },
+      plugins: {
+        legend: legendStyle(theme),
+        tooltip: defaultTooltipOptions(theme),
+      },
+    }),
+    [theme, radarMax],
+  );
+
+  return (
+    <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:items-stretch">
+      <Card className="w-full md:w-1/2">
+        <CardContent className="h-full flex items-center justify-center">
+          <ChartFrame height="h-[240px] sm:h-[320px]">
+            <Radar data={data} options={options} role="img" aria-label={t("modelComparison")} />
+            <figcaption className="sr-only">
+              {radarData.map((row) => {
+                const values = models.map((m) => {
+                  const key = modelId(m);
+                  const v = key ? row.values[key] : null;
+                  return `${m.short_name || m.name}: ${typeof v === "number" ? v.toFixed(1) : "—"}`;
+                });
+                return `${row.metric} — ${values.join(", ")}`;
+              })}
+            </figcaption>
+          </ChartFrame>
+        </CardContent>
+      </Card>
+      <div className="min-w-0 w-full md:w-1/2 flex flex-col">
+        <CompareTable rows={rows} models={models} renderValue={renderMetricValue} />
+      </div>
+    </div>
+  );
+}

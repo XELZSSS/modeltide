@@ -20,18 +20,18 @@ export const MAX_MODEL_LIMIT = 500;
 
 /**
  * Fetch caps per content. Policy:
- * - Full (no cap): lists backing detail pages, search and matching
- *   (AA index, OpenRouter rankings/directory, text-to-image, official
- *   pricing, weights). Truncating those loses content.
+ * - Full (no cap): lists backing detail pages, search, matching or joins
+ *   (AA index, AA changelog and the closed releases it feeds — a bounded
+ *   upstream, so truncating it only loses data, OpenRouter
+ *   rankings/directory, text-to-image, official pricing, weights).
+ *   Truncating those loses content.
  * - Windowed: unbounded upstreams where only a recent head is served
- *   (HF models/releases, changelogs). Detail long-tails resolve on demand.
+ *   (HF models/releases). Detail long-tails resolve on demand.
  * - Display-capped: pure rankings/news views with no downstream lookups.
  */
 export const SOURCE_LIMITS = {
   openSourceModels: 200,
   openSourceReleases: 200,
-  changelog: 200,
-  closedReleases: 200,
   agentRankings: 100,
   newsPerCategory: 30,
   dailyPapers: 20,

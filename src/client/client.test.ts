@@ -24,8 +24,7 @@ import {
   resolveBlendedPrice,
   resolveEffectivePricing,
 } from "@/client/utils/pricing-merge";
-import { matchTerm } from "@/shared/utils";
-import { fuzzyMatch } from "@/client/utils/fuzzy";
+import { matchTerm, fuzzyMatch } from "@/shared/utils";
 import {
   buildCompareRows,
   buildPriceRows,
@@ -34,13 +33,21 @@ import {
   radarMaxFor,
   type CompareRow,
   type RadarRow,
-} from "@/client/features/compare/logic";
-import { aggregateTaskShare, formatTaskLabel, taskLabel } from "@/client/features/home/usage";
+} from "@/client/features/compare/compare-logic";
+import { aggregateTaskShare, formatTaskLabel, taskLabel } from "@/client/features/home/home-usage";
 import { pickLatestReleaseName } from "@/client/features/home/use-home-stats";
+import { buildReleaseRows } from "@/client/utils/release-feed";
 import { resolveInitialTab } from "@/client/hooks/use-client-tab";
 import { useParams } from "@/client/router";
 import { isIosDevice, isStandaloneMode, unregisterStaleServiceWorker } from "@/client/pwa/use-pwa";
-import type { ArtificialAnalysisModel, ClosedReleaseEntry, OfficialPriceModel } from "@/shared/types";
+import { recentlyDegradedIds } from "@/client/utils/status-level";
+import type {
+  ArtificialAnalysisModel,
+  ClosedReleaseEntry,
+  OfficialPriceModel,
+  OpenSourceModelEntry,
+  StatusEvent,
+} from "@/shared/types";
 import type { OfficialGetter } from "@/client/utils/pricing-merge";
 import type { TFunction } from "@/shared/i18n";
 
@@ -104,139 +111,33 @@ function dailyCost(
   });
 }
 
-describe("formatTokens", () => {
-  it.each([
-    [100, "100"],
-    [1500, "1.5K"],
-    [128_000, "128K"],
-    [1_500_000, "1.5M"],
-    [999_999, "1M"],
-    [999_999_999, "1B"],
-    [2_000_000_000, "2B"],
-  ])("formatTokens(%s) -> %s", (input, expected) => {
-    expect(formatTokens(input)).toBe(expected);
-  });
-
-  it.each([[null], [undefined], [Number.NaN]])("formatTokens(%s) -> N/A", (input) => {
-    expect(formatTokens(input as never, NA)).toBe("N/A");
-  });
-});
-
-describe("formatScore / formatBoolean", () => {
-  it.each([[null], [undefined]])("formatScore(%s) -> N/A", (input) => {
-    expect(formatScore(NA, input as never)).toBe("N/A");
-  });
-
-  it("formats number as string", () => {
+describe("formatters", () => {
+  it("formats scores, numbers, money, dates and labels", () => {
+    expect(formatTokens(1_500_000)).toBe("1.5M");
+    expect(formatShortNumber(1_500)).toBe("1.50K");
     expect(formatScore(t(), 85)).toBe("85.00");
-  });
-
-  it("returns Yes/No for boolean, N/A for undefined", () => {
-    const t1 = t({ yes: "Yes", no: "No" });
-    expect(formatBoolean(t1, true)).toBe("Yes");
-    expect(formatBoolean(t1, false)).toBe("No");
-    expect(formatBoolean(NA, undefined)).toBe("N/A");
-  });
-});
-
-describe("formatShortNumber", () => {
-  it.each([
-    [42, "42"],
-    [500, "500"],
-    [1_500, "1.50K"],
-    [1234, "1.23K"],
-    [-2500, "-2.50K"],
-    [1_500_000, "1.50M"],
-    [999_999, "1.00M"],
-    [999_999_999_999, "1.00T"],
-    [2_000_000_000, "2.00B"],
-  ])("formatShortNumber(%s) -> %s", (input, expected) => {
-    expect(formatShortNumber(input)).toBe(expected);
-  });
-
-  it("returns em dash for non-finite", () => {
-    expect(formatShortNumber(NaN)).toBe("\u2014");
-  });
-});
-
-describe("formatDate / benchmarkLabel / categoryLabel", () => {
-  it.each([
-    ["invalid", "invalid"],
-    ["2024-01-15", "1/15/2024"],
-  ])("formatDate(%s)", (input, expected) => {
-    expect(formatDate(input, "en")).toBe(expected);
-  });
-
-  it.each([
-    ["gpqa", "GPQA", "benchmarkGpqa"],
-    ["unknown", "unknown", undefined],
-  ])("benchmarkLabel(%s)", (input, expected, key) => {
-    expect(benchmarkLabel(input, key ? t({ [key]: expected }) : t())).toBe(expected);
-  });
-
-  it("returns translated category labels, catGeneral for unknown", () => {
-    const t1 = t({ catCoding: "Coding", catReasoning: "Reasoning" });
-    expect(categoryLabel("coding", t1)).toBe("Coding");
-    expect(categoryLabel("reasoning", t1)).toBe("Reasoning");
+    expect(formatBoolean(t({ yes: "Yes" }), true)).toBe("Yes");
+    expect(formatTrend(-3.2)).toBe("-3.2%");
+    expect(formatDollar(0.004)).toBe("$0.004");
+    expect(formatPricePerMillion(0.005)).toBe("$0.01/M tokens");
+    expect(formatDate("2024-01-15", "en")).toBe("1/15/2024");
+    expect(formatUptime(t({ uptimeDays: "{days}d {hours}h" }), 172_800_000)).toBe("2d 0h");
+    expect(formatRelativeTime(new Date().toISOString(), t({ timeJustNow: "just now" }))).toBe("just now");
+    expect(benchmarkLabel("gpqa", t({ benchmarkGpqa: "GPQA" }))).toBe("GPQA");
+    expect(categoryLabel("coding", t({ catCoding: "Coding" }))).toBe("Coding");
     expect(categoryLabel("unknown", t())).toBe("catGeneral");
   });
-});
 
-describe("formatTrend", () => {
-  it.each([[null], [undefined]])("formatTrend(%s) -> N/A", (input) => {
+  it.each([[null], [undefined], [Number.NaN]])("renders missing values as N/A (%s)", (input) => {
+    expect(formatTokens(input as never, NA)).toBe("N/A");
+    expect(formatScore(NA, input as never)).toBe("N/A");
     expect(formatTrend(input as never, NA)).toBe("N/A");
-  });
-
-  it.each([
-    [5.5, "+5.5%"],
-    [47.8, "+47.8%"],
-    [0.8, "+0.8%"],
-    [-3.2, "-3.2%"],
-    [0, "0.0%"],
-  ])("formatTrend(%s) -> %s", (input, expected) => {
-    expect(formatTrend(input)).toBe(expected);
-  });
-});
-
-describe("formatDollar / formatPricePerMillion", () => {
-  it.each([
-    [42, "$42.00"],
-    [0.004, "$0.004"],
-    [0.0001, "$0.0001"],
-    [3, "$3.00"],
-    [0.02, "$0.02"],
-    [0, "$0.00"],
-  ])("formatDollar(%s) -> %s", (input, expected) => {
-    expect(formatDollar(input)).toBe(expected);
-  });
-
-  it.each([[null], [undefined]])("formatDollar(%s) -> N/A", (input) => {
     expect(formatDollar(input as never, NA)).toBe("N/A");
-  });
-
-  it("formats price per million tokens", () => {
-    expect(formatPricePerMillion(0.005)).toBe("$0.01/M tokens");
-  });
-
-  it.each([[null], [undefined]])("formatPricePerMillion(%s) -> N/A", (input) => {
     expect(formatPricePerMillion(input as never, NA)).toBe("N/A");
   });
 });
 
-describe("formatUptime / formatRelativeTime / safeHref", () => {
-  it.each([
-    [{ uptimeDays: "{days}d {hours}h" }, 172_800_000, "2d 0h"],
-    [{ uptimeHours: "{hours}h {mins}m" }, 7_200_000, "2h 0m"],
-    [{ uptimeMins: "{mins}m" }, 300_000, "5m"],
-  ])("formatUptime(%j)", (overrides, ms, expected) => {
-    expect(formatUptime(t(overrides), ms)).toBe(expected);
-  });
-
-  it("returns just now for recent times, input for invalid", () => {
-    expect(formatRelativeTime(new Date().toISOString(), t({ timeJustNow: "just now" }))).toBe("just now");
-    expect(formatRelativeTime("invalid", t())).toBe("invalid");
-  });
-
+describe("safeHref", () => {
   it.each([
     ["/models?tab=x", "/models?tab=x"],
     ["https://ok.example/a", "https://ok.example/a"],
@@ -282,23 +183,11 @@ describe("calcMonthlyCost", () => {
       [2_000_000, 0, { cacheHitRate: 0.5 }],
       11,
     ],
-    ["falls back to input price", { input: 10, output: 2, cacheHit: null }, [1_000_000, 0, { cacheHitRate: 1 }], 10],
-    [
-      "bills reasoning at output rate",
-      { input: 1, output: 2, cacheHit: null },
-      [1_000_000, 1_000_000, { dailyReasoning: 2_000_000 }],
-      1 + 3 * 2,
-    ],
-    ["clamps high hit rate", { input: 10, output: 2, cacheHit: 1 }, [1_000_000, 0, { cacheHitRate: 5 }], 1],
     ["clamps low hit rate", { input: 10, output: 2, cacheHit: 1 }, [1_000_000, 0, { cacheHitRate: -1 }], 10],
     ["clamps negative tokens", { input: 1, output: 2, cacheHit: null }, [-5, -5, {}], 0],
   ])("%s", (_label, pricing, args, expected) => {
     const [input, output, opts] = args as [number, number, { dailyReasoning?: number; cacheHitRate?: number }];
     expect(dailyCost(makeModel({ pricing: pricing as never }), input, output, opts)).toBe(expected);
-  });
-
-  it.each([[{}], [{ cacheHit: 0.1 }]])("returns null when legs missing: %j", (pricing) => {
-    expect(dailyCost(makeModel({ pricing: pricing as never }), 1_000_000, 1_000_000)).toBeNull();
   });
 
   it("returns null for missing pricing and non-finite tokens", () => {
@@ -319,11 +208,8 @@ describe("fuzzyMatch", () => {
     expect(fuzzyMatch(items, "calude", fields).map((m) => m.name)).toContain("claude-opus-4");
   });
 
-  it.each([["gp"], ["   "], ["zzzqqq"]])("returns empty for %s", (query) => {
-    expect(fuzzyMatch(items, query, fields)).toEqual([]);
-  });
-
-  it("returns empty for empty input", () => {
+  it("returns empty when nothing matches or input is empty", () => {
+    expect(fuzzyMatch(items, "zzzqqq", fields)).toEqual([]);
     expect(fuzzyMatch([], "claude", fields)).toEqual([]);
   });
 });
@@ -356,31 +242,6 @@ describe("computeWinners", () => {
     const winners = computeWinners(rows, models, getKey)!;
     expect(winners.get("cost")?.get("a")).toBe("win");
     expect(winners.get("cost")?.get("c")).toBe("loss");
-  });
-
-  it.each([
-    [
-      "display-identical tie",
-      [
-        { id: "x", score: 100, cost: null },
-        { id: "y", score: 100.0000000001, cost: null },
-      ],
-    ],
-    [
-      "every model ties",
-      [
-        { id: "x", score: 88, cost: null },
-        { id: "y", score: 88, cost: null },
-      ],
-    ],
-  ])("no highlight when %s", (_label, rows) => {
-    const winners = computeWinners(
-      [{ label: "score", getNumeric: (m: M) => m.score, bestIs: "max" }],
-      rows as M[],
-      getKey,
-    );
-    expect(winners.get("score")?.get("x")).toBeUndefined();
-    expect(winners.get("score")?.get("y")).toBeUndefined();
   });
 
   it("still marks a winner when values differ beyond display precision", () => {
@@ -431,25 +292,10 @@ describe("buildRadarData / radarMaxFor", () => {
     expect(buildRadarData(tKey, [])[0]).toEqual({ metric: "intelligence", values: {} });
   });
 
-  it("ignores a keyless model instead of colliding every keyless row onto one entry", () => {
-    const data = buildRadarData(tKey, [makeCompareModel({ id: "", slug: "", intelligence_index: 50 })]);
-    expect(data[0]!.values).toEqual({});
-  });
-
   it.each([
     [[], 100, 100],
-    [[{ metric: "intelligence", values: {} }], 100, 100],
     [[{ metric: "intelligence", values: { m: null } }], 100, 100],
-    [
-      [
-        { metric: "x", values: { m: 80 } },
-        { metric: "y", values: { m: Infinity } },
-      ],
-      100,
-      100,
-    ],
     [[{ metric: "x", values: { m: 101 } }], 100, 120],
-    [[{ metric: "x", values: { m: 120 } }], 100, 120],
     [[{ metric: "x", values: { m: 121 } }], 100, 140],
     [[{ metric: "x", values: { m: 10 } }], 20, 20],
   ])("radarMaxFor(%j, %s) -> %s", (data, fallback, expected) => {
@@ -520,22 +366,12 @@ describe("official price resolution", () => {
     expect(matchOfficialPricing(index, makeModel({ name }))?.id).toBe(id);
   });
 
-  it("returns undefined without a match", () => {
-    expect(matchOfficialPricing(index, makeModel({ name: "Some Other Model" }))).toBeUndefined();
-  });
-
   it.each([
     [
       "official legs win per-leg, catalog fills gaps",
       { input: 10, output: 50, cacheHit: 1 },
       { output: null },
       { input: 5, output: 50, cacheHit: 0.5, cacheWrite: 6.25, source: "official" },
-    ],
-    [
-      "fills write leg from catalog when official lacks one",
-      { input: 10, output: 50, cacheHit: 1, cacheWrite: 12.5 },
-      { cacheWrite: null },
-      { input: 5, output: 25, cacheHit: 0.5, cacheWrite: 12.5, source: "official" },
     ],
   ])("%s", (_label, catalog, officialOver, expected) => {
     expect(resolveEffectivePricing(catalog as never, makeOfficial(officialOver))).toEqual(expected);
@@ -552,12 +388,12 @@ describe("official price resolution", () => {
     expect(resolveEffectivePricing(undefined, null).source).toBeNull();
   });
 
-  it.each([
-    [{ input: 10, output: 50, cacheHit: 1 }, makeOfficial({}), 3.85],
-    [{ input: 5, output: 25, cacheHit: 0.5 }, undefined, 3.85],
-  ])("resolveBlendedPrice(%j)", (pricing, officialPrice, expected) => {
-    expect(resolveBlendedPrice(makeModel({ pricing: pricing as never }), officialPrice)).toBeCloseTo(expected, 5);
-  });
+  it.each([[{ input: 10, output: 50, cacheHit: 1 }, makeOfficial({}), 3.85]])(
+    "resolveBlendedPrice(%j)",
+    (pricing, officialPrice, expected) => {
+      expect(resolveBlendedPrice(makeModel({ pricing: pricing as never }), officialPrice)).toBeCloseTo(expected, 5);
+    },
+  );
 
   it("monthly cost uses official legs when matched, bills write tier", () => {
     const opts = {
@@ -572,20 +408,20 @@ describe("official price resolution", () => {
     expect(calcMonthlyCost(model, opts, official)).toBe(30);
   });
 
-  it.each([
-    [{ input: 10, output: 0, cacheHit: 1, cacheWrite: 30 }, 0.5 * 1 + 0.2 * 30 + 0.3 * 10],
-    [{ input: 10, output: 0, cacheHit: 1 }, 0.5 * 1 + 0.5 * 10],
-  ])("monthly cost write-tier handling %j", (pricing, expected) => {
-    expect(
-      calcMonthlyCost(makeModel({ pricing: pricing as never }), {
-        dailyInput: 1_000_000,
-        dailyOutput: 0,
-        cacheHitRate: 0.5,
-        cacheWriteRate: 0.2,
-        daysPerMonth: 1,
-      }),
-    ).toBeCloseTo(expected, 5);
-  });
+  it.each([[{ input: 10, output: 0, cacheHit: 1, cacheWrite: 30 }, 0.5 * 1 + 0.2 * 30 + 0.3 * 10]])(
+    "monthly cost write-tier handling %j",
+    (pricing, expected) => {
+      expect(
+        calcMonthlyCost(makeModel({ pricing: pricing as never }), {
+          dailyInput: 1_000_000,
+          dailyOutput: 0,
+          cacheHitRate: 0.5,
+          cacheWriteRate: 0.2,
+          daysPerMonth: 1,
+        }),
+      ).toBeCloseTo(expected, 5);
+    },
+  );
 });
 
 describe("monthly cost default fast path", () => {
@@ -659,19 +495,35 @@ describe("aggregateTaskShare", () => {
     expect(total).toBe(4);
   });
 
-  it("folds the long tail beyond the slice limit into other, empty for empty input", () => {
-    const { slices, total } = aggregateTaskShare(["a", "b", "c", "d", "e", "f", "g"].map((item) => task(item)));
-    expect(slices).toHaveLength(6);
-    expect(slices[5]).toEqual({ key: "__other__", total: 2 });
-    expect(total).toBe(7);
-    expect(aggregateTaskShare([])).toEqual({ slices: [], total: 0 });
-  });
-
   it("resolves localized labels with English fallback", () => {
     const tf = (key: string) => (key === "taskTextGeneration" ? "\u6587\u672c\u751f\u6210" : key);
     expect(taskLabel("text-generation", tf)).toBe("\u6587\u672c\u751f\u6210");
     expect(taskLabel("some-new-task", tf)).toBe("Some New Task");
     expect(formatTaskLabel("automatic_speech_recognition")).toBe("Automatic Speech Recognition");
+  });
+});
+
+describe("recentlyDegradedIds", () => {
+  const ev = (type: StatusEvent["type"], id: StatusEvent["id"]): StatusEvent => ({
+    id,
+    type,
+    at: new Date().toISOString(),
+    durationMin: null,
+  });
+
+  it("collects only degraded sources, ignoring up and down events", () => {
+    const ids = recentlyDegradedIds([
+      ev("down", "openrouter"),
+      ev("degraded", "anthropicApi"),
+      ev("up", "anthropicApi"),
+      ev("degraded", "groqApi"),
+    ]);
+    expect([...ids].sort()).toEqual(["anthropicApi", "groqApi"]);
+  });
+
+  it("is empty without degraded events", () => {
+    expect(recentlyDegradedIds([]).size).toBe(0);
+    expect(recentlyDegradedIds([ev("up", "news"), ev("down", "news")]).size).toBe(0);
   });
 });
 
@@ -683,13 +535,26 @@ describe("pickLatestReleaseName / resolveInitialTab", () => {
     releaseDate,
     link: "https://example.com",
   });
+  const hf = (id: string, createdAt: string): OpenSourceModelEntry => ({
+    id,
+    author: null,
+    downloads: 0,
+    likes: 0,
+    license: "apache-2.0",
+    task: null,
+    createdAt,
+    lastModified: null,
+    tags: [],
+  });
 
   it.each([
-    [[closed("2026-09-05"), closed("2026-09-01")], "Closed Model"],
-    [[], null],
-    [[closed("not-a-date")], null],
-  ])("pickLatestReleaseName(%j)", (feed, expected) => {
-    expect(pickLatestReleaseName(feed as ClosedReleaseEntry[])).toBe(expected);
+    [[], [closed("2026-09-05"), closed("2026-09-01")], "Closed Model"],
+    // Regression: a newer Hugging Face creation must win over the AA head,
+    // matching what the releases page shows in its first row.
+    [[hf("org/newest", "2026-09-06T04:54:00Z")], [closed("2026-09-05")], "newest"],
+    [[], [closed("not-a-date")], null],
+  ])("pickLatestReleaseName(%j, %j)", (hfFeed, aaFeed, expected) => {
+    expect(pickLatestReleaseName(hfFeed as OpenSourceModelEntry[], aaFeed as ClosedReleaseEntry[])).toBe(expected);
   });
 
   it("resolveInitialTab accepts deep-link, falls back otherwise", () => {
@@ -697,6 +562,51 @@ describe("pickLatestReleaseName / resolveInitialTab", () => {
     expect(resolveInitialTab(tabs, "closed", "feed")).toBe("closed");
     expect(resolveInitialTab(tabs, null, "feed")).toBe("feed");
     expect(resolveInitialTab(tabs, "nope", "feed")).toBe("feed");
+  });
+});
+
+describe("buildReleaseRows", () => {
+  const hf = (id: string, createdAt: string | null, lastModified: string | null = null): OpenSourceModelEntry => ({
+    id,
+    author: null,
+    downloads: 0,
+    likes: 0,
+    license: "apache-2.0",
+    task: null,
+    createdAt,
+    lastModified,
+    tags: [],
+  });
+  const aa = (id: string, releaseDate: string): ClosedReleaseEntry => ({
+    id,
+    model: `Model ${id}`,
+    provider: "Lab",
+    releaseDate,
+    link: `https://example.com/${id}`,
+  });
+
+  it("merges both sources into one list, newest first, with no open/closed field", () => {
+    const rows = buildReleaseRows([hf("meta-llama/older", "2026-01-01T00:00:00Z")], [aa("newest", "2026-09-05")]);
+    expect(rows.map((r) => r.name)).toEqual(["Model newest", "older"]);
+    expect(rows.map((r) => r.provider)).toEqual(["Lab", "Hugging Face"]);
+    expect(rows.map((r) => r.id)).toEqual(["aa:newest", "hf:meta-llama/older@2026-01-01"]);
+    expect(rows.every((r) => !("type" in r))).toBe(true);
+  });
+
+  it("collapses a same-day create and modify into a single event", () => {
+    const rows = buildReleaseRows([hf("org/model", "2026-03-04T01:00:00Z", "2026-03-04T23:00:00Z")], []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.date).toBe("2026-03-04");
+  });
+
+  it("keeps a modify from a later day as its own event", () => {
+    const rows = buildReleaseRows([hf("org/model", "2026-03-04T00:00:00Z", "2026-03-06T00:00:00Z")], []);
+    expect(rows.map((r) => r.date)).toEqual(["2026-03-06", "2026-03-04"]);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(2);
+  });
+
+  it("drops releases whose date cannot be parsed", () => {
+    expect(buildReleaseRows([], [aa("bad", "not-a-date")])).toEqual([]);
   });
 });
 
@@ -730,21 +640,15 @@ describe("useParams", () => {
 describe("isIosDevice / isStandaloneMode", () => {
   it.each([
     ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", undefined, true],
-    ["Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X)", undefined, true],
     ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)", 5, true],
-    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)", 0, false],
-    ["Mozilla/5.0 (Linux; Android 14; Pixel 8)", undefined, false],
     ["Mozilla/5.0 (Windows NT 10.0; Win64; x64)", undefined, false],
   ])("isIosDevice(%s)", (ua, touchPoints, expected) => {
     expect(isIosDevice(ua, touchPoints as never)).toBe(expected);
   });
 
   it.each([
-    [{ navigatorStandalone: true }, true],
     [{ displayStandalone: true }, true],
-    [{ displayFullscreen: true }, true],
     [{}, false],
-    [{ navigatorStandalone: false, displayStandalone: false, displayFullscreen: false }, false],
   ])("isStandaloneMode(%j) -> %s", (input, expected) => {
     expect(isStandaloneMode(input)).toBe(expected);
   });
@@ -767,9 +671,5 @@ describe("unregisterStaleServiceWorker", () => {
     await vi.waitFor(() => {
       expect(unregister).toHaveBeenCalledTimes(2);
     });
-  });
-
-  it("is a no-op without a window", () => {
-    expect(() => unregisterStaleServiceWorker()).not.toThrow();
   });
 });

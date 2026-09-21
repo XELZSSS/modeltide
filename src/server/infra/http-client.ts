@@ -1,7 +1,6 @@
 import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
-import { UpstreamError } from "@/server/infra/errors";
-import { isAbortError } from "@/server/infra/http-error";
+import { isAbortError, UpstreamError } from "@/server/infra/errors";
 
 interface FetchOptions extends Omit<RequestInit, "headers"> {
   timeoutMs?: number;

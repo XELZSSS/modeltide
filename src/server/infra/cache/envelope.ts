@@ -1,7 +1,7 @@
 import { ONE_DAY } from "@/shared/config";
 
-export const STALE_WINDOW_MS = ONE_DAY;
-export const MAX_STALE_EXTRA_MS = 60 * 60_000;
+const STALE_WINDOW_MS = ONE_DAY;
+const MAX_STALE_EXTRA_MS = 60 * 60_000;
 
 export function maxStaleMs(ttl: number): number {
   if (!Number.isFinite(ttl) || ttl <= 0) return MAX_STALE_EXTRA_MS;
@@ -15,5 +15,7 @@ export interface StaleEnvelope<T> {
 }
 
 export function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
-  return typeof v === "object" && v !== null && "d" in v && "e" in v && typeof (v as StaleEnvelope<T>).e === "number";
+  if (typeof v !== "object" || v === null || !("d" in v) || !("e" in v)) return false;
+  const e = (v as StaleEnvelope<T>).e;
+  return typeof e === "number" && Number.isFinite(e);
 }

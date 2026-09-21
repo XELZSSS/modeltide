@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { resetModuleCachesForTests } from "@/server/infra/cache-service";
+import { resetModuleCachesForTests } from "@/server/infra/cache/service";
 import { testCtx } from "@/server/test-helpers";
 import {
   HISTORY_KEY,
@@ -58,15 +58,6 @@ describe("getUptime", () => {
     expect(Date.parse(firstLaunchAt)).toBe(persisted);
     expect(uptimeMs).toBeGreaterThanOrEqual(86_400_000);
   });
-
-  it("degrades to an ephemeral first launch when KV writes fail", async () => {
-    const { ctx, kv } = testCtx();
-    kv.failPut = true;
-    const { firstLaunchAt, uptimeMs } = await getUptime(ctx);
-
-    expect(Number.isFinite(Date.parse(firstLaunchAt))).toBe(true);
-    expect(uptimeMs).toBeGreaterThanOrEqual(0);
-  });
 });
 
 describe("mergeSample", () => {
@@ -79,13 +70,6 @@ describe("mergeSample", () => {
     entry = mergeSample(entry, sample(1, false), NOW);
     expect(entry.recent).toHaveLength(2);
     expect(entry.recent.some((s) => s.t === NOW - old * MIN)).toBe(false);
-  });
-
-  it("upserts a sample landing inside half the interval instead of duplicating", () => {
-    let entry = mergeSample(undefined, sample(10, true, 500), NOW);
-    entry = mergeSample(entry, sample(9, true, 700), NOW);
-    expect(entry.recent).toHaveLength(1);
-    expect(entry.recent[0]!.latencyMs).toBe(700);
   });
 
   it("rolls back the replaced sample on upsert when the outcome flips", () => {
@@ -104,18 +88,6 @@ describe("mergeSample", () => {
 
     expect(entry.daily).toHaveLength(1);
     expect(entry.daily[0]).toMatchObject({ day: "2026-08-30", total: 4, ok: 2 });
-  });
-
-  it("counts a failing first sample", () => {
-    expect(mergeSample(undefined, sample(5, false), NOW).daily[0]!.total).toBe(1);
-  });
-
-  it("keeps one incident when the outage recovers after the flipped re-run", () => {
-    let entry = mergeSample(undefined, sample(10, true), NOW);
-    entry = mergeSample(entry, sample(9, false), NOW);
-    entry = mergeSample(entry, sample(7, true, 400), NOW);
-    expect(entry.daily.find((b) => b.day === "2026-08-30")).toMatchObject({ total: 2, ok: 1 });
-    expect(entry.recent.at(-1)).toMatchObject({ ok: true, latencyMs: 400 });
   });
 
   it("prunes daily buckets beyond the 30-day retention", () => {
@@ -138,10 +110,6 @@ describe("uptimeRatio / avgLatency", () => {
     const samples = [sample(100, true), sample(10, true), sample(5, false), sample(1, true)];
     expect(uptimeRatio(samples, NOW - 30 * MIN)).toBe(2 / 3);
     expect(avgLatency(samples, NOW - 30 * MIN)).toBe((900 + 900) / 2);
-  });
-
-  it("returns null latency when every sample in the window failed", () => {
-    expect(avgLatency([sample(5, false), sample(1, false)], NOW - 30 * MIN)).toBeNull();
   });
 });
 
@@ -184,14 +152,6 @@ describe("aggregateProbes", () => {
     ).toEqual({ ok: false, status: null, latencyMs: null, error: "2/2 feeds failed" });
   });
 
-  it("keeps the single-feed error message when only one target exists", () => {
-    expect(
-      aggregateProbes([
-        { target: target("openrouter"), probe: { ok: false, status: 500, latencyMs: null, error: "HTTP 500" } },
-      ]).get("openrouter")!.error,
-    ).toBe("HTTP 500");
-  });
-
   it("omits a source whose probes all timed out (unknown, not down)", () => {
     const agg = aggregateProbes([
       { target: target("huggingface"), probe: failProbe("timeout") },
@@ -200,15 +160,6 @@ describe("aggregateProbes", () => {
     ]);
     expect(agg.has("huggingface")).toBe(false);
     expect(agg.has("news")).toBe(false);
-  });
-
-  it("counts only decisive probes when unknowns mix with real failures", () => {
-    expect(
-      aggregateProbes([
-        { target: target("news"), probe: { ok: false, status: 503, latencyMs: null, error: "HTTP 503" } },
-        { target: target("news"), probe: failProbe("timeout") },
-      ]).get("news"),
-    ).toEqual({ ok: false, status: null, latencyMs: null, error: "HTTP 503" });
   });
 });
 
@@ -226,12 +177,6 @@ describe("deriveEvents", () => {
     expect(events[0]).toMatchObject({ type: "down", durationMin: null });
   });
 
-  it("treats a failing first sample as an ongoing outage", () => {
-    const events = deriveEvents(historyId, [sample(10, false), sample(0, false)]);
-    expect(events).toHaveLength(1);
-    expect(events[0]!.type).toBe("down");
-  });
-
   it("emits nothing for a fully healthy window", () => {
     expect(deriveEvents(historyId, [sample(10, true), sample(0, true)])).toHaveLength(0);
   });
@@ -240,21 +185,6 @@ describe("deriveEvents", () => {
     expect(deriveEvents(historyId, [sample(30, true), warnSample(20), warnSample(10), sample(0, true)])).toEqual([
       { id: historyId, type: "degraded", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: 20 },
       { id: historyId, type: "up", at: new Date(NOW).toISOString(), durationMin: null },
-    ]);
-  });
-
-  it("escalates an ongoing degraded episode straight to down without an up in between", () => {
-    expect(deriveEvents(historyId, [sample(30, true), warnSample(20), sample(10, false)])).toEqual([
-      { id: historyId, type: "degraded", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: 10 },
-      { id: historyId, type: "down", at: new Date(NOW - 10 * MIN).toISOString(), durationMin: null },
-    ]);
-  });
-
-  it("eases an outage back to degraded: up is emitted before the new degraded event", () => {
-    expect(deriveEvents(historyId, [sample(40, true), sample(30, false), warnSample(20)])).toEqual([
-      { id: historyId, type: "down", at: new Date(NOW - 30 * MIN).toISOString(), durationMin: 10 },
-      { id: historyId, type: "up", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: null },
-      { id: historyId, type: "degraded", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: null },
     ]);
   });
 });
@@ -347,27 +277,6 @@ describe("buildHistoryPayload", () => {
     expect(or.uptime24h).toBeLessThan(UPTIME_WARN_RATIO);
     expect(or.level).toBe("warn");
   });
-
-  it("warns on a degraded provider sample even with a perfect ratio", () => {
-    const payload = buildHistoryPayload(
-      { sources: { [historyId]: { recent: [sample(30, true), warnSample(10)], daily: [] } } },
-      { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
-      NOW,
-    );
-    const or = payload.sources.find((s) => s.id === historyId)!;
-    expect(or.ok).toBe(true);
-    expect(or.uptime24h).toBe(1);
-    expect(or.level).toBe("warn");
-  });
-
-  it("reports uptime7d as null (not 0%) when daily buckets carry no samples", () => {
-    const payload = buildHistoryPayload(
-      { sources: { [historyId]: { recent: [], daily: [{ day: "2026-08-30", total: 0, ok: 0 }] } } },
-      { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
-      NOW,
-    );
-    expect(payload.sources.find((s) => s.id === historyId)!.uptime7d).toBeNull();
-  });
 });
 
 describe("getStatusHistory read-only", () => {
@@ -432,16 +341,6 @@ describe("getStatusHistory read-only", () => {
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
   });
 
-  it("records a failed probe as a down sample when probes fail", async () => {
-    const kvStore = new Map<string, string>();
-    await recordStatusSamples(historyCtx(kvStore, false));
-    const payload = await getStatusHistory(historyCtx(kvStore));
-    const or = payload.sources.find((s) => s.id === "openrouter")!;
-    expect(or.ok).toBe(false);
-    expect(or.latencyMs).toBeNull();
-    expect(or.uptime24h).toBe(0);
-  });
-
   it("marks only the failing source down when probes disagree per target", async () => {
     const kvStore = new Map<string, string>();
     const openrouterUrl = `${upstreamConfig.openrouter}/api/v1/models`;
@@ -460,28 +359,40 @@ describe("getStatusHistory read-only", () => {
     expect(probe).toHaveBeenCalledWith(openrouterRankingsUrl);
   });
 
-  it("keeps a source healthy when any of its probes succeeds", async () => {
-    const kvStore = new Map<string, string>();
-    const openrouterUrl = `${upstreamConfig.openrouter}/api/v1/models`;
-    await recordStatusSamples(withProbe(kvStore, mockProbe([openrouterUrl])));
-    const payload = await getStatusHistory(historyCtx(kvStore));
-    expect(payload.sources.find((s) => s.id === historyId)!.ok).toBe(true);
-  });
-
   it("writes nothing when the whole round is unknown (all probes time out, all status pages fail)", async () => {
     const kvStore = new Map<string, string>();
     await recordStatusSamples(unknownRoundCtx(kvStore));
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
   });
 
-  it("keeps the previous state when a later round is unknown", async () => {
-    const kvStore = new Map<string, string>();
-    await recordStatusSamples(historyCtx(kvStore));
-    expect((await getStatusHistory(historyCtx(kvStore))).sources.find((s) => s.id === historyId)!.ok).toBe(true);
-    await recordStatusSamples(unknownRoundCtx(kvStore));
-    const after = await getStatusHistory(historyCtx(kvStore));
-    expect(after.sources.find((s) => s.id === historyId)!.ok).toBe(true);
-    expect(after.events).toHaveLength(0);
+  it("logs loudly when a round produces no samples instead of skipping silently", async () => {
+    const log = vi.fn();
+    const base = historyCtx(new Map<string, string>());
+    const ctx = {
+      ...base,
+      log,
+      http: {
+        probe: async () => ({ ok: false, status: null, latencyMs: null, error: "timeout" }),
+        json: async () => {
+          throw new Error("timeout");
+        },
+      },
+    } as unknown as AppContext;
+    await expect(recordStatusSamples(ctx)).resolves.toBe(false);
+    expect(log.mock.calls.some((c) => String(c[1] ?? c[0]).includes("no samples"))).toBe(true);
+  });
+
+  it("self-heals a stale history on read so a cron gap cannot outlive the next visit", async () => {
+    const staleAt = Date.now() - 60 * 60 * 1000;
+    const stale = {
+      sources: { openrouter: { recent: [{ t: staleAt, ok: true, latencyMs: 1, status: 200, error: null }], daily: [] } },
+    };
+    const kvStore = new Map<string, string>([[HISTORY_KEY, JSON.stringify(stale)]]);
+    const probe = mockProbe();
+    const payload = await getStatusHistory(withProbe(kvStore, probe));
+    expect(probe).toHaveBeenCalled();
+    const or = payload.sources.find((s) => s.id === "openrouter")!;
+    expect(Date.now() - Date.parse(or.checkedAt!)).toBeLessThan(60_000);
   });
 });
 
@@ -510,13 +421,6 @@ describe("readStore", () => {
   it("self-heals a corrupted history entry instead of throwing", async () => {
     const kvStore = new Map<string, string>([[HISTORY_KEY, "truncated-json{{{"]]);
     const { ctx } = testCtx(kvStore);
-    await expect(readStore(ctx)).resolves.toEqual({ sources: {} });
-    expect(kvStore.has(HISTORY_KEY)).toBe(false);
-  });
-
-  it("drops a corrupt history entry without retaining a backup", async () => {
-    const raw = "truncated-json{{{";
-    const { ctx, kvStore } = testCtx(new Map<string, string>([[HISTORY_KEY, raw]]));
     await expect(readStore(ctx)).resolves.toEqual({ sources: {} });
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
   });

@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { resetModuleCachesForTests } from "@/server/infra/cache-service";
+import { resetModuleCachesForTests } from "@/server/infra/cache/service";
 import { testCtx } from "@/server/test-helpers";
-import { getTextToImageLeaderboard } from "@/server/sources/aa/text-to-image";
-import { getAgentRankings } from "@/server/sources/agent-arena";
+import { getTextToImageLeaderboard } from "@/server/sources/aa/text-to-image-source";
+import { getAgentRankings } from "@/server/sources/agent-arena-source";
 import type { AppContext } from "@/server/context";
 
 beforeEach(() => resetModuleCachesForTests());

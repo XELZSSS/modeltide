@@ -13,7 +13,7 @@ function historyIndex(): number {
   return typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : 0;
 }
 
-export function normalizePathname(pathname: string): string {
+function normalizePathname(pathname: string): string {
   if (pathname.length > 1 && pathname.endsWith("/")) return pathname.replace(/\/+$/, "") || "/";
   return pathname;
 }

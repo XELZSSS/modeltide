@@ -1,13 +1,13 @@
 import type { AppContext } from "@/server/context";
-import { CacheService } from "@/server/infra/cache-service";
+import { CacheService } from "@/server/infra/cache/service";
 
-export interface MapKVHooks {
+interface MapKVHooks {
   failPut?: boolean;
   onPut?: (key: string, value: string, opts?: unknown) => void;
   onDelete?: (key: string) => void;
 }
 
-export interface MapKV extends KVNamespace {
+interface MapKV extends KVNamespace {
   store: Map<string, string>;
   failPut: boolean;
 }
@@ -33,7 +33,7 @@ export function mapKV(store = new Map<string, string>(), hooks: MapKVHooks = {})
   return kv as unknown as MapKV;
 }
 
-export interface TestCtxOptions {
+interface TestCtxOptions {
   http?: AppContext["http"];
   log?: AppContext["log"];
   version?: string;

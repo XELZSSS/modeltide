@@ -1,4 +1,4 @@
-import { CacheService } from "@/server/infra/cache-service";
+import { CacheService } from "@/server/infra/cache/service";
 import { HttpClient } from "@/server/infra/http-client";
 import { createLogger, type LogLevel } from "@/server/infra/logger";
 import { CACHE_VERSION } from "@/shared/config";

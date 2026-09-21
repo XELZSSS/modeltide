@@ -5,7 +5,7 @@ import { Button } from "@/client/components/ui/button";
 import { Badge } from "@/client/components/ui/primitives";
 import { useTranslation } from "@/client/providers";
 import { useCompareStore } from "@/client/stores";
-import { modelId } from "@/client/utils/model";
+import { modelId } from "@/client/utils/model-utils";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 const CompareChip = memo(function CompareChip({
@@ -24,7 +24,7 @@ const CompareChip = memo(function CompareChip({
         type="button"
         onClick={() => onRemove(model)}
         aria-label={t("removeModel", { name })}
-        className="shrink-0 p-1 rounded-none text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="shrink-0 p-1 text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
       >
         <X size={14} />
       </button>

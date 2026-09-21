@@ -1,6 +1,6 @@
 import { L1_MAX_TTL_MS, L1_TTL_CAP_MS, MEMORY_CACHE_MAX_BYTES, MEMORY_CACHE_MAX_KEYS } from "@/server/config";
 
-export interface MemoryEntry<T> {
+interface MemoryEntry<T> {
   d: T;
   e: number;
 }

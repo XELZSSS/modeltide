@@ -1,7 +1,7 @@
 "use client";
 import { memo, useMemo } from "react";
 import { approxEq } from "@/shared/utils";
-import { modelId } from "@/client/utils/model";
+import { modelId } from "@/client/utils/model-utils";
 import { formatDollar } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
 import type { ArtificialAnalysisModel } from "@/shared/types";
@@ -9,9 +9,9 @@ import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { useTranslation } from "@/client/providers";
 import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
 import { useMonthlyCosts } from "@/client/pricing/cost-inputs";
-import { CostEstimatorInputs } from "@/client/pricing/inputs";
-import { useOfficialPricing } from "@/client/pricing/official";
-import { WinnerMark } from "@/client/features/compare/CompareTable";
+import { CostEstimatorInputs } from "@/client/pricing/cost-form";
+import { useOfficialPricing } from "@/client/pricing/official-pricing-hook";
+import { WinnerMark } from "@/client/features/compare/compare-table";
 
 export const CostEstimator = memo(function CostEstimator({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();

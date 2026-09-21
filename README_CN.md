@@ -81,7 +81,7 @@ npm run dev      # http://localhost:5173
 | `npm run clean`      | 清理构建产物   |
 | `npm run audit`      | 依赖安全扫描   |
 
-`deploy` 会先自动运行 `check`；CI 使用 `npm run ci`
+`deploy` 会先自动运行 `check`
 
 ## 部署
 

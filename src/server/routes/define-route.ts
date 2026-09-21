@@ -1,8 +1,7 @@
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
-import { ApiError, ClientAbortError } from "@/server/infra/errors";
-import { isTimeoutLike } from "@/server/infra/http-error";
-import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/validation";
+import { ApiError, ClientAbortError, isTimeoutLike } from "@/server/infra/errors";
+import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
 import type { AppContext } from "@/server/context";
 import { BROWSER_CACHE_HEADER, BROWSER_NO_STORE_HEADER, CDN_CACHE_HEADER, CDN_NO_STORE_HEADER } from "@/server/config";
 import { applyApiHeaders } from "@/shared/config/security";
@@ -45,29 +44,21 @@ function collectQueryParams(url: URL): Record<string, string | string[]> {
   return raw;
 }
 
-export function timeoutResponse(): Response {
-  return Response.json(
-    { error: { code: 504, message: "Upstream request timed out" } },
-    { status: 504, headers: errorHeaders() },
-  );
+/** Every error body shares one envelope: `{ error: { code, message } }`. */
+function errorJson(status: number, message: string): Response {
+  return Response.json({ error: { code: status, message } }, { status, headers: errorHeaders() });
+}
+
+function timeoutResponse(): Response {
+  return errorJson(504, "Upstream request timed out");
 }
 
 export function methodNotAllowedResponse(): Response {
-  const res = Response.json(
-    { error: { code: 405, message: "Method not allowed" } },
-    { status: 405, headers: { "content-type": "application/json" } },
-  );
-  applyApiHeaders(res.headers);
-  return res;
+  return errorJson(405, "Method not allowed");
 }
 
 export function notFoundResponse(): Response {
-  const res = Response.json(
-    { error: { code: 404, message: "Not found" } },
-    { status: 404, headers: { "content-type": "application/json" } },
-  );
-  applyApiHeaders(res.headers);
-  return res;
+  return errorJson(404, "Not found");
 }
 
 export function stripBodyForHead(res: Response): Response {
@@ -79,34 +70,26 @@ export function stripBodyForHead(res: Response): Response {
 
 function mapApiError(err: unknown, method: string, path: string): Response {
   if (err instanceof ClientAbortError) {
-    const headers = errorHeaders();
-    return new Response(null, { status: 499, headers });
+    return new Response(null, { status: 499, headers: errorHeaders() });
   }
   if (isTimeoutLike(err)) return timeoutResponse();
   if (err instanceof ApiError) {
     const status = clampStatus(err.status);
-    const headers = errorHeaders();
     if (status === 504 || (err.name === "UpstreamError" && (err as { causedByTimeout?: boolean }).causedByTimeout)) {
       console.warn(`[upstream-timeout] ${method} ${path} ${err.message}`);
       return timeoutResponse();
     }
     if (status === 502) {
       console.warn(`[upstream] ${method} ${path} ${err.message}`);
-      return Response.json(
-        { error: { code: status, message: "Upstream data source temporarily unavailable" } },
-        { status, headers },
-      );
+      return errorJson(502, "Upstream data source temporarily unavailable");
     }
-    return Response.json({ error: { code: status, message: err.message } }, { status, headers });
+    return errorJson(status, err.message);
   }
   console.error(`[unhandled] ${method} ${path} ${err instanceof Error ? err.message : String(err)}`);
-  return Response.json(
-    { error: { code: 500, message: "Internal server error" } },
-    { status: 500, headers: errorHeaders() },
-  );
+  return errorJson(500, "Internal server error");
 }
 
-export interface ApiRouteDef<S extends QuerySchema = QuerySchema> {
+interface ApiRouteDef<S extends QuerySchema = QuerySchema> {
   query?: S;
   cache?: { browser: string; cdn: string };
   handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<unknown>;

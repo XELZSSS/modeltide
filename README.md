@@ -81,7 +81,7 @@ npm run dev      # http://localhost:5173
 | `npm run clean`      | Remove build artifacts               |
 | `npm run audit`      | Dependency security scan             |
 
-`deploy` runs `check` first; CI uses `npm run ci`
+`deploy` runs `check` first
 
 ## Deployment
 

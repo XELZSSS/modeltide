@@ -1,9 +1,9 @@
 import { UpstreamError } from "@/server/infra/errors";
 
 export const FAILURE_COOLDOWN_MS = 45_000;
-export const FAILURE_COOLDOWN_MAX_KEYS = 512;
+const FAILURE_COOLDOWN_MAX_KEYS = 512;
 
-export class FailureCooldown {
+class FailureCooldown {
   private lastFail = new Map<string, { at: number; timeout: boolean }>();
 
   constructor(private windowMs: number = FAILURE_COOLDOWN_MS) {}

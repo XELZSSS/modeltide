@@ -6,7 +6,7 @@
 
 import type { AppContext } from "@/server/context";
 import type { SourcePayload } from "@/shared/types";
-import type { ParseResult } from "@/server/parsers/result";
+import type { ParseResult } from "@/server/parsers/parse-result";
 import { UpstreamError } from "@/server/infra/errors";
 import { ttlFor } from "@/shared/config";
 
@@ -15,11 +15,11 @@ export function requireParsed<T>(result: ParseResult<T>): T {
   throw new UpstreamError(result.error);
 }
 
-export interface CacheScope {
+interface CacheScope {
   memoryOnly?: boolean;
 }
 
-export interface PayloadBuild<T> {
+interface PayloadBuild<T> {
   rows: T;
   partial?: boolean;
   ttl?: number;
@@ -61,7 +61,7 @@ export function cachedPayload<T>(
   );
 }
 
-export interface SourceBuild<Value> {
+interface SourceBuild<Value> {
   value: Value;
   ttl?: number;
 }

@@ -4,7 +4,7 @@
  * graph); only the data lives here so the fixture can't drift from what
  * src/server/sources/home.ts fans in.
  */
-export const FETCHED_AT = "2026-01-01T00:00:00.000Z";
+const FETCHED_AT = "2026-01-01T00:00:00.000Z";
 
 export function openRouterRankingsPayload() {
   return {

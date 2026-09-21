@@ -10,7 +10,7 @@ export function buildHallucinationRankings(models: ArtificialAnalysisModel[]): H
           id: model.id,
           slug: model.slug,
           model: model.name,
-          // Already 0-100 (parsers/aa/compact.ts): re-normalizing inflated sub-1% by 100x.
+          // Server already normalizes to 0-100 (parsers/aa/compact.ts) — pass through, no re-scaling here.
           hallucinationRate: total.hallucination_rate ?? null,
           accuracy: total.accuracy ?? null,
           attemptRate: total.attempt_rate ?? null,

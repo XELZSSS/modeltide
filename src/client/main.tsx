@@ -2,32 +2,32 @@ import { StrictMode, Suspense, lazy, useEffect, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { usePathname } from "@/client/router";
 import { Providers } from "@/client/providers";
-import { AppShell } from "@/client/components/layout/AppShell";
+import { AppShell } from "@/client/components/layout/app-shell";
 import { ErrorBoundary, NotFound, Spinner } from "@/client/components/feedback";
 import { useSearchStore } from "@/client/stores";
 import { registerServiceWorker, unregisterStaleServiceWorker } from "@/client/pwa/use-pwa";
-import { HomeView } from "@/client/features/home/HomeView";
+import { HomeView } from "@/client/features/home/home-view";
 import "@/styles/globals.css";
 
 const RankingsHubView = lazy(() =>
-  import("@/client/features/rankings/RankingsHubView").then((m) => ({ default: m.RankingsHubView })),
+  import("@/client/features/rankings/rankings-hub-view").then((m) => ({ default: m.RankingsHubView })),
 );
 const ModelDetailView = lazy(() =>
-  import("@/client/features/models/ModelDetailView").then((m) => ({ default: m.ModelDetailView })),
+  import("@/client/features/models/model-view").then((m) => ({ default: m.ModelDetailView })),
 );
 const CompareView = lazy(() =>
-  import("@/client/features/compare/CompareView.lazy").then((m) => ({ default: m.CompareView })),
+  import("@/client/features/compare/compare-view").then((m) => ({ default: m.CompareView })),
 );
 const PriceCompareView = lazy(() =>
-  import("@/client/features/compare/PriceCompareView.lazy").then((m) => ({ default: m.PriceCompareView })),
+  import("@/client/features/compare/price-compare-view").then((m) => ({ default: m.PriceCompareView })),
 );
 const ReleasesView = lazy(() =>
-  import("@/client/features/releases/ReleasesView").then((m) => ({ default: m.ReleasesView })),
+  import("@/client/features/releases/releases-view").then((m) => ({ default: m.ReleasesView })),
 );
-const NewsView = lazy(() => import("@/client/features/news/NewsView").then((m) => ({ default: m.NewsView })));
-const StatusView = lazy(() => import("@/client/features/status/StatusView").then((m) => ({ default: m.StatusView })));
+const NewsView = lazy(() => import("@/client/features/news/news-view").then((m) => ({ default: m.NewsView })));
+const StatusView = lazy(() => import("@/client/features/status/status-view").then((m) => ({ default: m.StatusView })));
 const SourceDetailView = lazy(() =>
-  import("@/client/features/status/SourceDetailView").then((m) => ({ default: m.SourceDetailView })),
+  import("@/client/features/status/source-view").then((m) => ({ default: m.SourceDetailView })),
 );
 
 function SearchResetOnNavigate(): null {

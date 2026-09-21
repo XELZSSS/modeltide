@@ -1,7 +1,7 @@
 import { buildContext, type Env } from "@/server/context";
 import { recordStatusSamples } from "@/server/sources/status";
 import { warmTasks } from "@/server/sources/registry";
-import { runCapped } from "@/server/infra/pool";
+import { runCapped } from "@/server/infra/task-pool";
 import {
   SAMPLE_TIMEOUT_MS,
   WARM_TASK_TIMEOUT_MS,
@@ -11,7 +11,7 @@ import {
 } from "@/server/config";
 import { applyApiHeaders } from "@/shared/config/security";
 import { methodNotAllowedResponse, notFoundResponse, stripBodyForHead } from "@/server/routes/define-route";
-import { handleApi } from "./router";
+import { handleApi } from "./api-router";
 
 async function pingCronMonitor(env: Env, healthy: boolean): Promise<void> {
   const url = env.STATUS_PING_URL;
@@ -55,7 +55,12 @@ export function cronHealthy(sampled: boolean | null, warmFailed: number, warmTot
 }
 
 async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: number): Promise<ScheduledResult> {
-  if (!env.CACHE) return { sampled: null, warmFailed: 0, warmTotal: 0, healthy: false };
+  if (!env.CACHE) {
+    // Degraded, not failed: status sampling and warmup fall back to memory L1
+    // (see buildContext/acquireSampleLock). Don't force healthy:false here —
+    // that pinged /fail on every local-dev cron. Health comes from cronHealthy.
+    console.warn("[scheduled] CACHE KV not configured: running with memory-only fallback");
+  }
   const sampleJob = (async (): Promise<boolean | null> => {
     try {
       return await recordStatusSamples(buildContext(env, { workSignal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));

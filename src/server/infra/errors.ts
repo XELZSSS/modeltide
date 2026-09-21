@@ -1,4 +1,15 @@
-import { isTimeoutLike } from "@/server/infra/http-error";
+export function isTimeoutLike(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "TimeoutError" ||
+      err.name === "AbortError" ||
+      (err as { causedByTimeout?: boolean }).causedByTimeout === true)
+  );
+}
+
+export function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
+}
 
 export class ApiError extends Error {
   status: number;

@@ -2,7 +2,7 @@
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import type { TranslationKey } from "@/shared/i18n";
 import { calcMonthlyCost } from "@/client/utils/cost-estimator";
-import { modelId } from "@/client/utils/model";
+import { modelId } from "@/client/utils/model-utils";
 import { resolveEffectivePricing, type OfficialGetter } from "@/client/utils/pricing-merge";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
@@ -70,29 +70,6 @@ function useCostEstimator(): CostEstimatorState {
   return useMemo(() => ({ values, setField, calc }), [values, setField, calc]);
 }
 
-const COST_CACHE = new Map<string, number | null>();
-const COST_CACHE_MAX = 1024;
-
-function costCacheKey(
-  model: ArtificialAnalysisModel,
-  pricing: ReturnType<typeof resolveEffectivePricing>,
-  calc: { input: number; output: number; reasoning: number; cache: number; cacheWrite: number; days: number },
-): string {
-  return [
-    model.id,
-    pricing.input ?? "",
-    pricing.output ?? "",
-    pricing.cacheHit ?? "",
-    pricing.cacheWrite ?? "",
-    calc.input,
-    calc.output,
-    calc.reasoning,
-    calc.cache,
-    calc.cacheWrite,
-    calc.days,
-  ].join("|");
-}
-
 export function getCachedMonthlyCost(
   model: ArtificialAnalysisModel,
   calc: { input: number; output: number; reasoning: number; cache: number; cacheWrite: number; days: number },
@@ -110,9 +87,6 @@ export function getCachedMonthlyCost(
     const v = model.defaultMonthlyCost;
     if (v != null && Number.isFinite(v)) return v;
   }
-  const pricing = resolveEffectivePricing(model.pricing, official);
-  const key = costCacheKey(model, pricing, calc);
-  if (COST_CACHE.has(key)) return COST_CACHE.get(key)!;
   const opts = {
     dailyInput: calc.input * 1_000_000,
     dailyOutput: calc.output * 1_000_000,
@@ -121,16 +95,10 @@ export function getCachedMonthlyCost(
     cacheWriteRate: calc.cacheWrite,
     daysPerMonth: calc.days,
   };
-  const result = calcMonthlyCost(model, opts, official);
-  COST_CACHE.set(key, result);
-  if (COST_CACHE.size > COST_CACHE_MAX) {
-    const first = COST_CACHE.keys().next().value as string | undefined;
-    if (first) COST_CACHE.delete(first);
-  }
-  return result;
+  return calcMonthlyCost(model, opts, official);
 }
 
-export type MonthlyCostMap = Map<string, number | null>;
+type MonthlyCostMap = Map<string, number | null>;
 
 /**
  * Monthly cost per modelId(). Keyed rather than positional so a filtered or

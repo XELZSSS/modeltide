@@ -2,10 +2,16 @@
 import { useMemo } from "react";
 import type { TranslationKey } from "@/shared/i18n";
 import { BarChart3, Brain, Image, Rocket, type LucideIcon } from "lucide-react";
-import type { ArtificialAnalysisModel, ClosedReleaseEntry, HallucinationRankingEntry } from "@/shared/types";
-import type { NormalizedHomeDashboard } from "@/client/api/normalize";
-import { computeProviderStats, shortModelId } from "@/client/utils/model";
+import type {
+  ArtificialAnalysisModel,
+  ClosedReleaseEntry,
+  HallucinationRankingEntry,
+  OpenSourceModelEntry,
+} from "@/shared/types";
+import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
+import { computeProviderStats, shortModelId } from "@/client/utils/model-utils";
 import { formatShortNumber } from "@/client/utils/format";
+import { buildReleaseRows } from "@/client/utils/release-feed";
 import type { HomeBarStat } from "./statistics-section";
 
 export interface HomeKpi {
@@ -24,23 +30,17 @@ export interface HomeProviderStat {
 
 const top7 = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, 7).map(map);
 
-function finiteTs(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const ts = Date.parse(value);
-  return Number.isFinite(ts) ? ts : null;
-}
-
 /**
- * Newest release name from the same feed as the releases page 模型发布 tab,
- * so the home KPI always matches its head. (The intelligence index carries
- * its own release_date per model, which lags the changelog and must not be
- * used here.)
+ * Head of the same merged feed the releases page renders (Hugging Face +
+ * Artificial Analysis), so the home KPI always matches its first row. (The
+ * intelligence index carries its own release_date per model, which lags the
+ * changelog and must not be used here.)
  */
-export function pickLatestReleaseName(closedReleases: ClosedReleaseEntry[]): string | null {
-  for (const entry of closedReleases) {
-    if (entry && finiteTs(entry.releaseDate) != null) return entry.model;
-  }
-  return null;
+export function pickLatestReleaseName(
+  openSourceReleases: OpenSourceModelEntry[],
+  closedReleases: ClosedReleaseEntry[],
+): string | null {
+  return buildReleaseRows(openSourceReleases, closedReleases)[0]?.name ?? null;
 }
 
 export function useHomeStats(
@@ -49,6 +49,7 @@ export function useHomeStats(
   dashboardData: NormalizedHomeDashboard,
   t: (key: TranslationKey, params?: Record<string, string | number>) => string,
   closedReleases?: ClosedReleaseEntry[],
+  openSourceReleases?: OpenSourceModelEntry[],
 ) {
   const openSourceRankings = dashboardData.opensource;
   // Trending order mirrors the official models page; downloads are reference only.
@@ -82,7 +83,7 @@ export function useHomeStats(
   );
 
   const { latestReleaseName, bestReasoningModel } = useMemo(() => {
-    const latestName = closedReleases ? pickLatestReleaseName(closedReleases) : null;
+    const latestName = pickLatestReleaseName(openSourceReleases ?? [], closedReleases ?? []);
     let bestReasoning: ArtificialAnalysisModel | null = null;
     for (const m of artificialData) {
       if (
@@ -92,7 +93,7 @@ export function useHomeStats(
         bestReasoning = m;
     }
     return { latestReleaseName: latestName, bestReasoningModel: bestReasoning };
-  }, [artificialData, closedReleases]);
+  }, [artificialData, closedReleases, openSourceReleases]);
 
   const kpiStrip = useMemo<HomeKpi[]>(
     () => [

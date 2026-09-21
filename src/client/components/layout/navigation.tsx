@@ -3,10 +3,10 @@ import { type ReactNode, useMemo } from "react";
 import { Home, Award, Megaphone, Newspaper, Activity, Settings, MoreHorizontal, ChevronRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "@/client/providers";
-import { prefetchQueriesForRoute } from "@/client/api/queries";
+import { prefetchQueriesForRoute } from "@/client/api/api-queries";
 import { SafeLink as Link, usePathname } from "@/client/router";
 import { Sheet, SheetBody, SheetHeader } from "@/client/components/ui/sheet";
-import { REPO_URL } from "@/client/config/navigation";
+import { REPO_URL } from "@/client/config/nav-config";
 
 interface NavItem {
   path: string;
@@ -53,7 +53,7 @@ function usePrefetch(): (path: string) => void {
   return useMemo(() => (path: string) => prefetchQueriesForRoute(qc, path), [qc]);
 }
 
-export function IconButton({ label, onClick, children }: { label: string; onClick?: () => void; children: ReactNode }) {
+function IconButton({ label, onClick, children }: { label: string; onClick?: () => void; children: ReactNode }) {
   return (
     <button type="button" aria-label={label} onClick={onClick} className={DESKTOP_ICON_BUTTON}>
       {children}
@@ -70,7 +70,7 @@ interface DesktopNavProps {
 }
 
 const DESKTOP_ICON_BUTTON =
-  "p-1.5 text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover bg-transparent rounded-none transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
+  "p-1.5 text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
 
 export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
   const pathname = usePathname();
@@ -96,7 +96,7 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
                 aria-current={active ? "page" : undefined}
                 onMouseEnter={() => prefetch(item.path)}
                 onFocus={() => prefetch(item.path)}
-                className={`relative px-3 py-1.5 text-sm font-medium rounded-none transition-colors duration-fast whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 ${
+                className={`relative px-3 py-1.5 text-sm font-medium transition-colors duration-fast whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 ${
                   active ? "text-text-primary" : "text-text-secondary hoverable:hover:text-text-primary"
                 }`}
               >
@@ -138,7 +138,12 @@ interface MobileNavProps {
 }
 
 const MOBILE_BAR_BUTTON =
-  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 rounded-none min-h-16 py-2";
+  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 min-h-16 py-2";
+
+const mobileBarItemClass = (active: boolean) =>
+  `${MOBILE_BAR_BUTTON} relative ${active ? "text-accent" : "text-text-secondary"}`;
+
+const ActiveIndicator = () => <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />;
 
 function MobileBarButton({
   active,
@@ -152,12 +157,7 @@ function MobileBarButton({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className={`${MOBILE_BAR_BUTTON} relative ${active ? "text-accent" : "text-text-secondary"}`}
-    >
+    <button type="button" onClick={onClick} aria-label={label} className={mobileBarItemClass(active)}>
       {children}
     </button>
   );
@@ -173,7 +173,7 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
 
   return (
     <nav
-      className="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch rounded-none border-t border-border bg-nav-bg backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)]"
+      className="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch border-t border-border bg-nav-bg backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)]"
       aria-label={t("navPrimaryMobile")}
     >
       {mobilePrimary.map((item) => {
@@ -185,16 +185,16 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
             aria-label={item.label}
             aria-current={active ? "page" : undefined}
             onTouchStart={() => prefetch(item.path)}
-            className={`${MOBILE_BAR_BUTTON} relative ${active ? "text-accent" : "text-text-secondary"}`}
+            className={mobileBarItemClass(active)}
           >
-            {active && <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />}
+            {active && <ActiveIndicator />}
             {item.icon}
             <span>{item.label}</span>
           </Link>
         );
       })}
       <MobileBarButton active={isMoreActive} onClick={onMoreOpen} label={t("more")}>
-        {isMoreActive && <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />}
+        {isMoreActive && <ActiveIndicator />}
         <MoreHorizontal size={18} />
         <span>{t("more")}</span>
       </MobileBarButton>

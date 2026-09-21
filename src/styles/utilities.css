@@ -81,13 +81,7 @@ main,
 .overflow-auto:not(.no-scrollbar) {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-secondary) 20%, transparent) transparent;
-}
 
-html,
-main,
-.overflow-y-auto:not(.no-scrollbar),
-.overflow-x-auto:not(.no-scrollbar),
-.overflow-auto:not(.no-scrollbar) {
   &::-webkit-scrollbar-track,
   &::-webkit-scrollbar-corner {
     background: transparent;
@@ -108,14 +102,8 @@ main,
   &::-webkit-scrollbar-thumb:hover {
     background-color: color-mix(in srgb, var(--text-secondary) 40%, transparent);
   }
-}
 
-@media (max-width: 767px) {
-  html,
-  main,
-  .overflow-y-auto:not(.no-scrollbar),
-  .overflow-x-auto:not(.no-scrollbar),
-  .overflow-auto:not(.no-scrollbar) {
+  @media (max-width: 767px) {
     &::-webkit-scrollbar {
       width: 4px;
       height: 4px;

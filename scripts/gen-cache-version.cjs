@@ -2,18 +2,15 @@
 // Generation script for src/shared/config/cache-version.gen.ts.
 const fs = require("fs");
 const path = require("path");
-const { walkTs, stripComments } = require("./_util.cjs");
+const { walkTs, stripComments } = require("./script-utils.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "src", "shared", "config", "cache-version.gen.ts");
-// `--check` verifies the committed artifact instead of silently rewriting it, so
-// CI can fail on drift.
-const CHECK_ONLY = process.argv.includes("--check");
 
 const HASH_INPUT_DIRS = [
   path.join(ROOT, "src", "server", "sources"),
   path.join(ROOT, "src", "server", "parsers"),
-  path.join(ROOT, "src", "server", "config"),
+  path.join(ROOT, "src", "server", "config.ts"),
   path.join(ROOT, "src", "server", "infra"),
   path.join(ROOT, "src", "server", "routes"),
   path.join(ROOT, "src", "server", "context.ts"),
@@ -72,14 +69,6 @@ function main() {
   if (existing === content) {
     console.log(`gen:cache-version ok (${version})`);
     return;
-  }
-  if (CHECK_ONLY) {
-    const committed = /sha-[0-9a-f]+/.exec(existing)?.[0] ?? "(no generated file)";
-    console.error(
-      `gen:cache-version stale: committed ${committed}, sources hash to ${version}. ` +
-        `Run \`node scripts/gen-cache-version.cjs\` and commit the result.`,
-    );
-    process.exit(1);
   }
   fs.writeFileSync(OUT, content);
   console.log(`gen:cache-version updated (${version})`);

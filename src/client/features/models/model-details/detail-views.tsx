@@ -1,7 +1,7 @@
 "use client";
 import type { ComponentType, ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
-import { MODEL_SOURCES, type ModelSource } from "@/client/config/navigation";
+import { MODEL_SOURCES, type ModelSource } from "@/client/config/nav-config";
 import { EmptyState, NotFound, Spinner } from "@/client/components/feedback";
 import { DetailPageLayout } from "@/client/components/layout";
 

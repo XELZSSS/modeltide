@@ -53,7 +53,10 @@
           document.documentElement.style.colorScheme = dark ? "dark" : "light";
           var m = document.querySelector("meta[name='theme-color']");
           if (m) m.setAttribute("content", dark ? "#000000" : "#ffffff");
-          if (lang) document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+          // Stored lang wins; otherwise mirror initialLang() in the settings store.
+          var nav = typeof navigator !== "undefined" && navigator.language ? navigator.language : "";
+          var resolved = lang || (/^en/i.test(nav) ? "en" : "zh");
+          document.documentElement.lang = resolved === "zh" ? "zh-CN" : "en";
         } catch (e) {}
       })();
     </script>

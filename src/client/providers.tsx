@@ -2,7 +2,7 @@
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSettingsStore } from "@/client/stores";
-import { ApiClientError, isAbortError } from "@/client/api/client";
+import { ApiClientError, isAbortError } from "@/client/api/api-client";
 import { FIVE_MINUTES, THIRTY_MINUTES } from "@/shared/config";
 import type { Lang, TFunction } from "@/shared/i18n";
 import { createT } from "@/shared/i18n";
@@ -52,40 +52,23 @@ function I18nProvider({ children }: { children: ReactNode }) {
   return <I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>;
 }
 
-const MOBILE_BREAKPOINT = 768;
+const MOBILE_QUERY = "(max-width: 767px)";
 
-function useIsMobile(): boolean {
-  const query = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
+export function useDevice(): { isMobile: boolean } {
   const [isMobile, setIsMobile] = useState<boolean>(() =>
-    typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false,
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(MOBILE_QUERY).matches
+      : false,
   );
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mq = window.matchMedia(query);
+    const mq = window.matchMedia(MOBILE_QUERY);
     const onChange = () => setIsMobile(mq.matches);
     onChange();
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, [query]);
-  return isMobile;
-}
-
-interface DeviceContextValue {
-  isMobile: boolean;
-}
-
-const DeviceContext = createContext<DeviceContextValue | null>(null);
-
-function DeviceProvider({ children }: { children: ReactNode }) {
-  const isMobile = useIsMobile();
-  const value = useMemo(() => ({ isMobile }), [isMobile]);
-  return <DeviceContext.Provider value={value}>{children}</DeviceContext.Provider>;
-}
-
-export function useDevice(): DeviceContextValue {
-  const ctx = use(DeviceContext);
-  if (!ctx) throw new Error("useDevice must be used within a DeviceProvider");
-  return ctx;
+  }, []);
+  return useMemo(() => ({ isMobile }), [isMobile]);
 }
 
 function createQueryClient(): QueryClient {
@@ -101,7 +84,6 @@ function createQueryClient(): QueryClient {
           return count < 2;
         },
         retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
-        // Default refetch-on-focus: otherwise an observed query never becomes fresh again.
         refetchOnWindowFocus: true,
         staleTime: FIVE_MINUTES,
         gcTime: THIRTY_MINUTES,
@@ -114,9 +96,7 @@ export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
   return (
     <I18nProvider>
-      <DeviceProvider>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      </DeviceProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </I18nProvider>
   );
 }

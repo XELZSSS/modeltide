@@ -5,9 +5,8 @@ import {
   useArtificialRankings,
   useHallucinationRankings,
   useOpenRouterRankings,
-} from "@/client/api/queries";
-import { modelDetailPath } from "@/client/utils/model";
-import { fuzzyMatch } from "@/client/utils/fuzzy";
+} from "@/client/api/api-queries";
+import { modelDetailPath } from "@/client/utils/model-utils";
 import type { SearchResult, SearchResultSource } from "@/shared/types";
 import type {
   ArtificialAnalysisModel,
@@ -15,8 +14,8 @@ import type {
   OpenRouterRankEntry,
   OpenSourceModelEntry,
 } from "@/shared/types";
-import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/navigation";
-import { matchTerm, normalizeModelKey } from "@/shared/utils";
+import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
+import { matchTerm, normalizeModelKey, fuzzyMatch } from "@/shared/utils";
 
 type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
 

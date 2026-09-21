@@ -1,6 +1,7 @@
 import { BENCHMARK_LABELS, ONE_DAY, ONE_HOUR, ONE_MINUTE } from "@/shared/config";
 import type { Lang, TFunction, TranslationKey } from "@/shared/i18n";
 import { isFiniteNumber } from "@/shared/utils";
+import { isHttpUrl } from "@/shared/utils/url";
 
 function compactParts(n: number) {
   return { abs: Math.abs(n), sign: n < 0 ? "-" : "" };
@@ -134,13 +135,7 @@ export function safeHref(url: string | null | undefined): string | undefined {
   if (!cleaned) return undefined;
   if (cleaned.startsWith("//") || cleaned.startsWith("/\\")) return undefined;
   if (cleaned.startsWith("/")) return cleaned;
-  try {
-    const parsed = new URL(cleaned);
-    if (parsed.protocol === "https:" || parsed.protocol === "http:") return cleaned;
-  } catch {
-    return undefined;
-  }
-  return undefined;
+  return isHttpUrl(cleaned) ? cleaned : undefined;
 }
 
 const CAT_MAP: Record<string, TranslationKey> = {

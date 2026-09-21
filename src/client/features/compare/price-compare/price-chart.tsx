@@ -7,19 +7,17 @@ import { registerBar } from "@/client/utils/charts-register";
 registerBar();
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { Card, CardContent } from "@/client/components/ui/card";
+import { ChartFrame } from "@/client/components/ui/chart-frame";
 import { useTranslation } from "@/client/providers";
-import { useChartTheme } from "@/client/theme/chart-theme";
+import { useChartTheme, hexToRgba, legendStyle, seriesColor } from "@/client/theme/chart-theme";
 import {
   axisDashedBorderStyle,
   axisGridStyle,
   axisTickStyle,
   chartBase,
   defaultTooltipOptions,
-  hexToRgba,
-  legendStyle,
-  seriesColor,
 } from "@/client/utils/charts";
-import type { CompareRow } from "@/client/features/compare/logic";
+import type { CompareRow } from "@/client/features/compare/compare-logic";
 
 export const PriceChart = memo(function PriceChart({
   priceRows,
@@ -86,11 +84,9 @@ export const PriceChart = memo(function PriceChart({
     <Card>
       <CardContent>
         <p className="ui-card-title mb-4">{t("priceComparison")}</p>
-        <div className="w-full h-[200px] sm:h-[240px] min-w-0 overflow-hidden">
-          <figure className="h-full [&_canvas]:block">
-            <Bar data={data} options={options} role="img" aria-label={t("priceComparison")} />
-          </figure>
-        </div>
+        <ChartFrame>
+          <Bar data={data} options={options} role="img" aria-label={t("priceComparison")} />
+        </ChartFrame>
       </CardContent>
     </Card>
   );

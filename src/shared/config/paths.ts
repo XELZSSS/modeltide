@@ -15,6 +15,7 @@ export const API_DOMAINS = {
 } as const;
 
 type Domain = keyof typeof API_DOMAINS;
+const DOMAINS = Object.keys(API_DOMAINS) as Domain[];
 
 function apiPath(domain: Domain): string {
   return `/api/${API_DOMAINS[domain]}`;
@@ -28,11 +29,12 @@ function queryKey(domain: Domain, ...parts: (string | number)[]): readonly strin
   return ["api", "v2", API_DOMAINS[domain], ...parts.map(String)] as const;
 }
 
+// Every domain gets a plain `["api","v2",<slug>]` key for free; only the
+// entries below need extra segments or parameterization.
+const plainQueryKeys = Object.fromEntries(DOMAINS.map((d) => [d, queryKey(d)])) as Record<Domain, readonly string[]>;
+
 export const queryKeys = {
-  artificialIndex: queryKey("artificialIndex"),
-  openSourceReleases: queryKey("openSourceReleases"),
-  openRouterRankings: queryKey("openRouterRankings"),
-  homeDashboard: queryKey("homeDashboard"),
+  ...plainQueryKeys,
   openSourceModels: queryKey(
     "openSourceModels",
     OPEN_SOURCE_MODELS_DEFAULTS.sort,
@@ -40,40 +42,18 @@ export const queryKeys = {
     OPEN_SOURCE_MODELS_DEFAULTS.limit,
   ),
   openSourceModel: (id: string) => queryKey("openSourceModel", id),
-  statusHistory: queryKey("statusHistory"),
   news: (category: string) => queryKey("news", category),
-  agentRankings: queryKey("agentRankings"),
-  officialPricing: queryKey("officialPricing"),
-  closedReleases: queryKey("closedReleases"),
 } as const;
 
-export const apiPaths: Record<Domain, string> = {
-  artificialIndex: apiPath("artificialIndex"),
-  openSourceModels: apiPath("openSourceModels"),
-  openSourceModel: apiPath("openSourceModel"),
-  openSourceReleases: apiPath("openSourceReleases"),
-  news: apiPath("news"),
-  openRouterRankings: apiPath("openRouterRankings"),
-  closedReleases: apiPath("closedReleases"),
-  agentRankings: apiPath("agentRankings"),
-  officialPricing: apiPath("officialPricing"),
-  statusHistory: apiPath("statusHistory"),
-  homeDashboard: apiPath("homeDashboard"),
-} as const;
+export const apiPaths = Object.fromEntries(DOMAINS.map((d) => [d, apiPath(d)])) as Record<Domain, string>;
 
+// Plain paths for free; only URLs that carry query strings are overridden.
 export const publicApiPaths = {
-  artificialIndex: apiPaths.artificialIndex,
+  ...apiPaths,
   openSourceModels: (() => {
     const d = OPEN_SOURCE_MODELS_DEFAULTS;
     return `${apiPaths.openSourceModels}?sort=${d.sort}&direction=${d.direction}&limit=${d.limit}`;
   })(),
   openSourceModel: (id: string) => `${apiPaths.openSourceModel}?id=${encodeURIComponent(id)}`,
-  openSourceReleases: apiPaths.openSourceReleases,
-  openRouterRankings: apiPaths.openRouterRankings,
-  closedReleases: apiPaths.closedReleases,
-  agentRankings: apiPaths.agentRankings,
-  officialPricing: apiPaths.officialPricing,
-  statusHistory: apiPaths.statusHistory,
   news: (category: string) => `${apiPaths.news}?category=${encodeURIComponent(category)}`,
-  homeDashboard: apiPaths.homeDashboard,
 } as const;

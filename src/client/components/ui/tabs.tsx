@@ -5,7 +5,7 @@ import { cn } from "@/client/utils/cn";
 import { SegmentedGroup } from "@/client/components/ui/grids";
 
 const tabButtonVariants = cva(
-  "rounded-none font-medium transition-colors duration-fast whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none relative pb-2.5",
+  "font-medium transition-colors duration-fast whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none relative pb-2.5",
   {
     variants: {
       active: {
@@ -67,6 +67,20 @@ export const TabButton = memo(function TabButton({
   );
 });
 
+/**
+ * Shared roving-focus move for Arrow/Home/End over a list of options. Returns
+ * the next index, or null when the key is not a navigation key (or the list is
+ * empty / the current index is unknown) so callers can leave the event alone.
+ */
+export function nextIndexForKey(key: string, index: number, length: number): number | null {
+  if (length === 0 || index < 0) return null;
+  if (key === "ArrowRight" || key === "ArrowDown") return (index + 1) % length;
+  if (key === "ArrowLeft" || key === "ArrowUp") return (index - 1 + length) % length;
+  if (key === "Home") return 0;
+  if (key === "End") return length - 1;
+  return null;
+}
+
 export interface TabItem {
   id: string;
   label: string;
@@ -96,19 +110,11 @@ export const TabContainer = memo(function TabContainer({
   children,
 }: TabContainerProps) {
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (tabs.length === 0) return;
-    const currentIndex = tabs.findIndex((tab) => tab.id === activeTab);
-    if (currentIndex < 0) return;
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (currentIndex + 1) % tabs.length;
-    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = tabs.length - 1;
-    }
+    const nextIndex = nextIndexForKey(
+      event.key,
+      tabs.findIndex((tab) => tab.id === activeTab),
+      tabs.length,
+    );
     if (nextIndex == null) return;
     event.preventDefault();
     onTabChange(tabs[nextIndex]!.id);

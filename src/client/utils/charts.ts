@@ -24,8 +24,6 @@ export const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
 
 export const axisDashedBorderStyle = (theme: ChartTheme) => ({ color: theme.grid, dash: [3, 3] as [number, number] });
 
-export { legendStyle, seriesColor, hexToRgba, ceilToStep } from "@/client/theme/chart-theme";
-
 export const lineSeriesStyle = {
   borderWidth: 2,
   pointRadius: 0,

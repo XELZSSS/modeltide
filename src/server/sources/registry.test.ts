@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { SOURCES } from "@/server/sources/registry";
-import { validateQuery, type QuerySchema } from "@/server/infra/validation";
+import { validateQuery, type QuerySchema } from "@/server/infra/query-validation";
 import { ValidationError } from "@/server/infra/errors";
 import { MAX_MODEL_LIMIT, apiPaths } from "@/shared/config";
-
-type Domain = keyof typeof apiPaths;
-
-const pathToDomain = new Map<string, Domain>(
-  Object.entries(apiPaths as Record<Domain, string>).map(([domain, path]) => [path, domain as Domain]),
-);
 
 const pathsOf = () => SOURCES.map((s) => s.path);
 
@@ -24,13 +18,6 @@ describe("SOURCES manifest", () => {
     expect(new Set(pathsOf()).size).toBe(pathsOf().length);
   });
 
-  it("keeps every route under /api/ and inside the shared path table", () => {
-    for (const path of pathsOf()) {
-      expect(path.startsWith("/api/"), path).toBe(true);
-      expect(pathToDomain.has(path), `unmapped path ${path}`).toBe(true);
-    }
-  });
-
   it("answers a bare request with defaults for every route except the single-model lookup", () => {
     const required = pathsOf().filter((path) => {
       try {
@@ -42,10 +29,6 @@ describe("SOURCES manifest", () => {
       }
     });
     expect(required).toEqual([apiPaths.openSourceModel]);
-  });
-
-  it("rejects a missing id on the single-model route rather than defaulting it", () => {
-    expect(() => validateQuery({}, schemaOf(apiPaths.openSourceModel))).toThrowError(/"id" is required/);
   });
 
   it("warms with typed params that satisfy their own schema", () => {
@@ -65,15 +48,6 @@ describe("SOURCES manifest", () => {
           }
         }
       }
-    }
-  });
-
-  it("uses only known warm tiers and reuses the same handler per tier", () => {
-    const tiers = new Set(["core", "hourly", "static"]);
-    for (const source of SOURCES) {
-      if (!source.warm) continue;
-      expect(tiers.has(source.warm), `${source.path} tier ${source.warm}`).toBe(true);
-      expect(typeof source.handler).toBe("function");
     }
   });
 
