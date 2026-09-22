@@ -1,4 +1,3 @@
-"use client";
 import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { isInternalHref } from "@/shared/utils";
 
@@ -8,9 +7,33 @@ function emitRouteChange(): void {
   window.dispatchEvent(new Event(ROUTE_CHANGE));
 }
 
+interface HistoryState {
+  idx?: unknown;
+  /** URL the entry was pushed from, so a detail page can tell "back" from "somewhere else". */
+  from?: unknown;
+}
+
+function historyState(): HistoryState | null {
+  return (window.history.state as HistoryState | null) ?? null;
+}
+
 function historyIndex(): number {
-  const raw = (window.history.state as { idx?: unknown } | null)?.idx;
+  const raw = historyState()?.idx;
   return typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : 0;
+}
+
+/**
+ * URL of the entry one step back in this session's history, or null for a landing
+ * (or after a `replace`, which keeps the entry's original origin).
+ */
+export function historyFrom(): string | null {
+  const raw = historyState()?.from;
+  return typeof raw === "string" ? raw : null;
+}
+
+/** True once this session has pushed an entry, i.e. "back" has somewhere in-app to go. */
+export function canGoBack(): boolean {
+  return historyIndex() > 0;
 }
 
 function normalizePathname(pathname: string): string {
@@ -24,8 +47,11 @@ export function navigate(to: string, replace = false): void {
     window.location.assign(url.href);
     return;
   }
-  if (replace) window.history.replaceState({ idx: historyIndex() }, "", url.href);
-  else window.history.pushState({ idx: historyIndex() + 1 }, "", url.href);
+  if (replace) window.history.replaceState({ ...historyState(), idx: historyIndex() }, "", url.href);
+  else {
+    const current = `${window.location.pathname}${window.location.search}`;
+    window.history.pushState({ idx: historyIndex() + 1, from: current }, "", url.href);
+  }
   emitRouteChange();
 }
 
@@ -47,10 +73,6 @@ export function useRouter(): { push: (to: string) => void; replace: (to: string)
     }),
     [],
   );
-}
-
-export function replaceRoute(to: string): void {
-  navigate(to, true);
 }
 
 export function usePathname(): string {

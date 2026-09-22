@@ -1,11 +1,10 @@
-"use client";
 import { memo, useEffect, type ReactNode } from "react";
 import { ArrowLeftRight, Trash2, X } from "lucide-react";
 import { Button } from "@/client/components/ui/button";
 import { Badge } from "@/client/components/ui/primitives";
 import { useTranslation } from "@/client/providers";
 import { useCompareStore } from "@/client/stores";
-import { modelId } from "@/client/utils/model-utils";
+import { modelDisplayName, modelId } from "@/client/utils/model-utils";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 const CompareChip = memo(function CompareChip({
@@ -16,7 +15,7 @@ const CompareChip = memo(function CompareChip({
   onRemove: (m: ArtificialAnalysisModel) => void;
 }) {
   const { t } = useTranslation();
-  const name = model.short_name || model.name;
+  const name = modelDisplayName(model);
   return (
     <Badge className="pl-3 pr-1 py-1 text-sm normal-case tracking-normal text-text-primary hoverable:hover:border-text-tertiary/40">
       <span className="font-medium truncate max-w-36">{name}</span>

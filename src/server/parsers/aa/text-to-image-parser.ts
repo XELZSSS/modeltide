@@ -1,4 +1,10 @@
-import { isRecord, isValidTextToImageEntry, numCoerce, numCoerceNonNegative, strOrNull } from "@/server/parsers/parser-primitives";
+import {
+  isRecord,
+  isValidTextToImageEntry,
+  numCoerce,
+  numCoerceNonNegative,
+  strOrNull,
+} from "@/server/parsers/parser-primitives";
 import type { TextToImageModel } from "@/shared/types";
 import type { RawEntry } from "@/server/parsers/upstream-types";
 

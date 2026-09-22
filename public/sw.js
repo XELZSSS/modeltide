@@ -1,6 +1,6 @@
 /* ModelTide service worker (no build step, served as /sw.js). */
 
-const SW_VERSION = "modeltide-v3";
+const SW_VERSION = "modeltide-v5";
 const CACHE_NAME = `modeltide-${SW_VERSION}`;
 
 const OTHER_CACHE_MAX = 100;

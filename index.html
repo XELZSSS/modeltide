@@ -11,6 +11,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- The two Latin faces carry the above-the-fold text; preloading them keeps the
+      first paint off the fallback face that font-display: swap would replace. -->
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="ModelTide" />
     <meta property="og:description" content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析" />
@@ -51,8 +55,10 @@
             (stored == null && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
           if (dark) document.documentElement.classList.add("dark");
           document.documentElement.style.colorScheme = dark ? "dark" : "light";
-          var m = document.querySelector("meta[name='theme-color']");
-          if (m) m.setAttribute("content", dark ? "#000000" : "#ffffff");
+          var metas = document.querySelectorAll("meta[name='theme-color']");
+          // Both media-scoped tags must move together: the browser picks by media,
+          // so a stale dark tag keeps painting the wrong chrome colour.
+          for (var i = 0; i < metas.length; i++) metas[i].setAttribute("content", dark ? "#000000" : "#ffffff");
           // Stored lang wins; otherwise mirror initialLang() in the settings store.
           var nav = typeof navigator !== "undefined" && navigator.language ? navigator.language : "";
           var resolved = lang || (/^en/i.test(nav) ? "en" : "zh");

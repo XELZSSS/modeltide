@@ -1,4 +1,3 @@
-"use client";
 import { memo, type ReactNode, type KeyboardEvent } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
@@ -92,7 +91,6 @@ interface TabContainerProps {
   className?: string;
   tabSize?: "sm" | "md";
   fill?: boolean;
-  role?: "tablist" | "radiogroup";
   ariaLabel?: string;
   onTabChange: (tabId: string) => void;
   children: ReactNode;
@@ -104,7 +102,6 @@ export const TabContainer = memo(function TabContainer({
   className,
   tabSize = "md",
   fill,
-  role = "tablist",
   ariaLabel,
   onTabChange,
   children,
@@ -121,13 +118,11 @@ export const TabContainer = memo(function TabContainer({
     document.getElementById(`tab-${tabs[nextIndex]!.id}`)?.focus();
   };
 
-  const buttonRole = role === "radiogroup" ? "radio" : "tab";
-
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       <SegmentedGroup
         className={cn("w-fit max-w-full overflow-x-auto no-scrollbar sm:flex-wrap", fill && "w-full sm:w-full")}
-        role={role}
+        role="tablist"
         aria-label={ariaLabel}
         onKeyDown={handleKeyDown}
       >
@@ -138,8 +133,7 @@ export const TabContainer = memo(function TabContainer({
             active={activeTab === tab.id}
             onClick={() => onTabChange(tab.id)}
             size={tabSize}
-            role={buttonRole}
-            tabIndex={activeTab === tab.id ? 0 : role === "radiogroup" ? 0 : -1}
+            tabIndex={activeTab === tab.id ? 0 : -1}
             aria-controls={`panel-${tab.id}`}
             id={`tab-${tab.id}`}
           >

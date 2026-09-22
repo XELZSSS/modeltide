@@ -1,4 +1,3 @@
-"use client";
 import { memo, type ComponentType, type ReactNode } from "react";
 import { Card, CardContent } from "@/client/components/ui/card";
 
@@ -6,15 +5,13 @@ export const StatCard = memo(function StatCard({
   label,
   value,
   icon: Icon,
-  className,
 }: {
   label: string;
   value: ReactNode;
   icon?: ComponentType<{ className?: string }>;
-  className?: string;
 }) {
   return (
-    <Card className={className}>
+    <Card>
       <CardContent className="flex flex-col items-center justify-center gap-1.5 py-4 text-center sm:p-4">
         <div className="flex items-center justify-center gap-1.5 min-w-0 max-w-full">
           {Icon && (

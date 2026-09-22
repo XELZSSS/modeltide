@@ -1,4 +1,3 @@
-"use client";
 import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
 
@@ -14,15 +13,9 @@ export const SegmentedGroup = memo(function SegmentedGroup({
   );
 });
 
-const STAT_GRID_COLS = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-2 md:grid-cols-4" } as const;
+const STAT_GRID_COLS = { 2: "grid-cols-2", 4: "grid-cols-2 md:grid-cols-4" } as const;
 
-export const StatGrid = memo(function StatGrid({
-  columns = 4,
-  children,
-}: {
-  columns?: 2 | 3 | 4;
-  children: ReactNode;
-}) {
+export const StatGrid = memo(function StatGrid({ columns = 4, children }: { columns?: 2 | 4; children: ReactNode }) {
   return <div className={cn("grid gap-3 sm:gap-4", STAT_GRID_COLS[columns])}>{children}</div>;
 });
 

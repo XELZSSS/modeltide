@@ -1,8 +1,7 @@
-"use client";
 import { useCallback, useState, useTransition } from "react";
-import { replaceRoute, useSearchParams } from "@/client/router";
+import { navigate, useSearchParams } from "@/client/router";
 
-export function resolveInitialTab<T extends string>(validTabs: readonly T[], raw: string | null, fallback: T): T {
+function resolveInitialTab<T extends string>(validTabs: readonly T[], raw: string | null, fallback: T): T {
   return raw != null && (validTabs as readonly string[]).includes(raw) ? (raw as T) : fallback;
 }
 
@@ -27,7 +26,7 @@ export function useClientTab<T extends string>(
         const url = new URL(window.location.href);
         if (url.searchParams.get(paramKey) !== tabId) {
           url.searchParams.set(paramKey, tabId);
-          replaceRoute(url.pathname + url.search + url.hash);
+          navigate(url.pathname + url.search + url.hash, true);
         }
       } catch (err) {
         console.warn(`[tab] failed to sync URL param "${paramKey}":`, err);

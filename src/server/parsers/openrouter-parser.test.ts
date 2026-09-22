@@ -61,7 +61,7 @@ describe("creatorFromSlug / titleFromSlug / categoryFrom", () => {
 });
 
 describe("parseDirectoryRows", () => {
-  it("drops -1 sentinel cache legs but keeps valid pricing legs", () => {
+  it("scales legs to per-million, nulling -1 sentinels", () => {
     const entry = parseDirectoryRows([
       {
         id: "acme/dynamic-model",
@@ -72,17 +72,6 @@ describe("parseDirectoryRows", () => {
           input_cache_write: "-1",
         },
       },
-    ]);
-    expect(entry.pricing["acme/dynamic-model"]).toEqual({
-      input: 1,
-      output: 2,
-      cacheHit: null,
-      cacheWrite: null,
-    });
-  });
-
-  it("keeps non-negative cache legs scaled to per-million", () => {
-    const entry = parseDirectoryRows([
       {
         id: "acme/cached-model",
         pricing: {
@@ -93,6 +82,12 @@ describe("parseDirectoryRows", () => {
         },
       },
     ]);
+    expect(entry.pricing["acme/dynamic-model"]).toEqual({
+      input: 1,
+      output: 2,
+      cacheHit: null,
+      cacheWrite: null,
+    });
     expect(entry.pricing["acme/cached-model"]).toEqual({
       input: 3,
       output: 15,
@@ -100,10 +95,23 @@ describe("parseDirectoryRows", () => {
       cacheWrite: 3.75,
     });
   });
+
+  it("mirrors a variant id onto its canonical slug", () => {
+    const { pricing: record } = parseDirectoryRows([
+      {
+        id: "acme/model-2:free",
+        canonical_slug: "acme/model-2-20260910",
+        pricing: { prompt: "0", completion: "0" },
+      },
+    ]);
+    const free = { input: 0, output: 0, cacheHit: null, cacheWrite: null };
+    expect(record["acme/model-2:free"]).toEqual(free);
+    expect(record["acme/model-2-20260910:free"]).toEqual(free);
+  });
 });
 
 describe("mapModels", () => {
-  it("aggregates rows by permaslug, keeping the latest change, and attaches pricing", () => {
+  it("aggregates rows by permaslug, taking variant, change and pricing from the dominant variant", () => {
     const models = mapModels(
       [
         row(),
@@ -114,6 +122,18 @@ describe("mapModels", () => {
           total_native_tokens_cached: 7,
           total_tool_calls: 3,
         }),
+        // Later date, tiny usage, drastic drop: a batch row must not lend its
+        // change to an entry whose label and pricing come from the standard row.
+        row({
+          date: "2026-08-03",
+          variant: "batch",
+          variant_permaslug: "openai/gpt-5:batch",
+          total_prompt_tokens: 0,
+          total_completion_tokens: 0,
+          total_native_tokens_reasoning: 0,
+          count: 0,
+          change: -0.9,
+        }),
       ],
       pricing,
     );
@@ -123,6 +143,7 @@ describe("mapModels", () => {
       id: "openai/gpt-5",
       name: "GPT 5",
       creator: "OpenAI",
+      variant: "std",
       promptTokens: 110,
       completionTokens: 100,
       totalTokens: 210,
@@ -159,10 +180,10 @@ describe("mapModels", () => {
   });
 
   it("keeps multi-variant rows without token data below genuine zero usage", () => {
-    const missing = {
+    const missing: Partial<ModelRow> = {
       total_prompt_tokens: undefined,
       total_completion_tokens: undefined,
-    } as unknown as Partial<ModelRow>;
+    };
     const models = mapModels(
       [
         row({ model_permaslug: "u/unknown", variant_permaslug: "u/unknown:a", ...missing }),
@@ -213,5 +234,26 @@ describe("mapModels", () => {
       pricing: variantPricing.get("a/b:standard"),
     });
     expect(models[0]!.isFree).toBe(false);
+  });
+
+  it("prices a dated variant permaslug through the mirrored key", () => {
+    // The directory lists the paid base row before its variant, as upstream does.
+    const { pricing: record } = parseDirectoryRows([
+      {
+        id: "acme/m",
+        canonical_slug: "acme/m-20260910",
+        pricing: { prompt: "0.000001", completion: "0.000002" },
+      },
+      {
+        id: "acme/m:free",
+        canonical_slug: "acme/m-20260910",
+        pricing: { prompt: "0", completion: "0" },
+      },
+    ]);
+    const [model] = mapModels(
+      [row({ model_permaslug: "acme/m-20260910", variant: "free", variant_permaslug: "acme/m-20260910:free" })],
+      new Map(Object.entries(record)),
+    );
+    expect(model!.isFree).toBe(true);
   });
 });

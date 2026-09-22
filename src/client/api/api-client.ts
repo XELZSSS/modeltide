@@ -23,12 +23,12 @@ function buildApiUrl(path: string): string {
   return apiBase && path.startsWith("/") ? apiBase + path : path;
 }
 
-function withTimeout(signal: AbortSignal | undefined, ms: number): { signal: AbortSignal; cleanup: () => void } {
+function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
   // Baseline (Workers + evergreen browsers) supports AbortSignal.timeout/any;
   // the manual addEventListener fallback was dead code — drop it.
   const timeout = AbortSignal.timeout(ms);
-  if (!signal) return { signal: timeout, cleanup: () => {} };
-  return { signal: AbortSignal.any([signal, timeout]), cleanup: () => {} };
+  if (!signal) return timeout;
+  return AbortSignal.any([signal, timeout]);
 }
 
 async function parseErrorMessage(res: Response): Promise<string> {
@@ -50,21 +50,16 @@ async function parseErrorMessage(res: Response): Promise<string> {
 
 async function apiFetch<T>(path: string, signal?: AbortSignal): Promise<T> {
   const url = buildApiUrl(path);
-  const combined = withTimeout(signal, FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      headers: { accept: "application/json" },
-      signal: combined.signal,
-    });
-    if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
-    const ct = res.headers.get("content-type") ?? "";
-    if (!ct.includes("application/json")) {
-      throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
-    }
-    return ((await res.json()) as { data: T }).data;
-  } finally {
-    combined.cleanup();
+  const res = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: withTimeout(signal, FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
   }
+  return ((await res.json()) as { data: T }).data;
 }
 
 export const fetcher =

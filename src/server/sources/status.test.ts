@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { testCtx } from "@/server/test-helpers";
+import { fakeHttp, testCtx } from "@/server/test-helpers";
 import {
   HISTORY_KEY,
   SAMPLE_LOCK_KEY,
@@ -19,13 +19,17 @@ import {
   type ProbeTarget,
 } from "@/server/sources/status";
 import { getStatusHistory } from "./status-history";
+import { resetUptimeMemoForTests } from "./status/uptime";
 import type { ProbeResult } from "@/server/infra/http-client";
 import { SOURCE_IDS, UPTIME_WARN_RATIO } from "@/shared/config";
 import { upstreamConfig } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import type { DayBucket, SourceId, UptimeSample } from "@/shared/types";
 
-beforeEach(() => resetModuleCachesForTests());
+beforeEach(() => {
+  resetModuleCachesForTests();
+  resetUptimeMemoForTests();
+});
 
 const MIN = 60_000;
 const NOW = Date.UTC(2026, 7, 30, 12, 0, 0);
@@ -39,24 +43,41 @@ const sample = (minAgo: number, ok: boolean, latencyMs: number | null = ok ? 900
 const warnSample = (minAgo: number): UptimeSample => ({ ...sample(minAgo, true), warn: true });
 
 describe("getUptime", () => {
-  it("persists first launch on the first call and reports ~zero uptime", async () => {
+  it("persists first launch on the first call and reuses it later", async () => {
     const { ctx, kv } = testCtx();
     const before = Date.now();
     const { firstLaunchAt, uptimeMs } = await getUptime(ctx);
 
     const firstLaunchMs = Date.parse(firstLaunchAt);
     expect(firstLaunchMs).toBeGreaterThanOrEqual(before);
-    expect(uptimeMs).toBeLessThanOrEqual(Date.now() - before + 5);
+    // First launch stores the same `now` the delta is measured from, so uptime is exactly 0.
+    expect(uptimeMs).toBe(0);
     expect(kv.store.get("uptime:first-launch")).toBe(String(firstLaunchMs));
+
+    // Fresh isolate: the persisted value is what a later launch reads back.
+    resetUptimeMemoForTests();
+    const { ctx: ctx2 } = testCtx(new Map([["uptime:first-launch", String(firstLaunchMs)]]));
+    const callStartedAt = Date.now();
+    const reused = await getUptime(ctx2);
+    const callFinishedAt = Date.now();
+    expect(Date.parse(reused.firstLaunchAt)).toBe(firstLaunchMs);
+    // getUptime stamps `now` on entry, so uptimeMs sits inside the call window.
+    expect(reused.uptimeMs).toBeGreaterThanOrEqual(callStartedAt - firstLaunchMs);
+    expect(reused.uptimeMs).toBeLessThanOrEqual(callFinishedAt - firstLaunchMs);
   });
 
-  it("reuses the persisted first-launch timestamp on later calls", async () => {
-    const persisted = Date.now() - 86_400_000;
-    const { ctx } = testCtx(new Map([["uptime:first-launch", String(persisted)]]));
-    const { firstLaunchAt, uptimeMs } = await getUptime(ctx);
+  it("reads the first-launch key once per isolate", async () => {
+    const start = 1_700_000_000_000;
+    const { ctx, kv } = testCtx(new Map([["uptime:first-launch", String(start)]]));
+    const gets = vi.spyOn(kv, "get");
 
-    expect(Date.parse(firstLaunchAt)).toBe(persisted);
-    expect(uptimeMs).toBeGreaterThanOrEqual(86_400_000);
+    const first = await getUptime(ctx);
+    const second = await getUptime(ctx);
+
+    expect(gets).toHaveBeenCalledTimes(1);
+    expect(gets).toHaveBeenCalledWith("uptime:first-launch");
+    expect(first.firstLaunchAt).toBe(new Date(start).toISOString());
+    expect(second.firstLaunchAt).toBe(first.firstLaunchAt);
   });
 });
 
@@ -101,12 +122,9 @@ describe("mergeSample", () => {
 });
 
 describe("uptimeRatio / avgLatency", () => {
-  it("returns null for an empty window", () => {
+  it("returns null for an empty window and ratios over in-window samples only", () => {
     expect(uptimeRatio([], NOW - 60 * MIN)).toBeNull();
     expect(avgLatency([], NOW - 60 * MIN)).toBeNull();
-  });
-
-  it("computes the ratio over in-window samples only", () => {
     const samples = [sample(100, true), sample(10, true), sample(5, false), sample(1, true)];
     expect(uptimeRatio(samples, NOW - 30 * MIN)).toBe(2 / 3);
     expect(avgLatency(samples, NOW - 30 * MIN)).toBe((900 + 900) / 2);
@@ -142,14 +160,44 @@ describe("aggregateProbes", () => {
     ).toEqual({ ok: true, status: 200, latencyMs: 300, error: null });
   });
 
-  it("summarizes total failure across multiple feeds as x/y failed", () => {
+  it("names the failing endpoints in the failure detail", () => {
     const http503 = { ok: false, status: 503, latencyMs: null, error: "HTTP 503" } as const;
     expect(
       aggregateProbes([
         { target: target("news"), probe: { ...http503 } },
-        { target: target("news"), probe: { ...http503 } },
+        { target: { id: "news", url: "https://other.test/feed" }, probe: { ...http503 } },
       ]).get("news"),
-    ).toEqual({ ok: false, status: null, latencyMs: null, error: "2/2 feeds failed" });
+    ).toEqual({
+      ok: false,
+      status: null,
+      latencyMs: null,
+      error: "2/2 endpoints failed: HTTP 503 (upstream.test); HTTP 503 (other.test)",
+    });
+  });
+
+  it("reports a single failing endpoint by its own error, and a partial failure as a warning", () => {
+    const http503 = { ok: false, status: 503, latencyMs: null, error: "HTTP 503" } as const;
+    expect(aggregateProbes([{ target: target("huggingface"), probe: { ...http503 } }]).get("huggingface")).toEqual({
+      ok: false,
+      status: null,
+      latencyMs: null,
+      error: "HTTP 503 (upstream.test)",
+    });
+
+    // Partial loss keeps the warning text so a degraded event can explain itself.
+    expect(
+      aggregateProbes([
+        { target: target("news"), probe: okProbe(200, 300) },
+        { target: { id: "news", url: "https://down.test/feed" }, probe: { ...http503 } },
+      ]).get("news"),
+    ).toEqual({
+      ok: true,
+      warn: true,
+      warnReason: "1/2 endpoints failed: HTTP 503 (down.test)",
+      status: 200,
+      latencyMs: 300,
+      error: null,
+    });
   });
 
   it("omits a source whose probes all timed out (unknown, not down)", () => {
@@ -164,27 +212,43 @@ describe("aggregateProbes", () => {
 });
 
 describe("deriveEvents", () => {
-  it("pairs a down event with its duration and an up event on recovery", () => {
-    expect(deriveEvents(historyId, [sample(30, true), sample(20, false), sample(10, false), sample(0, true)])).toEqual([
-      { id: historyId, type: "down", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: 20 },
-      { id: historyId, type: "up", at: new Date(NOW).toISOString(), durationMin: null },
+  it("pairs a down event with its duration, detail and an up event on recovery", () => {
+    const down = { ...sample(20, false), error: "HTTP 503 (api.openrouter.ai)" };
+    expect(deriveEvents(historyId, [sample(30, true), down, sample(10, false), sample(0, true)])).toEqual([
+      {
+        id: historyId,
+        type: "down",
+        at: new Date(NOW - 20 * MIN).toISOString(),
+        durationMin: 20,
+        detail: "HTTP 503 (api.openrouter.ai)",
+      },
+      { id: historyId, type: "up", at: new Date(NOW).toISOString(), durationMin: null, detail: null },
     ]);
   });
 
-  it("keeps durationMin null for an ongoing outage", () => {
-    const events = deriveEvents(historyId, [sample(30, true), sample(10, false), sample(5, false)]);
+  it("keeps durationMin null for an ongoing outage and emits nothing when healthy", () => {
+    const events = deriveEvents(historyId, [
+      sample(30, true),
+      { ...sample(10, false), error: "timeout (api.openrouter.ai)" },
+      sample(5, false),
+    ]);
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ type: "down", durationMin: null });
-  });
-
-  it("emits nothing for a fully healthy window", () => {
+    expect(events[0]).toMatchObject({ type: "down", durationMin: null, detail: "timeout (api.openrouter.ai)" });
     expect(deriveEvents(historyId, [sample(10, true), sample(0, true)])).toHaveLength(0);
   });
 
-  it("emits a degraded event for warn samples and closes it with up", () => {
-    expect(deriveEvents(historyId, [sample(30, true), warnSample(20), warnSample(10), sample(0, true)])).toEqual([
-      { id: historyId, type: "degraded", at: new Date(NOW - 20 * MIN).toISOString(), durationMin: 20 },
-      { id: historyId, type: "up", at: new Date(NOW).toISOString(), durationMin: null },
+  it("carries the provider's warning on a degraded event and follows it while the incident is open", () => {
+    const opened = { ...warnSample(20), warnReason: "Minor Service Outage: Elevated error rates" };
+    const updated = { ...warnSample(10), warnReason: "Minor Service Outage: Elevated error rates on the API" };
+    expect(deriveEvents(historyId, [sample(30, true), opened, updated, sample(0, true)])).toEqual([
+      {
+        id: historyId,
+        type: "degraded",
+        at: new Date(NOW - 20 * MIN).toISOString(),
+        durationMin: 20,
+        detail: "Minor Service Outage: Elevated error rates on the API",
+      },
+      { id: historyId, type: "up", at: new Date(NOW).toISOString(), durationMin: null, detail: null },
     ]);
   });
 });
@@ -263,6 +327,28 @@ describe("buildHistoryPayload", () => {
     expect(or.level).toBe("error");
   });
 
+  it("reports the latest failure or degradation detail per source", () => {
+    const payload = buildHistoryPayload(
+      {
+        sources: {
+          [historyId]: {
+            recent: [{ ...sample(10, true), warn: true, warnReason: "Minor Service Outage: API latency" }],
+            daily: [],
+          },
+          news: { recent: [{ ...sample(10, false), error: "2/6 endpoints failed: HTTP 503 (techcrunch.com)" }], daily: [] },
+        },
+      },
+      { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
+      NOW,
+    );
+    expect(payload.sources.find((s) => s.id === historyId)?.detail).toBe("Minor Service Outage: API latency");
+    expect(payload.sources.find((s) => s.id === "news")?.detail).toBe(
+      "2/6 endpoints failed: HTTP 503 (techcrunch.com)",
+    );
+    // A healthy source carries no detail rather than a stale one.
+    expect(payload.sources.find((s) => s.id === "huggingface")?.detail).toBeNull();
+  });
+
   it("warns when a brief outage kept 24h uptime inside the error band", () => {
     // 198/199 up = 0.9950 in [UPTIME_ERROR_RATIO, UPTIME_WARN_RATIO).
     const recent = [sample(199, false), ...Array.from({ length: 198 }, (_, i) => sample(198 - i, true))];
@@ -280,42 +366,58 @@ describe("buildHistoryPayload", () => {
 });
 
 describe("getStatusHistory read-only", () => {
-  function historyCtx(kvStore: Map<string, string>, probeOk = true): AppContext {
-    return testCtx(kvStore, {
-      http: {
-        probe: async () => ({ ok: probeOk, status: probeOk ? 200 : 503, latencyMs: probeOk ? 500 : null, error: null }),
-        json: async (url: string) => {
-          if (url.includes("status.cloud.google.com")) return [];
-          return { components: [{ name: "API", status: "operational" }] };
-        },
-      } as unknown as AppContext["http"],
-    }).ctx;
+  const statusJson = (url: string) =>
+    url.includes("status.cloud.google.com") ? [] : { components: [{ name: "API", status: "operational" }] };
+  const okHttpProbe: AppContext["http"]["probe"] = async () => ({ ok: true, status: 200, latencyMs: 500, error: null });
+
+  /** `probe` defaults to a healthy target; a spy can be passed to assert on the calls. */
+  function historyCtx(
+    kvStore: Map<string, string>,
+    probe: AppContext["http"]["probe"] = okHttpProbe,
+    json: (url: string) => unknown = statusJson,
+  ): AppContext {
+    return testCtx(kvStore, { http: fakeHttp({ probe, json }) }).ctx;
   }
 
-  /** historyCtx clone whose http.probe is a spyable mock. */
-  function withProbe(kvStore: Map<string, string>, probe: AppContext["http"]["probe"]): AppContext {
-    const base = historyCtx(kvStore);
-    return { ...base, http: { ...base.http, probe } as unknown as AppContext["http"] };
-  }
-
-  const unknownRoundCtx = (kvStore: Map<string, string>): AppContext => {
-    const base = historyCtx(kvStore);
-    return {
-      ...base,
-      http: {
-        ...base.http,
-        probe: async () => ({ ok: false, status: null, latencyMs: null, error: "timeout" }),
-        json: async () => {
-          throw new Error("timeout");
-        },
-      },
-    } as unknown as AppContext;
+  const degradedPage = {
+    status: { indicator: "minor", description: "Partially Degraded Service" },
+    components: [{ name: "API", status: "degraded_performance" }],
+    incidents: [{ name: "Elevated error rates on the API", status: "investigating", impact: "minor" }],
   };
+
+  it("stores the provider's own warning text and shows it on the degraded event", async () => {
+    const kvStore = new Map<string, string>();
+    await recordStatusSamples(historyCtx(kvStore, okHttpProbe, async () => degradedPage));
+    const payload = await getStatusHistory(historyCtx(kvStore));
+    const detail = "Partially Degraded Service: Elevated error rates on the API";
+    const page = payload.sources.find((s) => s.id === "openaiApi")!;
+    expect(page.level).toBe("warn");
+    expect(page.detail).toBe(detail);
+    expect(payload.events.find((e) => e.id === "openaiApi")).toMatchObject({
+      type: "degraded",
+      durationMin: null,
+      detail,
+    });
+  });
+
+  it("stores the incident text as the failure detail when the page reports an outage", async () => {
+    const kvStore = new Map<string, string>();
+    const outage = {
+      status: { indicator: "critical", description: "Major Service Outage" },
+      components: [{ name: "API", status: "major_outage" }],
+      incidents: [{ name: "API unavailable", status: "identified", impact: "critical" }],
+    };
+    await recordStatusSamples(historyCtx(kvStore, okHttpProbe, async () => outage));
+    const payload = await getStatusHistory(historyCtx(kvStore));
+    const detail = "Major Service Outage: API unavailable";
+    expect(payload.sources.find((s) => s.id === "openaiApi")?.detail).toBe(detail);
+    expect(payload.events.find((e) => e.id === "openaiApi")).toMatchObject({ type: "down", detail });
+  });
 
   it("serves an empty store without sampling, so reads never touch upstreams", async () => {
     const kvStore = new Map<string, string>();
     const probe = mockProbe();
-    const payload = await getStatusHistory(withProbe(kvStore, probe));
+    const payload = await getStatusHistory(historyCtx(kvStore, probe));
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
     expect(probe).not.toHaveBeenCalled();
     expect(payload.sources.every((s) => s.ok === false)).toBe(true);
@@ -326,7 +428,7 @@ describe("getStatusHistory read-only", () => {
     await recordStatusSamples(historyCtx(kvStore));
     expect(kvStore.has(HISTORY_KEY)).toBe(true);
     const probe = mockProbe();
-    const payload = await getStatusHistory(withProbe(kvStore, probe));
+    const payload = await getStatusHistory(historyCtx(kvStore, probe));
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(true);
     expect(or.checkedAt).not.toBeNull();
@@ -346,7 +448,7 @@ describe("getStatusHistory read-only", () => {
     const openrouterUrl = `${upstreamConfig.openrouter}/api/v1/models`;
     const openrouterRankingsUrl = `${upstreamConfig.openrouter}/api/frontend/v1/rankings/models`;
     const probe = mockProbe([openrouterUrl, openrouterRankingsUrl]);
-    await recordStatusSamples(withProbe(kvStore, probe));
+    await recordStatusSamples(historyCtx(kvStore, probe));
     const payload = await getStatusHistory(historyCtx(kvStore));
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(false);
@@ -359,37 +461,33 @@ describe("getStatusHistory read-only", () => {
     expect(probe).toHaveBeenCalledWith(openrouterRankingsUrl);
   });
 
-  it("writes nothing when the whole round is unknown (all probes time out, all status pages fail)", async () => {
+  it("writes nothing and logs loudly when the whole round is unknown", async () => {
     const kvStore = new Map<string, string>();
-    await recordStatusSamples(unknownRoundCtx(kvStore));
-    expect(kvStore.has(HISTORY_KEY)).toBe(false);
-  });
-
-  it("logs loudly when a round produces no samples instead of skipping silently", async () => {
     const log = vi.fn();
-    const base = historyCtx(new Map<string, string>());
-    const ctx = {
-      ...base,
+    const ctx = testCtx(kvStore, {
       log,
-      http: {
+      http: fakeHttp({
         probe: async () => ({ ok: false, status: null, latencyMs: null, error: "timeout" }),
         json: async () => {
           throw new Error("timeout");
         },
-      },
-    } as unknown as AppContext;
+      }),
+    }).ctx;
     await expect(recordStatusSamples(ctx)).resolves.toBe(false);
+    expect(kvStore.has(HISTORY_KEY)).toBe(false);
     expect(log.mock.calls.some((c) => String(c[1] ?? c[0]).includes("no samples"))).toBe(true);
   });
 
   it("self-heals a stale history on read so a cron gap cannot outlive the next visit", async () => {
     const staleAt = Date.now() - 60 * 60 * 1000;
     const stale = {
-      sources: { openrouter: { recent: [{ t: staleAt, ok: true, latencyMs: 1, status: 200, error: null }], daily: [] } },
+      sources: {
+        openrouter: { recent: [{ t: staleAt, ok: true, latencyMs: 1, status: 200, error: null }], daily: [] },
+      },
     };
     const kvStore = new Map<string, string>([[HISTORY_KEY, JSON.stringify(stale)]]);
     const probe = mockProbe();
-    const payload = await getStatusHistory(withProbe(kvStore, probe));
+    const payload = await getStatusHistory(historyCtx(kvStore, probe));
     expect(probe).toHaveBeenCalled();
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(Date.now() - Date.parse(or.checkedAt!)).toBeLessThan(60_000);
@@ -397,17 +495,18 @@ describe("getStatusHistory read-only", () => {
 });
 
 describe("buildTargets", () => {
-  it("probes every news leg (all feeds + daily papers) so one dead feed can't flip news", async () => {
+  it("probes one representative feed per news category plus daily papers", async () => {
     const { NEWS_CATEGORIES } = await import("@/shared/config");
     const { rssConfig, upstreamConfig, upstreamEndpoints } = await import("@/server/config");
     const targets = buildTargets();
     const news = targets.filter((t) => t.id === "news");
-    const feedCount = Object.values(rssConfig).reduce((a, feeds) => a + feeds.length, 0);
-    expect(news).toHaveLength(feedCount + 1);
-    expect(news.some((t) => t.url === `${upstreamConfig.huggingfaceSite}${upstreamEndpoints.hfDailyPapers}`)).toBe(
-      true,
-    );
-    expect(targets).toHaveLength(6 + feedCount + 1);
+    // Every feed is fetched by the news warmup in the same cron fire; the probe
+    // only needs to tell whether the category is reachable.
+    expect(news).toHaveLength(NEWS_CATEGORIES.length + 1);
+    expect(news.map((t) => t.url)).toEqual([
+      ...NEWS_CATEGORIES.map((category) => rssConfig[category][0]),
+      `${upstreamConfig.huggingfaceSite}${upstreamEndpoints.hfDailyPapers}`,
+    ]);
     expect(targets.filter((t) => t.id === "openrouter")).toHaveLength(2);
     expect(targets.filter((t) => t.id === "artificialAnalysis")).toHaveLength(2);
     expect(targets.some((t) => t.id === "arena")).toBe(true);
@@ -418,14 +517,11 @@ describe("buildTargets", () => {
 });
 
 describe("readStore", () => {
-  it("self-heals a corrupted history entry instead of throwing", async () => {
-    const kvStore = new Map<string, string>([[HISTORY_KEY, "truncated-json{{{"]]);
-    const { ctx } = testCtx(kvStore);
-    await expect(readStore(ctx)).resolves.toEqual({ sources: {} });
-    expect(kvStore.has(HISTORY_KEY)).toBe(false);
-  });
+  it("drops corrupt entries and salvages readable per-source data instead of throwing", async () => {
+    const corrupt = new Map<string, string>([[HISTORY_KEY, "truncated-json{{{"]]);
+    await expect(readStore(testCtx(corrupt).ctx)).resolves.toEqual({ sources: {} });
+    expect(corrupt.has(HISTORY_KEY)).toBe(false);
 
-  it("salvages the readable per-source entries of a partially corrupt store", async () => {
     const good = {
       recent: [{ t: Date.now() - 60_000, ok: true, latencyMs: 10, status: 200, error: null }],
       daily: [{ day: "2026-01-01", total: 3, ok: 2 }],

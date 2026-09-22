@@ -3,7 +3,7 @@ import { LITELLM_FETCH_OPTS, cacheKeys, upstreamConfig, upstreamEndpoints } from
 import type { OfficialPriceModel, OfficialPricingPayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { parseLitellmPricing } from "@/server/parsers/litellm-parser";
-import { cachedSource, requireParsed } from "@/server/sources/pipeline";
+import { cached, requireParsed } from "@/server/sources/pipeline";
 
 async function fetchLitellmPricing(ctx: AppContext): Promise<OfficialPriceModel[]> {
   const raw = await ctx.http.json<unknown>(
@@ -14,7 +14,7 @@ async function fetchLitellmPricing(ctx: AppContext): Promise<OfficialPriceModel[
 }
 
 export const getOfficialPricing = (ctx: AppContext): Promise<OfficialPricingPayload> =>
-  cachedSource(ctx, cacheKeys.officialPricing, STATIC_TTL_MS, async () => {
+  cached(ctx, cacheKeys.officialPricing, STATIC_TTL_MS, async () => {
     const models = await fetchLitellmPricing(ctx);
-    return { value: { models, fetchedAt: new Date().toISOString() } };
+    return { data: { models, fetchedAt: new Date().toISOString() } };
   });

@@ -2,12 +2,12 @@ import { STATIC_TTL_MS } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import type { ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError } from "@/server/infra/errors";
+import { UpstreamError, rethrowIfAllAborted } from "@/server/infra/errors";
 import { getChangelogModels } from "@/server/sources/aa/changelog-source";
 import { getIntelligenceIndexResult } from "@/server/sources/aa/index-source";
 import { toClosedReleases, toClosedReleasesFromIndex } from "@/server/parsers/closed-releases-parser";
 import type { SourcePayload } from "@/shared/types";
-import { cachedPayload } from "@/server/sources/pipeline";
+import { cachedPayload, requireRows } from "@/server/sources/pipeline";
 import { errMsg } from "@/server/infra/task-pool";
 
 async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedReleaseEntry[]; partial: boolean }> {
@@ -27,18 +27,21 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
     ctx.log("warn", `[closed-releases] changelog leg failed: ${errMsg(changelogResult.reason)}`);
   }
   const models = index?.models ?? [];
-  if (models.length === 0 && changelog.length === 0)
+  if (models.length === 0 && changelog.length === 0) {
+    rethrowIfAllAborted([indexResult, changelogResult]);
     throw new UpstreamError(`Releases: both index and changelog failed`);
+  }
   const entries = toClosedReleases(changelog);
   ctx.log("info", `[closed-releases] rows=${entries.length} (changelog=${changelog.length}, index=${models.length})`);
   let finalEntries = entries;
-  if (finalEntries.length === 0 && models.length > 0) {
+  const indexFallback = finalEntries.length === 0 && models.length > 0;
+  if (indexFallback) {
     finalEntries = toClosedReleasesFromIndex(models);
     ctx.log("warn", `[closed-releases] changelog empty, index fallback rows=${finalEntries.length}`);
   }
-  if (finalEntries.length === 0)
-    throw new UpstreamError(`Releases yielded 0 rows (changelog=${changelog.length}, index=${models.length})`);
-  const partial = index == null || index.enrichFailed;
+  requireRows(finalEntries, "Releases", "rows", `changelog=${changelog.length}, index=${models.length}`);
+  // Rebuilt from the index: the changelog leg contributed nothing usable.
+  const partial = index == null || index.enrichFailed || indexFallback;
   if (partial) ctx.log("warn", "[closed-releases] serving partial (degraded enrichment)");
   return { entries: finalEntries, partial };
 }

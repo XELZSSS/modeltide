@@ -1,17 +1,17 @@
 import {
   isRecord,
   isoDate,
+  numCoerce,
   numIntCoerceNonNegative,
   strOrNull,
   isSuitableNewsItem,
   isValidRowId,
-  trimmedOrNull,
 } from "@/server/parsers/parser-primitives";
 import type { NewsItem, OpenSourceModelEntry } from "@/shared/types";
 import { SOURCE_LIMITS } from "@/shared/config";
 import { upstreamConfig } from "@/server/config";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
-import { getOpenLicense } from "@/server/parsers/licenses";
+import { getOpenLicense, getOpenLicenseId, isRecognizedNonOpenLicense, licenseTagId } from "@/server/parsers/licenses";
 import { dedupeBy } from "@/shared/utils";
 import type { DailyPaperEntry, HFModel } from "@/server/parsers/upstream-types";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
@@ -22,23 +22,58 @@ function resolveAuthor(m: HFModel, id: string): string | null {
   return strOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
 }
 
-export function findUnknownLicenseTags(items: unknown[], cap = 5): string[] {
+export interface LicenseDrops {
+  /** Rows that declare no `license:` tag at all. */
+  withoutTag: number;
+  /** Rows that declare one the gate rejects: non-open or unrecognized. */
+  declaredNonOpen: number;
+  /** Unrecognized tag ids (HF's own non-open sentinels excluded), capped. */
+  unknownTags: string[];
+}
+
+/**
+ * Why rows lose their license. Both causes leave `license` null, so the sources
+ * would otherwise report one indistinguishable drop count; splitting them keeps
+ * "no license declared" (upstream habit, mostly fresh research repos) apart from
+ * "declared, but not open" in the fetch logs.
+ */
+export function summarizeLicenseDrops(items: unknown[], cap = 5): LicenseDrops {
   const unknown = new Set<string>();
+  let withoutTag = 0;
+  let declaredNonOpen = 0;
   for (const raw of items) {
     if (!isRecord(raw)) continue;
     const tags = (raw as HFModel).tags;
-    if (!Array.isArray(tags)) continue;
-    for (const t of tags) {
-      if (typeof t !== "string" || !t.toLowerCase().startsWith("license:")) continue;
-      if (getOpenLicense([t]) == null) unknown.add(t);
-      if (unknown.size >= cap) break;
+    const ids = Array.isArray(tags) ? tags.map(licenseTagId).filter((id): id is string => id != null) : [];
+    if (ids.length === 0) {
+      withoutTag++;
+      continue;
     }
-    if (unknown.size >= cap) break;
+    if (getOpenLicenseId(ids) != null) continue;
+    declaredNonOpen++;
+    for (const id of ids) {
+      if (isRecognizedNonOpenLicense(id) || unknown.has(id)) continue;
+      if (unknown.size >= cap) break;
+      unknown.add(id);
+    }
   }
-  return [...unknown];
+  return { withoutTag, declaredNonOpen, unknownTags: [...unknown] };
 }
 
+/**
+ * Detail shape: keeps `tags`, which only the model page renders. Lists ship the
+ * same row through `mapListModel` instead — `tags` is about half of a list row
+ * and no list, table, compare or search consumer reads it.
+ */
 export function mapModel(m: unknown): OpenSourceModelEntry | null {
+  return toEntry(m, true);
+}
+
+export function mapListModel(m: unknown): OpenSourceModelEntry | null {
+  return toEntry(m, false);
+}
+
+function toEntry(m: unknown, includeTags: boolean): OpenSourceModelEntry | null {
   if (!isRecord(m)) return null;
   const model = m as HFModel;
   if (!isValidRowId(model.id)) return null;
@@ -47,7 +82,7 @@ export function mapModel(m: unknown): OpenSourceModelEntry | null {
   const likes = numIntCoerceNonNegative(model.likes) ?? 0;
   const tags = Array.isArray(model.tags) ? model.tags.filter((t): t is string => typeof t === "string") : [];
   const license = getOpenLicense(tags);
-  return {
+  const entry: OpenSourceModelEntry = {
     id,
     author: resolveAuthor(model, id),
     downloads,
@@ -56,17 +91,18 @@ export function mapModel(m: unknown): OpenSourceModelEntry | null {
     task: strOrNull(model.pipeline_tag),
     createdAt: isoDate(model.createdAt),
     lastModified: isoDate(model.lastModified),
-    tags: tags.slice(0, 100),
   };
+  if (includeTags) entry.tags = tags.slice(0, 100);
+  return entry;
 }
 
 function toNewsItem(entry: unknown): NewsItem | null {
   if (!isRecord(entry)) return null;
   const paper = isRecord((entry as DailyPaperEntry).paper) ? (entry as DailyPaperEntry).paper! : undefined;
-  const rawId = trimmedOrNull(paper?.id);
+  const rawId = strOrNull(paper?.id);
   const rawTitle = typeof paper?.title === "string" ? paper.title : "";
   // Papers occasionally ship HTML-escaped titles; strip markup before gating.
-  const title = stripHtml(decodeEntities(rawTitle)).replace(/\s+/g, " ").trim();
+  const title = stripHtml(decodeEntities(rawTitle));
   const publishedAt = typeof paper?.publishedAt === "string" ? paper.publishedAt.trim() : "";
   if (!rawId || !title || !Number.isFinite(Date.parse(publishedAt))) return null;
   if (!isValidRowId(rawId)) return null;
@@ -102,10 +138,5 @@ function upvotesOf(entry: unknown): number {
   if (!isRecord(entry)) return -1;
   const v = (entry as DailyPaperEntry).paper;
   const up = isRecord(v) ? (v as { upvotes?: unknown }).upvotes : (entry as { upvotes?: unknown }).upvotes;
-  if (typeof up === "number" && Number.isFinite(up)) return up;
-  if (typeof up === "string" && up.trim() !== "") {
-    const n = Number(up.trim());
-    if (Number.isFinite(n)) return n;
-  }
-  return -1;
+  return numCoerce(up) ?? -1;
 }

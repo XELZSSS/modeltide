@@ -1,4 +1,3 @@
-"use client";
 import { createJSONStorage, type StateStorage } from "zustand/middleware";
 
 const safeStorage = (getStorage: () => Storage): StateStorage => ({

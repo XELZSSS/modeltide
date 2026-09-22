@@ -2,12 +2,11 @@ import { API_DOMAINS, ONE_MINUTE } from "@/shared/config";
 import { HISTORY_KV_RETENTION_TTL_S } from "@/server/config";
 import type { AppContext } from "@/server/context";
 import { errMsg } from "@/server/infra/task-pool";
+import { isRecord } from "@/server/parsers/parser-primitives";
 import type { DayBucket, SourceId, UptimeSample } from "@/shared/types";
 import { fetchProviderStatuses } from "@/server/sources/incident-source";
-import { mergeSample, type HistorySourceEntry, type HistoryStore } from "./history-math";
-import { aggregateProbes, probeTargets, type ProbeTarget, type SourceAggregate } from "./probe";
-
-export type { HistorySourceEntry, HistoryStore, ProbeTarget, SourceAggregate };
+import { mergeSample, type HistoryStore } from "./history-math";
+import { aggregateProbes, probeTargets, type SourceAggregate } from "./probe";
 
 const SAMPLE_LOCK_TTL_S = 120;
 export const SAMPLE_LOCK_KEY = `${API_DOMAINS.statusHistory}:lock`;
@@ -15,14 +14,12 @@ export const SAMPLE_LOCK_KEY = `${API_DOMAINS.statusHistory}:lock`;
 const SAMPLE_SELF_HEAL_MS = 45 * 60 * 1000;
 
 function isValidSample(s: unknown): s is UptimeSample {
-  if (!s || typeof s !== "object" || Array.isArray(s)) return false;
-  const r = s as Record<string, unknown>;
-  return typeof r.t === "number" && Number.isFinite(r.t) && typeof r.ok === "boolean";
+  if (!isRecord(s)) return false;
+  return typeof s.t === "number" && Number.isFinite(s.t) && typeof s.ok === "boolean";
 }
 function isValidBucket(b: unknown): b is DayBucket {
-  if (!b || typeof b !== "object" || Array.isArray(b)) return false;
-  const r = b as Record<string, unknown>;
-  return typeof r.day === "string" && typeof r.total === "number" && typeof r.ok === "number";
+  if (!isRecord(b)) return false;
+  return typeof b.day === "string" && typeof b.total === "number" && typeof b.ok === "number";
 }
 
 async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
@@ -56,27 +53,33 @@ async function releaseSampleLock(ctx: AppContext, token: string | null): Promise
       await ctx.kv.delete(SAMPLE_LOCK_KEY);
     }
   } catch (err) {
-    ctx.log(
-      "warn",
-      `[status-history] sample lock release failed, leaving to TTL expiry: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    ctx.log("warn", `[status-history] sample lock release failed, leaving to TTL expiry: ${errMsg(err)}`);
   }
 }
 
 export const HISTORY_KEY = API_DOMAINS.statusHistory;
 let memoryStore: HistoryStore = { sources: {} };
 
+/** The in-process store when it holds anything, else an empty one. */
+const memoryOrEmpty = (): HistoryStore => (Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} });
+
+/** True at most once per `intervalMs`. */
+function throttleGate(intervalMs: number): () => boolean {
+  let last = 0;
+  return () => {
+    const now = Date.now();
+    if (now - last < intervalMs) return false;
+    last = now;
+    return true;
+  };
+}
+
 const KV_READ_WARN_THROTTLE_MS = 30 * 60 * 1000;
-let lastKvReadWarnAt = 0;
+const kvReadWarnGate = throttleGate(KV_READ_WARN_THROTTLE_MS);
 
 function warnKvReadFailure(ctx: AppContext, err: unknown): void {
-  const now = Date.now();
-  if (now - lastKvReadWarnAt < KV_READ_WARN_THROTTLE_MS) return;
-  lastKvReadWarnAt = now;
-  ctx.log(
-    "warn",
-    `[status-history] KV read failed, serving memory: ${err instanceof Error ? err.message : String(err)}`,
-  );
+  if (!kvReadWarnGate()) return;
+  ctx.log("warn", `[status-history] KV read failed, serving memory: ${errMsg(err)}`);
 }
 
 export async function readStore(ctx: AppContext): Promise<HistoryStore> {
@@ -88,7 +91,7 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
     warnKvReadFailure(ctx, err);
     return memoryStore;
   }
-  if (raw == null) return Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} };
+  if (raw == null) return memoryOrEmpty();
   try {
     const salvaged = salvageStore(JSON.parse(raw));
     if (salvaged) return salvaged;
@@ -100,18 +103,17 @@ export async function readStore(ctx: AppContext): Promise<HistoryStore> {
   } catch (err) {
     ctx.log("warn", `[status-history] corrupt history clear failed: ${errMsg(err)}`);
   }
-  return Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} };
+  return memoryOrEmpty();
 }
 
 function salvageStore(parsed: unknown): HistoryStore | null {
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  const sources = (parsed as { sources?: unknown }).sources;
-  if (!sources || typeof sources !== "object" || Array.isArray(sources)) return null;
+  if (!isRecord(parsed)) return null;
+  const { sources } = parsed;
+  if (!isRecord(sources)) return null;
   const out: HistoryStore["sources"] = {};
-  for (const [id, entry] of Object.entries(sources as Record<string, unknown>)) {
-    if (entry == null) continue;
-    if (typeof entry !== "object" || Array.isArray(entry)) continue;
-    const { recent, daily } = entry as { recent?: unknown; daily?: unknown };
+  for (const [id, entry] of Object.entries(sources)) {
+    if (!isRecord(entry)) continue;
+    const { recent, daily } = entry;
     if (!Array.isArray(recent) || !Array.isArray(daily)) continue;
     if (!recent.every(isValidSample) || !daily.every(isValidBucket)) continue;
     out[id as SourceId] = { recent, daily };
@@ -135,7 +137,7 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
     for (const [id, result] of providerResults) {
       aggregates.set(id, {
         ok: result.ok,
-        ...(result.warn ? { warn: true } : {}),
+        ...(result.warn ? { warn: true, warnReason: result.warnReason } : {}),
         status: result.status,
         latencyMs: result.ok ? result.latencyMs : null,
         error: result.error,
@@ -156,10 +158,9 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
 async function mergeSamplesIntoStore(
   ctx: AppContext,
   aggregates: Map<SourceId, SourceAggregate>,
-  now = Date.now(),
-): Promise<HistoryStore> {
+  now: number,
+): Promise<void> {
   const store = await readStore(ctx);
-  if (aggregates.size === 0) return store;
   for (const [id, agg] of aggregates) {
     store.sources[id] = mergeSample(
       store.sources[id],
@@ -170,32 +171,29 @@ async function mergeSamplesIntoStore(
         status: agg.status,
         error: agg.error,
         ...(agg.warn ? { warn: true } : {}),
+        ...(agg.warnReason != null ? { warnReason: agg.warnReason } : {}),
       },
       now,
     );
   }
   if (!ctx.kv) {
     memoryStore = store;
-    return store;
+    return;
   }
   try {
     await ctx.kv.put(HISTORY_KEY, JSON.stringify(store), { expirationTtl: HISTORY_KV_RETENTION_TTL_S });
   } catch (err) {
-    ctx.log(
-      "warn",
-      `[status-history] KV write failed, serving memory: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    ctx.log("warn", `[status-history] KV write failed, serving memory: ${errMsg(err)}`);
     memoryStore = store;
   }
-  return store;
 }
 
 export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore> {
   // readStore never rejects: every KV read/write is caught and degrades to
   // memoryStore internally.
   const store = await readStore(ctx);
-  if (ctx.kv) warnStaleSamples(ctx, store);
   const latest = latestSampleAt(store);
+  if (ctx.kv) warnStaleSamples(ctx, latest);
   const now = Date.now();
   // Cron gaps used to leave multi-hour holes that anchored recovery events to
   // the next surviving round, so a read now refills a stale history (fresh
@@ -220,7 +218,7 @@ export async function ensureFreshSamples(ctx: AppContext): Promise<HistoryStore>
 
 const STALE_SAMPLE_WARN_MS = 2 * 60 * 60 * 1000;
 const STALE_WARN_THROTTLE_MS = 30 * 60 * 1000;
-let lastStaleWarnAt = 0;
+const staleWarnGate = throttleGate(STALE_WARN_THROTTLE_MS);
 
 export function latestSampleAt(store: HistoryStore): number {
   let latest = 0;
@@ -231,12 +229,10 @@ export function latestSampleAt(store: HistoryStore): number {
   return latest;
 }
 
-function warnStaleSamples(ctx: AppContext, store: HistoryStore): void {
+function warnStaleSamples(ctx: AppContext, latest: number): void {
   const now = Date.now();
-  const latest = latestSampleAt(store);
   if (latest === 0 || now - latest <= STALE_SAMPLE_WARN_MS) return;
-  if (now - lastStaleWarnAt < STALE_WARN_THROTTLE_MS) return;
-  lastStaleWarnAt = now;
+  if (!staleWarnGate()) return;
   ctx.log("warn", "[status-history] samples are stale: sampling cron may be dead", {
     latestSampleAt: new Date(latest).toISOString(),
     ageHours: Math.round((now - latest) / 3_600_000),

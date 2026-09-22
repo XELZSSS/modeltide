@@ -3,7 +3,7 @@ import { UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig, upstreamEndpoints } fro
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
 import { parseDirectoryRows, type DirectoryCacheEntry } from "@/server/parsers/openrouter-parser";
-import { cachedSource } from "@/server/sources/pipeline";
+import { cached } from "@/server/sources/pipeline";
 
 const PRICING_TTL_MS = SLOW_TTL_MS;
 
@@ -21,8 +21,8 @@ async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntry
 }
 
 export async function getModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntry> {
-  return cachedSource<DirectoryCacheEntry>(ctx, cacheKeys.openRouterPricing, PRICING_TTL_MS, async () => {
+  return cached<DirectoryCacheEntry>(ctx, cacheKeys.openRouterPricing, PRICING_TTL_MS, async () => {
     const data = await fetchModelDirectory(ctx);
-    return { value: data };
+    return { data };
   });
 }

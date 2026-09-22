@@ -16,10 +16,16 @@ export const numCoerce = (v: unknown): number | null => {
 
 export const numOr = (v: unknown, fallback = 0): number => numCoerce(v) ?? fallback;
 
-/** numNonNegative, but accepts numeric strings (upstream rates are quoted as text). */
+/** Zero-or-more, accepting numeric strings (upstream rates are quoted as text). */
 export const numCoerceNonNegative = (v: unknown): number | null => {
   const n = numCoerce(v);
   return n != null && n >= 0 ? n : null;
+};
+
+/** Strictly positive: a 0 rate means "not priced", not "free". */
+export const numCoercePositive = (v: unknown): number | null => {
+  const n = numCoerce(v);
+  return n != null && n > 0 ? n : null;
 };
 
 const ISO_LIKE_RE = /^\d{4}-\d{2}-\d{2}(?:[T ]\S*)?$/;
@@ -44,43 +50,10 @@ export const obj = (v: unknown): Record<string, unknown> | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 export const isRecord = (v: unknown): v is Record<string, unknown> => obj(v) !== undefined;
 
-function numWhere(v: unknown, predicate: (n: number) => boolean): number | null {
-  const n = num(v);
-  return n != null && predicate(n) ? n : null;
-}
-export const numPositive = (v: unknown): number | null => numWhere(v, (n) => n > 0);
-export const numNonNegative = (v: unknown): number | null => numWhere(v, (n) => n >= 0);
-
-export const numIntNonNegative = (v: unknown): number | null => {
-  const n = numNonNegative(v);
-  return n == null ? null : Math.trunc(n);
-};
-
 export const numIntCoerceNonNegative = (v: unknown): number | null => {
   const n = numCoerceNonNegative(v);
   return n == null ? null : Math.trunc(n);
 };
-
-/** Trimmed non-empty string or null — safe for unknown upstream values. */
-export const trimmedOrNull = (v: unknown): string | null => {
-  if (typeof v !== "string") return null;
-  const t = v.trim();
-  return t ? t : null;
-};
-
-/** Array of records filtered from an unknown upstream value. Never throws. */
-export function recordsOf(v: unknown, max = 50_000): Record<string, unknown>[] {
-  if (!Array.isArray(v)) return [];
-  const out: Record<string, unknown>[] = [];
-  const cap = Math.min(v.length, max);
-  for (let i = 0; i < cap; i++) {
-    const item = v[i];
-    if (item !== null && typeof item === "object" && !Array.isArray(item)) {
-      out.push(item as Record<string, unknown>);
-    }
-  }
-  return out;
-}
 
 export const titleCase = (s: string): string => (s ? s[0]!.toUpperCase() + s.slice(1).toLowerCase() : s);
 
@@ -98,8 +71,16 @@ export function parseTs(v: unknown, positiveOnly = false): number {
   return t;
 }
 
+/**
+ * Descending date; unparseable dates sink to the bottom and two of them compare
+ * equal instead of producing a NaN comparator (`-Infinity - -Infinity`).
+ */
 export function byDateDesc<T>(getDate: (item: T) => unknown): (a: T, b: T) => number {
-  return (a, b) => parseTs(getDate(b)) - parseTs(getDate(a));
+  return (a, b) => {
+    const ta = parseTs(getDate(a));
+    const tb = parseTs(getDate(b));
+    return ta === tb ? 0 : tb - ta;
+  };
 }
 
 /**

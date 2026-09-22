@@ -35,6 +35,11 @@ export function buildContext(
      * (or fail) a refresh that other callers have joined.
      */
     callerSignal?: AbortSignal;
+    /**
+     * Keeps an orphaned refresh alive past the request that started it, so an
+     * aborted request still leaves the cache warm.
+     */
+    onDetach?: (work: Promise<unknown>) => void;
   },
 ): AppContext {
   const log = createLogger();
@@ -43,7 +48,10 @@ export function buildContext(
     log("warn", "[context] CACHE KV not configured: status history is per-isolate memory only");
   }
   return {
-    cache: new CacheService(env.CACHE, CACHE_VERSION, { callerSignal: init?.callerSignal }),
+    cache: new CacheService(env.CACHE, CACHE_VERSION, {
+      callerSignal: init?.callerSignal,
+      onDetach: init?.onDetach,
+    }),
     http: new HttpClient(init?.workSignal ? { signal: init.workSignal } : undefined),
     kv: env.CACHE,
     hfToken: env.HF_TOKEN,

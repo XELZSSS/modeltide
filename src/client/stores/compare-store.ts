@@ -1,4 +1,3 @@
-"use client";
 import { persist } from "zustand/middleware";
 import { create } from "zustand";
 import { useMemo } from "react";
@@ -11,7 +10,10 @@ const MAX_COMPARE = 2;
 
 function cleanIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  return [...new Set(raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0))].slice(0, MAX_COMPARE);
+  return [...new Set(raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0))].slice(
+    0,
+    MAX_COMPARE,
+  );
 }
 
 interface CompareState {
@@ -19,6 +21,7 @@ interface CompareState {
   lastExceedAt: number | null;
   toggleCompareModel: (model: ArtificialAnalysisModel) => boolean;
   removeCompareModel: (model: { id?: string; slug?: string }) => void;
+  pruneCompare: (validIds: ReadonlySet<string>) => void;
   clearCompare: () => void;
   clearExceed: () => void;
 }
@@ -48,6 +51,12 @@ export const useCompareStore = create<CompareState>()(
           const key = modelId(model);
           if (!key) return state;
           return { compareIds: state.compareIds.filter((id) => id !== key), lastExceedAt: null };
+        }),
+      pruneCompare: (validIds) =>
+        set((state) => {
+          const kept = state.compareIds.filter((id) => validIds.has(id));
+          // Same-object return keeps a no-op prune from notifying subscribers (and re-rendering).
+          return kept.length === state.compareIds.length ? state : { compareIds: kept, lastExceedAt: null };
         }),
       clearCompare: () => set({ compareIds: [], lastExceedAt: null }),
       clearExceed: () => set({ lastExceedAt: null }),

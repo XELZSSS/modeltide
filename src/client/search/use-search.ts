@@ -1,4 +1,3 @@
-"use client";
 import { useMemo } from "react";
 import {
   useAllOpenSourceModels,
@@ -15,22 +14,29 @@ import type {
   OpenSourceModelEntry,
 } from "@/shared/types";
 import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
+import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { matchTerm, normalizeModelKey, fuzzyMatch } from "@/shared/utils";
 
 type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
 
-interface SourceConfig<T extends SearchItem> {
-  items: T[];
-  getFields: (item: T) => (string | undefined | null)[];
-  map: (item: T) => SearchResult;
+interface SourceConfig {
+  items: readonly SearchItem[];
+  getFields(item: SearchItem): (string | undefined | null)[];
+  map(item: SearchItem): SearchResult;
 }
 
-function collect<T extends SearchItem>(
-  config: SourceConfig<T>,
-  term: string,
-): { result: SearchResult; match: number }[] {
+/** Erases one source's item type here instead of at every field/map call site. */
+function defineSource<T extends SearchItem>(
+  items: readonly T[],
+  getFields: (item: T) => (string | undefined | null)[],
+  map: (item: T) => SearchResult,
+): SourceConfig {
+  return { items, getFields, map };
+}
+
+function collect(config: SourceConfig, term: string): { result: SearchResult; match: number }[] {
   const out: { result: SearchResult; match: number }[] = [];
-  const missed: T[] = [];
+  const missed: SearchItem[] = [];
   for (const item of config.items) {
     const fields = config.getFields(item).filter((v): v is string => typeof v === "string" && v.length > 0);
     const { matched, score } = matchTerm(fields, term);
@@ -58,114 +64,109 @@ const MAX_RESULTS = 20;
 
 const EMPTY_ARRAY: never[] = [];
 
-export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: boolean }): SearchState {
-  const baseEnabled = searchTerm.trim().length >= 2;
-  const enabled = baseEnabled && !opts?.suspended;
+/** Minimum trimmed query length that starts a search. */
+export const MIN_QUERY = 2;
+
+/**
+ * Corpus priority for equally relevant hits. It also decides which entry survives
+ * the dedupe below: one model lives in several corpora (hallucination rankings are
+ * derived from the AA models), and their `score`s are different metrics — letting
+ * an intelligence index race an omniscience index picked the winner, so the same
+ * model could resolve to a different detail page (with a different back
+ * destination) depending on which metric happened to be larger.
+ */
+const SOURCE_PRIORITY: Record<SearchResultSource, number> = {
+  modelRankings: 0,
+  openRouterRankings: 1,
+  openSourceRankings: 2,
+  hallucinationRankings: 3,
+};
+
+/**
+ * Orders hits by relevance, then by corpus priority, then by the corpus's own
+ * score (only ever comparing like with like), and collapses the same model down
+ * to its highest-priority entry.
+ */
+export function rankSearchHits(hits: { result: SearchResult; match: number }[]): SearchResult[] {
+  const ordered = [...hits].sort(
+    (a, b) =>
+      b.match - a.match ||
+      SOURCE_PRIORITY[a.result.source] - SOURCE_PRIORITY[b.result.source] ||
+      (b.result.score ?? -Infinity) - (a.result.score ?? -Infinity),
+  );
+  const seen = new Set<string>();
+  const deduped: SearchResult[] = [];
+  for (const c of ordered) {
+    const key = normalizeModelKey(c.result.name || c.result.id) || c.result.id.toLowerCase();
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    deduped.push(c.result);
+    if (deduped.length >= MAX_RESULTS) break;
+  }
+  return deduped;
+}
+
+export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: boolean; warm?: boolean }): SearchState {
+  const baseEnabled = searchTerm.trim().length >= MIN_QUERY;
+  // `warm` (the search box has focus) loads the corpora before the term is long enough, so
+  // the first two keystrokes read from cache instead of fanning out four full-dataset
+  // requests. It overrides `suspended`, which only gates the term-driven search.
+  const enabled = opts?.warm === true || (baseEnabled && opts?.suspended !== true);
   const artificialQ = useArtificialRankings(enabled);
   const openSourceQ = useAllOpenSourceModels(enabled);
   const orQ = useOpenRouterRankings(enabled);
 
-  const artificialData = artificialQ.data ?? (EMPTY_ARRAY as ArtificialAnalysisModel[]);
+  const artificialData = artificialQ.data ?? EMPTY_ARRAY;
   const openSourceRankings = openSourceQ.data ?? EMPTY_ARRAY;
   const openRouterData = orQ.data?.tokenUsageRankings ?? EMPTY_ARRAY;
   const hallucinationRankings = useHallucinationRankings(artificialData, enabled);
 
   const error = [artificialQ.error, openSourceQ.error, orQ.error].find((e): e is Error | null => e != null) ?? null;
 
-  const sources = useMemo<SourceConfig<SearchItem>[]>(
+  const sources = useMemo<SourceConfig[]>(
     () => [
-      {
-        items: artificialData,
-        getFields: (m) => {
-          const model = m as ArtificialAnalysisModel;
-          return [model.name, model.slug, model.short_name, model.model_creators?.name];
-        },
-        map: (m): SearchResult => {
-          const model = m as ArtificialAnalysisModel;
-          return {
-            id: model.id,
-            name: model.name,
-            source: "modelRankings",
-            score: model.intelligence_index,
-            provider: model.model_creators?.name || null,
-            link: detailLink("modelRankings", model.slug || model.id),
-          };
-        },
-      },
-      {
-        items: openRouterData,
-        getFields: (m) => {
-          const e = m as OpenRouterRankEntry;
-          return [e.name, e.id, e.creator];
-        },
-        map: (m): SearchResult => {
-          const e = m as OpenRouterRankEntry;
-          return {
-            id: e.id,
-            name: e.name,
-            source: "openRouterRankings",
-            score: null,
-            provider: e.creator || null,
-            link: detailLink("openRouterRankings", e.id),
-          };
-        },
-      },
-      {
-        items: openSourceRankings,
-        getFields: (m) => {
-          const e = m as OpenSourceModelEntry;
-          return [e.id, e.author ?? ""];
-        },
-        map: (m): SearchResult => {
-          const e = m as OpenSourceModelEntry;
-          return {
-            id: e.id,
-            name: e.id,
-            source: "openSourceRankings",
-            score: null,
-            provider: e.author || null,
-            link: detailLink("openSourceRankings", e.id),
-          };
-        },
-      },
-      {
-        items: hallucinationRankings,
-        getFields: (m) => {
-          const e = m as HallucinationRankingEntry;
-          return [e.model, e.slug, e.id];
-        },
-        map: (m): SearchResult => {
-          const e = m as HallucinationRankingEntry;
-          return {
-            id: e.id,
-            name: e.model,
-            source: "hallucinationRankings",
-            score: e.omniscienceIndex,
-            provider: null,
-            link: detailLink("hallucinationRankings", e.slug || e.id),
-          };
-        },
-      },
+      defineSource(artificialData, SEARCH_FIELDS.aa, (m) => ({
+        id: m.id,
+        name: m.name,
+        source: "modelRankings",
+        score: m.intelligence_index,
+        provider: m.model_creators?.name || null,
+        link: detailLink("modelRankings", m.slug || m.id),
+      })),
+      defineSource(openRouterData, SEARCH_FIELDS.or, (e) => ({
+        id: e.id,
+        name: e.name,
+        source: "openRouterRankings",
+        score: null,
+        provider: e.creator || null,
+        link: detailLink("openRouterRankings", e.id),
+      })),
+      defineSource(openSourceRankings, SEARCH_FIELDS.os, (e) => ({
+        id: e.id,
+        name: e.id,
+        source: "openSourceRankings",
+        score: null,
+        provider: e.author || null,
+        link: detailLink("openSourceRankings", e.id),
+      })),
+      defineSource(hallucinationRankings, SEARCH_FIELDS.hall, (e) => ({
+        id: e.id,
+        name: e.model,
+        source: "hallucinationRankings",
+        score: e.omniscienceIndex,
+        provider: null,
+        link: detailLink("hallucinationRankings", e.slug || e.id),
+      })),
     ],
     [artificialData, openRouterData, openSourceRankings, hallucinationRankings],
   );
 
   const results = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
-    if (!enabled || !term) return [];
-    const collected = sources.flatMap((source) => collect(source, term));
-    collected.sort((a, b) => b.match - a.match || (b.result.score ?? -Infinity) - (a.result.score ?? -Infinity));
-    const seen = new Set<string>();
-    const deduped: SearchResult[] = [];
-    for (const c of collected) {
-      const key = normalizeModelKey(c.result.name || c.result.id) || c.result.id.toLowerCase();
-      if (key && seen.has(key)) continue;
-      if (key) seen.add(key);
-      deduped.push(c.result);
-      if (deduped.length >= MAX_RESULTS) break;
-    }
-    return deduped;
-  }, [enabled, searchTerm, sources]);
+    // Warming alone must not surface matches: the dropdown still needs a long enough term.
+    if (!enabled || !baseEnabled || !term) return [];
+    return rankSearchHits(sources.flatMap((source) => collect(source, term)));
+  }, [enabled, baseEnabled, searchTerm, sources]);
 
   return {
     results,

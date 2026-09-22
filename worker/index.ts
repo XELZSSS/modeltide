@@ -1,6 +1,6 @@
 import { buildContext, type Env } from "@/server/context";
 import { recordStatusSamples } from "@/server/sources/status";
-import { warmTasks } from "@/server/sources/registry";
+import { warmTasks, type WarmTier } from "@/server/sources/registry";
 import { runCapped } from "@/server/infra/task-pool";
 import {
   SAMPLE_TIMEOUT_MS,
@@ -13,25 +13,35 @@ import { applyApiHeaders } from "@/shared/config/security";
 import { methodNotAllowedResponse, notFoundResponse, stripBodyForHead } from "@/server/routes/define-route";
 import { handleApi } from "./api-router";
 
+/** Append the Healthchecks `/fail` suffix before any query string or hash. */
+function failTarget(url: string): string {
+  const cut = [url.indexOf("?"), url.indexOf("#")].filter((i) => i >= 0);
+  if (cut.length === 0) return url.endsWith("/") ? `${url}fail` : `${url}/fail`;
+  const at = Math.min(...cut);
+  return `${url.slice(0, at).replace(/\/$/, "")}/fail${url.slice(at)}`;
+}
+
 async function pingCronMonitor(env: Env, healthy: boolean): Promise<void> {
   const url = env.STATUS_PING_URL;
   if (!url) return;
-  let target = url;
-  try {
-    const parsed = new URL(url);
-    parsed.pathname = parsed.pathname.endsWith("/")
-      ? `${parsed.pathname}${healthy ? "" : "fail"}`
-      : `${parsed.pathname}${healthy ? "" : "/fail"}`;
-    target = parsed.toString();
-  } catch {
-    target = healthy ? url : url.endsWith("/") ? `${url}fail` : `${url}/fail`;
-  }
+  // An invalid URL fails at fetch below and is reported the same way.
+  const target = healthy ? url : failTarget(url);
   try {
     const res = await fetch(target, { signal: AbortSignal.timeout(PING_TIMEOUT_MS) });
     if (!res.ok) console.warn(`[cron-monitor] ping responded ${res.status} (healthy=${healthy})`);
   } catch (err) {
     console.warn(`[cron-monitor] ping failed: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+/**
+ * Warm tiers per cron fire time. Off-peak minutes (< 30) refresh hourly data
+ * too; every 6th hour adds static data. Peak minutes (:30-:59) refresh only
+ * core data.
+ */
+function warmTiersFor(fireMinuteUtc: number, fireHourUtc: number): WarmTier[] {
+  if (fireMinuteUtc >= 30) return ["core"];
+  return ["core", "hourly", ...(fireHourUtc % 6 === 0 ? (["static"] as const) : [])];
 }
 
 interface ScheduledResult {
@@ -72,16 +82,9 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
   const warmJob = (async (): Promise<{ failed: number; total: number }> => {
     try {
       const batchSignal = AbortSignal.timeout(WARM_BATCH_TIMEOUT_MS);
-      const coreTasks = warmTasks(env, "core", WARM_TASK_TIMEOUT_MS);
-      const hourlyTasks = warmTasks(env, "hourly", WARM_TASK_TIMEOUT_MS);
-      const tasks =
-        fireMinuteUtc < 30
-          ? [
-              ...coreTasks,
-              ...hourlyTasks,
-              ...(fireHourUtc % 6 === 0 ? warmTasks(env, "static", WARM_TASK_TIMEOUT_MS) : []),
-            ]
-          : coreTasks;
+      const tasks = warmTiersFor(fireMinuteUtc, fireHourUtc).flatMap((tier) =>
+        warmTasks(env, tier, WARM_TASK_TIMEOUT_MS),
+      );
       const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: batchSignal });
       const failed = results.filter((r) => r.status === "rejected").length;
       if (failed > 0) {
@@ -102,11 +105,25 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
   };
 }
 
+/**
+ * Bare `/api` counts too: `run_worker_first` routes it here (wrangler.jsonc),
+ * so handing it to ASSETS would answer the SPA shell (HTML, 200) instead of the
+ * JSON 404.
+ */
 function isApiRequest(url: URL): boolean {
-  return url.pathname.startsWith("/api/");
+  return url.pathname === "/api" || url.pathname.startsWith("/api/");
 }
 
-async function fetchHandler(req: Request, env: Env): Promise<Response> {
+/**
+ * A refresh orphaned by a client disconnect must outlive the request that
+ * started it, or the cache is never filled and the next caller repeats the same
+ * upstream fetch.
+ */
+function detachHook(ctx?: ExecutionContext): ((work: Promise<unknown>) => void) | undefined {
+  return ctx ? (work) => ctx.waitUntil(work) : undefined;
+}
+
+async function fetchHandler(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const url = new URL(req.url);
   if (!isApiRequest(url)) {
     if (!env.ASSETS) return new Response("Static assets binding not configured", { status: 500 });
@@ -121,7 +138,7 @@ async function fetchHandler(req: Request, env: Env): Promise<Response> {
     return methodNotAllowedResponse();
   }
   const isHead = req.method === "HEAD";
-  const res = (await handleApi(req, env, url)) ?? notFoundResponse();
+  const res = (await handleApi(req, env, url, detachHook(ctx))) ?? notFoundResponse();
   return isHead ? stripBodyForHead(res) : res;
 }
 

@@ -1,4 +1,3 @@
-"use client";
 import { memo } from "react";
 import { useTranslation } from "@/client/providers";
 import type { StatusEvent } from "@/shared/types";
@@ -34,19 +33,28 @@ const StatusEventRow = memo(function StatusEventRow({
   const style = resolveEventStyle(event.type);
   const labelKey = sourceLabelKey(event.id);
   const sourceLabel = labelKey ? t(labelKey) : event.id;
+  const detail = event.type === "up" ? null : (event.detail ?? null);
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <div className="flex items-center gap-2 min-w-0">
-        <Dot size="sm" color={style.color} />
-        <span className="text-sm">
-          <span className={cn("font-medium", style.text)}>{t(style.labelKey)}</span>
-          {showSource && (
-            <>
-              <span className="text-text-secondary mx-1.5">·</span>
-              <span className="text-text-secondary">{sourceLabel}</span>
-            </>
+    <div className="flex items-start justify-between gap-3 px-4 py-3">
+      <div className="flex items-start gap-2 min-w-0">
+        {/* mt-1.5 centres the 8px dot on the 20px first line now that the row is top-aligned. */}
+        <Dot size="sm" color={style.color} className="mt-1.5" />
+        <div className="min-w-0">
+          <div className="text-sm">
+            <span className={cn("font-medium", style.text)}>{t(style.labelKey)}</span>
+            {showSource && (
+              <>
+                <span className="text-text-secondary mx-1.5">·</span>
+                <span className="text-text-secondary">{sourceLabel}</span>
+              </>
+            )}
+          </div>
+          {detail && (
+            <p className="ui-caption text-text-secondary mt-0.5 line-clamp-2 break-words" title={detail}>
+              {detail}
+            </p>
           )}
-        </span>
+        </div>
       </div>
       <div className="flex items-center gap-2 shrink-0 text-xs text-text-secondary">
         {event.type !== "up" && (

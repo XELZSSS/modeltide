@@ -1,7 +1,6 @@
-"use client";
 import { useMemo } from "react";
 import { ExternalLink, Clock, Search } from "lucide-react";
-import { useTranslation } from "@/client/providers";
+import { useDevice, useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import { Pagination } from "@/client/components/ui/pagination";
 import { useSuspenseNewsState } from "@/client/api/api-queries";
@@ -12,7 +11,6 @@ import { useClientTab } from "@/client/hooks/use-client-tab";
 import { type TabItem } from "@/client/components/ui/tabs";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import { NEWS_CATEGORIES } from "@/shared/config";
-import { useDevice } from "@/client/providers";
 import { usePagedData } from "@/client/components/data/table";
 
 const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
@@ -84,15 +82,10 @@ function NewsList({ news }: { news: NewsItem[] }) {
 }
 
 function NewsCategoryContent({ categoryId }: { categoryId: NewsCategory }) {
-  const { t } = useTranslation();
   const { items: news, partial } = useSuspenseNewsState(categoryId);
   return (
     <>
-      {partial && (
-        <div className="mb-3">
-          <PartialNotice message={t("partialDataNotice")} />
-        </div>
-      )}
+      {partial && <PartialNotice />}
       <NewsList key={categoryId} news={news} />
     </>
   );

@@ -5,9 +5,6 @@ node_modules/
 dist/
 coverage/
 
-# Cloudflare generated types (kept out; `npm run cf-typegen` regenerates)
-cloudflare-env.d.ts
-
 # IDE
 .vscode/
 .idea/

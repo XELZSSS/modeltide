@@ -1,4 +1,3 @@
-"use client";
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "@/client/router";
 import { useSettingsStore } from "@/client/stores";
@@ -6,21 +5,6 @@ import { useTranslation } from "@/client/providers";
 import { DesktopNav, MobileNav, MobileMoreSheet } from "./navigation";
 
 const SettingsSheet = lazy(() => import("./settings-sheet").then((m) => ({ default: m.SettingsSheet })));
-
-const ACCENT_BY_PREFIX: readonly (readonly [string, string])[] = [
-  ["/news", "news"],
-  ["/status", "status"],
-  ["/releases", "releases"],
-  ["/models", "rankings"],
-  ["/compare", "rankings"],
-  ["/price-compare", "rankings"],
-  ["/model", "rankings"],
-];
-
-function accentForPath(pathname: string): string {
-  const hit = ACCENT_BY_PREFIX.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  return hit?.[1] ?? "home";
-}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
@@ -45,13 +29,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     const dark = themeMode === "dark";
     document.documentElement.classList.toggle("dark", dark);
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
-    const meta = document.querySelector("meta[name='theme-color']");
-    if (meta) meta.setAttribute("content", dark ? "#000000" : "#ffffff");
+    const metas = document.querySelectorAll("meta[name='theme-color']");
+    for (const meta of metas) meta.setAttribute("content", dark ? "#000000" : "#ffffff");
   }, [themeMode]);
-
-  useLayoutEffect(() => {
-    document.body.dataset.accent = accentForPath(pathname);
-  }, [pathname]);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });

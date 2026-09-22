@@ -1,10 +1,9 @@
-"use client";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useSuspenseAgentRankings } from "@/client/api/api-queries";
 import type { AgentRankEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/components/data/table";
 import { cn } from "@/client/utils/cn";
-import { trendClass, type DataTableColumn } from "@/client/components/data/table-columns";
+import { rightCol, trendClass, type DataTableColumn } from "@/client/components/data/table-columns";
 import type { useTranslation } from "@/client/providers";
 
 function buildAgentColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColumn<AgentRankEntry>[] {
@@ -42,20 +41,10 @@ function buildAgentColumns(t: ReturnType<typeof useTranslation>["t"]): DataTable
         );
       },
     },
-    {
-      id: "creator",
-      header: t("provider"),
-      align: "right",
+    rightCol("creator", t("provider"), (item) => <span className="text-sm">{item.creator}</span>, { hiddenMd: true }),
+    rightCol("license", t("license"), (item) => <span className="text-sm">{item.license ?? t("notAvailable")}</span>, {
       hiddenMd: true,
-      cell: (item) => <span className="text-sm">{item.creator}</span>,
-    },
-    {
-      id: "license",
-      header: t("license"),
-      align: "right",
-      hiddenMd: true,
-      cell: (item) => <span className="text-sm">{item.license ?? t("notAvailable")}</span>,
-    },
+    }),
   ];
 }
 

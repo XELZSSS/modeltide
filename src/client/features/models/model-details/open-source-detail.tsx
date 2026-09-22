@@ -1,4 +1,3 @@
-"use client";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import type { OpenSourceModelEntry } from "@/shared/types";

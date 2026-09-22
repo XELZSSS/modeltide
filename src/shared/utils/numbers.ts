@@ -15,6 +15,18 @@ export function normalizePercent(value: number | null | undefined): number | nul
   return Math.max(0, Math.min(100, percent));
 }
 
+/**
+ * Same 0-1 -> 0-100 coercion as `normalizePercent`, without the [0, 100] clamp:
+ * metrics that are legitimately negative (AA's omniscience index runs below
+ * zero for some models) or above 100 keep their sign and magnitude instead of
+ * being flattened to the band edge. Idempotent, so it is safe on values a
+ * parser has already scaled.
+ */
+export function unclampedPercent(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return value > 0 && value <= 1 ? value * 100 : value;
+}
+
 export function approxEq(a: number, b: number, eps = 1e-9): boolean {
   if (a === b) return true;
   return Math.abs(a - b) < eps * Math.max(1, Math.abs(a), Math.abs(b));

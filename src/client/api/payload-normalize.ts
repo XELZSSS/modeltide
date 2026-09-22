@@ -1,5 +1,4 @@
-"use client";
-import type { HomeDashboardData, OpenSourceModelEntry, SourcePayload } from "@/shared/types";
+import type { HomeDashboardData, HomeOpenSourceEntry, SourcePayload } from "@/shared/types";
 import { isPartialDashboard } from "@/shared/utils";
 
 /**
@@ -26,7 +25,7 @@ export function unwrapList<T>(payload: unknown, label: string): T[] {
 export interface NormalizedHomeDashboard {
   orRankings: HomeDashboardData["orRankings"];
   textToImage: HomeDashboardData["textToImage"];
-  opensource: OpenSourceModelEntry[];
+  opensource: HomeOpenSourceEntry[];
   /** True when any dashboard leg failed and was nulled out. */
   partial: boolean;
 }
@@ -52,6 +51,14 @@ export function normalizeHomeDashboard(raw: HomeDashboardData, label = "homeDash
 }
 
 /**
+ * Reads the `partial` flag off an unknown payload. Non-object payloads (null,
+ * primitives) and objects without the flag read as `false`.
+ */
+export function isPartialPayload(payload: unknown): boolean {
+  return (payload as { partial?: boolean } | null | undefined)?.partial === true;
+}
+
+/**
  * Non-throwing variant of unwrapList that also surfaces the payload partial
  * flag and whether the payload failed local validation (`malformed`).
  */
@@ -59,10 +66,7 @@ export function unwrapListPartial<T>(
   payload: unknown,
   label: string,
 ): { data: T[]; partial: boolean; malformed: boolean } {
-  const partial =
-    typeof payload === "object" && payload != null && "partial" in payload
-      ? (payload as SourcePayload<T[]>).partial === true
-      : false;
+  const partial = isPartialPayload(payload);
   if (payload == null) return { data: [] as T[], partial, malformed: false };
   try {
     return { data: unwrapList<T>(payload, label), partial, malformed: false };

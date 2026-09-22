@@ -12,7 +12,7 @@ import { getModelById, getModels, getReleases } from "@/server/sources/hf-source
 import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
 import { getStatusHistory } from "@/server/sources/status-history";
 
-type WarmTier = "core" | "hourly" | "static";
+export type WarmTier = "core" | "hourly" | "static";
 
 interface SourceManifestEntry<Q extends QuerySchema = QuerySchema> {
   path: string;
@@ -24,7 +24,10 @@ interface SourceManifestEntry<Q extends QuerySchema = QuerySchema> {
 }
 
 const OPEN_SOURCE_SORTS = ["trendingScore", "downloads", "likes", "createdAt", "lastModified"] as const;
-const SORT_DIRECTIONS = ["-1", "1"] as const;
+// Upstream rejects ascending order for every sort key ("only descending sort is
+// supported"), so the enum admits only -1: a `direction=1` request now fails
+// validation with a 400 instead of reaching Hugging Face and surfacing as a 502.
+const SORT_DIRECTIONS = ["-1"] as const;
 
 function defineSource<S extends QuerySchema>(entry: SourceManifestEntry<S>): SourceManifestEntry {
   return entry as SourceManifestEntry;
@@ -45,7 +48,7 @@ export const SOURCES: readonly SourceManifestEntry[] = [
     path: apiPaths.news,
     query: { category: qEnum(NEWS_CATEGORIES, NEWS_CATEGORIES[0]) },
     handler: (ctx, params) => getNews(ctx, params.category),
-    warm: "core",
+    warm: "hourly",
     warmParams: NEWS_CATEGORIES.map((category) => ({ category })),
   }),
   defineSource({

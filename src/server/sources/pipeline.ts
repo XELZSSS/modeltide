@@ -1,18 +1,27 @@
 /**
  * Naming rule for `src/server/sources/*`: `fetch*` never touches cache;
- * `get*` always caches through the helpers below (`cachedSource` /
- * `cachedPayload`).
+ * `get*` always caches through the helpers below (`cached` / `cachedPayload`).
  */
 
 import type { AppContext } from "@/server/context";
 import type { SourcePayload } from "@/shared/types";
 import type { ParseResult } from "@/server/parsers/parse-result";
-import { UpstreamError } from "@/server/infra/errors";
+import { UpstreamError, zeroUpstream } from "@/server/infra/errors";
 import { ttlFor } from "@/shared/config";
 
 export function requireParsed<T>(result: ParseResult<T>): T {
   if (result.ok) return result.data;
   throw new UpstreamError(result.error);
+}
+
+/**
+ * An upstream that parsed to nothing is a 502, never an empty 200. `label`,
+ * `unit` and `detail` feed `zeroUpstreamMessage`, so every source reports this
+ * one way.
+ */
+export function requireRows<T>(rows: T[], label: string, unit: string, detail?: string): T[] {
+  if (rows.length === 0) throw zeroUpstream(label, unit, detail);
+  return rows;
 }
 
 interface CacheScope {
@@ -56,30 +65,6 @@ export function cachedPayload<T>(
         data: sourcePayload(result.rows, { partial: result.partial }),
         ttl: result.ttl ?? ttlFor(Boolean(result.partial), ttl),
       };
-    },
-    scope,
-  );
-}
-
-interface SourceBuild<Value> {
-  value: Value;
-  ttl?: number;
-}
-
-export function cachedSource<Value>(
-  ctx: AppContext,
-  key: string,
-  ttl: number,
-  build: (ctx: AppContext) => Promise<SourceBuild<Value>>,
-  scope?: CacheScope,
-): Promise<Value> {
-  return cached<Value>(
-    ctx,
-    key,
-    ttl,
-    async () => {
-      const result = await build(ctx);
-      return { data: result.value, ttl: result.ttl ?? ttl };
     },
     scope,
   );

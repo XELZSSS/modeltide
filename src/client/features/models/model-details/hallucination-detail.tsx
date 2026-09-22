@@ -1,4 +1,3 @@
-"use client";
 import type { ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";

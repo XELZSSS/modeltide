@@ -1,6 +1,6 @@
 import { utf8ByteLength, fnv1aHash } from "@/shared/utils";
 import { ClientAbortError, UpstreamError } from "@/server/infra/errors";
-import { MAX_KV_RETENTION_TTL_S } from "@/server/config";
+import { INFLIGHT_HANG_GUARD_MS, MAX_KV_RETENTION_TTL_S } from "@/server/config";
 import { isEnvelope, maxStaleMs, type StaleEnvelope } from "./envelope";
 import { l1TtlFor, sharedL1, type MemoryL1 } from "./memory-l1";
 import { sharedInflight, type InflightRegistry } from "./inflight";
@@ -14,9 +14,6 @@ function jitteredTtl(vk: string, ttl: number): number {
   if (base < 60_000) return Math.max(1000, Math.round(base * factor));
   return Math.max(60_000, Math.round(base * factor));
 }
-
-// Past every upstream timeout (10s default, 15s litellm, 1 retry): stuck fn only.
-const INFLIGHT_HANG_GUARD_MS = 60_000;
 
 function warnKvReadFailure(err: unknown): void {
   console.warn(
@@ -40,6 +37,8 @@ interface CacheStores {
    * cancels the shared refresh.
    */
   callerSignal?: AbortSignal;
+  /** Keeps an orphaned refresh alive past the request that started it. */
+  onDetach?: (work: Promise<unknown>) => void;
 }
 
 export class CacheService {
@@ -47,6 +46,7 @@ export class CacheService {
   private inflight: InflightRegistry;
   private failureCooldownMs: number;
   private callerSignal?: AbortSignal;
+  private onDetach?: (work: Promise<unknown>) => void;
 
   constructor(
     private kv: KVNamespace | undefined,
@@ -57,16 +57,17 @@ export class CacheService {
     this.inflight = stores?.inflight ?? sharedInflight;
     this.failureCooldownMs = stores?.failureCooldownMs ?? FAILURE_COOLDOWN_MS;
     this.callerSignal = stores?.callerSignal;
+    this.onDetach = stores?.onDetach;
   }
 
   private vk(k: string): string {
     return `${this.version}:${k}`;
   }
 
-  private async getRaw(key: string): Promise<{ raw: string } | undefined> {
+  private async getRaw(kv: KVNamespace, key: string): Promise<{ raw: string } | undefined> {
     let raw: string | null;
     try {
-      raw = await this.kv!.get(key, { type: "text" });
+      raw = await kv.get(key, { type: "text" });
     } catch (err) {
       warnKvReadFailure(err);
       return undefined;
@@ -75,9 +76,11 @@ export class CacheService {
     return { raw };
   }
 
-  private async getVersioned<T>(k: string): Promise<{ env: StaleEnvelope<T>; bytes: number } | undefined> {
-    if (!this.kv) return undefined;
-    const hit = await this.getRaw(this.vk(k));
+  private async getVersioned<T>(
+    kv: KVNamespace,
+    k: string,
+  ): Promise<{ env: StaleEnvelope<T>; bytes: number } | undefined> {
+    const hit = await this.getRaw(kv, this.vk(k));
     if (!hit) return undefined;
     let env: StaleEnvelope<T>;
     try {
@@ -89,24 +92,29 @@ export class CacheService {
     return { env, bytes: utf8ByteLength(hit.raw) };
   }
 
-  private async setSerialized(k: string, serialized: string, ttl: number): Promise<void> {
-    if (!this.kv) return;
+  private async setSerialized(kv: KVNamespace, k: string, serialized: string, ttl: number): Promise<void> {
     const expirationTtl = Math.min(Math.max(Math.ceil((ttl + maxStaleMs(ttl)) / 1000), 60), MAX_KV_RETENTION_TTL_S);
-    await this.kv.put(k, serialized, { expirationTtl });
+    await kv.put(k, serialized, { expirationTtl });
   }
 
-  private async storeCurrent<T>(vk: string, data: T, ttl: number): Promise<void> {
-    const hasKv = this.kv != null;
+  private async storeCurrent<T>(kv: KVNamespace | undefined, vk: string, data: T, ttl: number): Promise<void> {
     const effective = jitteredTtl(vk, ttl);
+    let serialized: string;
     try {
-      const serialized = JSON.stringify({ d: data, e: Date.now() + effective, t: effective });
-      // Serialized-bytes accounting vs parsed objects: treat the budget as a floor.
-      const bytes = utf8ByteLength(serialized);
-      this.l1.set(vk, data, hasKv ? l1TtlFor(effective) : effective, bytes);
-      await this.setSerialized(vk, serialized, effective);
+      serialized = JSON.stringify({ d: data, e: Date.now() + effective, t: effective });
     } catch (err) {
-      console.warn(`[cache] KV write failed for ${vk}: ${err instanceof Error ? err.message : String(err)}`);
+      console.warn(`[cache] serialize failed for ${vk}: ${err instanceof Error ? err.message : String(err)}`);
+      return;
     }
+    // Only the KV put can be handed off: the cron has no detach hook, so it
+    // awaits and cannot lose the write. Without KV the L1 is authoritative.
+    this.l1.set(vk, data, kv ? l1TtlFor(effective) : effective, utf8ByteLength(serialized));
+    if (!kv) return;
+    const put = this.setSerialized(kv, vk, serialized, effective).catch((err: unknown) => {
+      console.warn(`[cache] KV write failed for ${vk}: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    if (this.onDetach) this.onDetach(put);
+    else await put;
   }
 
   private async loadStaleOrRefresh<T>(
@@ -115,10 +123,10 @@ export class CacheService {
     fn: () => Promise<{ data: T; ttl?: number }>,
     mem: { d: T; e: number } | undefined,
     kvHit: { env: StaleEnvelope<T> } | undefined,
-    memoryOnly: boolean,
+    kv: KVNamespace | undefined,
   ): Promise<T> {
     try {
-      return await this.refresh(vk, ttl, fn, memoryOnly);
+      return await this.refresh(vk, ttl, fn, kv);
     } catch (err) {
       if (kvHit) {
         const staleBudget = maxStaleMs(kvHit.env.t ?? ttl);
@@ -156,6 +164,7 @@ export class CacheService {
         if (settled) return;
         settled = true;
         signal.removeEventListener("abort", onAbort);
+        this.onDetach?.(work.then(undefined, () => {}));
         reject(new ClientAbortError(`Client aborted request for ${k}`));
       };
       signal.addEventListener("abort", onAbort, { once: true });
@@ -183,43 +192,35 @@ export class CacheService {
     fn: () => Promise<{ data: T; ttl?: number }>,
     opts?: { memoryOnly?: boolean },
   ): Promise<T> {
-    if (opts?.memoryOnly) return this.withMemory(k, ttl, fn);
+    // `memoryOnly` is just "no KV for this call": one store variable drives both
+    // the KV path and the memory-only path below.
+    const kv = opts?.memoryOnly === true ? undefined : this.kv;
     const vk = this.vk(k);
     const mem = this.l1.get<T>(vk);
     if (mem && mem.e > Date.now()) {
       return mem.d;
     }
-    if (!this.kv) {
-      if (!mem) return this.refresh(vk, ttl, fn);
-      return this.loadStaleOrRefresh(vk, ttl, fn, mem, undefined, false);
+    if (!kv) {
+      if (!mem) return this.refresh(vk, ttl, fn, kv);
+      return this.loadStaleOrRefresh(vk, ttl, fn, mem, undefined, kv);
     }
-    const hit = await this.getVersioned<T>(k);
+    const hit = await this.getVersioned<T>(kv, k);
     if (!hit) {
-      if (!mem) return this.refresh(vk, ttl, fn);
-      return this.loadStaleOrRefresh(vk, ttl, fn, mem, undefined, false);
+      if (!mem) return this.refresh(vk, ttl, fn, kv);
+      return this.loadStaleOrRefresh(vk, ttl, fn, mem, undefined, kv);
     }
     if (hit.env.e > Date.now()) {
       this.l1.set(vk, hit.env.d, l1TtlFor(hit.env.e - Date.now()), hit.bytes);
       return hit.env.d;
     }
-    return this.loadStaleOrRefresh(vk, ttl, fn, mem, hit, false);
-  }
-
-  private async withMemory<T>(k: string, ttl: number, fn: () => Promise<{ data: T; ttl?: number }>): Promise<T> {
-    const vk = this.vk(k);
-    const mem = this.l1.get<T>(vk);
-    if (mem && mem.e > Date.now()) {
-      return mem.d;
-    }
-    if (!mem) return this.refresh(vk, ttl, fn, true);
-    return this.loadStaleOrRefresh(vk, ttl, fn, mem, undefined, true);
+    return this.loadStaleOrRefresh(vk, ttl, fn, mem, hit, kv);
   }
 
   private async refresh<T>(
     vk: string,
     ttl: number,
     fn: () => Promise<{ data: T; ttl?: number }>,
-    memoryOnly = false,
+    kv: KVNamespace | undefined,
   ): Promise<T> {
     const existing = this.inflight.get<T>(vk);
     if (existing) return existing;
@@ -231,27 +232,23 @@ export class CacheService {
     const task = (async () => {
       const { data, ttl: t } = await fn();
       if (this.inflight.get(vk) !== p) return data;
-      if (memoryOnly) {
-        const effective = jitteredTtl(vk, t ?? ttl);
-        const serialized = JSON.stringify({ d: data, e: Date.now() + effective, t: effective });
-        this.l1.set(vk, data, effective, utf8ByteLength(serialized));
-      } else {
-        await this.storeCurrent(vk, data, t ?? ttl);
-      }
+      await this.storeCurrent(kv, vk, data, t ?? ttl);
       return data;
     })();
-    p = this.inflight.run(vk, task);
     let rejectGuard: (err: unknown) => void = () => {};
     const guardRejection = new Promise<never>((_, reject) => {
       rejectGuard = reject;
     });
+    // The guarded promise is what joins the registry, so callers that attach to
+    // an in-flight refresh inherit the same deadline as the one that started it.
+    p = this.inflight.run(vk, Promise.race([task, guardRejection]));
     p.then(undefined, () => {});
     const hangTimer = setTimeout(() => {
       this.inflight.release(vk, p);
       rejectGuard(new UpstreamError(`Upstream refresh timed out (inflight guard) for ${vk}`, { timeout: true }));
     }, INFLIGHT_HANG_GUARD_MS);
     try {
-      return await Promise.race([p, guardRejection]);
+      return await p;
     } catch (err) {
       // A caller abort isn't an upstream failure; recording it cools down the key.
       if (!(err instanceof ClientAbortError)) refreshFailureCooldown.record(vk, err);

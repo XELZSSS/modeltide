@@ -1,9 +1,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { testCtx } from "@/server/test-helpers";
+import { fakeHttp, testCtx } from "@/server/test-helpers";
 import { getTextToImageLeaderboard } from "@/server/sources/aa/text-to-image-source";
 import { getAgentRankings } from "@/server/sources/agent-arena-source";
-import type { AppContext } from "@/server/context";
 
 beforeEach(() => resetModuleCachesForTests());
 
@@ -16,7 +15,7 @@ describe("getTextToImageLeaderboard (no upstream rank)", () => {
   it("derives ranks from elo order instead of yielding 0 models", async () => {
     const { ctx } = testCtx(new Map(), {
       version: "v-t2i-current-schema",
-      http: { text: async () => T2I_FLIGHT_BODY } as unknown as AppContext["http"],
+      http: fakeHttp({ text: () => T2I_FLIGHT_BODY }),
     });
     const payload = await getTextToImageLeaderboard(ctx);
     expect(payload.data).toHaveLength(2);
@@ -33,7 +32,7 @@ describe("getTextToImageLeaderboard (no upstream rank)", () => {
   it("surfaces the RSC scan diagnostic when the marker disappears", async () => {
     const { ctx } = testCtx(new Map(), {
       version: "v-t2i-drift",
-      http: { text: async () => '1:{"props":{"other":[1,2,3]}}' } as unknown as AppContext["http"],
+      http: fakeHttp({ text: () => '1:{"props":{"other":[1,2,3]}}' }),
     });
     await expect(getTextToImageLeaderboard(ctx)).rejects.toThrowError(
       /Text-to-image parse failed: RSC marker "textToImage" not found .*hash=/,
@@ -103,12 +102,12 @@ describe("getAgentRankings (RSC flight path)", () => {
     const requested: { url: string; rsc: boolean }[] = [];
     const { ctx } = testCtx(new Map(), {
       version: "v-agent-rsc",
-      http: {
-        text: async (url: string, init: { headers?: Record<string, string> }) => {
-          requested.push({ url, rsc: init.headers?.RSC === "1" });
+      http: fakeHttp({
+        text: (url, init) => {
+          requested.push({ url, rsc: init?.headers?.RSC === "1" });
           return FLIGHT_BODY;
         },
-      } as unknown as AppContext["http"],
+      }),
     });
     const payload = await getAgentRankings(ctx);
     expect(requested).toHaveLength(1);

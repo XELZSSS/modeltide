@@ -1,4 +1,3 @@
-"use client";
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatDollar } from "@/client/utils/format";
@@ -11,7 +10,12 @@ import {
 } from "@/client/components/data/table-columns";
 import { computeBlendPrice } from "@/shared/utils";
 import { modelId } from "@/client/utils/model-utils";
-import { resolveEffectivePricing, type OfficialGetter } from "@/client/utils/pricing-merge";
+import {
+  resolveEffectivePricing,
+  PRICE_LEGS,
+  type OfficialGetter,
+  type PriceLegPick,
+} from "@/client/utils/pricing-merge";
 import { CompareModelCell } from "@/client/features/rankings/aa/aa-cells";
 import type { EffectivePricing } from "@/client/utils/pricing-merge";
 
@@ -34,12 +38,7 @@ export function buildPricingColumns(
   );
   const getEff = (model: ArtificialAnalysisModel): EffectivePricing =>
     effectiveMap?.get(modelId(model)) ?? resolveEffectivePricing(model.pricing, getOfficial?.(model));
-  const pricingLegCol = (
-    id: string,
-    header: string,
-    getLeg: (eff: EffectivePricing) => number | null | undefined,
-    opts?: { hiddenMd?: boolean },
-  ) =>
+  const pricingLegCol = (id: string, header: string, getLeg: PriceLegPick, opts?: { hiddenMd?: boolean }) =>
     rightCol(
       id,
       header,
@@ -56,12 +55,12 @@ export function buildPricingColumns(
     rightCol("provider", t("provider"), (row) => (
       <RightAlignedText>{row.model.model_creators?.name || t("notAvailable")}</RightAlignedText>
     )),
-    pricingLegCol("cacheHitPrice", t("cacheHitPrice"), (eff) => eff.cacheHit, { hiddenMd: true }),
+    pricingLegCol("cacheHitPrice", t("cacheHitPrice"), PRICE_LEGS.cacheHitPrice, { hiddenMd: true }),
     rightCol("blendedPrice", t("blendedPrice"), (row: PricingRow) =>
       pending ? pendingBar("4.5rem") : formatDollar(computeBlendPrice(getEff(row.model)), t),
     ),
-    pricingLegCol("promptPrice", t("promptPrice"), (eff) => eff.input, { hiddenMd: true }),
-    pricingLegCol("completionPrice", t("completionPrice"), (eff) => eff.output, { hiddenMd: true }),
+    pricingLegCol("promptPrice", t("promptPrice"), PRICE_LEGS.promptPrice, { hiddenMd: true }),
+    pricingLegCol("completionPrice", t("completionPrice"), PRICE_LEGS.completionPrice, { hiddenMd: true }),
     {
       ...mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) =>
         pending ? pendingBar("5rem") : formatDollar(row.monthlyCost, t),

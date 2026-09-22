@@ -16,17 +16,13 @@ export interface ReleaseRow {
   link: string | null;
 }
 
-export function parseReleaseTs(value: string): number | null {
+function parseReleaseTs(value: string): number | null {
   const ts = Date.parse(value);
   return Number.isFinite(ts) ? ts : null;
 }
 
 function toReleaseDateStr(ts: number): string {
-  const d = new Date(ts);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return new Date(ts).toISOString().slice(0, 10);
 }
 
 const HF_SOURCE = "Hugging Face";

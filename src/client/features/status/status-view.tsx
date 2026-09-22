@@ -1,4 +1,3 @@
-"use client";
 import { memo } from "react";
 import { SafeLink as Link } from "@/client/router";
 import { ChevronRight } from "lucide-react";
@@ -14,7 +13,7 @@ import { sourceLabelKey } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary } from "@/shared/types";
 import { LEVEL_STYLES, recentlyDegradedIds, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./status-parts";
-import { StatusEventList } from "@/client/components/status-events";
+import { StatusEventList } from "./status-events";
 
 const EMPTY_BUCKETS: DayBucket[] = [];
 
@@ -32,6 +31,9 @@ const SourceCard = memo(function SourceCard({
   const label = labelKey ? t(labelKey) : summary.id;
   const level = resolveLevel(summary);
   const style = LEVEL_STYLES[level];
+  // The card used to say only "Degraded" / "Failure"; the source's own warning or
+  // probe error is what tells the reader whether it matters.
+  const detail = level === "ok" ? null : (summary.detail ?? null);
   return (
     <Link
       href={`/status/${summary.id}`}
@@ -48,6 +50,11 @@ const SourceCard = memo(function SourceCard({
           )}
         </div>
       </div>
+      {detail && (
+        <p className="ui-caption text-text-secondary mb-2 line-clamp-2 break-words" title={detail}>
+          {detail}
+        </p>
+      )}
       <UptimeStrip buckets={buckets} />
       <div className="flex items-center justify-between gap-3 mt-3 ui-caption">
         {(
@@ -81,28 +88,25 @@ function StatusContent() {
   // Unprobed sources must not read as healthy (1 probed-OK + 13 silent).
   const unprobed = levels.filter((l) => l === "unknown").length;
   const sourceCount = data.sources.length;
-  const overall = !hasData
-    ? { color: "var(--text-tertiary)", message: t("historyAccumulating") }
-    : erroring > 0
-      ? { color: "var(--destructive)", message: t("statusDegraded", { down: erroring, total: sourceCount }) }
-      : warning > 0
-        ? { color: "var(--warning)", message: t("statusWarnBanner", { warn: warning, total: sourceCount }) }
-        : unprobed > 0
-          ? {
-              color: "var(--text-tertiary)",
-              message: t("statusProbing", { probed: sourceCount - unprobed, total: sourceCount }),
-            }
-          : { color: "var(--success)", message: t("statusAllOk") };
+  // Priority order: no data > errors > warnings > still probing > all ok.
+  let overall: { color: string; message: string };
+  if (!hasData) overall = { color: "var(--text-tertiary)", message: t("historyAccumulating") };
+  else if (erroring > 0)
+    overall = { color: "var(--destructive)", message: t("statusDegraded", { down: erroring, total: sourceCount }) };
+  else if (warning > 0)
+    overall = { color: "var(--warning)", message: t("statusWarnBanner", { warn: warning, total: sourceCount }) };
+  else if (unprobed > 0)
+    overall = {
+      color: "var(--text-tertiary)",
+      message: t("statusProbing", { probed: sourceCount - unprobed, total: sourceCount }),
+    };
+  else overall = { color: "var(--success)", message: t("statusAllOk") };
 
   return (
     <PageContainer>
       <PageHeader title={t("statusPageTitle")} kicker={t("kickerStatus")} description={t("sourceStatus")} />
 
-      {data.persisted === false && (
-        <div className="mb-4">
-          <PartialNotice message={t("memoryModeNotice")} />
-        </div>
-      )}
+      {data.persisted === false && <PartialNotice message={t("memoryModeNotice")} />}
 
       <Card>
         <CardContent className="flex items-center justify-between gap-3 flex-wrap py-4">

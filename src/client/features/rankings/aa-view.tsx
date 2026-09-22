@@ -1,5 +1,4 @@
-"use client";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "@/client/router";
 import { useTranslation } from "@/client/providers";
 import { useClientTab } from "@/client/hooks/use-client-tab";
@@ -10,7 +9,8 @@ import { useCompareModels, useCompareStore } from "@/client/stores";
 import { useEffectivePricingMap, useMonthlyCosts } from "@/client/pricing/cost-inputs";
 import { CostEstimatorInputs } from "@/client/pricing/cost-form";
 import { useOfficialPricing } from "@/client/pricing/official-pricing-hook";
-import { CompareChipBar } from "@/client/components/compare-tray";
+import { CompareChipBar } from "@/client/features/compare/compare-tray";
+import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { ModelExpandedDetail } from "@/client/features/rankings/aa/aa-cells";
 import { buildRankingColumns } from "@/client/features/rankings/aa/aa-rank-columns";
 import { buildPricingColumns, type PricingRow } from "@/client/features/rankings/aa/aa-price-columns";
@@ -22,15 +22,9 @@ const VIEW_MODES = ["rankings", "pricing"] as const;
 /** Stable empty identity: a fresh `[]` literal per render defeated the pricing memos. */
 const EMPTY_MODELS: ArtificialAnalysisModel[] = [];
 
-const getAASearchFields = (model: ArtificialAnalysisModel) => [
-  model.name,
-  model.slug,
-  model.model_creators?.name ?? "",
-];
-
 const getAARowId = (model: ArtificialAnalysisModel) => modelId(model);
 const getPricingRowId = (row: PricingRow) => modelId(row.model);
-const getPricingSearchFields = (row: PricingRow) => getAASearchFields(row.model);
+const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
 
 const renderModelDetail = (model: ArtificialAnalysisModel) => <ModelExpandedDetail model={model} />;
 const renderPricingDetail = (row: PricingRow) => <ModelExpandedDetail model={row.model} />;
@@ -40,6 +34,7 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
   const { t } = useTranslation();
   const toggleCompareModel = useCompareStore((s) => s.toggleCompareModel);
   const clearCompare = useCompareStore((s) => s.clearCompare);
+  const pruneCompare = useCompareStore((s) => s.pruneCompare);
   const [viewMode, setViewMode] = useClientTab("view", VIEW_MODES, VIEW_MODES[0]);
 
   const { getOfficial, isPending: officialPending } = useOfficialPricing(viewMode === "pricing");
@@ -57,6 +52,14 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
     },
   );
   const comparedModels = useCompareModels(rankings);
+
+  useEffect(() => {
+    // Stale ids still count against MAX_COMPARE in the store, and this list owns the
+    // + buttons, so the removal has to happen here too, not only on the compare page.
+    const validIds = new Set(rankings.map(modelId).filter(Boolean));
+    if (validIds.size === 0) return;
+    pruneCompare(validIds);
+  }, [rankings, pruneCompare]);
 
   const avgCost = useMemo(() => {
     const valid = [...monthlyCosts.values()].filter((v): v is number => v != null);
@@ -134,7 +137,7 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
           data={rankings}
           columns={rankingColumns}
           getRowId={getAARowId}
-          getSearchFields={getAASearchFields}
+          getSearchFields={SEARCH_FIELDS.aa}
           renderExpandedRow={renderModelDetail}
         />
       )}

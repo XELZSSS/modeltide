@@ -1,4 +1,3 @@
-"use client";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "@/client/providers";
 import type { DayBucket } from "@/shared/types";

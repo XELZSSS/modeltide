@@ -1,4 +1,4 @@
-import { UpstreamError } from "@/server/infra/errors";
+import { isTimeoutLike } from "@/server/infra/errors";
 
 export const FAILURE_COOLDOWN_MS = 45_000;
 const FAILURE_COOLDOWN_MAX_KEYS = 512;
@@ -24,8 +24,7 @@ class FailureCooldown {
 
   record(key: string, err?: unknown): void {
     const now = Date.now();
-    const timeout =
-      (err instanceof UpstreamError && err.causedByTimeout) || (err instanceof Error && err.name === "TimeoutError");
+    const timeout = isTimeoutLike(err);
     this.lastFail.set(key, { at: now, timeout });
     if (this.lastFail.size <= FAILURE_COOLDOWN_MAX_KEYS) return;
     for (const [k, t] of this.lastFail) {

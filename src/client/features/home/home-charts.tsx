@@ -1,11 +1,10 @@
-"use client";
 import { memo, useMemo } from "react";
 import { type ChartOptions } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
 import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 import { ChartFrame } from "@/client/components/ui/chart-frame";
-import { shortModelId } from "@/client/utils/model-utils";
+import { modelDisplayName, shortModelId } from "@/client/utils/model-utils";
 import { registerLine } from "@/client/utils/charts-register";
 
 registerLine();
@@ -116,7 +115,7 @@ export const IndexLineChart = memo(function IndexLineChart({ models }: { models:
           <ChartFrame>
             <Line data={data} options={options} aria-label={t("intelligenceIndex")} role="img" />
             <figcaption className="sr-only">
-              {top10.map((m) => `${m.short_name || m.name}: ${Math.round(m.intelligence_index ?? 0)}`).join(", ")}
+              {top10.map((m) => `${modelDisplayName(m)}: ${Math.round(m.intelligence_index ?? 0)}`).join(", ")}
             </figcaption>
           </ChartFrame>
         )}

@@ -66,22 +66,20 @@ npm run dev      # http://localhost:5173
 
 ## 常用命令
 
-| 命令                 | 说明           |
-| -------------------- | -------------- |
-| `npm run dev`        | 开发服务器     |
-| `npm run build`      | 生产构建       |
-| `npm run preview`    | 预览生产构建   |
-| `npm run deploy`     | 部署到 Workers |
-| `npm run check`      | 运行全部检查   |
-| `npm run test`       | 运行测试       |
-| `npm run test:watch` | 测试监听模式   |
-| `npm run lint`       | 静态检查       |
-| `npm run type-check` | 类型检查       |
-| `npm run format`     | 代码格式化     |
-| `npm run clean`      | 清理构建产物   |
-| `npm run audit`      | 依赖安全扫描   |
-
-`deploy` 会先自动运行 `check`
+| 命令                 | 说明                         |
+| -------------------- | ---------------------------- |
+| `npm run dev`        | 开发服务器                   |
+| `npm run build`      | 生产构建                     |
+| `npm run preview`    | 预览生产构建                 |
+| `npm run check`      | 类型检查 + Lint + 测试       |
+| `npm run deploy`     | 检查 + 构建 + 部署到 Workers |
+| `npm run test`       | 运行测试                     |
+| `npm run test:watch` | 测试监听模式                 |
+| `npm run lint`       | 静态检查                     |
+| `npm run type-check` | 类型检查                     |
+| `npm run format`     | 代码格式化                   |
+| `npm run clean`      | 清理构建产物                 |
+| `npm run audit`      | 依赖安全扫描                 |
 
 ## 部署
 
@@ -89,12 +87,12 @@ npm run dev      # http://localhost:5173
 2. (推荐)创建 KV 命名空间并替换 `wrangler.jsonc` 中的 ID
 3. (可选)`npx wrangler secret put HF_TOKEN` 配置只读 [HF token](https://huggingface.co/settings/tokens)，供 Hugging Face 路由使用
 4. (可选)`npx wrangler secret put STATUS_PING_URL` 配置 [Healthchecks.io](https://healthchecks.io/docs/monitoring_cron_jobs/) ping URL，cron 停止运行时会收到警告
-5. `npx wrangler login` 登录一次，然后 `npm run deploy`（或在 Workers Builds 连接仓库自动部署）
+5. `npx wrangler login` 登录一次，然后 `npm run deploy`（会先执行 `npm run check`：类型检查、Lint、测试，通过后再构建并部署；也可在 Workers Builds 连接仓库自动部署——该路径同样必须执行 `npm run deploy`，因为提交进仓库的 `CACHE_VERSION` 只有经过构建才会重新生成）
 
-|          | 未配置 KV | 配置 KV                     |
-| -------- | --------- | --------------------------- |
-| 数据     | 内存缓存  | KV 缓存（30分/2小时/6小时） |
-| 状态历史 | 仅内存    | 保留 30 天                  |
+|          | 未配置 KV | 配置 KV                           |
+| -------- | --------- | --------------------------------- |
+| 数据     | 内存缓存  | KV 缓存（30分/1小时/2小时/6小时） |
+| 状态历史 | 仅内存    | 保留 30 天                        |
 
 `CACHE_VERSION` 由数据层代码的内容哈希自动生成（`scripts/gen-cache-version.cjs`）——无需手动改版本号，旧 KV 条目自然过期
 

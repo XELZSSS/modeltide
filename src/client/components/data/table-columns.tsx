@@ -1,4 +1,3 @@
-"use client";
 import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
 
@@ -76,14 +75,19 @@ export function mobilePrimaryCol<T>(
   return col(id, header, cell, { ...opts, align: "right", mobilePrimary: true });
 }
 
+const MONO_EMPHASIS_CLASS = {
+  strong: "ui-mono-value font-semibold",
+  muted: "ui-mono-value font-normal text-text-secondary",
+} as const;
+
 export function monoCol<T>(
   id: string,
   header: string,
   format: (row: T) => ReactNode,
-  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean; semibold?: boolean },
+  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean; emphasis?: keyof typeof MONO_EMPHASIS_CLASS },
 ): DataTableColumn<T> {
   const alignCol = opts?.mobilePrimary ? mobilePrimaryCol : rightCol;
-  const className = opts?.semibold ? "ui-mono-value font-semibold" : "ui-mono-value";
+  const className = opts?.emphasis ? MONO_EMPHASIS_CLASS[opts.emphasis] : "ui-mono-value";
   return alignCol(
     id,
     header,

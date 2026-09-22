@@ -1,10 +1,7 @@
-"use client";
 import { memo, type ReactNode } from "react";
-import { Download, Languages, RefreshCw, SunMoon } from "lucide-react";
+import { Languages, SunMoon } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { useSettingsStore } from "@/client/stores";
-import { usePwaInstall, useSwUpdate } from "@/client/pwa/use-pwa";
-import { Button } from "@/client/components/ui/button";
 import { SegmentedGroup } from "@/client/components/ui/grids";
 import { TabButton, nextIndexForKey } from "@/client/components/ui/tabs";
 import { Sheet, SheetBody, SheetHeader } from "@/client/components/ui/sheet";
@@ -77,8 +74,6 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   const { t, lang, setLang } = useTranslation();
   const themeMode = useSettingsStore((s) => s.themeMode);
   const setThemeMode = useSettingsStore((s) => s.setThemeMode);
-  const { canInstall, isInstalled, isIos, promptInstall } = usePwaInstall();
-  const { updateAvailable, applyUpdate } = useSwUpdate();
 
   return (
     <Sheet open={open} onClose={onClose} ariaLabel={t("settings")}>
@@ -112,26 +107,6 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               ]}
             />
           </SettingRow>
-          <SettingRow icon={<Download size={16} />} label={t("pwaInstall")}>
-            {isInstalled ? (
-              <span className="text-xs text-text-tertiary">{t("pwaInstalled")}</span>
-            ) : canInstall ? (
-              <Button variant="outline" size="sm" onClick={() => void promptInstall()}>
-                {t("pwaInstallCta")}
-              </Button>
-            ) : (
-              <span className="text-xs text-text-tertiary text-right leading-5 max-w-[60%]">
-                {isIos ? t("pwaIosHint") : t("pwaUnavailable")}
-              </span>
-            )}
-          </SettingRow>
-          {updateAvailable && (
-            <SettingRow icon={<RefreshCw size={16} />} label={t("pwaUpdateAvailable")}>
-              <Button variant="primary" size="sm" onClick={applyUpdate}>
-                {t("pwaUpdateNow")}
-              </Button>
-            </SettingRow>
-          )}
         </div>
       </SheetBody>
     </Sheet>

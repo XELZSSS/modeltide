@@ -1,4 +1,3 @@
-"use client";
 import { useQuery, useSuspenseQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
@@ -29,7 +28,12 @@ import type {
   StatusHistoryPayload,
 } from "@/shared/types";
 import { dedupeBy, isPartialDashboard } from "@/shared/utils";
-import { normalizeHomeDashboard, unwrapList, unwrapListPartial } from "@/client/api/payload-normalize";
+import {
+  isPartialPayload,
+  normalizeHomeDashboard,
+  unwrapList,
+  unwrapListPartial,
+} from "@/client/api/payload-normalize";
 
 interface ApiQueryOptions<T> {
   ttl?: number;
@@ -38,16 +42,46 @@ interface ApiQueryOptions<T> {
   isPartialData?: (data: T | undefined) => boolean;
 }
 
+/**
+ * Consecutive `partial: true` responses tolerated before a permanently degraded upstream
+ * stops being polled: ~25 min of self-healing at `PARTIAL_FAIL_TTL_MS` (5 min), after
+ * which the view keeps the stale-but-usable payload rather than re-requesting a dead leg.
+ */
+export const MAX_PARTIAL_POLLS = 5;
+
+/** Settled-fetch count at which each query's current partial streak started. */
+const partialPollBases = new WeakMap<object, number>();
+
+/**
+ * `refetchInterval` for a payload that may arrive with `partial: true`: polls up to
+ * `MAX_PARTIAL_POLLS` further fetches, then gives up. Only a settled fetch counts as a poll
+ * — React Query re-evaluates this callback on every render, so calls would burn the cap.
+ */
+export function partialPollInterval<T>(
+  query: unknown,
+  isPartialData: (data: T | undefined) => boolean,
+  partialRefetchMs: number,
+  bases: WeakMap<object, number> = partialPollBases,
+): number | false {
+  if (query == null || typeof query !== "object") return false;
+  const state = (query as { state?: { data?: T; dataUpdateCount?: number; errorUpdateCount?: number } }).state;
+  if (!isPartialData(state?.data)) {
+    bases.delete(query);
+    return false;
+  }
+  const settled = (state?.dataUpdateCount ?? 0) + (state?.errorUpdateCount ?? 0);
+  const base = bases.get(query) ?? settled;
+  bases.set(query, base);
+  return settled - base >= MAX_PARTIAL_POLLS ? false : partialRefetchMs;
+}
+
 function createApiQuery<T>(key: readonly (string | number)[], path: string, opts?: ApiQueryOptions<T>) {
   const { ttl, gcTime, partialRefetchMs, isPartialData } = opts ?? {};
   const queryFn = fetcher<T>(path);
   const ttlMs = ttl ?? THIRTY_MINUTES;
   const partialPoll: false | ((query: unknown) => number | false) =
     partialRefetchMs != null && isPartialData != null
-      ? (query: unknown) => {
-          const data = (query as { state?: { data?: T } } | null)?.state?.data;
-          return isPartialData(data) ? partialRefetchMs : false;
-        }
+      ? (query: unknown) => partialPollInterval(query, isPartialData, partialRefetchMs)
       : false;
   const timing = {
     gcTime: gcTime ?? Math.min(Math.max(ttlMs, THIRTY_MINUTES), STATIC_TTL_MS),
@@ -61,9 +95,6 @@ function createApiQuery<T>(key: readonly (string | number)[], path: string, opts
       qc.prefetchQuery({ queryKey: key, queryFn, staleTime: timing.staleTime, gcTime: timing.gcTime }),
   };
 }
-
-/** Shared partial-check for `SourcePayload`-shaped query data. */
-const isPartialPayload = (d: { partial?: boolean } | undefined): boolean => d?.partial === true;
 
 interface SuspenseQueryLike {
   useSuspense: () => { data: unknown };
@@ -86,7 +117,6 @@ const qArtificialRaw = createApiQuery<SourcePayload<ArtificialAnalysisModel[]>>(
   queryKeys.artificialIndex,
   apiPaths.artificialIndex,
   {
-    ttl: THIRTY_MINUTES,
     partialRefetchMs: PARTIAL_FAIL_TTL_MS,
     isPartialData: isPartialPayload,
   },
@@ -100,7 +130,6 @@ const qOpenRouter = createApiQuery<OpenRouterRankingsPayload>(
   queryKeys.openRouterRankings,
   apiPaths.openRouterRankings,
   {
-    ttl: THIRTY_MINUTES,
     partialRefetchMs: PARTIAL_FAIL_TTL_MS,
     isPartialData: isPartialPayload,
   },
@@ -120,7 +149,6 @@ const qOpenSourceModelsRaw = createApiQuery<SourcePayload<OpenSourceModelEntry[]
 function qNewsRaw(c: NewsCategory) {
   const category = (NEWS_CATEGORIES.includes(c) ? c : NEWS_CATEGORIES[0]) as NewsCategory;
   return createApiQuery<SourcePayload<NewsItem[]>>(queryKeys.news(category), apiPaths.news(category), {
-    ttl: THIRTY_MINUTES,
     partialRefetchMs: PARTIAL_FAIL_TTL_MS,
     isPartialData: isPartialPayload,
   });
@@ -135,14 +163,12 @@ const qAgent = createApiQuery<AgentRankingsPayload>(queryKeys.agentRankings, api
 export const qOfficialPricing = createApiQuery<OfficialPricingPayload>(
   queryKeys.officialPricing,
   apiPaths.officialPricing,
-  { ttl: STATIC_TTL_MS, gcTime: STATIC_TTL_MS },
+  { ttl: STATIC_TTL_MS },
 );
 const qClosedReleasesRaw = createApiQuery<SourcePayload<ClosedReleaseEntry[]>>(
   queryKeys.closedReleases,
   apiPaths.closedReleases,
   {
-    ttl: STATIC_TTL_MS,
-    gcTime: STATIC_TTL_MS,
     partialRefetchMs: PARTIAL_FAIL_TTL_MS,
     isPartialData: isPartialPayload,
   },
@@ -150,7 +176,7 @@ const qClosedReleasesRaw = createApiQuery<SourcePayload<ClosedReleaseEntry[]>>(
 
 export function useArtificialRankings(enabled = true) {
   const q = qArtificialRaw.use(enabled);
-  const unwrapped = useMemo(() => unwrapListPartial<ArtificialAnalysisModel>(q.data, "artificialIndex"), [q.data]);
+  const unwrapped = useUnwrappedPartial<ArtificialAnalysisModel>(q.data, "artificialIndex");
   const hasData = unwrapped.data.length > 0;
   const isError = enabled && !hasData && !q.isPending && (q.isError || unwrapped.malformed);
   const error = isError ? (q.error ?? new Error("Malformed artificialIndex payload")) : null;
@@ -158,6 +184,12 @@ export function useArtificialRankings(enabled = true) {
 }
 
 export const useSuspenseArtificialRankings = suspenseList<ArtificialAnalysisModel>(qArtificialRaw, "artificialIndex");
+
+/** Same rows plus the payload's `partial` flag, for views that surface a notice. */
+export const useSuspenseArtificialRankingsState = suspenseListState<ArtificialAnalysisModel>(
+  qArtificialRaw,
+  "artificialIndex",
+);
 
 export function useSuspenseHomeDashboard() {
   const { data } = qHomeDashboardRaw.useSuspense();
@@ -262,69 +294,53 @@ export function useSuspenseHallucinationRankings(): HallucinationRankingEntry[] 
   return useHallucinationRankings(models);
 }
 
-type PrefetchFn = (qc: QueryClient) => void;
+interface Prefetchable {
+  prefetch: (qc: QueryClient) => Promise<void>;
+}
+
+/** Prefetches every listed query in order; the calls are fire-and-forget. */
+function prefetchAll(qc: QueryClient, ...queries: Prefetchable[]): void {
+  for (const q of queries) void q.prefetch(qc);
+}
+
 interface RoutePrefetchEntry {
   match: (path: string) => boolean;
-  run: PrefetchFn[];
+  run: (qc: QueryClient) => void;
 }
 
 const ROUTE_PREFETCH_MAP: RoutePrefetchEntry[] = [
   {
     match: (p) => p === "/",
-    run: [
-      (qc) => void qArtificialRaw.prefetch(qc),
-      (qc) => void qHomeDashboardRaw.prefetch(qc),
-      (qc) => void qClosedReleasesRaw.prefetch(qc),
-      (qc) => void qOpenSourceReleasesRaw.prefetch(qc),
-      (qc) => void qStatusHistory.prefetch(qc),
-    ],
+    run: (qc) =>
+      prefetchAll(qc, qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw, qOpenSourceReleasesRaw, qStatusHistory),
   },
   {
     match: (p) => p === "/models",
-    run: [
-      (qc) => void qArtificialRaw.prefetch(qc),
-      (qc) => void qOpenRouter.prefetch(qc),
-      (qc) => void qOpenSourceModelsRaw.prefetch(qc),
-      (qc) => void qAgent.prefetch(qc),
-      (qc) => void qOfficialPricing.prefetch(qc),
-    ],
+    run: (qc) => prefetchAll(qc, qArtificialRaw, qOpenRouter, qOpenSourceModelsRaw, qAgent, qOfficialPricing),
   },
   {
     match: (p) => p === "/releases",
-    run: [(qc) => void qOpenSourceReleasesRaw.prefetch(qc), (qc) => void qClosedReleasesRaw.prefetch(qc)],
+    run: (qc) => prefetchAll(qc, qOpenSourceReleasesRaw, qClosedReleasesRaw),
   },
   {
     match: (p) => p === "/news",
-    run: [
-      (qc) => {
-        for (const c of NEWS_CATEGORIES) void qNewsRaw(c).prefetch(qc);
-      },
-    ],
+    run: (qc) => prefetchAll(qc, ...NEWS_CATEGORIES.map((c) => qNewsRaw(c))),
   },
   {
     match: (p) => p === "/status" || p.startsWith("/status/"),
-    run: [(qc) => void qStatusHistory.prefetch(qc)],
+    run: (qc) => prefetchAll(qc, qStatusHistory),
   },
   {
     match: (p) => p === "/price-compare" || p === "/compare",
-    run: [(qc) => void qArtificialRaw.prefetch(qc), (qc) => void qOfficialPricing.prefetch(qc)],
+    run: (qc) => prefetchAll(qc, qArtificialRaw, qOfficialPricing),
   },
   {
     match: (p) => p.startsWith("/model/"),
-    run: [
-      (qc) => void qArtificialRaw.prefetch(qc),
-      (qc) => void qOpenRouter.prefetch(qc),
-      (qc) => void qOfficialPricing.prefetch(qc),
-    ],
+    run: (qc) => prefetchAll(qc, qArtificialRaw, qOpenRouter, qOfficialPricing),
   },
 ];
 
 export const prefetchQueriesForRoute = (qc: QueryClient, pathname: string): void => {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-  for (const entry of ROUTE_PREFETCH_MAP) {
-    if (entry.match(path)) {
-      for (const fn of entry.run) fn(qc);
-      return;
-    }
-  }
+  ROUTE_PREFETCH_MAP.find((entry) => entry.match(path))?.run(qc);
 };

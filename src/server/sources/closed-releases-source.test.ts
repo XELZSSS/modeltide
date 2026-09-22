@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
 import { testCtx } from "@/server/test-helpers";
+import { ClientAbortError } from "@/server/infra/errors";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 vi.mock("@/server/sources/aa/index-source", async (importOriginal) => {
@@ -28,7 +29,6 @@ const closedModel = (id: string): ArtificialAnalysisModel => ({
 
 const indexResult = (models: ArtificialAnalysisModel[], enrichFailed = false) => ({
   models,
-  weights: {},
   enrichFailed,
   fetchedAt: new Date().toISOString(),
 });
@@ -47,6 +47,7 @@ describe("getClosedReleases", () => {
 
     expect(payload.data).toHaveLength(1);
     expect(payload.data[0]?.id).toBe("vendor/a");
+    expect(payload.partial).toBe(true);
   });
 
   it("still 502s when both legs fail", async () => {
@@ -55,6 +56,14 @@ describe("getClosedReleases", () => {
     const { ctx } = testCtx();
 
     await expect(getClosedReleases(ctx)).rejects.toThrow(/both index and changelog failed/);
+  });
+
+  it("rethrows a caller abort when both legs were aborted", async () => {
+    vi.mocked(getChangelogModels).mockRejectedValue(new ClientAbortError("caller gone"));
+    vi.mocked(getIntelligenceIndexResult).mockRejectedValue(new ClientAbortError("caller gone"));
+    const { ctx } = testCtx();
+
+    await expect(getClosedReleases(ctx)).rejects.toBeInstanceOf(ClientAbortError);
   });
 
   it("marks the payload partial when the index leg is the one that broke", async () => {

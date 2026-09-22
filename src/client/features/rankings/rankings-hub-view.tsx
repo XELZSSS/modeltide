@@ -1,14 +1,14 @@
-"use client";
 import { lazy, memo, useMemo, type ComponentType } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import {
   useSuspenseArtificialRankings,
+  useSuspenseArtificialRankingsState,
   useSuspenseOpenSourceModels,
   useSuspenseOpenRouterRankings,
   useSuspenseHallucinationRankings,
 } from "@/client/api/api-queries";
-import { SuspenseQuery } from "@/client/components/feedback";
+import { PartialNotice, SuspenseQuery } from "@/client/components/feedback";
 import { SearchInput } from "@/client/search/search-input";
 import { type TabItem } from "@/client/components/ui/tabs";
 import { TabbedPage } from "@/client/components/layout";
@@ -40,9 +40,8 @@ const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   providerCompare: MODEL_SOURCES.aa.sourceLabelKey,
 };
 
-/** Same-shaped tabs (query → `<View rankings>`) share one factory; tabs with
- *  unique props (OpenRouter `data`, Agent self-sufficient, provider aggregate)
- *  stay hand-written below. */
+/** Same-shaped tabs (query → `<View rankings>`) share one factory; tabs that need
+ *  extra props or chrome stay hand-written below. */
 function defineRankingsTab<T>(useRankings: () => T, View: ComponentType<{ rankings: T }>): ComponentType {
   return memo(function RankingsTab() {
     const rankings = useRankings();
@@ -50,7 +49,15 @@ function defineRankingsTab<T>(useRankings: () => T, View: ComponentType<{ rankin
   });
 }
 
-const ModelRankingsTab = defineRankingsTab(useSuspenseArtificialRankings, ArtificialAnalysisView);
+const ModelRankingsTab = memo(function ModelRankingsTab() {
+  const { items, partial } = useSuspenseArtificialRankingsState();
+  return (
+    <>
+      {partial && <PartialNotice />}
+      <ArtificialAnalysisView rankings={items} />
+    </>
+  );
+});
 const OpenSourceTab = defineRankingsTab(useSuspenseOpenSourceModels, RankingViewsModule.OpenSource);
 const HallucinationRankingsTab = defineRankingsTab(useSuspenseHallucinationRankings, RankingViewsModule.Hallucination);
 

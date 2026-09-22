@@ -14,5 +14,39 @@
     "jsx-no-undef": "error",
     "void-dom-elements-no-children": "error",
     "no-unused-vars": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/client/**/*.ts", "src/client/**/*.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/server", "@/server/*", "**/server/**"],
+                "message": "Client code must not import server code. Move the shared piece into src/shared."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/server/**/*.ts", "src/shared/**/*.ts", "worker/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/client", "@/client/*", "**/client/**"],
+                "message": "Server, shared and worker code must not import the client bundle. Move the shared piece into src/shared."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

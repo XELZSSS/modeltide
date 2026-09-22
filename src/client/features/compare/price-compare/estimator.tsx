@@ -1,7 +1,6 @@
-"use client";
 import { memo, useMemo } from "react";
 import { approxEq } from "@/shared/utils";
-import { modelId } from "@/client/utils/model-utils";
+import { modelDisplayName, modelId } from "@/client/utils/model-utils";
 import { formatDollar } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
 import type { ArtificialAnalysisModel } from "@/shared/types";
@@ -47,7 +46,7 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
             return (
               <div key={modelId(model) || `idx-${index}`} className="flex items-center justify-between gap-2">
                 <span className="text-sm truncate" style={{ color: seriesColor(theme, index) }}>
-                  {model.short_name || model.name}
+                  {modelDisplayName(model)}
                 </span>
                 {cost != null ? (
                   <span className={cn("font-mono text-sm", isBest && "font-semibold text-success")}>

@@ -1,6 +1,13 @@
-import { hasCatalogIdentity, isNonEmptyString, isRecord, numCoerce, obj, str } from "@/server/parsers/parser-primitives";
+import {
+  hasCatalogIdentity,
+  isNonEmptyString,
+  isRecord,
+  numCoerce,
+  obj,
+  str,
+} from "@/server/parsers/parser-primitives";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { normalizeModelKey, normalizePercent } from "@/shared/utils";
+import { normalizeModelKey } from "@/shared/utils";
 import { findNextData } from "@/server/parsers/rsc-parser";
 import type { ModelMetaEntry } from "@/server/parsers/openrouter-parser";
 
@@ -26,13 +33,12 @@ export function findModelArray(tree: unknown): Record<string, unknown>[] | null 
     findNextData<Record<string, unknown>>(tree, "initialModels"),
     findNextData<Record<string, unknown>>(tree, "models"),
   ];
+  let fallback: Record<string, unknown>[] | null = null;
   for (const arr of candidates) {
     if (arr?.some((m) => m && typeof m === "object" && "intelligenceIndex" in m)) return arr;
+    if (!fallback && isModelArray(arr)) fallback = arr;
   }
-  for (const arr of candidates) {
-    if (isModelArray(arr)) return arr;
-  }
-  return null;
+  return fallback;
 }
 
 function isModelArray(arr: unknown): arr is Record<string, unknown>[] {
@@ -62,10 +68,7 @@ function mergeEntry(cur: Record<string, unknown>, patch: Record<string, unknown>
   return mergedEntry;
 }
 
-export function mergeBySlug(
-  catalog: unknown,
-  ...enrich: unknown[]
-): Record<string, unknown>[] {
+export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<string, unknown>[] {
   const merged = new Map<string, Record<string, unknown>>();
   const catalogArr = Array.isArray(catalog) ? catalog.slice(0, 20_000) : [];
   for (const raw of catalogArr) {
@@ -87,23 +90,15 @@ export function mergeBySlug(
 
 export interface IntelligenceIndexResult {
   models: ArtificialAnalysisModel[];
-  weights: Record<string, boolean>;
   enrichFailed: boolean;
   /** Stamped once per upstream fetch so cache hits keep reporting the real refresh time. */
   fetchedAt: string;
 }
 
-export function buildWeightsRecord(models: unknown): Record<string, boolean> {
-  const record: Record<string, boolean> = Object.create(null);
-  if (!Array.isArray(models)) return record;
-  for (const raw of models) {
-    if (!isRecord(raw)) continue;
-    const m = raw as Partial<ArtificialAnalysisModel>;
-    if (typeof m.is_open_weights !== "boolean") continue;
-    if (typeof m.slug === "string" && m.slug) record[m.slug] = m.is_open_weights;
-    if (typeof m.id === "string" && m.id && m.id !== m.slug) record[m.id] = m.is_open_weights;
-  }
-  return record;
+function metaEntry(meta: Record<string, ModelMetaEntry>, key: string): ModelMetaEntry | undefined {
+  if (!Object.hasOwn(meta, key)) return undefined;
+  const e = meta[key];
+  return isRecord(e) ? (e as ModelMetaEntry) : undefined;
 }
 
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {
@@ -113,22 +108,20 @@ function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEnt
     const key = normalizeModelKey(raw);
     if (key) keys.push(key);
   }
+  const valued = (e: ModelMetaEntry): boolean => e.intelligenceIndex != null || e.agenticIndex != null;
   let looseHit: ModelMetaEntry | undefined;
   for (const key of keys) {
-    if (!Object.hasOwn(meta, key)) continue;
-    const e = meta[key];
-    if (!isRecord(e)) continue;
-    const entry = e as ModelMetaEntry;
-    if (entry.intelligenceIndex != null || entry.agenticIndex != null) return entry;
-    looseHit ??= entry;
+    const e = metaEntry(meta, key);
+    if (!e) continue;
+    if (valued(e)) return e;
+    looseHit ??= e;
   }
   if (looseHit) return looseHit;
   for (const key of keys) {
     const stripped = key.replace(/\d{4,8}$/, "");
-    if (stripped && stripped !== key && Object.hasOwn(meta, stripped)) {
-      const e = meta[stripped];
-      if (isRecord(e)) return e as ModelMetaEntry;
-    }
+    if (!stripped || stripped === key) continue;
+    const e = metaEntry(meta, stripped);
+    if (e) return e;
   }
   return undefined;
 }
@@ -144,7 +137,9 @@ export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record
         filled++;
       }
       if (m.agentic_index == null && entry.agenticIndex != null) {
-        m.agentic_index = normalizePercent(entry.agenticIndex);
+        // OpenRouter mirrors AA's indices on the same 0-100 scale as
+        // intelligenceIndex, so this is a copy rather than a percent conversion.
+        m.agentic_index = entry.agenticIndex;
         filled++;
       }
     }

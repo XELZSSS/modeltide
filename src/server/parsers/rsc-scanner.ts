@@ -1,7 +1,7 @@
 import { UpstreamError } from "@/server/infra/errors";
 import { fnv1aHash } from "@/shared/utils";
 
-export function balancedJsonEnd(text: string, openIdx: number, budget: number): number {
+function balancedJsonEnd(text: string, openIdx: number, budget: number): number {
   if (budget <= 0 || openIdx < 0 || openIdx >= text.length) return -1;
   const open = text.charCodeAt(openIdx);
   if (open !== 0x5b /* [ */ && open !== 0x7b /* { */) return -1;
@@ -29,6 +29,12 @@ export function balancedJsonEnd(text: string, openIdx: number, budget: number): 
     }
   }
   return -1;
+}
+
+/** Balanced `[…]`/`{…}` slice starting at openAt, or null when unbalanced. */
+function balancedJsonSlice(text: string, openAt: number, budgetChars: number): string | null {
+  const end = balancedJsonEnd(text, openAt, budgetChars);
+  return end === -1 ? null : text.slice(openAt, end);
 }
 
 export const MAX_RSC_BYTES = 5 * 1024 * 1024;
@@ -108,9 +114,7 @@ function parseBalancedMarkerValue(line: string, idx: number, marker: string, bud
   while (v < line.length && " \t\r\n".includes(line.charAt(v))) v++;
   const open = line.charAt(v);
   if (open !== "[" && open !== "{") return null;
-  const maxEnd = Math.min(line.length, v + MAX_SCAN_CHARS, v + budgetChars);
-  const end = balancedJsonEnd(line, v, maxEnd - v);
-  return end === -1 ? null : line.slice(v, end);
+  return balancedJsonSlice(line, v, Math.min(MAX_SCAN_CHARS, budgetChars));
 }
 
 function parseWindowCandidates(
@@ -241,10 +245,10 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
 }
 
 function parseJsonArrayAt(window: string, openAt: number, found: unknown[]): boolean {
-  const end = balancedJsonEnd(window, openAt, MAX_SCAN_CHARS);
-  if (end === -1) return false;
+  const slice = balancedJsonSlice(window, openAt, MAX_SCAN_CHARS);
+  if (slice == null) return false;
   try {
-    found.push(JSON.parse(window.slice(openAt, end)));
+    found.push(JSON.parse(slice));
     return true;
   } catch {
     return false;

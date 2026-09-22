@@ -1,45 +1,21 @@
-"use client";
 import {
   type DataTableColumn,
   RightAlignedText,
   mobilePrimaryCol,
+  monoCol,
   rightCol,
   trendClass,
 } from "@/client/components/data/table-columns";
-import { modelNameCol } from "@/client/components/data/table";
-import { SearchableDataTable } from "@/client/components/data/table";
+import { modelNameCol, RankedTableView } from "@/client/components/data/table";
 import { formatShortNumber, formatTrend } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
 import type { OpenRouterRankEntry, OpenRouterRankingsPayload } from "@/shared/types";
 import type { TranslationKey } from "@/shared/i18n";
 import { ShieldAlert } from "lucide-react";
-import { EmptyState } from "@/client/components/feedback";
+import { EmptyState, PartialNotice } from "@/client/components/feedback";
 import { OpenRouterModelDetail } from "@/client/features/models/model-details/openrouter-detail";
+import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { useTranslation } from "@/client/providers";
-import { useRankedColumns } from "@/client/components/data/table";
-
-function tokenText(v: number | null | undefined): string {
-  return typeof v === "number" && Number.isFinite(v) ? formatShortNumber(v) : "—";
-}
-
-function tokenCol(
-  id: string,
-  header: string,
-  get: (item: OpenRouterRankEntry) => number | null | undefined,
-  opts?: { primary?: boolean; muted?: boolean; hiddenMd?: boolean },
-): DataTableColumn<OpenRouterRankEntry> {
-  const col = opts?.primary ? mobilePrimaryCol : rightCol;
-  return col(
-    id,
-    header,
-    (item) => (
-      <span className={`ui-mono-value ${opts?.muted ? "font-normal text-text-secondary" : "font-semibold"}`}>
-        {tokenText(get(item))}
-      </span>
-    ),
-    opts?.hiddenMd ? { hiddenMd: true } : undefined,
-  );
-}
 
 function buildOpenRouterBodyColumns(t: (key: TranslationKey) => string): DataTableColumn<OpenRouterRankEntry>[] {
   return [
@@ -49,10 +25,19 @@ function buildOpenRouterBodyColumns(t: (key: TranslationKey) => string): DataTab
       (item) => item.name,
       "45%",
     ),
-    tokenCol("totalTokens", t("totalTokens"), (item) => item.totalTokens, { primary: true }),
-    tokenCol("inputTokens", t("inputTokens"), (item) => item.promptTokens, { hiddenMd: true }),
-    tokenCol("outputTokens", t("outputTokens"), (item) => item.completionTokens, { hiddenMd: true }),
-    tokenCol("requests", t("requests"), (item) => item.requestCount, { muted: true }),
+    monoCol("totalTokens", t("totalTokens"), (item) => formatShortNumber(item.totalTokens), {
+      mobilePrimary: true,
+      emphasis: "strong",
+    }),
+    monoCol("inputTokens", t("inputTokens"), (item) => formatShortNumber(item.promptTokens), {
+      hiddenMd: true,
+      emphasis: "strong",
+    }),
+    monoCol("outputTokens", t("outputTokens"), (item) => formatShortNumber(item.completionTokens), {
+      hiddenMd: true,
+      emphasis: "strong",
+    }),
+    monoCol("requests", t("requests"), (item) => formatShortNumber(item.requestCount), { emphasis: "muted" }),
     rightCol("creator", t("creator"), (item) => (
       <RightAlignedText className="ui-caption">{item.creator || t("unknown")}</RightAlignedText>
     )),
@@ -65,7 +50,6 @@ function buildOpenRouterBodyColumns(t: (key: TranslationKey) => string): DataTab
 }
 
 const getModelRowId = (r: OpenRouterRankEntry) => r.id;
-const getSearchFields = (r: OpenRouterRankEntry) => [r.name, r.creator, r.id];
 const renderExpandedDetail = (item: OpenRouterRankEntry) => (
   <div className="p-4 sm:p-5">
     <OpenRouterModelDetail model={item} />
@@ -74,19 +58,21 @@ const renderExpandedDetail = (item: OpenRouterRankEntry) => (
 
 export function OpenRouterRankingsView({ data }: { data?: OpenRouterRankingsPayload }) {
   const { t } = useTranslation();
-  const modelColumns = useRankedColumns(buildOpenRouterBodyColumns);
 
   if (!data) {
     return <EmptyState icon={ShieldAlert} message={t("noRankingsData")} />;
   }
 
   return (
-    <SearchableDataTable
-      data={data.tokenUsageRankings ?? []}
-      columns={modelColumns}
-      getRowId={getModelRowId}
-      getSearchFields={getSearchFields}
-      renderExpandedRow={renderExpandedDetail}
-    />
+    <>
+      {data.partial === true && <PartialNotice />}
+      <RankedTableView
+        rows={data.tokenUsageRankings ?? []}
+        getRowId={getModelRowId}
+        getSearchFields={SEARCH_FIELDS.or}
+        buildBodyColumns={buildOpenRouterBodyColumns}
+        renderExpandedRow={renderExpandedDetail}
+      />
+    </>
   );
 }

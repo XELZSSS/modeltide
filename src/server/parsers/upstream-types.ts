@@ -96,6 +96,7 @@ export interface ChangelogRawEntry {
 export interface StatuspageSummaryRaw {
   status?: { indicator?: unknown; description?: unknown };
   components?: unknown;
+  incidents?: unknown;
 }
 
 /** Google Cloud `incidents.json` entry. */

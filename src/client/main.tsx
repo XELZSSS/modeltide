@@ -1,7 +1,7 @@
-import { StrictMode, Suspense, lazy, useEffect, type ReactNode } from "react";
+import { StrictMode, Suspense, lazy, useEffect, type ComponentType, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { usePathname } from "@/client/router";
-import { Providers } from "@/client/providers";
+import { Providers, useTranslation } from "@/client/providers";
 import { AppShell } from "@/client/components/layout/app-shell";
 import { ErrorBoundary, NotFound, Spinner } from "@/client/components/feedback";
 import { useSearchStore } from "@/client/stores";
@@ -40,45 +40,65 @@ function SearchResetOnNavigate(): null {
   return null;
 }
 
+// ErrorBoundary is a class component, so the translated copy has to be read here,
+// one level below the i18n provider that wraps <Routes />.
+function ShellErrorBoundary({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <ErrorBoundary
+      errorTitle={t("errorBoundaryTitle")}
+      retryLabel={t("errorBoundaryRetry")}
+      offlineMessage={t("offlineRetry")}
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
+
 function Shell({ children }: { children: ReactNode }) {
   return (
     <AppShell>
-      <ErrorBoundary>
+      <ShellErrorBoundary>
         <Suspense fallback={<Spinner />}>{children}</Suspense>
-      </ErrorBoundary>
+      </ShellErrorBoundary>
     </AppShell>
   );
 }
 
+interface RouteEntry {
+  key: string;
+  match: (pathname: string) => boolean;
+  el: ComponentType;
+}
+
+/** Order matters: exact paths first, then the two `/…/` prefix routes. */
+const ROUTES: RouteEntry[] = [
+  { key: "home", match: (p) => p === "/", el: HomeView },
+  { key: "models", match: (p) => p === "/models", el: RankingsHubView },
+  { key: "compare", match: (p) => p === "/compare", el: CompareView },
+  { key: "price", match: (p) => p === "/price-compare", el: PriceCompareView },
+  { key: "releases", match: (p) => p === "/releases", el: ReleasesView },
+  { key: "news", match: (p) => p === "/news", el: NewsView },
+  { key: "status", match: (p) => p === "/status", el: StatusView },
+  { key: "model", match: (p) => p.startsWith("/model/"), el: ModelDetailView },
+  { key: "source", match: (p) => p.startsWith("/status/"), el: SourceDetailView },
+];
+
 function Routes() {
   const pathname = usePathname();
-  const route =
-    pathname === "/"
-      ? { el: <HomeView />, key: "home" }
-      : pathname === "/models"
-        ? { el: <RankingsHubView />, key: "models" }
-        : pathname === "/compare"
-          ? { el: <CompareView />, key: "compare" }
-          : pathname === "/price-compare"
-            ? { el: <PriceCompareView />, key: "price" }
-            : pathname === "/releases"
-              ? { el: <ReleasesView />, key: "releases" }
-              : pathname === "/news"
-                ? { el: <NewsView />, key: "news" }
-                : pathname === "/status"
-                  ? { el: <StatusView />, key: "status" }
-                  : pathname.startsWith("/model/")
-                    ? { el: <ModelDetailView />, key: "model" }
-                    : pathname.startsWith("/status/")
-                      ? { el: <SourceDetailView />, key: "source" }
-                      : null;
+  const route = ROUTES.find((r) => r.match(pathname));
   if (!route)
     return (
       <Shell>
         <NotFound />
       </Shell>
     );
-  return <Shell key={route.key}>{route.el}</Shell>;
+  const View = route.el;
+  return (
+    <Shell key={route.key}>
+      <View />
+    </Shell>
+  );
 }
 
 function App() {

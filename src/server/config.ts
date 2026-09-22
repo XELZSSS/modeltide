@@ -1,6 +1,6 @@
 import { normalizeModelLimit } from "@/shared/config/limits";
 import { cacheKey } from "@/shared/config/paths";
-import { fnv1aHash, utf8ByteLength } from "@/shared/utils";
+import { fnv1aHash } from "@/shared/utils";
 import type { NewsCategory } from "@/shared/types/news";
 
 export const upstreamConfig = {
@@ -17,11 +17,27 @@ const UPSTREAM_TIMEOUT_MS = 10_000;
 const RSS_TIMEOUT_MS = 7_000;
 const LITELLM_TIMEOUT_MS = 15_000;
 
+/** Retry backoff ceiling used by http-client; bounds the worst-case call below. */
+export const BACKOFF_MAX_MS = 2_000;
+
 export const UPSTREAM_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
 
 export const FAST_FETCH_OPTS = { timeoutMs: RSS_TIMEOUT_MS, retries: 1 } as const;
 
 export const LITELLM_FETCH_OPTS = { timeoutMs: LITELLM_TIMEOUT_MS, retries: 1 } as const;
+
+const FETCH_OPTS = [UPSTREAM_FETCH_OPTS, FAST_FETCH_OPTS, LITELLM_FETCH_OPTS] as const;
+
+/** Worst case for one upstream call: every attempt burns its full timeout, plus the retry backoff. */
+const WORST_CASE_UPSTREAM_CALL_MS = Math.max(...FETCH_OPTS.map((o) => o.timeoutMs * (o.retries + 1))) + BACKOFF_MAX_MS;
+
+/**
+ * Past every upstream timeout, so a stuck refresh fn is the only thing left that
+ * can trip it. Covers a handler that awaits two such calls in sequence (the AA
+ * index body, then an enrich leg): letting this fire on a live refresh would
+ * release the inflight slot and start a second concurrent fetch for the key.
+ */
+export const INFLIGHT_HANG_GUARD_MS = WORST_CASE_UPSTREAM_CALL_MS * 2;
 
 export const MAX_JSON_BYTES = 5 * 1024 * 1024;
 export const MAX_FEED_BYTES = 2 * 1024 * 1024;
@@ -48,7 +64,7 @@ export const providerStatusEndpoints = {
   groqApi: "https://groqstatus.com/api/v2/summary.json",
   cohereApi: "https://status.cohere.com/api/v2/summary.json",
   fireworksApi: "https://status.fireworks.ai/api/v2/summary.json",
-  cerebrasApi: "https://status.cerebras.com/api/v2/summary.json",
+  cerebrasApi: "https://status.cerebras.ai/api/v2/summary.json",
   deepseekApi: "https://deepseek.statuspage.io/api/v2/summary.json",
   moonshotApi: "https://status.moonshot.cn/api/v2/summary.json",
 } as const;
@@ -105,13 +121,18 @@ export const NEWS_LEG_CONCURRENCY = 5;
 
 export const cacheKeys = {
   intelligenceIndex: cacheKey("artificialIndex"),
+  aaIndexBody: "aa-index-body",
+  aaModelsEnrich: "aa-models-enrich",
+  aaOmniscienceEnrich: "aa-omniscience-enrich",
   homeDashboard: cacheKey("homeDashboard"),
   openSourceModels: (sort: string, direction: string, limit: number) =>
     cacheKey("openSourceModels", sort, direction, normalizeModelLimit(limit)),
   openSourceModel: (id: string) => {
+    // Always hashed: a raw id would share the key space with the hashed form, so
+    // a crafted `?id=` could read another model's entry — or overwrite it with
+    // the `null` a 404 lookup caches.
     const trimmed = id.trim();
-    const keyed = utf8ByteLength(trimmed) > 128 ? `h:${fnv1aHash(trimmed)}` : trimmed;
-    return cacheKey("openSourceModels", "by-id", keyed);
+    return cacheKey("openSourceModels", "by-id", `h:${fnv1aHash(trimmed)}`);
   },
   openSourceReleases: cacheKey("openSourceReleases"),
   news: (category: NewsCategory) => cacheKey("news", category),

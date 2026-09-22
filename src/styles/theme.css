@@ -14,17 +14,12 @@
   --color-accent-contrast: var(--accent-contrast);
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
-  --color-destructive-contrast: var(--destructive-contrast);
-  --color-destructive-light: var(--destructive-light);
   --color-success: var(--success);
   --color-success-light: var(--success-light);
-  --color-success-contrast: var(--success-contrast);
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
-  --color-warning-contrast: var(--warning-contrast);
   --color-info: var(--info);
   --color-info-light: var(--info-light);
-  --color-info-contrast: var(--info-contrast);
   --color-nav-bg: var(--nav-bg);
 
   /* Flat language: intentional zero-radius ladder (xs→full all 0).
@@ -37,8 +32,6 @@
   --radius-full: 0;
 
   /* Elevation: card stays border-only (no shadow); overlay only. */
-  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.06);
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);
   --shadow-md: 0 4px 12px rgb(0 0 0 / 0.12);
   --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.18);
 
@@ -50,14 +43,6 @@
   --duration-fast: 150ms;
   --duration-base: 200ms;
   --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
-
-  /* Focus ring */
-  --ring-width: 2px;
-  --ring-offset: 2px;
-
-  /* Chart alphas (replaces hardcoded 0.06/0.85). */
-  --chart-fill-alpha: 0.08;
-  --chart-bar-alpha: 0.85;
 
   --font-sans:
     "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Symbol", "PingFang SC",
@@ -85,16 +70,11 @@
   --selected: color-mix(in srgb, var(--accent) 12%, transparent);
   --ring: var(--accent);
   --destructive: #c03a30;
-  --destructive-contrast: #ffffff;
-  --destructive-light: color-mix(in srgb, var(--destructive) 10%, transparent);
   --success: #2f7a4d;
-  --success-contrast: #ffffff;
   --success-light: color-mix(in srgb, var(--success) 10%, transparent);
   --warning: #9a6b0a;
-  --warning-contrast: #ffffff;
   --warning-light: color-mix(in srgb, var(--warning) 10%, transparent);
   --info: #2f6d8a;
-  --info-contrast: #ffffff;
   --info-light: color-mix(in srgb, var(--info) 10%, transparent);
   --nav-bg: rgba(250, 251, 252, 0.85);
   --chart-1: #365899;
@@ -132,16 +112,11 @@
   --selected: color-mix(in srgb, var(--accent) 14%, transparent);
   --ring: var(--accent);
   --destructive: #dd6f66;
-  --destructive-contrast: #161a20;
-  --destructive-light: color-mix(in srgb, var(--destructive) 14%, transparent);
   --success: #6fae7e;
-  --success-contrast: #161a20;
   --success-light: color-mix(in srgb, var(--success) 14%, transparent);
   --warning: #d3a24a;
-  --warning-contrast: #161a20;
   --warning-light: color-mix(in srgb, var(--warning) 14%, transparent);
   --info: #6aa5c2;
-  --info-contrast: #161a20;
   --info-light: color-mix(in srgb, var(--info) 14%, transparent);
   --nav-bg: rgba(22, 26, 32, 0.85);
   --chart-1: #8ba3d6;
@@ -160,16 +135,4 @@
   --donut-4: #6fae7e;
   --donut-5: #d3a24a;
   --donut-6: #6e7887;
-}
-
-body[data-accent] {
-  --accent-light: color-mix(in srgb, var(--accent) 10%, transparent);
-  --hover: color-mix(in srgb, var(--accent) 7%, transparent);
-  --selected: color-mix(in srgb, var(--accent) 12%, transparent);
-  --ring: var(--accent);
-}
-.dark body[data-accent] {
-  --accent-light: color-mix(in srgb, var(--accent) 12%, transparent);
-  --hover: color-mix(in srgb, var(--accent) 9%, transparent);
-  --selected: color-mix(in srgb, var(--accent) 14%, transparent);
 }

@@ -4,8 +4,8 @@ import {
   parseGoogleCloudIncidents as parseGoogleCloudIncidentsResult,
   parseStatuspageSummary as parseStatuspageSummaryResult,
 } from "@/server/parsers/incident-parser";
-import type { AppContext } from "@/server/context";
 import { parseDailyPapers as parseDailyPapersResult } from "@/server/parsers/hf-parser";
+import { fakeHttp, testCtx } from "@/server/test-helpers";
 
 /** Unwrap a successful ParseResult; failure surfaces as a thrown error. */
 function unwrap<T>(res: { ok: true; data: T } | { ok: false; error: string }): T {
@@ -21,8 +21,7 @@ const healthyStatuspage = (indicator = "none") => ({
   status: { indicator, description: indicator === "none" ? "All Systems Operational" : "Degraded" },
   components: [{ name: "API", status: "operational" }],
 });
-const ctxWithJson = (json: (url: string) => Promise<unknown>) =>
-  ({ http: { json }, log: () => {} }) as unknown as AppContext;
+const ctxWithJson = (json: (url: string) => Promise<unknown>) => testCtx(new Map(), { http: fakeHttp({ json }) }).ctx;
 const paper = (id: string, title: string, upvotes: number, publishedAt = "2026-09-05T00:00:00.000Z") => ({
   paper: { id, title, upvotes, publishedAt },
 });
@@ -78,6 +77,23 @@ describe("parseStatuspageSummary", () => {
     expect(parseStatuspageSummary(healthyStatuspage(indicator)).level).toBe(level);
   });
 
+  it("reads the page headline and the active incident names as the warning content", () => {
+    const out = parseStatuspageSummary({
+      status: { indicator: "minor", description: "Partially Degraded Service" },
+      components: [{ name: "API", status: "degraded_performance" }],
+      incidents: [
+        { name: "Elevated error rates", status: "investigating", impact: "minor" },
+        { name: "Resolved outage", status: "resolved", impact: "major" },
+        { name: "Informational note", status: "monitoring", impact: "none" },
+      ],
+    });
+    expect(out).toMatchObject({
+      level: "warn",
+      pageDescription: "Partially Degraded Service",
+      activeIncidents: ["Elevated error rates"],
+    });
+  });
+
   it("fails closed on empty or unreadable component lists", () => {
     expect(parseStatuspageSummaryResult({ components: [] }).ok).toBe(false);
     expect(parseStatuspageSummaryResult({ components: [{ name: "x", status: "" }] }).ok).toBe(false);
@@ -129,16 +145,42 @@ describe("parseGoogleCloudIncidents", () => {
 });
 
 describe("fetchProviderStatuses", () => {
-  it("skips providers whose status page fetch fails instead of marking them down", async () => {
-    const ctx = ctxWithJson(async (url: string) => {
-      if (url.includes("deepseek")) throw new Error("timeout");
-      if (url.includes("status.cloud.google.com")) return [];
-      return healthyStatuspage();
+  it("skips failed or unparseable providers instead of marking them down", async () => {
+    const throwing = await fetchProviderStatuses(
+      ctxWithJson(async (url: string) => {
+        if (url.includes("deepseek")) throw new Error("timeout");
+        if (url.includes("status.cloud.google.com")) return [];
+        return healthyStatuspage();
+      }),
+    );
+    expect(throwing.has("deepseekApi")).toBe(false);
+    expect(throwing.get("cerebrasApi")).toMatchObject({ ok: true });
+    expect(throwing.get("googleCloudApi")).toMatchObject({ ok: true });
+
+    const unparseable = await fetchProviderStatuses(
+      ctxWithJson(async (url: string) => {
+        if (url.includes("status.cloud.google.com")) return [];
+        return { nope: true };
+      }),
+    );
+    expect(unparseable.has("openaiApi")).toBe(false);
+    expect(unparseable.get("googleCloudApi")).toMatchObject({ ok: true });
+  });
+
+  it("reports the provider's warning text instead of a bare degraded flag", async () => {
+    const map = await fetchProviderStatuses(
+      ctxWithJson(async () => ({
+        status: { indicator: "minor", description: "Partially Degraded Service" },
+        components: [{ name: "API", status: "degraded_performance" }],
+        incidents: [{ name: "Elevated error rates on the API", status: "investigating", impact: "minor" }],
+      })),
+    );
+    expect(map.get("openaiApi")).toMatchObject({
+      ok: true,
+      warn: true,
+      warnReason: "Partially Degraded Service: Elevated error rates on the API",
+      error: null,
     });
-    const map = await fetchProviderStatuses(ctx);
-    expect(map.has("deepseekApi")).toBe(false);
-    expect(map.get("cerebrasApi")).toMatchObject({ ok: true });
-    expect(map.get("googleCloudApi")).toMatchObject({ ok: true });
   });
 
   it("returns an empty map when every fetch fails (no confident verdicts)", async () => {
@@ -148,16 +190,6 @@ describe("fetchProviderStatuses", () => {
       }),
     );
     expect(map.size).toBe(0);
-  });
-
-  it("skips unparseable payloads instead of marking them down", async () => {
-    const ctx = ctxWithJson(async (url: string) => {
-      if (url.includes("status.cloud.google.com")) return [];
-      return { nope: true };
-    });
-    const map = await fetchProviderStatuses(ctx);
-    expect(map.has("openaiApi")).toBe(false);
-    expect(map.get("googleCloudApi")).toMatchObject({ ok: true });
   });
 });
 

@@ -2,11 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
 import { getModelDirectory } from "@/server/sources/openrouter-directory";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { testCtx } from "@/server/test-helpers";
+import { fakeHttp, testCtx } from "@/server/test-helpers";
 import { UpstreamError } from "@/server/infra/errors";
 import { upstreamConfig, upstreamEndpoints } from "@/server/config";
 import { PARTIAL_FAIL_TTL_MS } from "@/shared/config";
-import type { AppContext } from "@/server/context";
 import type { ModelRow, PricingRow } from "@/server/parsers/upstream-types";
 
 const RANKINGS_URL = `${upstreamConfig.openrouter}${upstreamEndpoints.openRouterRankings}`;
@@ -31,24 +30,23 @@ function row(over: Partial<ModelRow> = {}): ModelRow {
 }
 
 function directoryRow(id: string): PricingRow {
-  return { id, pricing: { prompt: "0.000001", completion: "0.000002" } } as unknown as PricingRow;
+  return { id, pricing: { prompt: "0.000001", completion: "0.000002" } };
 }
 
 /** Routes ctx.http.json by URL and records how often each endpoint was hit. */
 function orCtx(responses: Record<string, unknown>) {
   const hits: Record<string, number> = {};
-  const http = {
-    json: async (url: string) => {
-      hits[url] = (hits[url] ?? 0) + 1;
-      const entry = responses[url];
-      if (entry instanceof Error) throw entry;
-      if (entry === undefined) throw new Error(`unexpected request to ${url}`);
-      return entry;
-    },
-  } as unknown as AppContext["http"];
   const logs: [string, string][] = [];
   const { ctx, kvStore } = testCtx(new Map<string, string>(), {
-    http,
+    http: fakeHttp({
+      json: (url) => {
+        hits[url] = (hits[url] ?? 0) + 1;
+        const entry = responses[url];
+        if (entry instanceof Error) throw entry;
+        if (entry === undefined) throw new Error(`unexpected request to ${url}`);
+        return entry;
+      },
+    }),
     log: (level, msg) => logs.push([level, msg]),
   });
   return { ctx, kvStore, hits, logs };
@@ -97,17 +95,19 @@ describe("getOpenRouterRankings", () => {
     expect((err as UpstreamError).status).toBe(504);
   });
 
-  it("rejects a non-array rankings response", async () => {
-    const { ctx } = orCtx({ [RANKINGS_URL]: { data: null }, [DIRECTORY_URL]: { data: [] } });
-    await expect(getOpenRouterRankings(ctx)).rejects.toThrowError(/non-array response/);
-  });
+  it("rejects malformed rankings bodies", async () => {
+    const { ctx: nonArray } = orCtx({ [RANKINGS_URL]: { data: null }, [DIRECTORY_URL]: { data: [] } });
+    await expect(getOpenRouterRankings(nonArray)).rejects.toThrowError(/non-array response/);
 
-  it("rejects when every ranking row has an unusable permaslug", async () => {
-    const { ctx } = orCtx({
+    // Rejections arm the shared failure cooldown: reset so the next body is actually parsed.
+    resetModuleCachesForTests();
+    const { ctx: badSlugs } = orCtx({
       [RANKINGS_URL]: { data: [row({ model_permaslug: "" }), row({ model_permaslug: "javascript:alert(1)" })] },
       [DIRECTORY_URL]: { data: [directoryRow("openai/gpt-5")] },
     });
-    await expect(getOpenRouterRankings(ctx)).rejects.toThrowError(/all 2 ranking rows had invalid model_permaslug/);
+    await expect(getOpenRouterRankings(badSlugs)).rejects.toThrowError(
+      /all 2 ranking rows had invalid model_permaslug/,
+    );
   });
 
   it("keeps the cached payload and fetchedAt on a cache hit", async () => {

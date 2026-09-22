@@ -2,7 +2,7 @@
 // Generation script for src/shared/config/cache-version.gen.ts.
 const fs = require("fs");
 const path = require("path");
-const { walkTs, stripComments } = require("./script-utils.cjs");
+const { walkTs, stripComments, normalizeSource } = require("./script-utils.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "src", "shared", "config", "cache-version.gen.ts");
@@ -49,21 +49,49 @@ function collectFiles() {
   return [...new Set(files)].filter((f) => f !== OUT).sort();
 }
 
-function hashFiles() {
+const OXFMT_CONFIG = path.join(ROOT, ".oxfmtrc.json");
+
+/** The config file is JSONC, and its CLI-only keys are not formatter options. */
+function readFormatterOptions() {
+  const parsed = JSON.parse(stripComments(fs.readFileSync(OXFMT_CONFIG, "utf8")));
+  delete parsed.$schema;
+  delete parsed.ignorePatterns;
+  // Force the most collapsed form available. The formatter default is
+  // `objectWrap: "preserve"`, which accepts a hand-expanded object literal as
+  // already formatted — so expanding or collapsing one would still move the
+  // version even though nothing about the data changed.
+  parsed.objectWrap = "collapse";
+  return parsed;
+}
+
+async function hashFiles() {
   // eslint-disable-next-line global-require
   const { createHash } = require("crypto");
+  // eslint-disable-next-line global-require
+  const { format } = require("oxfmt");
+  const options = readFormatterOptions();
   const hash = createHash("sha256");
   for (const file of collectFiles()) {
+    const source = fs.readFileSync(file, "utf8");
+    // Hash the formatter's own output rather than the raw text. Whitespace, line
+    // wrapping, trailing commas and quote style are all formatting, so a
+    // format-only edit must leave the version alone — and no hand-rolled
+    // canonicalisation keeps up with everything the formatter is allowed to do.
+    const { code, errors } = await format(file, source, options);
+    if (errors.length > 0) {
+      console.error(`gen:cache-version cannot format ${path.relative(ROOT, file)}: ${errors[0].message}`);
+      process.exit(1);
+    }
     hash.update(path.relative(ROOT, file).replaceAll("\\", "/"));
     hash.update("\0");
-    hash.update(stripComments(fs.readFileSync(file, "utf8")).replace(/\s+/g, " "));
+    hash.update(normalizeSource(code));
     hash.update("\0");
   }
   return hash.digest("hex").slice(0, 12);
 }
 
-function main() {
-  const version = `sha-${hashFiles()}`;
+async function main() {
+  const version = `sha-${await hashFiles()}`;
   const content = `${GEN_HEADER}export const CACHE_VERSION = "${version}";\n`;
   const existing = fs.existsSync(OUT) ? fs.readFileSync(OUT, "utf8") : "";
   if (existing === content) {
@@ -74,4 +102,7 @@ function main() {
   console.log(`gen:cache-version updated (${version})`);
 }
 
-main();
+main().catch((err) => {
+  console.error(`gen:cache-version failed: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+});

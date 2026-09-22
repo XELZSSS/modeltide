@@ -1,9 +1,8 @@
-"use client";
 import { memo, useMemo, type ReactNode } from "react";
 import { formatDollar } from "@/client/utils/format";
 import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
 import { useTranslation } from "@/client/providers";
-import { modelId } from "@/client/utils/model-utils";
+import { modelDisplayName, modelId } from "@/client/utils/model-utils";
 import { DataTable } from "@/client/components/data/table";
 import type { DataTableColumn } from "@/client/components/data/table-columns";
 import { useOfficialPricing } from "@/client/pricing/official-pricing-hook";
@@ -30,7 +29,7 @@ function buildColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColum
       cell: (row) => (
         <div className="min-w-0">
           <p className="text-sm font-medium truncate" title={row.model.name}>
-            {row.model.short_name || row.model.name}
+            {modelDisplayName(row.model)}
           </p>
           <p className="text-xs text-text-secondary truncate">{row.official.provider}</p>
         </div>

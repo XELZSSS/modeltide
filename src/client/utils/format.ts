@@ -36,8 +36,8 @@ function formatScaled(abs: number, sign: string, value: number, scales: ScaleEnt
   return null;
 }
 
-export function formatShortNumber(n: number) {
-  if (!Number.isFinite(n)) return "—";
+export function formatShortNumber(n: number | null | undefined) {
+  if (!isFiniteNumber(n)) return "—";
   const { abs, sign } = compactParts(n);
   const scaled = formatScaled(abs, sign, abs, SHORT_SCALES, 2);
   if (scaled) return scaled;
@@ -96,16 +96,22 @@ export function orNA(value: string | null | undefined, t: TFunction): string {
   return value || t("notAvailable");
 }
 
+/**
+ * Sub-cent prices need the extra digits or they render as a flat $0.00; exported so the
+ * compare view can rank cells on exactly the precision it displays them with.
+ */
+export function priceDisplayPrecision(v: number): number {
+  const abs = Math.abs(v);
+  if (abs === 0 || abs.toFixed(2) !== "0.00") return 2;
+  return abs.toFixed(3) === "0.000" ? 4 : 3;
+}
+
 function usdString(v: number): string {
   if (Object.is(v, -0)) v = 0;
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
-  let out = abs.toFixed(2);
-  if (abs > 0 && Number(out) === 0) {
-    out = abs.toFixed(3);
-    if (Number(out) === 0) out = abs.toFixed(4);
-    if (Number(out) === 0) return `${sign}<$0.0001`;
-  }
+  const out = abs.toFixed(priceDisplayPrecision(abs));
+  if (abs > 0 && Number(out) === 0) return `${sign}<$0.0001`;
   return `${sign}$${out}`;
 }
 

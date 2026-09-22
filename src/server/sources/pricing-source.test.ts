@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { getOfficialPricing } from "@/server/sources/pricing-source";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { testCtx } from "@/server/test-helpers";
-import type { AppContext } from "@/server/context";
+import { fakeHttp, testCtx } from "@/server/test-helpers";
 
 function litellmTable() {
   return {
@@ -26,16 +25,14 @@ function litellmTable() {
 }
 
 function pricingCtx(body: unknown) {
-  const calls: { url: string; init: unknown }[] = [];
-  const http = {
-    json: async (url: string, init?: unknown) => {
-      calls.push({ url, init });
+  const http = fakeHttp({
+    json: () => {
       if (body instanceof Error) throw body;
       return body;
     },
-  } as unknown as AppContext["http"];
+  });
   const { ctx, kvStore } = testCtx(new Map<string, string>(), { http });
-  return { ctx, kvStore, calls };
+  return { ctx, kvStore, calls: http.calls };
 }
 
 describe("getOfficialPricing", () => {

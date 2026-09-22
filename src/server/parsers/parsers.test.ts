@@ -4,15 +4,7 @@ import { stripHtml } from "@/server/parsers/html-to-text";
 import { parseFeed as parseFeedResult } from "@/server/parsers/rss-feed-parser";
 import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc-parser";
 import { getOpenLicense } from "@/server/parsers/licenses";
-import {
-  isoDate,
-  num,
-  numCoerce,
-  numIntNonNegative,
-  numNonNegative,
-  numOr,
-  numPositive,
-} from "@/server/parsers/parser-primitives";
+import { byDateDesc, isoDate, num, numCoerce, numOr } from "@/server/parsers/parser-primitives";
 
 /** Unwrap a successful parseFeed result; failure surfaces as a thrown error. */
 function readFeed(xml: string, url = "https://x.example/feed") {
@@ -89,11 +81,21 @@ describe("parseRscPayload", () => {
   const byInitialModels = (tree: unknown) =>
     (tree as { tree?: { initialModels?: { id: string }[] } })?.tree?.initialModels ?? null;
 
-  it.each([
-    ['0:{"$a":1}\n1:{"tree":{"initialModels":[{"id":"x"}]}}\n', [{ id: "x" }]],
-    ['0:{"$a":1}\n2E:{"tree":{"initialModels":[{"id":"u"}]}}\n', [{ id: "u" }]],
-  ])("parses streamed lines and hex ids", (body, expected) => {
-    expect(parseRscPayload<{ id: string }>(body, "initialModels", byInitialModels)).toEqual(expected);
+  it("parses streamed lines with decimal and hex ids", () => {
+    expect(
+      parseRscPayload<{ id: string }>(
+        '0:{"$a":1}\n1:{"tree":{"initialModels":[{"id":"x"}]}}\n',
+        "initialModels",
+        byInitialModels,
+      ),
+    ).toEqual([{ id: "x" }]);
+    expect(
+      parseRscPayload<{ id: string }>(
+        '0:{"$a":1}\n2E:{"tree":{"initialModels":[{"id":"u"}]}}\n',
+        "initialModels",
+        byInitialModels,
+      ),
+    ).toEqual([{ id: "u" }]);
   });
 
   it('parses hex-prefixed chunk lines (Next.js flight ids are hex, e.g. "c:")', () => {
@@ -160,16 +162,12 @@ describe("parseFeed", () => {
     expect(items[0]?.link).toBe("https://x.example/self");
   });
 
-  it.each([
-    [
+  it("stringifies attributed nodes via their text node", () => {
+    const item = readFeed(
       rss(rssItem(`<title>I1</title><link>https://y.example/a</link><guid isPermaLink="false">guid-123</guid>`)),
-      "guid-123",
-      undefined,
-    ],
-  ])("stringifies attributed nodes via their text node", (xml, expectedId, expectedTitle) => {
-    const item = readFeed(xml, "https://y.example/feed")[0];
-    expect(item?.id).toBe(expectedId);
-    if (expectedTitle !== undefined) expect(item?.title).toBe(expectedTitle);
+      "https://y.example/feed",
+    )[0];
+    expect(item?.id).toBe("guid-123");
   });
 
   it("falls back to the link for ids when guid is absent", () => {
@@ -240,11 +238,12 @@ describe("primitives", () => {
     expect(isoDate(input)).toBeNull();
   });
 
-  it("numPositive/numNonNegative/numIntNonNegative behave", () => {
-    expect(numPositive(0)).toBeNull();
-    expect(numNonNegative(0)).toBe(0);
-    expect(numIntNonNegative(3.9)).toBe(3);
-    expect(numIntNonNegative(-1)).toBeNull();
+  it("byDateDesc sinks unparseable dates and never returns a NaN comparator", () => {
+    const cmp = byDateDesc<{ d: string }>((r) => r.d);
+    expect(cmp({ d: "nope" }, { d: "also-nope" })).toBe(0);
+
+    const sorted = [{ d: "2026-01-02" }, { d: "not-a-date" }, { d: "2026-03-04" }, { d: "" }].sort(cmp);
+    expect(sorted.map((r) => r.d)).toEqual(["2026-03-04", "2026-01-02", "not-a-date", ""]);
   });
 });
 
@@ -258,12 +257,22 @@ describe("getOpenLicense", () => {
     expect(getOpenLicense(tags)).toBe(expected);
   });
 
-  it.each([[["license:cc-by-nd-4.0"]], [["license:mitre"]], [[]]])(
-    "getOpenLicense(%j) rejects ND/lookalikes/non-licenses",
-    (tags) => {
-      expect(getOpenLicense(tags)).toBeNull();
-    },
-  );
+  it.each([
+    [["license:cc-by-nd-4.0"]],
+    [["license:cc-by-nc-4.0"]],
+    [["license:cc-by-nc-sa-4.0"]],
+    [["license:cc-by-nc-nd-4.0"]],
+    [["license:cc-by-nc4.0"]],
+    [["license:mitre"]],
+    [[]],
+  ])("getOpenLicense(%j) rejects ND/NC/lookalikes/non-licenses", (tags) => {
+    expect(getOpenLicense(tags)).toBeNull();
+  });
+
+  it("still accepts the permissive CC variants", () => {
+    expect(getOpenLicense(["license:cc-by-4.0"])).toBe("cc-by-4.0");
+    expect(getOpenLicense(["license:cc-by-sa-4.0"])).toBe("cc-by-sa-4.0");
+  });
 });
 
 describe("feed guard", () => {

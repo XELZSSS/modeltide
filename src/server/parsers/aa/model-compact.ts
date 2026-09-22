@@ -8,33 +8,40 @@ import {
   str,
   strOr,
 } from "@/server/parsers/parser-primitives";
-import { BENCHMARK_KEYS, type BenchmarkKey } from "@/shared/config";
+import { BENCHMARK_KEYS, MODALITY_KEYS, ABSOLUTE_SCORE_BENCHMARKS, type BenchmarkKey } from "@/shared/config";
 import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
-import { normalizePercent } from "@/shared/utils";
+import { normalizePercent, unclampedPercent } from "@/shared/utils";
 
 const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   mmlu_pro: "mmluPro",
   tau_banking: "tauBanking",
-  terminalbench_v2_1: "terminalbenchV21",
-  terminalbench_v4_0: "terminalbenchV40",
+  terminalbench_v2_1: "terminalBench21",
+  terminalbench_hard: "terminalbenchHard",
+  terminalbench_v4_0: "terminalBench40",
   apex_agents: "apexAgents",
   mmmu_pro: "mmmuPro",
   automation_bench: "automationBenchPartialScore",
 };
 
+/**
+ * Every benchmark key but `ABSOLUTE_SCORE_BENCHMARKS` is stored on the 0-100
+ * scale the renderer expects. Scaling here (rather than leaving raw fractions
+ * for the client to guess at) keeps one payload from mixing scales per key, and
+ * `unclampedPercent` keeps omniscience's negative scores negative instead of
+ * flattening them to 0.
+ */
 function compactBenchmarks(m: Record<string, unknown>): Partial<Record<BenchmarkKey, number | null>> {
   const benchmarks: Partial<Record<BenchmarkKey, number | null>> = {};
   for (const key of BENCHMARK_KEYS) {
-    const value = numCoerce(m[BENCHMARK_FIELD_OVERRIDES[key] ?? key]);
+    const raw = numCoerce(m[BENCHMARK_FIELD_OVERRIDES[key] ?? key]);
+    const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : unclampedPercent(raw);
     if (value != null) benchmarks[key] = value;
   }
   return benchmarks;
 }
 
-const MODALITIES = ["text", "image", "speech", "video"] as const;
-
 function compactCodingIndex(m: Record<string, unknown>): number | null {
-  const tb = normalizePercent(numCoerce(m.terminalbenchV21));
+  const tb = normalizePercent(numCoerce(m.terminalBench21));
   const sc = normalizePercent(numCoerce(m.scicode));
   if (tb == null && sc == null) return null;
   const values = [tb, sc].filter((v): v is number => v != null);
@@ -83,7 +90,7 @@ function compactOmniscience(
   const accuracy = normalizePercent(numCoerce(omniscienceBreakdown?.accuracy));
   const attemptRate = normalizePercent(numCoerce(omniscienceBreakdown?.attemptRate));
   const hallucinationRate = normalizePercent(numCoerce(omniscienceBreakdown?.hallucinationRate));
-  const omni = normalizePercent(omniscience);
+  const omni = unclampedPercent(omniscience);
   if (accuracy != null) total.accuracy = accuracy;
   if (attemptRate != null) total.attempt_rate = attemptRate;
   if (hallucinationRate != null) total.hallucination_rate = hallucinationRate;
@@ -92,13 +99,22 @@ function compactOmniscience(
 }
 
 function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unknown>): void {
-  for (const mo of MODALITIES) {
+  for (const mo of MODALITY_KEYS) {
     const suffix = mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase();
     const inputMo = bool(m[`inputModality${suffix}`]);
     if (inputMo !== undefined) model[`input_modality_${mo}`] = inputMo;
     const outputMo = bool(m[`outputModality${suffix}`]);
     if (outputMo !== undefined) model[`output_modality_${mo}`] = outputMo;
   }
+  // Upstream quirk: the index body publishes the image/speech/video flags but
+  // omits text and has no output flag at all. Only a record that describes part
+  // of its modalities gets the text fallback; an explicit flag always wins.
+  const describesModalities = MODALITY_KEYS.some(
+    (mo) => model[`input_modality_${mo}`] !== undefined || model[`output_modality_${mo}`] !== undefined,
+  );
+  if (!describesModalities) return;
+  if (model.input_modality_text === undefined) model.input_modality_text = true;
+  if (model.output_modality_text === undefined) model.output_modality_text = true;
 }
 
 export function compact(m: unknown): ArtificialAnalysisModel {

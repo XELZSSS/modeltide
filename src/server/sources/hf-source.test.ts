@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { getModels, getModelById, fetchHFModelById } from "@/server/sources/hf-source";
+import { getModels, getModelById, getReleases, fetchHFModelById } from "@/server/sources/hf-source";
 import { UpstreamError } from "@/server/infra/errors";
-import { testCtx } from "@/server/test-helpers";
+import { fakeHttp, testCtx } from "@/server/test-helpers";
 import type { AppContext } from "@/server/context";
 
 beforeEach(() => resetModuleCachesForTests());
@@ -10,7 +10,7 @@ beforeEach(() => resetModuleCachesForTests());
 function hfCtx(items: unknown[], kvStore = new Map<string, string>()) {
   return testCtx(kvStore, {
     version: "v1",
-    http: { json: async () => items } as unknown as AppContext["http"],
+    http: fakeHttp({ json: () => items }),
   });
 }
 
@@ -41,7 +41,7 @@ describe("getModels empty-result TTL", () => {
     }));
     const { ctx, kvStore } = testCtx(new Map<string, string>(), {
       version: "v1",
-      http: { json: async () => items } as unknown as AppContext["http"],
+      http: fakeHttp({ json: () => items }),
     });
 
     const first = await getModels(ctx, { sort: "trendingScore", direction: "-1", limit: 101 });
@@ -59,6 +59,45 @@ describe("getModels empty-result TTL", () => {
   });
 });
 
+describe("list rows drop the detail-only tags", () => {
+  const row = {
+    id: "org/open",
+    author: "org",
+    downloads: 10,
+    likes: 1,
+    pipeline_tag: "text-generation",
+    createdAt: "2026-01-01T00:00:00Z",
+    lastModified: "2026-02-01T00:00:00Z",
+    tags: ["license:mit", "text-generation"],
+  };
+
+  it("omits tags from both list endpoints", async () => {
+    const { data: models } = await getModels(hfCtx([row]).ctx, {
+      sort: "trendingScore",
+      direction: "-1",
+      limit: 500,
+    });
+    expect(models).toHaveLength(1);
+    expect(models[0]).not.toHaveProperty("tags");
+    expect(models[0]?.license).toBe("mit");
+
+    const { data: releases } = await getReleases(hfCtx([row]).ctx);
+    expect(releases).toHaveLength(1);
+    expect(releases[0]).not.toHaveProperty("tags");
+  });
+
+  it("keeps tags on the by-id detail row the model page fetches", async () => {
+    const { ctx } = testCtx(new Map(), {
+      version: "v-hf-detail",
+      http: fakeHttp({ json: () => row }),
+    });
+    await expect(fetchHFModelById(ctx, "org/open")).resolves.toMatchObject({
+      id: "org/open",
+      tags: ["license:mit", "text-generation"],
+    });
+  });
+});
+
 describe("fetchHFModelById / getModelById (window-free detail lookup)", () => {
   const hfRow = {
     id: "org/niche-model",
@@ -73,7 +112,7 @@ describe("fetchHFModelById / getModelById (window-free detail lookup)", () => {
   const byIdCtx = (json: (url: string) => Promise<unknown>): AppContext =>
     testCtx(new Map(), {
       version: "v-hf-by-id",
-      http: { json } as unknown as AppContext["http"],
+      http: fakeHttp({ json }),
     }).ctx;
 
   it("maps a single upstream row without any list window", async () => {

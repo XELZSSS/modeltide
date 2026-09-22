@@ -1,4 +1,3 @@
-"use client";
 import { memo } from "react";
 import { cn } from "@/client/utils/cn";
 

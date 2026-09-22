@@ -5,13 +5,5 @@
   "printWidth": 120,
   // Required: the default reorders package.json keys.
   "sortPackageJson": false,
-  "ignorePatterns": [
-    "dist/**",
-    "node_modules/**",
-    "cloudflare-env.d.ts",
-    ".wrangler/**",
-    "coverage/**",
-    "package-lock.json",
-    "public/sw.js"
-  ]
+  "ignorePatterns": ["dist/**", "node_modules/**", ".wrangler/**", "coverage/**", "package-lock.json", "public/sw.js"]
 }

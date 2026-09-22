@@ -1,4 +1,3 @@
-"use client";
 import { Check, Plus } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { cn } from "@/client/utils/cn";

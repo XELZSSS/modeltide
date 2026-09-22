@@ -1,4 +1,3 @@
-"use client";
 import { memo, useMemo } from "react";
 import type { ChartOptions } from "chart.js";
 import { Bar } from "react-chartjs-2";
@@ -6,8 +5,7 @@ import { registerBar } from "@/client/utils/charts-register";
 
 registerBar();
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { Card, CardContent } from "@/client/components/ui/card";
-import { ChartFrame } from "@/client/components/ui/chart-frame";
+import { ChartCard, ChartFrame } from "@/client/components/ui/chart-frame";
 import { useTranslation } from "@/client/providers";
 import { useChartTheme, hexToRgba, legendStyle, seriesColor } from "@/client/theme/chart-theme";
 import {
@@ -18,6 +16,7 @@ import {
   defaultTooltipOptions,
 } from "@/client/utils/charts";
 import type { CompareRow } from "@/client/features/compare/compare-logic";
+import { modelDisplayName } from "@/client/utils/model-utils";
 
 export const PriceChart = memo(function PriceChart({
   priceRows,
@@ -35,7 +34,7 @@ export const PriceChart = memo(function PriceChart({
       datasets: models.map((model, index) => {
         const color = seriesColor(theme, index);
         return {
-          label: model.short_name || model.name,
+          label: modelDisplayName(model),
           data: priceRows.map((row) => {
             const v = row.getNumeric?.(model);
             return typeof v === "number" ? v : null;
@@ -81,13 +80,10 @@ export const PriceChart = memo(function PriceChart({
   );
 
   return (
-    <Card>
-      <CardContent>
-        <p className="ui-card-title mb-4">{t("priceComparison")}</p>
-        <ChartFrame>
-          <Bar data={data} options={options} role="img" aria-label={t("priceComparison")} />
-        </ChartFrame>
-      </CardContent>
-    </Card>
+    <ChartCard title={t("priceComparison")}>
+      <ChartFrame>
+        <Bar data={data} options={options} role="img" aria-label={t("priceComparison")} />
+      </ChartFrame>
+    </ChartCard>
   );
 });

@@ -1,13 +1,12 @@
-"use client";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "@/client/router";
 import { Button } from "@/client/components/ui/button";
 import { CenteredPageState, EmptyState, Spinner } from "@/client/components/feedback";
-import { CompareChipBar } from "@/client/components/compare-tray";
+import { CompareChipBar } from "./compare-tray";
 import { useTranslation } from "@/client/providers";
 import { useCompareStore, useCompareModels } from "@/client/stores";
 import { useArtificialRankings } from "@/client/api/api-queries";
-import type { TranslationKey } from "@/shared/i18n";
+import { modelId } from "@/client/utils/model-utils";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { BackButton, DetailPageLayout, PageContainer } from "@/client/components/layout";
 
@@ -18,6 +17,14 @@ function useComparedRankings(): {
 } {
   const rankingsQ = useArtificialRankings();
   const models = useCompareModels(rankingsQ.data);
+  const pruneCompare = useCompareStore((s) => s.pruneCompare);
+  const validIds = useMemo(() => new Set(rankingsQ.data.map(modelId).filter(Boolean)), [rankingsQ.data]);
+  useEffect(() => {
+    // A failed or still-empty list proves nothing about the stored ids, so only a
+    // loaded, non-empty list may drop them.
+    if (rankingsQ.isPending || rankingsQ.isError || validIds.size === 0) return;
+    pruneCompare(validIds);
+  }, [validIds, rankingsQ.isPending, rankingsQ.isError, pruneCompare]);
   const compared = useMemo(() => {
     if (rankingsQ.isError) return [];
     if (rankingsQ.isPending) return null;
@@ -27,13 +34,13 @@ function useComparedRankings(): {
 }
 
 interface ComparePageLayoutProps {
-  backLabelKey: TranslationKey;
+  /** Fallback destination for a direct landing; the back button itself returns to wherever the reader came from. */
   backTo: string;
   title: string;
   children: (models: ArtificialAnalysisModel[]) => React.ReactNode;
 }
 
-export function ComparePageLayout({ backLabelKey, backTo, title, children }: ComparePageLayoutProps) {
+export function ComparePageLayout({ backTo, title, children }: ComparePageLayoutProps) {
   const router = useRouter();
   const { t } = useTranslation();
   const removeCompareModel = useCompareStore((s) => s.removeCompareModel);
@@ -56,7 +63,7 @@ export function ComparePageLayout({ backLabelKey, backTo, title, children }: Com
           <Button size="sm" variant="outline" onClick={() => refetchRankings()}>
             {t("errorBoundaryRetry")}
           </Button>
-          <BackButton labelKey="backToList" to={backTo} />
+          <BackButton labelKey="back" to={backTo} />
         </div>
       </CenteredPageState>
     );
@@ -71,7 +78,7 @@ export function ComparePageLayout({ backLabelKey, backTo, title, children }: Com
             {t("compareStale")}
           </p>
         )}
-        <BackButton labelKey="backToList" to={backTo} />
+        <BackButton labelKey="back" to={backTo} />
       </CenteredPageState>
     );
   }
@@ -79,7 +86,7 @@ export function ComparePageLayout({ backLabelKey, backTo, title, children }: Com
   return (
     <PageContainer>
       <DetailPageLayout
-        backLabelKey={backLabelKey}
+        backLabelKey="back"
         backTo={backTo}
         title={title}
         description={t("artificialSource")}

@@ -1,16 +1,19 @@
-"use client";
-import { memo, useCallback, useMemo, type ReactNode } from "react";
+import { Suspense, lazy, memo, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatDollar } from "@/client/utils/format";
+import { ChartCard } from "@/client/components/ui/chart-frame";
 import { buildPriceRows, type CompareRow, type Winner } from "./compare-logic";
 import { CompareTable, WinnerValue } from "@/client/features/compare/compare-table";
-import { PriceChart } from "@/client/features/compare/price-compare/price-chart";
 import { CostEstimator } from "@/client/features/compare/price-compare/estimator";
 import { LiteLLMVsRouterTable } from "@/client/features/compare/price-compare/price-compare-table";
 import { useOfficialPricing } from "@/client/pricing/official-pricing-hook";
 import { MODEL_SOURCES } from "@/client/config/nav-config";
 import { ComparePageLayout } from "./compare-layout";
+
+const PriceChart = lazy(() =>
+  import("@/client/features/compare/price-compare/price-chart").then((m) => ({ default: m.PriceChart })),
+);
 
 const PriceCompareContent = memo(function PriceCompareContent({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
@@ -34,18 +37,24 @@ const PriceCompareContent = memo(function PriceCompareContent({ models }: { mode
         <p className="text-sm font-semibold">{t("priceBreakdown")}</p>
         <CompareTable rows={priceRows} models={models} mobileLayout="model-cards" renderValue={renderPrice} />
       </div>
-      <PriceChart priceRows={priceRows} models={models} />
+      <Suspense fallback={<PriceChartFallback />}>
+        <PriceChart priceRows={priceRows} models={models} />
+      </Suspense>
       <CostEstimator models={models} />
       <LiteLLMVsRouterTable models={models} />
     </>
   );
 });
 
+function PriceChartFallback() {
+  const { t } = useTranslation();
+  return <ChartCard title={t("priceComparison")} loading />;
+}
+
 export function PriceCompareView() {
   const { t } = useTranslation();
   return (
     <ComparePageLayout
-      backLabelKey="backToPricing"
       backTo={`${MODEL_SOURCES.aa.backTo}&view=pricing`}
       title={t("priceComparison")}
     >

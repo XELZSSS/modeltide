@@ -1,7 +1,5 @@
 import type { AppContext } from "@/server/context";
 import { MAX_JSON_BYTES, UPSTREAM_FETCH_OPTS } from "@/server/config";
-import { errMsg } from "@/server/infra/task-pool";
-import { parseRscPayload } from "@/server/parsers/rsc-parser";
 
 const DEFAULT_RSC_HEADERS = { RSC: "1", "Next-Router-State-Tree": "%5B%5D" } as const;
 
@@ -26,34 +24,4 @@ export async function fetchRscText(
     },
     opts.maxBytes ?? MAX_JSON_BYTES,
   );
-}
-
-interface RscArrayOptions<T> extends RscFetchOptions {
-  label: string;
-  marker: string;
-  extract: (tree: unknown) => T[] | null;
-  map?: (arr: T[]) => T[];
-  logPrefix?: string;
-}
-
-export async function fetchRscArrayLenient<T>(
-  ctx: AppContext,
-  base: string,
-  path: string,
-  opts: RscArrayOptions<T>,
-): Promise<T[]> {
-  let body: string | null;
-  try {
-    body = await fetchRscText(ctx, base, path, opts);
-  } catch (err) {
-    ctx.log("warn", `${opts.logPrefix ?? ""} ${opts.label} enrichment failed: ${errMsg(err)}`);
-    return [];
-  }
-  try {
-    const arr = parseRscPayload<T>(body, opts.marker, opts.extract);
-    return opts.map ? opts.map(arr) : arr;
-  } catch (err) {
-    ctx.log("warn", `${opts.logPrefix ?? ""} ${opts.label} enrichment parse failed: ${errMsg(err)}`);
-    return [];
-  }
 }

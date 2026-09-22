@@ -1,4 +1,4 @@
-"use client";
+import { useEffect } from "react";
 import { persist } from "zustand/middleware";
 import { create } from "zustand";
 import type { ThemeMode } from "@/shared/types";
@@ -18,15 +18,23 @@ function readStoredSettings(): Partial<SettingsState> {
 
 const storedSettings = readStoredSettings();
 
+function isThemeMode(value: unknown): value is ThemeMode {
+  return value === "dark" || value === "light";
+}
+
+function isLang(value: unknown): value is Lang {
+  return value === "zh" || value === "en";
+}
+
 function initialThemeMode(): ThemeMode {
-  if (storedSettings.themeMode === "dark" || storedSettings.themeMode === "light") return storedSettings.themeMode;
+  if (isThemeMode(storedSettings.themeMode)) return storedSettings.themeMode;
   if (typeof window === "undefined") return "light";
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function initialLang(): Lang {
   if (typeof window === "undefined") return "zh";
-  if (storedSettings.lang === "zh" || storedSettings.lang === "en") return storedSettings.lang;
+  if (isLang(storedSettings.lang)) return storedSettings.lang;
   const nav = navigator.language ?? "";
   if (nav.toLowerCase().startsWith("en")) return "en";
   return "zh";
@@ -50,15 +58,46 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: STORAGE_KEYS.settings,
       version: 1,
+      // A version bump without migrate makes zustand's rehydration destructure
+      // `undefined` and silently skip hydration, so the pair stays in step.
+      migrate: (persisted) => persisted as SettingsState,
       storage: localJsonStorage,
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SettingsState>;
         return {
           ...current,
-          themeMode: p.themeMode === "dark" || p.themeMode === "light" ? p.themeMode : current.themeMode,
-          lang: p.lang === "zh" || p.lang === "en" ? p.lang : current.lang,
+          themeMode: isThemeMode(p.themeMode) ? p.themeMode : current.themeMode,
+          lang: isLang(p.lang) ? p.lang : current.lang,
         };
       },
     },
   ),
 );
+
+/**
+ * Adopts a settings write made by another tab. Values that already match are
+ * ignored: the receiving tab then writes nothing, so two tabs converge instead
+ * of echoing each other's writes.
+ */
+export function syncSettingsFromStorageEvent(e: StorageEvent): void {
+  if (e.key !== STORAGE_KEYS.settings || e.newValue == null) return;
+  try {
+    const parsed = JSON.parse(e.newValue) as { state?: Partial<SettingsState> };
+    const current = useSettingsStore.getState();
+    const themeMode = parsed.state?.themeMode;
+    const lang = parsed.state?.lang;
+    const updates: Partial<Pick<SettingsState, "themeMode" | "lang">> = {};
+    if (isThemeMode(themeMode) && themeMode !== current.themeMode) updates.themeMode = themeMode;
+    if (isLang(lang) && lang !== current.lang) updates.lang = lang;
+    if (Object.keys(updates).length > 0) useSettingsStore.setState(updates);
+  } catch (err) {
+    console.warn(`[settings] ignoring malformed storage event: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+export function useSettingsStorageSync(): void {
+  useEffect(() => {
+    window.addEventListener("storage", syncSettingsFromStorageEvent);
+    return () => window.removeEventListener("storage", syncSettingsFromStorageEvent);
+  }, []);
+}

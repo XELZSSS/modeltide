@@ -1,4 +1,3 @@
-"use client";
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatScore } from "@/client/utils/format";

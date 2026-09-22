@@ -1,4 +1,3 @@
-"use client";
 import { memo, useMemo } from "react";
 import { formatDollar } from "@/client/utils/format";
 import { Input } from "@/client/components/ui/input";

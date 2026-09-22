@@ -1,5 +1,5 @@
 import { SOURCE_IDS } from "@/shared/config";
-import type { SourceId, StatusHistoryPayload, StatusEvent } from "@/shared/types";
+import type { StatusHistoryPayload, StatusEvent } from "@/shared/types";
 import { buildSourceSummary, deriveEvents, emptyEntry, type HistoryStore } from "./history-math";
 import type { UptimePayload } from "./uptime";
 
@@ -11,13 +11,12 @@ export function buildHistoryPayload(
   now = Date.now(),
   persisted = true,
 ): StatusHistoryPayload {
-  const ids: SourceId[] = [...SOURCE_IDS];
   const recent: StatusHistoryPayload["recent"] = {};
   const daily: StatusHistoryPayload["daily"] = {};
   const sources: StatusHistoryPayload["sources"] = [];
   const events: StatusEvent[] = [];
 
-  for (const id of ids) {
+  for (const id of SOURCE_IDS) {
     const entry = store.sources[id] ?? emptyEntry();
     recent[id] = [...entry.recent];
     daily[id] = [...entry.daily];

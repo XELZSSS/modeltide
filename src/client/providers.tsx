@@ -1,7 +1,6 @@
-"use client";
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useSettingsStore } from "@/client/stores";
+import { useSettingsStorageSync, useSettingsStore } from "@/client/stores";
 import { ApiClientError, isAbortError } from "@/client/api/api-client";
 import { FIVE_MINUTES, THIRTY_MINUTES } from "@/shared/config";
 import type { Lang, TFunction } from "@/shared/i18n";
@@ -33,6 +32,7 @@ function syncDocumentMeta(lang: Lang) {
 function I18nProvider({ children }: { children: ReactNode }) {
   const lang = useSettingsStore((s) => s.lang);
   const setLang = useSettingsStore((s) => s.setLang);
+  useSettingsStorageSync();
 
   useEffect(() => {
     syncDocumentMeta(lang);

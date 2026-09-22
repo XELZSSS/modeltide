@@ -4,9 +4,10 @@ import {
   numCoerce,
   numCoerceNonNegative,
   numOr,
+  obj,
+  strOrNull,
   titleCase,
   isValidOpenRouterDirectoryRow,
-  trimmedOrNull,
 } from "@/server/parsers/parser-primitives";
 import { PER_MILLION, perMillionOrNull } from "@/shared/config";
 import type { OpenRouterRankEntry } from "@/shared/types";
@@ -62,7 +63,7 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
   if (!Array.isArray(rows)) return { pricing: pricingRecord, meta: metaRecord };
   const capped = rows.slice(0, 20_000);
   for (const raw of capped) {
-    if (!isRecord(raw) || !isValidOpenRouterDirectoryRow(raw)) continue;
+    if (!isValidOpenRouterDirectoryRow(raw)) continue;
     const m = raw as unknown as PricingRow;
     const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
     const pricingEntry = buildPricingEntry(
@@ -72,17 +73,23 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
       numCoerceNonNegative(pricing.input_cache_write),
     );
     if (pricingEntry) {
-      const idKey = trimmedOrNull(m.id);
-      const slugKey = trimmedOrNull(m.canonical_slug);
-      for (const key of [idKey, slugKey]) {
+      const idKey = strOrNull(m.id);
+      const slugKey = strOrNull(m.canonical_slug);
+      // Rankings address a variant by its dated permaslug (`<canonical_slug>:<variant>`),
+      // so a variant row must also be findable under that composed key.
+      let variantSlugKey: string | null = null;
+      if (idKey && slugKey) {
+        const variantAt = idKey.lastIndexOf(":");
+        if (variantAt > 0) variantSlugKey = `${slugKey}${idKey.slice(variantAt)}`;
+      }
+      for (const key of [idKey, slugKey, variantSlugKey]) {
         if (!key) continue;
         const norm = key.toLowerCase();
         if (!Object.hasOwn(pricingRecord, norm)) pricingRecord[norm] = pricingEntry;
       }
     }
-    const benchmarks = isRecord(m.benchmarks) ? (m.benchmarks as Record<string, unknown>) : undefined;
-    const aaRaw = benchmarks ? benchmarks.artificial_analysis : undefined;
-    const aaBenchmarks = isRecord(aaRaw) ? (aaRaw as Record<string, unknown>) : undefined;
+    const benchmarks = obj(m.benchmarks);
+    const aaBenchmarks = obj(benchmarks?.artificial_analysis);
     const intelligenceIndex = numCoerce(aaBenchmarks?.intelligence_index);
     const agenticIndex = numCoerce(aaBenchmarks?.agentic_index);
     if (intelligenceIndex == null && agenticIndex == null) continue;
@@ -165,28 +172,14 @@ function usageTotal(row: ModelRow): number {
 
 interface Group {
   agg: ModelRow;
+  /**
+   * Highest-usage row. It is the single source for every per-variant field the
+   * entry exposes (`variant`, `change`, pricing variant), so the trend column
+   * always describes the variant the row is labelled with — a batch or stealth
+   * row can never contribute a change to a standard/free-labelled entry.
+   */
   dominant: ModelRow;
   dominantTokens: number;
-  latestDate: string;
-}
-
-function trackLatestChange(group: Group, row: ModelRow): void {
-  const dateRaw = (row as unknown as Record<string, unknown>)?.date;
-  const dateStr = typeof dateRaw === "string" ? dateRaw : "";
-  const rowTime = dateStr ? Date.parse(dateStr) : NaN;
-  const latestTime = group.latestDate ? Date.parse(group.latestDate) : NaN;
-  const isLater =
-    dateStr !== "" &&
-    (!group.latestDate || (Number.isFinite(rowTime) && (!Number.isFinite(latestTime) || rowTime >= latestTime)));
-  if (isLater) {
-    group.latestDate = dateStr;
-    group.agg.date = dateStr;
-    const parsedChange = numCoerce(row.change);
-    if (parsedChange != null) group.agg.change = parsedChange;
-  } else if (!group.latestDate) {
-    const parsedChange = numCoerce(row.change);
-    if (parsedChange != null && group.agg.change == null) group.agg.change = parsedChange;
-  }
 }
 
 function changePercent(value: unknown): number | null {
@@ -220,7 +213,6 @@ function groupRows(rows: unknown): Map<string, Group> {
         agg: { ...row, model_permaslug: id },
         dominant: row,
         dominantTokens: tokens,
-        latestDate: row.date ?? "",
       });
       continue;
     }
@@ -230,7 +222,6 @@ function groupRows(rows: unknown): Map<string, Group> {
       if (!Number.isFinite(cur) && !Number.isFinite(add)) continue;
       group.agg[k] = (Number.isFinite(cur) ? cur : 0) + (Number.isFinite(add) ? add : 0);
     }
-    trackLatestChange(group, row);
     if (tokens > group.dominantTokens) {
       group.dominant = row;
       group.dominantTokens = tokens;
@@ -266,7 +257,7 @@ export function mapModels(rows: unknown, pricingMap: Map<string, PricingEntry>):
       cachedTokens: numOr(row.total_native_tokens_cached, 0),
       toolCalls: numOr(row.total_tool_calls, 0),
       requestCount: numOr(row.count, 0),
-      change: changePercent(row.change),
+      change: changePercent(dominant.change),
       pricing,
       isFree,
     });

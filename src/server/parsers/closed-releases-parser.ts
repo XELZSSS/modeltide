@@ -59,7 +59,7 @@ export function toClosedReleasesFromIndex(models: unknown): ClosedReleaseEntry[]
 export function toClosedReleases(changelog: unknown): ClosedReleaseEntry[] {
   if (!Array.isArray(changelog)) return [];
   const records = changelog.filter(
-    (e): e is import("@/server/parsers/aa").ChangelogModel =>
+    (e): e is ChangelogModel =>
       e !== null && typeof e === "object" && typeof (e as { slug?: unknown }).slug === "string",
   );
   const sorted = [...records].sort(byDateDesc((e) => e.releaseDate));

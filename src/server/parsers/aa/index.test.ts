@@ -2,7 +2,6 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
 import {
   backfillFromMeta,
-  buildWeightsRecord,
   compact,
   compactOmniscienceEnrich,
   mapEntry,
@@ -29,7 +28,9 @@ function rawModel(over: Record<string, unknown> = {}): Record<string, unknown> {
     isReasoning: true,
     creator: { name: "OpenAI", color: "#000000" },
     analystAgent: 0.72,
-    terminalbenchV21: 0.8,
+    terminalBench21: 0.8,
+    terminalbenchHard: 0.7,
+    terminalBench40: 0.9,
     scicode: 0.6,
     price1mInputTokens: 1.5,
     price1mOutputTokens: 6,
@@ -66,17 +67,46 @@ describe("compact", () => {
       hallucination_rate: 10,
       omniscience: 90,
     });
-  });
-
-  it.each([[0.5, 50]])("normalizes sub-1 fractions to percents (analystAgent=%s)", (input, expected) => {
-    expect(compact(rawModel({ analystAgent: input })).agentic_index).toBe(expected);
+    expect(compact(rawModel({ analystAgent: 0.5 })).agentic_index).toBe(50);
+    expect(compact(rawModel()).benchmarks).toMatchObject({
+      terminalbench_v2_1: 80,
+      terminalbench_hard: 70,
+      terminalbench_v4_0: 90,
+      omniscience: 90,
+    });
+    // Omniscience runs below zero for some models: both of its representations
+    // must keep the sign instead of being clamped to the 0 floor.
+    expect(compact(rawModel({ omniscience: -5.3 })).benchmarks?.omniscience).toBe(-5.3);
+    expect(compact(rawModel({ omniscience: -5.3 })).omniscience_breakdown?.total?.omniscience).toBe(-5.3);
   });
 
   it("averages coding sub-scores only when at least one is present", () => {
-    expect(compact(rawModel({ terminalbenchV21: null })).coding_index).toBe(60);
-    const sparse = compact(rawModel({ terminalbenchV21: null, scicode: null }));
+    expect(compact(rawModel({ terminalBench21: null })).coding_index).toBe(60);
+    const sparse = compact(rawModel({ terminalBench21: null, scicode: null }));
     expect(sparse.coding_index).toBeUndefined();
     expect("coding_index" in sparse).toBe(false);
+  });
+
+  it("defaults the omitted text flags once a record describes any modality", () => {
+    const indexRow = compact(
+      rawModel({
+        inputModalityText: undefined,
+        outputModalityText: undefined,
+        inputModalityImage: true,
+        inputModalitySpeech: false,
+      }),
+    );
+    expect(indexRow).toMatchObject({
+      input_modality_text: true,
+      output_modality_text: true,
+      input_modality_image: true,
+      input_modality_speech: false,
+    });
+
+    // An explicit upstream value wins, and a record that describes nothing stays
+    // empty rather than claiming to be text-only.
+    expect(compact(rawModel({ outputModalityText: false })).output_modality_text).toBe(false);
+    expect(compact({ id: "x", slug: "x", name: "X" }).input_modality_text).toBeUndefined();
   });
 
   it("drops invalid release dates", () => {
@@ -100,9 +130,11 @@ describe("mergeBySlug", () => {
     { slug: "a", name: "A", intelligenceIndex: 1 },
     { slug: "b", name: "B" },
     { slug: "", name: "NoSlug" },
+    { slug: "x" },
+    { name: "y" },
   ];
 
-  it("overlays enrichment fields and skips enrichments without a catalog match", () => {
+  it("overlays enrichment fields, skipping ghosts and slugless/nameless rows", () => {
     const merged = mergeBySlug(catalog, [
       { slug: "a", medianOutputSpeed: 5 },
       { slug: "ghost", name: "Ghost" },
@@ -110,10 +142,6 @@ describe("mergeBySlug", () => {
     expect(merged.map((m) => m.slug)).toEqual(["a", "b"]);
     expect(merged[0]!.medianOutputSpeed).toBe(5);
     expect(merged[0]!.intelligenceIndex).toBe(1);
-  });
-
-  it("drops catalog entries without slug or name", () => {
-    expect(mergeBySlug([{ slug: "x" }, { name: "y" }])).toEqual([]);
   });
 
   it("ignores prototype keys from enrichment payloads", () => {
@@ -127,21 +155,6 @@ describe("mergeBySlug", () => {
   });
 });
 
-describe("buildWeightsRecord", () => {
-  const wModel = (over: Record<string, unknown> = {}): ArtificialAnalysisModel =>
-    ({ slug: "a", id: "a", name: "A", ...over }) as ArtificialAnalysisModel;
-
-  it("indexes flags by slug and id, skipping flagless models", () => {
-    expect(
-      buildWeightsRecord([
-        wModel({ slug: "open", id: "open", is_open_weights: true }),
-        wModel({ slug: "closed", id: "ns/closed", is_open_weights: false }),
-        wModel({ slug: "unknown" }),
-      ]),
-    ).toEqual({ open: true, closed: false, "ns/closed": false });
-  });
-});
-
 describe("backfillFromMeta", () => {
   const aaModel = (over: Record<string, unknown> = {}): ArtificialAnalysisModel =>
     ({ slug: "a", name: "Model A", ...over }) as ArtificialAnalysisModel;
@@ -151,22 +164,23 @@ describe("backfillFromMeta", () => {
       aaModel({ agentic_index: null }),
       aaModel({ slug: "b", name: "Model B", agentic_index: 40 }),
       aaModel({ slug: "c", name: "Model C", agentic_index: null }),
+      aaModel({ slug: "d", name: "Model D", intelligence_index: null }),
+      aaModel({ slug: "e", name: "Model E", agentic_index: null }),
     ];
     const filled = backfillFromMeta(models, {
       [normalizeModelKey("Model A")]: { agenticIndex: 55.4 },
       [normalizeModelKey("Model B")]: { agenticIndex: 99 },
       [normalizeModelKey("Unknown")]: { agenticIndex: 1 },
+      [normalizeModelKey("Model D")]: { intelligenceIndex: 61.2 },
+      [normalizeModelKey("Model E")]: { agenticIndex: 0.9 },
     });
-    expect(filled).toBe(1);
+    expect(filled).toBe(3);
     expect(models[0]).toMatchObject({ agentic_index: 55.4 });
     expect(models[1]).toMatchObject({ agentic_index: 40 });
     expect(models[2]).toMatchObject({ agentic_index: null });
-  });
-
-  it("backfills a missing intelligence index from the OpenRouter directory", () => {
-    const models = [aaModel({ intelligence_index: null })];
-    expect(backfillFromMeta(models, { [normalizeModelKey("Model A")]: { intelligenceIndex: 61.2 } })).toBe(1);
-    expect(models[0]!.intelligence_index).toBe(61.2);
+    expect(models[3]!.intelligence_index).toBe(61.2);
+    // OpenRouter mirrors the same 0-100 scale, so sub-1 values stay verbatim.
+    expect(models[4]).toMatchObject({ agentic_index: 0.9 });
   });
 });
 
@@ -195,8 +209,8 @@ describe("mapEntry (text-to-image)", () => {
     });
   });
 
-  it.each([[{ ...base, elo: null }]])("returns null when identity or elo is missing", (entry) => {
-    expect(mapEntry(entry as RawEntry)).toBeNull();
+  it("returns null when identity or elo is missing", () => {
+    expect(mapEntry({ ...base, elo: null })).toBeNull();
   });
 });
 

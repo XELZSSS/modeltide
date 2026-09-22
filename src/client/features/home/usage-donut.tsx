@@ -1,4 +1,3 @@
-"use client";
 import { memo, useMemo } from "react";
 import type { ChartOptions } from "chart.js";
 import { Doughnut } from "react-chartjs-2";

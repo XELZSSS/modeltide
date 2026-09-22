@@ -1,4 +1,3 @@
-"use client";
 import { lazy } from "react";
 import { useParams } from "@/client/router";
 import { MODEL_SOURCES, type ModelSource } from "@/client/config/nav-config";
@@ -22,14 +21,10 @@ function isModelSource(value: string): value is ModelSource {
   return Object.hasOwn(MODEL_SOURCES, value);
 }
 
-function useModelSourceParams(): { src: ModelSource | null; decodedId: string } {
+function ModelDetailContentInner() {
   const params = useParams<{ source: string; wildcard: string }>("/model/:source/*");
   const src = params.source && isModelSource(params.source) ? params.source : null;
-  return { src, decodedId: params.wildcard ?? "" };
-}
-
-function ModelDetailContentInner() {
-  const { src, decodedId } = useModelSourceParams();
+  const decodedId = params.wildcard ?? "";
 
   if (!src || !decodedId) return <NotFound />;
 

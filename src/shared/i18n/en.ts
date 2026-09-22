@@ -4,7 +4,7 @@ export const en = {
   statistics: "Statistics",
   openSourceTrendingStats: "Trending Open Source",
   hallucinationStats: "Highest Accuracy",
-  backToList: "Back to rankings",
+  back: "Back",
   backToHome: "Back to home",
   downloads: "Downloads",
   likes: "Likes",
@@ -22,7 +22,6 @@ export const en = {
   notAvailable: "N/A",
   metaDescription:
     "ModelTide - AI Model Dashboard aggregating rankings, benchmarks, pricing, releases, and provider analysis",
-  modelsTotal: "{count} models",
   yes: "Yes",
   no: "No",
   modelInfo: "Model Info",
@@ -162,7 +161,6 @@ export const en = {
   scicode: "SciCode",
   ifbench: "IFBench",
   backToModelRankings: "Back to model rankings",
-  backToPricing: "Back to price rankings",
   backToUsageRankings: "Back to usage rankings",
   backToOpenSourceRankings: "Back to open source rankings",
   backToHallucinationRankings: "Back to hallucination rankings",
@@ -241,6 +239,7 @@ export const en = {
   themeLight: "Light",
   themeDark: "Dark",
   navStatus: "Status",
+  navReleases: "Releases",
   serviceUptime: "Service uptime",
   statusCurrent: "Current status",
   statusPageTitle: "Service Status",
@@ -276,14 +275,6 @@ export const en = {
   priceDiff: "Price Diff",
   memoryModeNotice: "Memory mode: history is temporary without KV storage",
   compareStale: "Some selected models are no longer listed and were removed.",
-  pwaInstall: "Install app",
-  pwaInstalled: "Installed",
-  pwaInstallCta: "Install",
-  pwaIosHint: "On iPhone/iPad: Share → Add to Home Screen",
-  pwaUnavailable: "Use the browser menu → Install / Add to Home Screen",
-  pwaUpdateAvailable: "New version available",
-  pwaUpdateNow: "Update",
-  offlineNotice: "You're offline — showing cached content",
 } as const;
 
 export type EnDict = typeof en;

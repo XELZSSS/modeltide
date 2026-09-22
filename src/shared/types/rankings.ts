@@ -40,7 +40,8 @@ export interface OpenSourceModelEntry {
   task: string | null;
   createdAt: string | null;
   lastModified: string | null;
-  tags: string[];
+  /** Detail-only: the model page renders the tag cloud, no list does. */
+  tags?: string[];
 }
 
 export interface AgentRankEntry {

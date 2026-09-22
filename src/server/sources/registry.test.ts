@@ -70,7 +70,8 @@ describe("SOURCES manifest", () => {
   it("warms every news category so no first visitor pays for a cold feed", () => {
     const news = SOURCES.find((s) => s.path === apiPaths.news);
     const categories = (news?.warmParams ?? []) as { category: string }[];
-    expect(news?.warm).toBe("core");
+    // Hourly, not every fire: the 13 feeds are ~4 MB decoded per refresh.
+    expect(news?.warm).toBe("hourly");
     expect(categories.map((c) => c.category)).toEqual(["industry", "opensource", "hardware", "funding", "research"]);
   });
 });

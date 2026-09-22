@@ -1,7 +1,8 @@
-﻿<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" rx="112" fill="#ffffff"/>
-  <!-- Geometric M: near-baseline middle vertex reads unmistakably as the letter M -->
-  <path d="M132 272 V144 L256 260 L380 144 V272" fill="none" stroke="#090a0b" stroke-width="48" stroke-linecap="square" stroke-linejoin="miter"/>
-  <!-- Tide wave: angular zigzag kept clear of the M -->
-  <path d="M96 360 L136 328 L176 360 L216 328 L256 360 L296 328 L336 360 L376 328 L416 360" fill="none" stroke="#38bdf8" stroke-width="30" stroke-linecap="square" stroke-linejoin="miter"/>
+  <!-- Water wave mark. Its 36-unit canvas is scaled so the ink measures 272px and is centred. -->
+  <g transform="translate(120 109.42) scale(7.56)">
+    <path fill="#269" d="M33.398 23.678c-7.562 4.875-20.062-.438-18.375-8.062c1.479-6.684 9.419-4.763 11.225-3.861c1.806.902.713-3.889-3.475-5.327C17.1 4.48 10.156 4.893 7.961 14.678c-1.5 6.687 1.438 16.062 12.719 16.187c11.281.125 12.718-7.187 12.718-7.187z"/>
+    <path fill="#55ACEE" d="M35.988 25.193c0-2.146-2.754-2.334-4-1.119c-2.994 2.919-7.402 4.012-13.298 2.861c-10.25-2-10.341-14.014-3.333-17.441c3.791-1.854 8.289.341 9.999 1.655c1.488 1.143 4.334 2.66 4.185.752C29.223 7.839 21.262-.86 10.595 4.64C-.071 10.14 0 22.553 0 24.803v7.25C0 34.262 1.814 36 4.023 36h28C34.232 36 36 34.262 36 32.053c0 0-.004-6.854-.012-6.86z"/>
+  </g>
 </svg>

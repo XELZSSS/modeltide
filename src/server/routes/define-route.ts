@@ -54,7 +54,9 @@ function timeoutResponse(): Response {
 }
 
 export function methodNotAllowedResponse(): Response {
-  return errorJson(405, "Method not allowed");
+  const res = errorJson(405, "Method not allowed");
+  res.headers.set("Allow", "GET, HEAD, OPTIONS");
+  return res;
 }
 
 export function notFoundResponse(): Response {
@@ -72,13 +74,12 @@ function mapApiError(err: unknown, method: string, path: string): Response {
   if (err instanceof ClientAbortError) {
     return new Response(null, { status: 499, headers: errorHeaders() });
   }
-  if (isTimeoutLike(err)) return timeoutResponse();
+  if (isTimeoutLike(err)) {
+    console.warn(`[upstream-timeout] ${method} ${path} ${err instanceof Error ? err.message : String(err)}`);
+    return timeoutResponse();
+  }
   if (err instanceof ApiError) {
     const status = clampStatus(err.status);
-    if (status === 504 || (err.name === "UpstreamError" && (err as { causedByTimeout?: boolean }).causedByTimeout)) {
-      console.warn(`[upstream-timeout] ${method} ${path} ${err.message}`);
-      return timeoutResponse();
-    }
     if (status === 502) {
       console.warn(`[upstream] ${method} ${path} ${err.message}`);
       return errorJson(502, "Upstream data source temporarily unavailable");
@@ -100,11 +101,12 @@ export async function handleApiRoute<S extends QuerySchema>(
   env: Env,
   path: string,
   def: ApiRouteDef<S>,
+  hooks?: { onDetach?: (work: Promise<unknown>) => void },
 ): Promise<Response> {
   try {
     const url = new URL(req.url);
 
-    const context = buildContext(env, { callerSignal: req.signal });
+    const context = buildContext(env, { callerSignal: req.signal, onDetach: hooks?.onDetach });
     const rawParams = collectQueryParams(url);
     const schemaKeys = new Set(Object.keys(def.query ?? {}));
     const unknownKeys = Object.keys(rawParams).filter((k) => !schemaKeys.has(k));

@@ -77,8 +77,7 @@
 html,
 main,
 .overflow-y-auto:not(.no-scrollbar),
-.overflow-x-auto:not(.no-scrollbar),
-.overflow-auto:not(.no-scrollbar) {
+.overflow-x-auto:not(.no-scrollbar) {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-secondary) 20%, transparent) transparent;
 
@@ -283,19 +282,6 @@ main,
   background-color: var(--bg-card);
   box-shadow: var(--shadow-lg);
   min-width: 0;
-}
-
-/* Unified vertical rhythm: page sections share one spacing scale. */
-@utility ui-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-@utility ui-stack-lg {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
 }
 
 @supports not (backdrop-filter: blur(12px)) {

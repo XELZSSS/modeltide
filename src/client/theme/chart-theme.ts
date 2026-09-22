@@ -1,4 +1,3 @@
-"use client";
 import { useEffect, useState } from "react";
 
 export interface ChartTheme {
@@ -39,11 +38,11 @@ function resolveChartTheme(): ChartTheme {
   const styles = getComputedStyle(document.documentElement);
   const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
   return {
-    grid: read("--border", "rgba(30, 36, 48, 0.14)"),
-    tick: read("--text-tertiary", "#8b96a5"),
-    tickSecondary: read("--text-secondary", "#5b6675"),
-    tooltipBg: read("--bg-secondary", "#f1f4f7"),
-    tooltipText: read("--text-primary", "#1e2430"),
+    grid: read("--border", FALLBACK_THEME.grid),
+    tick: read("--text-tertiary", FALLBACK_THEME.tick),
+    tickSecondary: read("--text-secondary", FALLBACK_THEME.tickSecondary),
+    tooltipBg: read("--bg-secondary", FALLBACK_THEME.tooltipBg),
+    tooltipText: read("--text-primary", FALLBACK_THEME.tooltipText),
     palette: Array.from({ length: 10 }, (_, i) => read(`--chart-${i + 1}`, FALLBACK_THEME.palette[i] ?? "#888888")),
     donut: Array.from({ length: DONUT_FALLBACK.length }, (_, i) =>
       read(`--donut-${i + 1}`, DONUT_FALLBACK[i] ?? "#888888"),
@@ -66,7 +65,6 @@ function ensureObserver(): void {
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
   const observer = new MutationObserver(notify);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-  observer.observe(document.body, { attributes: true, attributeFilter: ["data-accent"] });
   media?.addEventListener?.("change", notify);
 }
 

@@ -1,8 +1,8 @@
-"use client";
 import { formatIndex, formatPercent } from "@/client/utils/format";
 import type { HallucinationRankingEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/components/data/table";
 import { monoCol, type DataTableColumn } from "@/client/components/data/table-columns";
+import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import type { useTranslation } from "@/client/providers";
 
 function buildHallColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColumn<HallucinationRankingEntry>[] {
@@ -13,7 +13,7 @@ function buildHallColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableC
       (item) => item.model,
     ),
     monoCol("hallucinationRate", t("hallucinationRate"), (item) => formatPercent(t, item.hallucinationRate), {
-      semibold: true,
+      emphasis: "strong",
     }),
     monoCol("accuracy", t("accuracy"), (item) => formatPercent(t, item.accuracy), { hiddenMd: true }),
     monoCol("attemptRate", t("attemptRate"), (item) => formatPercent(t, item.attemptRate), { hiddenMd: true }),
@@ -24,14 +24,13 @@ function buildHallColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableC
 }
 
 const getHallRowId = (entry: HallucinationRankingEntry) => entry.id || entry.slug || entry.model;
-const getHallSearchFields = (entry: HallucinationRankingEntry) => [entry.model];
 
 export function HallucinationRankingsView({ rankings }: { rankings: HallucinationRankingEntry[] }) {
   return (
     <RankedTableView
       rows={rankings}
       getRowId={getHallRowId}
-      getSearchFields={getHallSearchFields}
+      getSearchFields={SEARCH_FIELDS.hall}
       buildBodyColumns={buildHallColumns}
     />
   );

@@ -1,4 +1,3 @@
-"use client";
 import { memo, useCallback, useMemo, type ReactNode } from "react";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useTranslation, useDevice } from "@/client/providers";
@@ -6,7 +5,7 @@ import { useChartTheme, seriesColor } from "@/client/theme/chart-theme";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { Dot } from "@/client/components/ui/primitives";
 import { cn } from "@/client/utils/cn";
-import { modelId } from "@/client/utils/model-utils";
+import { modelDisplayName, modelId } from "@/client/utils/model-utils";
 import { computeWinners, rowKey, type CompareRow, type Winner } from "./compare-logic";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
@@ -29,7 +28,6 @@ interface TablePartsProps extends Omit<CompareTableProps, "mobileLayout"> {
 }
 
 const modelKeyOf = (m: ArtificialAnalysisModel, index: number) => modelId(m) || `idx-${index}`;
-const modelNameOf = (m: ArtificialAnalysisModel) => m.short_name || m.name;
 
 interface CompareCellProps {
   align?: "left" | "right";
@@ -60,39 +58,21 @@ const Th = memo(function CompareTh({
   );
 });
 
-const Td = memo(function CompareTd({
-  align = "left",
-  mono,
-  className,
-  style,
-  children,
-}: CompareCellProps & { mono?: boolean }) {
+const Td = memo(function CompareTd({ align = "left", className, style, children }: CompareCellProps) {
   return (
-    <td
-      className={cn("px-4 py-3 text-sm", mono && "font-mono tabular-nums", align === "right" && "text-right", className)}
-      style={style}
-    >
+    <td className={cn("px-4 py-3 text-sm", align === "right" && "text-right", className)} style={style}>
       {children}
     </td>
   );
 });
 
-const Tr = memo(function CompareTr({
-  className,
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLTableRowElement>) {
+const Tr = memo(function CompareTr({ className, children, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr className={cn("border-b border-border last:border-b-0", className)} {...props}>
       {children}
     </tr>
   );
 });
-
-function useModelColorOf(): (index: number) => string {
-  const theme = useChartTheme();
-  return useCallback((index: number) => seriesColor(theme, index), [theme]);
-}
 
 export const WinnerMark = memo(function WinnerMark() {
   return <TrendingUp size={12} className="inline ml-0.5 text-success" aria-hidden="true" />;
@@ -218,18 +198,36 @@ function MobileTable({
 
 function CompareTableInner({ rows, models, renderValue, mobileLayout = "metric-rows" }: CompareTableProps) {
   const { isMobile } = useDevice();
-  const getColor = useModelColorOf();
+  const theme = useChartTheme();
+  const getColor = useCallback((index: number) => seriesColor(theme, index), [theme]);
   const winners = useMemo(() => computeWinners(rows, models, modelKeyOf), [rows, models]);
 
-  const parts = useMemo(
-    () => ({ rows, models, getKey: modelKeyOf, getName: modelNameOf, getColor, renderValue, winners }),
-    [rows, models, getColor, renderValue, winners],
-  );
   if (isMobile) {
-    return <MobileTable {...parts} layout={mobileLayout} />;
+    return (
+      <MobileTable
+        rows={rows}
+        models={models}
+        getKey={modelKeyOf}
+        getName={modelDisplayName}
+        getColor={getColor}
+        renderValue={renderValue}
+        winners={winners}
+        layout={mobileLayout}
+      />
+    );
   }
 
-  return <DesktopTable {...parts} />;
+  return (
+    <DesktopTable
+      rows={rows}
+      models={models}
+      getKey={modelKeyOf}
+      getName={modelDisplayName}
+      getColor={getColor}
+      renderValue={renderValue}
+      winners={winners}
+    />
+  );
 }
 
 function getWinner(

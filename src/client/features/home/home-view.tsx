@@ -1,4 +1,3 @@
-"use client";
 import { Fragment, Suspense, lazy } from "react";
 import { SafeLink as Link } from "@/client/router";
 import { useTranslation } from "@/client/providers";
@@ -12,10 +11,10 @@ import {
 } from "@/client/api/api-queries";
 import { SuspenseQuery, PartialNotice } from "@/client/components/feedback";
 import { SearchInput } from "@/client/search/search-input";
-import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
+import { ChartCard } from "@/client/components/ui/chart-frame";
 import { PageContainer, PageSection } from "@/client/components/layout";
 import { Dot } from "@/client/components/ui/primitives";
-import { resolveEventStyle } from "@/client/components/status-events";
+import { resolveEventStyle } from "@/client/features/status/status-events";
 import { sourceLabelKey } from "@/shared/config";
 import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
@@ -32,12 +31,11 @@ const EVENT_LINK_CLASS =
 function useLatestEventSummary() {
   const { data } = useSuspenseStatusHistory();
   const latest = (data.events ?? [])[0] ?? null;
-  if (!latest)
-    return { latest: null as null, summary: undefined, lastSample: undefined, level: "unknown" as const, data };
+  if (!latest) return { latest: null as null, summary: undefined, lastSample: undefined, level: "unknown" as const };
   const summary = data.sources.find((s) => s.id === latest.id);
   const samples = data.recent?.[latest.id] ?? [];
   const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
-  return { latest, summary, lastSample, level: resolveLevel(summary), data };
+  return { latest, summary, lastSample, level: resolveLevel(summary) };
 }
 
 function HomeLatestEvents() {
@@ -101,17 +99,6 @@ function HomeLatestEvents() {
   );
 }
 
-function ChartSkeleton({ title, subtitle }: { title?: string; subtitle?: string }) {
-  return (
-    <Card>
-      <CardContent>
-        {title && <CardHeader title={title} subtitle={subtitle} />}
-        <div className="h-[200px] sm:h-[240px] animate-pulse bg-bg-secondary" />
-      </CardContent>
-    </Card>
-  );
-}
-
 function HomeContent() {
   const { t } = useTranslation();
   const artificialData = useSuspenseArtificialRankings();
@@ -139,11 +126,7 @@ function HomeContent() {
         </div>
       </div>
 
-      {dashboardData.partial && (
-        <div className="mb-4">
-          <PartialNotice message={t("partialDataNotice")} />
-        </div>
-      )}
+      {dashboardData.partial && <PartialNotice />}
 
       <div className="mb-5 sm:mb-6">
         <KpiStrip kpis={kpiStrip} />
@@ -152,12 +135,12 @@ function HomeContent() {
       <PageSection>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
           <div className="lg:col-span-6">
-            <Suspense fallback={<ChartSkeleton title={t("intelligenceIndex")} subtitle={t("artificialSource")} />}>
+            <Suspense fallback={<ChartCard loading title={t("intelligenceIndex")} subtitle={t("artificialSource")} />}>
               <IndexLineChart models={artificialData} />
             </Suspense>
           </div>
           <div className="lg:col-span-3">
-            <Suspense fallback={<ChartSkeleton />}>
+            <Suspense fallback={<ChartCard loading />}>
               <UsageDonut models={dashboardData.opensource} />
             </Suspense>
           </div>

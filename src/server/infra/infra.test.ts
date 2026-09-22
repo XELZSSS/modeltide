@@ -3,7 +3,7 @@ import { CacheService, resetModuleCachesForTests } from "@/server/infra/cache/se
 import { HttpClient } from "@/server/infra/http-client";
 import { ClientAbortError, UpstreamError, wrapUpstream } from "@/server/infra/errors";
 import { mapKV } from "@/server/test-helpers";
-import { MEMORY_CACHE_MAX_BYTES } from "@/server/config";
+import { INFLIGHT_HANG_GUARD_MS, MEMORY_CACHE_MAX_BYTES } from "@/server/config";
 import { validateQuery, qEnum, qNum, qStr } from "@/server/infra/query-validation";
 import { runCapped } from "@/server/infra/task-pool";
 
@@ -93,6 +93,26 @@ describe("cache-service", () => {
     });
   });
 
+  describe("inflight hang guard", () => {
+    it("bounds a joiner by the same deadline as the caller that started the refresh", async () => {
+      vi.useFakeTimers();
+      const leader = makeCache("v-guard");
+      const joiner = makeCache("v-guard");
+      const stuck = () => new Promise<{ data: string }>(() => {});
+      const leaderP = leader.withTtl("gk", 60_000, stuck);
+      const joinerP = joiner.withTtl("gk", 60_000, async () => ({ data: "never" }));
+      const settled = Promise.allSettled([leaderP, joinerP]);
+
+      await vi.advanceTimersByTimeAsync(INFLIGHT_HANG_GUARD_MS + 1_000);
+
+      const message = (r: PromiseSettledResult<unknown>): string =>
+        r.status === "rejected" ? String((r.reason as Error).message) : "";
+      const [leaderResult, joinerResult] = await settled;
+      expect(message(leaderResult)).toMatch(/inflight guard/);
+      expect(message(joinerResult)).toMatch(/inflight guard/);
+    });
+  });
+
   describe("caller isolation", () => {
     it("a leader abort rejects only that caller while the joiner still succeeds", async () => {
       const leaderAbort = new AbortController();
@@ -114,7 +134,27 @@ describe("cache-service", () => {
       expect(calls.n).toBe(1);
     });
 
-    it("never arms the cooldown from a ClientAbortError", async () => {
+    it("hands the orphaned refresh to the detach hook", async () => {
+      const abort = new AbortController();
+      const detached: Promise<unknown>[] = [];
+      const cache = new CacheService(undefined, "v-detach", {
+        callerSignal: abort.signal,
+        onDetach: (work) => {
+          detached.push(work);
+        },
+      });
+      const pending = cache.withTtl("dk", 60_000, async () => {
+        await sleep(10);
+        return { data: "filled" };
+      });
+      abort.abort();
+
+      await expect(pending).rejects.toHaveProperty("name", "ClientAbortError");
+      expect(detached).toHaveLength(1);
+      await expect(detached[0]).resolves.toBe("filled");
+    });
+
+    it("arms the cooldown for genuine failures but never for caller aborts", async () => {
       const cache = new CacheService(undefined, "v-iso2");
       await expect(
         cache.withTtl("cab", 60_000, async () => {
@@ -124,16 +164,14 @@ describe("cache-service", () => {
       const calls = { n: 0 };
       await expect(cache.withTtl("cab", 60_000, countingFn("ok", calls))).resolves.toBe("ok");
       expect(calls.n).toBe(1);
-    });
 
-    it("still arms the cooldown for a genuine failure", async () => {
-      const cache = new CacheService(undefined, "v-iso2b", { failureCooldownMs: 30 });
+      const failing = new CacheService(undefined, "v-iso2b", { failureCooldownMs: 30 });
       await expect(
-        cache.withTtl("gb", 60_000, async () => {
+        failing.withTtl("gb", 60_000, async () => {
           throw new UpstreamError("upstream down", { timeout: true });
         }),
       ).rejects.toThrow(/upstream down/);
-      await expect(cache.withTtl("gb", 60_000, async () => ({ data: "x" }))).rejects.toThrow(/cooldown/);
+      await expect(failing.withTtl("gb", 60_000, async () => ({ data: "x" }))).rejects.toThrow(/cooldown/);
     });
   });
 
@@ -243,6 +281,29 @@ describe("runCapped pool", () => {
       3,
     );
     expect(peak).toBe(3);
+  });
+});
+
+describe("KV write deferral", () => {
+  it("awaits the put when no detach hook exists", async () => {
+    const kv = mapKV();
+    const cache = new CacheService(kv, "v-defer");
+    await cache.withTtl("dk", 60_000, async () => ({ data: "x" }));
+    expect(kv.store.has("v-defer:dk")).toBe(true);
+  });
+
+  it("hands the put to the detach hook when one exists", async () => {
+    const kv = mapKV();
+    const detached: Promise<unknown>[] = [];
+    const cache = new CacheService(kv, "v-defer2", {
+      onDetach: (work) => {
+        detached.push(work);
+      },
+    });
+    await cache.withTtl("dk2", 60_000, async () => ({ data: "x" }));
+    expect(detached).toHaveLength(1);
+    await Promise.all(detached);
+    expect(kv.store.has("v-defer2:dk2")).toBe(true);
   });
 });
 

@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { getNews } from "@/server/sources/news-source";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { testCtx } from "@/server/test-helpers";
+import { fakeHttp, testCtx } from "@/server/test-helpers";
 import { rssConfig } from "@/server/config";
 import { PARTIAL_FAIL_TTL_MS, SOURCE_LIMITS } from "@/shared/config";
 import { UpstreamError, ValidationError } from "@/server/infra/errors";
 import type { NewsCategory, NewsItem } from "@/shared/types";
-import type { AppContext } from "@/server/context";
 
 const INDUSTRY_A = rssConfig.industry[0]!;
 const INDUSTRY_B = rssConfig.industry[1]!;
@@ -37,19 +36,11 @@ function paper(id: string, title: string, upvotes = 10) {
   return { paper: { id, title, upvotes, publishedAt: "2026-09-02T00:00:00Z" } };
 }
 
+/** Fake upstream routed by URL: a missing feed fails the fetch, like a down leg. */
 function newsCtx(feeds: Record<string, string>, papers: unknown[] = []) {
-  const seen: string[] = [];
-  const http = {
-    text: async (url: string) => {
-      seen.push(url);
-      const body = feeds[url];
-      if (body === undefined) throw new Error(`feed unreachable: ${url}`);
-      return body;
-    },
-    json: async () => papers,
-  } as unknown as AppContext["http"];
+  const http = fakeHttp({ text: feeds, json: () => papers });
   const { ctx, kvStore } = testCtx(new Map<string, string>(), { http });
-  return { ctx, kvStore, seen };
+  return { ctx, kvStore, seen: http.calls };
 }
 
 const titles = (items: NewsItem[]) => items.map((i) => i.title);
@@ -74,8 +65,9 @@ describe("getNews", () => {
     expect(payload.partial).toBeUndefined();
   });
 
-  it("reserves head slots for papers, capped at hfPapersQuota", async () => {
-    const papers = Array.from({ length: 8 }, (_, i) => paper(`2409.0000${i}`, `Paper ${i}`));
+  it("reserves head slots for top-upvoted papers, capped at hfPapersQuota", async () => {
+    const upvotes = [3, 30, 1, 20, 2, 10, 5, 15];
+    const papers = upvotes.map((upvotes, i) => paper(`2409.0000${i}`, `Paper ${i}`, upvotes));
     const { ctx } = newsCtx(
       {
         [RESEARCH_A]: feed("arxiv-a", many("news", 3)),
@@ -87,20 +79,14 @@ describe("getNews", () => {
     const payload = await getNews(ctx, "research");
     const items = payload.data;
     expect(items.filter((i) => i.id.startsWith("hf-paper-"))).toHaveLength(SOURCE_LIMITS.hfPapersQuota);
-    expect(titles(items).slice(0, SOURCE_LIMITS.hfPapersQuota)).toEqual(
-      Array.from({ length: SOURCE_LIMITS.hfPapersQuota }, (_, i) => `Paper ${i}`),
-    );
-    expect(items).toHaveLength(SOURCE_LIMITS.hfPapersQuota + 6);
-  });
-
-  it("orders papers by upvotes before the quota slice", async () => {
-    const { ctx } = newsCtx({ [RESEARCH_A]: feed("a", []), [RESEARCH_B]: feed("b", []), [RESEARCH_C]: feed("c", []) }, [
-      paper("low", "Low", 1),
-      paper("high", "High", 99),
-      paper("mid", "Mid", 5),
+    expect(titles(items).slice(0, SOURCE_LIMITS.hfPapersQuota)).toEqual([
+      "Paper 1",
+      "Paper 3",
+      "Paper 7",
+      "Paper 5",
+      "Paper 6",
     ]);
-    const items = await getNews(ctx, "research").then((p) => p.data);
-    expect(titles(items)).toEqual(["High", "Mid", "Low"]);
+    expect(items).toHaveLength(SOURCE_LIMITS.hfPapersQuota + 6);
   });
 
   it("dedupes repeated links and drops items that duplicate a paper link", async () => {

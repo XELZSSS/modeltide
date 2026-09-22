@@ -1,5 +1,5 @@
-"use client";
 import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react";
+import { useResetOnChange } from "@/client/hooks/use-reset-on-change";
 import { useRouter } from "@/client/router";
 import { Loader2, Search, X } from "lucide-react";
 import { cn } from "@/client/utils/cn";
@@ -7,14 +7,13 @@ import { Input } from "@/client/components/ui/input";
 import { useTranslation } from "@/client/providers";
 import { useSearchStore } from "@/client/stores";
 import type { SearchResult } from "@/shared/types";
-import { useSearchAllRankings } from "@/client/search/use-search";
-
-const MIN_QUERY = 2;
+import { useSearchAllRankings, MIN_QUERY } from "@/client/search/use-search";
 
 export function SearchInput({ className }: { className?: string }) {
   const { t } = useTranslation();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -25,12 +24,18 @@ export function SearchInput({ className }: { className?: string }) {
   const searchTerm = useSearchStore((s) => s.searchTerm);
   const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
   const { inputValue, setInputValue, debounced, setDebouncedDirect } = useDebouncedTerm("", 200);
+  const canSearch = inputValue.trim().length >= MIN_QUERY;
 
   useEffect(() => {
     if (debounced !== searchTerm) setSearchTerm(debounced);
   }, [debounced, searchTerm, setSearchTerm]);
 
-  const { results, isPending, isError } = useSearchAllRankings(searchTerm, { suspended: !isOpen });
+  // The corpus queries warm while the box is focused, so the burst lands before the
+  // term is long enough for the dropdown; an untouched, unfocused box stays silent.
+  const { results, isPending, isError } = useSearchAllRankings(searchTerm, { suspended: !isOpen, warm: isFocused });
+  // The query only sees the debounced term, so the raw input still being ahead of it
+  // means "nothing has run yet", not "no matches".
+  const pending = isPending || inputValue !== searchTerm;
 
   const clearSearch = () => {
     setDebouncedDirect("");
@@ -64,7 +69,7 @@ export function SearchInput({ className }: { className?: string }) {
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
-      if (inputValue.length >= MIN_QUERY) setIsOpen(true);
+      if (canSearch) setIsOpen(true);
       return;
     }
     if (!isOpen) return;
@@ -92,15 +97,17 @@ export function SearchInput({ className }: { className?: string }) {
           autoComplete="off"
           onChange={(e) => {
             setInputValue(e.target.value);
-            setIsOpen(e.target.value.length >= MIN_QUERY);
+            setIsOpen(e.target.value.trim().length >= MIN_QUERY);
             setActiveIndex(-1);
           }}
           onFocus={() => {
-            if (inputValue.length >= MIN_QUERY) {
+            setIsFocused(true);
+            if (canSearch) {
               setIsOpen(true);
               setActiveIndex(-1);
             }
           }}
+          onBlur={() => setIsFocused(false)}
           onKeyDown={onKeyDown}
           placeholder={t("searchPlaceholder")}
           className="flex-1 border-0 bg-transparent px-0 h-full focus:border-transparent focus:ring-0"
@@ -125,7 +132,7 @@ export function SearchInput({ className }: { className?: string }) {
         </button>
       </div>
 
-      {isOpen && inputValue.length >= MIN_QUERY && (
+      {isOpen && canSearch && (
         <div
           id={listboxId}
           ref={listRef}
@@ -136,7 +143,7 @@ export function SearchInput({ className }: { className?: string }) {
             <SearchDropdown
               listboxId={listboxId}
               results={results}
-              isPending={isPending}
+              isPending={pending}
               isError={isError}
               activeIndex={clampedIndex}
               onHover={setActiveIndex}
@@ -146,7 +153,7 @@ export function SearchInput({ className }: { className?: string }) {
         </div>
       )}
       <div id={statusId} role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {isOpen && inputValue.length >= MIN_QUERY && !isPending && t("searchResultsCount", { count: results.length })}
+        {isOpen && canSearch && !pending && t("searchResultsCount", { count: results.length })}
       </div>
     </div>
   );
@@ -164,29 +171,26 @@ function useDebouncedTerm(
   const [inputValue, setInputValue] = useState(initial);
   const [debounced, setDebounced] = useState(initial);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancel = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-  useEffect(() => () => cancel(), [cancel]);
   useEffect(() => {
-    if (inputValue === debounced) return;
-    cancel();
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       setDebounced(inputValue);
     }, delayMs);
-  }, [inputValue, debounced, delayMs, cancel]);
-  const setDebouncedDirect = useCallback(
-    (v: string) => {
-      cancel();
-      setDebounced(v);
-      setInputValue(v);
-    },
-    [cancel],
-  );
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [inputValue, delayMs]);
+  const setDebouncedDirect = useCallback((v: string) => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setDebounced(v);
+    setInputValue(v);
+  }, []);
   return { inputValue, setInputValue, debounced, setDebouncedDirect };
 }
 
@@ -197,28 +201,21 @@ function useClickOutside(ref: RefObject<HTMLElement | null>, onOutside: () => vo
   });
 
   useEffect(() => {
-    function handle(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onOutsideRef.current();
-    }
-    function handleFocus(e: FocusEvent) {
+    function handle(e: Event) {
       if (ref.current && !ref.current.contains(e.target as Node)) onOutsideRef.current();
     }
     document.addEventListener("pointerdown", handle);
-    document.addEventListener("focusin", handleFocus);
+    document.addEventListener("focusin", handle);
     return () => {
       document.removeEventListener("pointerdown", handle);
-      document.removeEventListener("focusin", handleFocus);
+      document.removeEventListener("focusin", handle);
     };
   }, [ref]);
 }
 
 function useListKeyboard(itemCount: number, onSelect: (index: number) => void, onClose?: () => void) {
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [prevItemCount, setPrevItemCount] = useState(itemCount);
-  if (prevItemCount !== itemCount) {
-    setPrevItemCount(itemCount);
-    setActiveIndex(-1);
-  }
+  if (useResetOnChange(itemCount)) setActiveIndex(-1);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -306,6 +303,11 @@ function SearchDropdown({
             activeIndex === index ? "bg-hover" : "hoverable:hover:bg-hover",
           )}
           onMouseEnter={() => onHover(index)}
+          // Keep focus on the input. A row is not focusable, so the browser's
+          // mousedown default moves focus to the body — the focusin listener in
+          // useClickOutside then closes the list and unmounts this row before its
+          // click is delivered, so the selection silently disappeared.
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => onSelect(result)}
         >
           <span className="flex items-center justify-between gap-2">

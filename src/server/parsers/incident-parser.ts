@@ -24,7 +24,13 @@ function indicatorLevel(indicator: string): SourceLevel {
 interface StatuspageVerdict {
   level: SourceLevel;
   degradedComponents: string[];
+  /** The page's own headline, e.g. "Minor Service Outage". */
+  pageDescription: string;
+  /** Names of unresolved, non-informational incidents — the actual warning content. */
+  activeIncidents: string[];
 }
+
+const RESOLVED_INCIDENT_STATES = new Set(["resolved", "postmortem"]);
 
 export function parseStatuspageSummary(raw: unknown): ParseResult<StatuspageVerdict> {
   const root = obj(raw) as StatuspageSummaryRaw | undefined;
@@ -55,7 +61,27 @@ export function parseStatuspageSummary(raw: unknown): ParseResult<StatuspageVerd
   const indicator = str(obj(root?.status)?.indicator).trim().toLowerCase();
   // The coarser page indicator wins when present, mapped via explicit bands.
   const level: SourceLevel = indicator ? indicatorLevel(indicator) : worst;
-  return parseOk({ level, degradedComponents });
+  return parseOk({
+    level,
+    degradedComponents,
+    pageDescription: str(obj(root?.status)?.description).trim().slice(0, 120),
+    activeIncidents: readActiveIncidentNames(root?.incidents),
+  });
+}
+
+/** Unresolved incidents with a real impact: informational/"none" ones are not warnings. */
+function readActiveIncidentNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const entry of raw.slice(0, 20)) {
+    const incident = obj(entry);
+    if (!incident) continue;
+    if (RESOLVED_INCIDENT_STATES.has(str(incident.status).trim().toLowerCase())) continue;
+    if (str(incident.impact).trim().toLowerCase() === "none") continue;
+    const name = str(incident.name).trim();
+    if (name) names.push(name.slice(0, 120));
+  }
+  return names;
 }
 
 const GCP_ROUTINE_SEVERITIES = new Set(["low"]);
@@ -73,7 +99,7 @@ export function parseGoogleCloudIncidents(raw: unknown): ParseResult<{ level: So
     // `end` marks a resolved incident. Accept any non-empty rendered value so
     // a numeric/boolean regression doesn't flip closed incidents to open.
     const endRaw = (incident as Record<string, unknown>).end;
-    const ended = typeof endRaw === "string" ? endRaw.trim() !== "" : endRaw != null && String(endRaw).trim() !== "";
+    const ended = endRaw != null && String(endRaw).trim() !== "";
     if (ended) continue;
     const severityRaw = (incident as Record<string, unknown>).severity;
     const severity = typeof severityRaw === "string" ? severityRaw.trim().toLowerCase() : "";

@@ -1,6 +1,6 @@
-import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
+import { BACKOFF_MAX_MS, MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
 import { utf8ByteLength } from "@/shared/utils";
-import { isAbortError, UpstreamError } from "@/server/infra/errors";
+import { UpstreamError } from "@/server/infra/errors";
 
 interface FetchOptions extends Omit<RequestInit, "headers"> {
   timeoutMs?: number;
@@ -13,6 +13,10 @@ export interface ProbeResult {
   status: number | null;
   latencyMs: number | null;
   error: string | null;
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
 }
 
 function parseRetryAfterMs(res: Response): number | null {
@@ -33,35 +37,24 @@ function parseRetryAfterMs(res: Response): number | null {
   return null;
 }
 
-function assertContentLength(url: string, res: Response, contentLength: string | null, maxBytes: number): void {
-  if (!contentLength) return;
-  const trimmed = contentLength.trim();
-  if (!/^\d+$/.test(trimmed)) return;
-  if (Number(trimmed) > maxBytes) {
-    void res.body?.cancel()?.catch(() => {});
-    throw new UpstreamError(`Upstream payload too large for ${url}`);
-  }
-}
-
-function assertBodySize(url: string, body: string, maxBytes: number): void {
-  if (utf8ByteLength(body) > maxBytes) {
-    throw new UpstreamError(`Upstream payload too large for ${url}`);
-  }
-}
-
 function buildHeaders(userAgent: string, accept: string, extra?: Record<string, string>): Record<string, string> {
   return { "user-agent": userAgent, accept, ...extra };
 }
 
 async function fetchBodyText(url: string, res: Response, maxBytes: number): Promise<string> {
-  assertContentLength(url, res, res.headers.get("content-length"), maxBytes);
+  const contentLength = res.headers.get("content-length")?.trim();
+  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+    void res.body?.cancel()?.catch(() => {});
+    throw new UpstreamError(`Upstream payload too large for ${url}`);
+  }
   const body = await readBodyText(res, url, maxBytes);
-  assertBodySize(url, body, maxBytes);
+  if (utf8ByteLength(body) > maxBytes) {
+    throw new UpstreamError(`Upstream payload too large for ${url}`);
+  }
   return body;
 }
 
 const BACKOFF_BASE_MS = 500;
-const BACKOFF_MAX_MS = 2000;
 const BACKOFF_JITTER_MS = 250;
 
 function computeBackoff(attempt: number): number {

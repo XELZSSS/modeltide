@@ -1,5 +1,4 @@
-"use client";
-import { SafeLink as Link, usePathname, useSearchParams } from "@/client/router";
+import { SafeLink as Link, usePathname } from "@/client/router";
 import { ArrowLeft, TriangleAlert, type LucideIcon, Loader2 } from "lucide-react";
 import { Button, buttonVariants } from "@/client/components/ui/button";
 import { Card } from "@/client/components/ui/card";
@@ -130,14 +129,15 @@ export const Spinner = memo(function Spinner() {
   );
 });
 
-export function PartialNotice({ message }: { message: string }) {
+export function PartialNotice({ message }: { message?: string }) {
+  const { t } = useTranslation();
   return (
     <div
       role="status"
-      className="flex items-center gap-1.5 border border-warning/30 bg-warning-light px-3 py-2 ui-caption text-text-secondary"
+      className="mb-3 flex items-center gap-1.5 border border-warning/30 bg-warning-light px-3 py-2 ui-caption text-text-secondary"
     >
       <TriangleAlert size={14} className="shrink-0 text-warning" aria-hidden="true" />
-      <span className="min-w-0">{message}</span>
+      <span className="min-w-0">{message ?? t("partialDataNotice")}</span>
     </div>
   );
 }
@@ -153,8 +153,10 @@ export function CenteredPageState({ children }: { children: ReactNode }) {
 export function SuspenseQuery({ children, resetKey: extraKey }: { children: ReactNode; resetKey?: string }) {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const resetKey = `${pathname}?${searchParams.toString()}${extraKey ? `:${extraKey}` : ""}`;
+  // Route (plus the caller's own view key) resets the subtree. Query params are left
+  // out: every param in the app is `tab`/`view` state owned by a component inside the
+  // boundary, so keying on them only remounted views that must keep their state.
+  const resetKey = `${pathname}${extraKey ? `:${extraKey}` : ""}`;
   return (
     <QueryErrorResetBoundary>
       {({ reset }) => (

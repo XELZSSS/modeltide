@@ -1,4 +1,3 @@
-"use client";
 import { memo, useEffect, useRef } from "react";
 import { cn } from "@/client/utils/cn";
 import { X } from "lucide-react";

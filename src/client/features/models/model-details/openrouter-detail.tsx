@@ -1,4 +1,3 @@
-"use client";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import type { OpenRouterRankEntry } from "@/shared/types";
@@ -7,16 +6,20 @@ import { InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { useSuspenseOpenRouterRankings } from "@/client/api/api-queries";
+import { PRICE_LEGS, type PriceLegId } from "@/client/utils/pricing-merge";
 import { createDetailView } from "./detail-views";
+
+const PRICE_ROW_LEGS = ["cacheHitPrice", "promptPrice", "completionPrice"] as const satisfies readonly PriceLegId[];
 
 export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry }) {
   const { t } = useTranslation();
   const showVariantBadge = !!model.variant && model.variant !== "standard" && model.variant !== "free";
-  const priceRows: [TranslationKey, number | null | undefined][] = [
-    ["cacheHitPrice", model.pricing?.cacheHit],
-    ["promptPrice", model.pricing?.input],
-    ["completionPrice", model.pricing?.output],
-  ];
+  const pricing = model.pricing;
+  const priceRows: [TranslationKey, number | null | undefined][] = PRICE_ROW_LEGS.map((id) => [
+    id,
+    pricing ? PRICE_LEGS[id](pricing) : undefined,
+  ]);
+  const cacheWrite = pricing ? PRICE_LEGS.cacheWritePrice(pricing) : null;
   const tokenStats: [TranslationKey, string][] = [
     ["inputTokens", model.promptTokens != null ? formatShortNumber(model.promptTokens) : t("notAvailable")],
     ["outputTokens", model.completionTokens != null ? formatShortNumber(model.completionTokens) : t("notAvailable")],
@@ -55,9 +58,7 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
           {priceRows.map(([labelKey, value]) => (
             <InfoRow key={labelKey} label={t(labelKey)} value={formatPricePerMillion(value, t)} />
           ))}
-          {model.pricing?.cacheWrite != null && (
-            <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(model.pricing.cacheWrite, t)} />
-          )}
+          {cacheWrite != null && <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(cacheWrite, t)} />}
         </InfoCard>
       </InfoGrid>
       {(showVariantBadge || model.isFree) && (
@@ -76,7 +77,7 @@ export const OrDetail = createDetailView(
     if (data && !Array.isArray(data.tokenUsageRankings)) {
       throw new Error("openRouterRankings: invalid shape (tokenUsageRankings is not an array)");
     }
-    return { data: data?.tokenUsageRankings };
+    return { data: data?.tokenUsageRankings, partial: data?.partial === true };
   },
   "or",
   OpenRouterModelDetail,

@@ -8,8 +8,13 @@ import { SOURCES } from "@/server/sources/registry";
  * from the same entries), so endpoints and warmup targets cannot drift apart.
  * Returns undefined when no route matches so the entrypoint can render its 404.
  */
-export function handleApi(req: Request, env: Env, url: URL): Promise<Response> | undefined {
+export function handleApi(
+  req: Request,
+  env: Env,
+  url: URL,
+  onDetach?: (work: Promise<unknown>) => void,
+): Promise<Response> | undefined {
   const source = SOURCES.find((s) => s.path === url.pathname);
   if (!source) return undefined;
-  return handleApiRoute(req, env, url.pathname, source);
+  return handleApiRoute(req, env, url.pathname, source, onDetach ? { onDetach } : undefined);
 }

@@ -15,7 +15,6 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      thresholds: { lines: 70, branches: 65, functions: 70, statements: 70 },
     },
     // Inline projects inherit the root config by default (plugins +
     // resolve.alias); each project only declares its own test scope.

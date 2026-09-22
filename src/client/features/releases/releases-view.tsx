@@ -1,4 +1,3 @@
-"use client";
 import { useMemo } from "react";
 import { ExternalLink } from "lucide-react";
 import { RightAlignedText, type DataTableColumn } from "@/client/components/data/table-columns";
@@ -35,15 +34,6 @@ function ReleaseModelCell({
       <div className="flex md:hidden mt-1.5 items-center gap-2">{line}</div>
     </div>
   );
-}
-
-function releaseDateCol<T>(t: ReturnType<typeof useTranslation>["t"], lang: string, getDate: (row: T) => string) {
-  return {
-    header: t("releaseDate"),
-    align: "right" as const,
-    hiddenMd: true,
-    cell: (row: T) => <span className="ui-mono-value font-normal">{formatDate(getDate(row), lang)}</span>,
-  };
 }
 
 function ReleasesContent() {
@@ -86,7 +76,10 @@ function ReleasesContent() {
       {
         id: "releaseDate",
         width: "18%",
-        ...releaseDateCol(t, lang, (row: ReleaseRow) => row.date),
+        header: t("releaseDate"),
+        align: "right",
+        hiddenMd: true,
+        cell: (row) => <span className="ui-mono-value font-normal">{formatDate(row.date, lang)}</span>,
       },
     ],
     [t, lang],
@@ -124,11 +117,7 @@ function ReleasesContent() {
       <div className="flex items-center gap-2 -mt-2 mb-4">
         <span className="ui-meta tabular-nums">{t("events", { count: rows.length })}</span>
       </div>
-      {partial && (
-        <div className="mb-3">
-          <PartialNotice message={t("partialDataNotice")} />
-        </div>
-      )}
+      {partial && <PartialNotice />}
       <SearchableDataTable
         data={rows}
         columns={columns}

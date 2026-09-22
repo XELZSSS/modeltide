@@ -10,7 +10,15 @@ function* walkTs(dir) {
   }
 }
 
-function stripComments(src) {
+/**
+ * Literal-aware scan shared by the two source views below. String, template and
+ * `${}`-interpolation content always comes through verbatim; only code outside a
+ * literal is reshaped.
+ *
+ * With `dropWhitespace`, code whitespace and block-comment placeholders are
+ * removed as well, so a formatting-only edit leaves the output unchanged.
+ */
+function scanSource(src, { dropWhitespace = false } = {}) {
   let out = "";
   let i = 0;
   const n = src.length;
@@ -55,12 +63,16 @@ function stripComments(src) {
     if (c === "/" && next === "*") {
       const end = src.indexOf("*/", i + 2);
       i = end === -1 ? n : end + 2;
-      out += " ";
+      if (!dropWhitespace) out += " ";
       continue;
     }
     if (c === "/" && next === "/") {
       const end = src.indexOf("\n", i + 2);
       i = end === -1 ? n : end;
+      continue;
+    }
+    if (dropWhitespace && /\s/.test(c)) {
+      i += 1;
       continue;
     }
     out += c;
@@ -69,4 +81,25 @@ function stripComments(src) {
   return out;
 }
 
-module.exports = { walkTs, stripComments };
+/** Comment-free source; code whitespace is left alone. */
+function stripComments(src) {
+  return scanSource(src);
+}
+
+/**
+ * Comment- and whitespace-free source view for cache-version hashing.
+ *
+ * Whitespace inside a literal is data, so it survives: `"a b"` and `"ab"` stay
+ * distinct, as do the spaces in a `String.raw` pattern. Whitespace in code is
+ * not, so the hash stays put across formatting and moves only when the code or a
+ * literal actually changes.
+ *
+ * Regex literals are not tracked — the scanner cannot tell `/…/` from division —
+ * so whitespace inside a bare regex is dropped too. Keep such a pattern in a
+ * template literal when its spacing is load-bearing.
+ */
+function normalizeSource(src) {
+  return scanSource(src, { dropWhitespace: true });
+}
+
+module.exports = { walkTs, stripComments, normalizeSource };

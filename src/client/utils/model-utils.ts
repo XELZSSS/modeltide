@@ -21,6 +21,10 @@ export function shortModelId(id: string | null | undefined): string {
   return id.split("/").pop() || id;
 }
 
+export function modelDisplayName(m: { short_name?: string | null; name?: string | null } | null | undefined): string {
+  return m?.short_name || m?.name || "";
+}
+
 function groupByProvider(models: ArtificialAnalysisModel[], unknownLabel = "Unknown") {
   const providers = new Map<string, { name: string; color: string; models: ArtificialAnalysisModel[] }>();
   for (const m of models) {
@@ -54,14 +58,15 @@ export function computeProviderStats(
   unknownLabel = "Unknown",
   getOfficial?: (m: ArtificialAnalysisModel) => OfficialPriceModel | undefined,
 ): ProviderStats[] {
-  const finite = isFiniteNumber;
   return groupByProvider(models, unknownLabel)
     .map(({ name, color, models: group }) => {
       const count = group.length;
-      const prices = group.map((m) => resolveEffectivePricing(m.pricing, getOfficial?.(m)).input).filter(finite);
+      const prices = group
+        .map((m) => resolveEffectivePricing(m.pricing, getOfficial?.(m)).input)
+        .filter(isFiniteNumber);
       const avgPrice = avg(prices);
-      const avgSpeed = avg(group.map(getOutputSpeed).filter(finite));
-      const avgIntelligence = avg(group.map((m) => m.intelligence_index).filter(finite));
+      const avgSpeed = avg(group.map(getOutputSpeed).filter(isFiniteNumber));
+      const avgIntelligence = avg(group.map((m) => m.intelligence_index).filter(isFiniteNumber));
       return { name, color, count, avgPrice, avgSpeed, avgIntelligence };
     })
     .sort((a, b) => b.count - a.count);

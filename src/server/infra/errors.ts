@@ -7,10 +7,6 @@ export function isTimeoutLike(err: unknown): boolean {
   );
 }
 
-export function isAbortError(err: unknown): boolean {
-  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
-}
-
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -32,6 +28,17 @@ export class ClientAbortError extends ApiError {
     super(msg, 499);
     this.name = "ClientAbortError";
   }
+}
+
+/**
+ * Re-throw the caller's abort when every leg was aborted: a join source that
+ * reports a client abandon as an upstream failure cools the whole key down for
+ * FAILURE_COOLDOWN_MS.
+ */
+export function rethrowIfAllAborted(legs: readonly PromiseSettledResult<unknown>[]): void {
+  if (legs.length === 0) return;
+  if (!legs.every((leg) => leg.status === "rejected" && leg.reason instanceof ClientAbortError)) return;
+  throw (legs[0] as PromiseRejectedResult).reason as Error;
 }
 
 export class UpstreamError extends ApiError {

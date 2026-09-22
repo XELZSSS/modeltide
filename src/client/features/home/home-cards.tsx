@@ -1,4 +1,3 @@
-"use client";
 import { memo } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TextToImageModel } from "@/shared/types";

@@ -19,6 +19,8 @@ import {
   computeBlendPrice,
 } from "@/shared/utils";
 import { createT, interpolate } from "@/shared/i18n";
+import { en } from "@/shared/i18n/en";
+import { zh } from "@/shared/i18n/zh";
 
 describe("shared/config limits", () => {
   it.each([
@@ -72,16 +74,13 @@ describe("shared/utils", () => {
     [0.5, 50],
     [2, 2],
     [-1, 0],
+    [NaN, null],
   ])("normalizePercent(%s) -> %s", (input, expected) => {
     expect(normalizePercent(input)).toBe(expected);
   });
 
-  it("normalizePercent(NaN) -> null", () => {
-    expect(normalizePercent(NaN)).toBeNull();
-  });
-
-  it.each([[1, 1 + 1e-10, true]])("approxEq(%s, %s) -> %s", (a, b, expected) => {
-    expect(approxEq(a, b)).toBe(expected);
+  it("approxEq tolerates float noise", () => {
+    expect(approxEq(1, 1 + 1e-10)).toBe(true);
   });
 
   it("hashes stably and guards prototypes", () => {
@@ -115,19 +114,11 @@ describe("shared/utils", () => {
     if (score !== undefined) expect(res.score).toBe(score);
   });
 
-  it.each([[{ input: 5, output: 25, cacheHit: 0.5 }, 3.85]])(
-    "computeBlendPrice(%j) blends 7:2:1",
-    (pricing, expected) => {
-      expect(computeBlendPrice(pricing)).toBeCloseTo(expected, 5);
-    },
-  );
-
-  it.each([{ input: 2, output: 6 }])("computeBlendPrice(%j) falls back to input price", (pricing) => {
-    expect(computeBlendPrice(pricing)).toBe(2.4);
-  });
-
-  it.each([{}, null])("computeBlendPrice(%j) returns null when legs missing", (pricing) => {
-    expect(computeBlendPrice(pricing as never)).toBeNull();
+  it("computeBlendPrice blends 7:2:1, falls back, and nulls on missing legs", () => {
+    expect(computeBlendPrice({ input: 5, output: 25, cacheHit: 0.5 })).toBeCloseTo(3.85, 5);
+    expect(computeBlendPrice({ input: 2, output: 6 })).toBe(2.4);
+    expect(computeBlendPrice({})).toBeNull();
+    expect(computeBlendPrice(null)).toBeNull();
   });
 });
 
@@ -144,5 +135,12 @@ describe("shared/i18n", () => {
     expect(createT("en")("compareLimit")).toBe("Select at least 2 models to compare.");
     expect(createT("en")("timeMinutesAgo", { value: 3 })).toMatch(/^3/);
     expect(createT("zh")("definitelyNotAKey" as never)).toBe("definitelyNotAKey");
+  });
+
+  it("keeps every {placeholder} in step across the dictionaries", () => {
+    const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+    for (const key of Object.keys(en) as (keyof typeof en)[]) {
+      expect(placeholders(zh[key]), key).toEqual(placeholders(en[key]));
+    }
   });
 });

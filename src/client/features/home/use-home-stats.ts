@@ -1,4 +1,3 @@
-"use client";
 import { useMemo } from "react";
 import type { TranslationKey } from "@/shared/i18n";
 import { BarChart3, Brain, Image, Rocket, type LucideIcon } from "lucide-react";
@@ -9,7 +8,7 @@ import type {
   OpenSourceModelEntry,
 } from "@/shared/types";
 import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
-import { computeProviderStats, shortModelId } from "@/client/utils/model-utils";
+import { computeProviderStats, modelDisplayName, shortModelId } from "@/client/utils/model-utils";
 import { formatShortNumber } from "@/client/utils/format";
 import { buildReleaseRows } from "@/client/utils/release-feed";
 import type { HomeBarStat } from "./statistics-section";
@@ -25,7 +24,6 @@ export interface HomeProviderStat {
   name: string;
   color: string;
   avgSpeed: number;
-  count: number;
 }
 
 const top7 = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, 7).map(map);
@@ -51,20 +49,19 @@ export function useHomeStats(
   closedReleases?: ClosedReleaseEntry[],
   openSourceReleases?: OpenSourceModelEntry[],
 ) {
-  const openSourceRankings = dashboardData.opensource;
   // Trending order mirrors the official models page; downloads are reference only.
-  const trendingPool = openSourceRankings;
+  const openSourceRankings = dashboardData.opensource;
   const t2iModels = useMemo(() => dashboardData.textToImage?.data ?? [], [dashboardData.textToImage?.data]);
   const latestOpenRouterModel = dashboardData.orRankings?.tokenUsageRankings?.[0] ?? null;
 
   const trendingStats = useMemo<HomeBarStat[]>(
     () =>
-      top7(trendingPool, (model) => ({
+      top7(openSourceRankings, (model) => ({
         label: shortModelId(model.id),
         value: model.downloads,
         valueLabel: formatShortNumber(model.downloads),
       })),
-    [trendingPool],
+    [openSourceRankings],
   );
 
   const hallucinationStats = useMemo<HomeBarStat[]>(
@@ -113,7 +110,7 @@ export function useHomeStats(
       {
         id: "reasoning",
         label: t("bestReasoningModel"),
-        value: bestReasoningModel?.short_name || bestReasoningModel?.name || t("notAvailable"),
+        value: modelDisplayName(bestReasoningModel) || t("notAvailable"),
         Icon: Brain,
       },
     ],
@@ -124,7 +121,7 @@ export function useHomeStats(
     () =>
       computeProviderStats(artificialData, t("unknown"))
         .filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
-        .map(({ name, color, count, avgSpeed }) => ({ name, color, avgSpeed, count }))
+        .map(({ name, color, avgSpeed }) => ({ name, color, avgSpeed }))
         .sort((a, b) => b.avgSpeed - a.avgSpeed),
     [artificialData, t],
   );

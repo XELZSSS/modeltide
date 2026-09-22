@@ -1,5 +1,4 @@
-"use client";
-import { Fragment, memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, memo, useCallback, useDeferredValue, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { useDevice, useTranslation } from "@/client/providers";
 import { EmptyState } from "@/client/components/feedback";
@@ -9,7 +8,7 @@ import type { DataTableColumn, RowListProps } from "@/client/components/data/tab
 import { RankingNameCell } from "@/client/components/data/table-columns";
 import { dedupeBy, filterByTerm } from "@/shared/utils";
 import { useSearchStore } from "@/client/stores";
-import { useDeferredValue } from "react";
+import { useResetOnChange } from "@/client/hooks/use-reset-on-change";
 import { cn } from "@/client/utils/cn";
 
 const DEFAULT_PAGE_SIZE = 8;
@@ -26,9 +25,8 @@ export function usePagedData<T>(
   const totalPages = Math.ceil(dedupedData.length / safeSize);
   const safeTotal = Math.max(1, totalPages);
   const resetToken = `${resetKey ?? ""}|${safeSize}`;
-  const [prevResetToken, setPrevResetToken] = useState(resetToken);
-  if (prevResetToken !== resetToken) {
-    setPrevResetToken(resetToken);
+  const didReset = useResetOnChange(resetToken);
+  if (didReset) {
     setPage(1);
   } else if (page > safeTotal) {
     setPage(safeTotal);
@@ -39,7 +37,7 @@ export function usePagedData<T>(
   return { dedupedData, page: cur, totalPages, pagedData: paged, goToPage } as const;
 }
 
-export function getRowExpandState<T>(
+function getRowExpandState<T>(
   row: T,
   getRowId: (row: T) => string,
   expandedRowId: string | null | undefined,
@@ -51,7 +49,7 @@ export function getRowExpandState<T>(
   return { rowId, isExpanded, toggle };
 }
 
-export function ExpandToggle({
+function ExpandToggle({
   isExpanded,
   onToggle,
   size = 14,
@@ -76,7 +74,9 @@ export function ExpandToggle({
         onToggle();
       }}
     >
-      <span className={cn("shrink-0 text-text-secondary transition-transform duration-fast", isExpanded && "rotate-90")}>
+      <span
+        className={cn("shrink-0 text-text-secondary transition-transform duration-fast", isExpanded && "rotate-90")}
+      >
         <ChevronRight size={size} />
       </span>
     </Button>
@@ -91,7 +91,7 @@ function cellInnerClasses<T>(col: DataTableColumn<T>): string {
   return cn("flex items-center gap-2 min-w-0 [&>*]:min-w-0", col.align === "right" && "justify-end text-right");
 }
 
-export function TableHeader<T>({ columns, isExpandable }: { columns: DataTableColumn<T>[]; isExpandable: boolean }) {
+function TableHeader<T>({ columns, isExpandable }: { columns: DataTableColumn<T>[]; isExpandable: boolean }) {
   return (
     <thead>
       <tr className="border-b border-border">
@@ -157,7 +157,7 @@ function TableBodyInner<T>({
   );
 }
 
-export const TableBody = memo(TableBodyInner) as typeof TableBodyInner;
+const TableBody = memo(TableBodyInner) as typeof TableBodyInner;
 
 interface MobileColumnLayout<T> {
   primaryCol: DataTableColumn<T>;
@@ -241,18 +241,17 @@ function MobileTableBodyInner<T>({
   );
 }
 
-export const MobileTableBody = memo(MobileTableBodyInner) as typeof MobileTableBodyInner;
+const MobileTableBody = memo(MobileTableBodyInner) as typeof MobileTableBodyInner;
 
-export interface DataTableProps<T> {
+interface DataTableProps<T> {
   data: T[];
   columns: DataTableColumn<T>[];
   getRowId: (row: T) => string;
   renderExpandedRow?: (row: T) => ReactNode;
   resetKey?: string | number;
-  pageSize?: number;
 }
 
-function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKey, pageSize }: DataTableProps<T>) {
+function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKey }: DataTableProps<T>) {
   const { isMobile } = useDevice();
   const { t } = useTranslation();
   const [ownExpandedId, setOwnExpandedId] = useState<string | null>(null);
@@ -260,7 +259,7 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
   const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(
     data,
     getRowId,
-    pageSize ?? DEFAULT_PAGE_SIZE,
+    DEFAULT_PAGE_SIZE,
     resetKey,
   );
   const rootRef = useRef<HTMLDivElement>(null);
@@ -316,24 +315,18 @@ function DataTableInner<T>({ data, columns, getRowId, renderExpandedRow, resetKe
 
 export const DataTable = memo(DataTableInner) as typeof DataTableInner;
 
-function useFilteredData<T>(
-  data: T[],
-  getFields: (x: T) => (string | null | undefined)[],
-  term: string,
-): { filtered: T[]; deferredTerm: string } {
-  const deferredTerm = useDeferredValue(term);
-  const filtered = useMemo(() => filterByTerm(data, deferredTerm, getFields), [data, deferredTerm, getFields]);
-  return { filtered, deferredTerm };
-}
-
-export interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
+interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
   data: T[];
   getSearchFields: (row: T) => (string | null | undefined)[];
 }
 
 function SearchableDataTableInner<T>({ data, getSearchFields, ...tableProps }: SearchableDataTableProps<T>) {
   const searchTerm = useSearchStore((s) => s.searchTerm);
-  const { filtered, deferredTerm } = useFilteredData(data, getSearchFields, searchTerm);
+  const deferredTerm = useDeferredValue(searchTerm);
+  const filtered = useMemo(
+    () => filterByTerm(data, deferredTerm, getSearchFields),
+    [data, deferredTerm, getSearchFields],
+  );
   return <DataTable data={filtered} resetKey={deferredTerm} {...tableProps} />;
 }
 
@@ -370,12 +363,22 @@ export function RankedTableView<T>({
   getRowId,
   getSearchFields,
   buildBodyColumns,
+  renderExpandedRow,
 }: {
   rows: T[];
   getRowId: (row: T) => string;
   getSearchFields: (row: T) => (string | null | undefined)[];
   buildBodyColumns: BodyBuilder<T>;
+  renderExpandedRow?: (item: T) => ReactNode;
 }) {
   const columns = useRankedColumns(buildBodyColumns);
-  return <SearchableDataTable data={rows} columns={columns} getRowId={getRowId} getSearchFields={getSearchFields} />;
+  return (
+    <SearchableDataTable
+      data={rows}
+      columns={columns}
+      getRowId={getRowId}
+      getSearchFields={getSearchFields}
+      renderExpandedRow={renderExpandedRow}
+    />
+  );
 }

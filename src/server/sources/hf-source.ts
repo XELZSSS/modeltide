@@ -3,13 +3,13 @@ import { ONE_MINUTE, SLOW_TTL_MS, SOURCE_LIMITS, normalizeModelLimit, sliceToLim
 import { upstreamConfig, UPSTREAM_FETCH_OPTS, cacheKeys } from "@/server/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError, ValidationError, zeroUpstream } from "@/server/infra/errors";
+import { UpstreamError, ValidationError } from "@/server/infra/errors";
 import { dedupeBy } from "@/shared/utils";
-import { findUnknownLicenseTags, mapModel } from "@/server/parsers/hf-parser";
+import { mapListModel, mapModel, summarizeLicenseDrops } from "@/server/parsers/hf-parser";
 import type { HFModel } from "@/server/parsers/upstream-types";
 
 import type { SourcePayload } from "@/shared/types";
-import { cachedPayload } from "@/server/sources/pipeline";
+import { cachedPayload, requireRows } from "@/server/sources/pipeline";
 
 interface ModelQuery {
   sort: string;
@@ -35,9 +35,25 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
     throw new UpstreamError(
       `HuggingFace API returned non-array response (got ${items === null ? "null" : typeof items})`,
     );
-  const unknown = findUnknownLicenseTags(items);
-  if (unknown.length > 0) ctx.log("info", `[huggingface] unrecognized license tags: ${unknown.join(", ")}`);
+  logLicenseDrops(ctx, items);
   return items;
+}
+
+/**
+ * One license diagnostic per upstream response: rows the gate rejects because
+ * they declare a non-open license are counted apart from rows that declare no
+ * license at all, and only genuinely unrecognized tags are named — so
+ * `license:other` (HF's own non-open sentinel) stops looking like schema drift.
+ */
+function logLicenseDrops(ctx: AppContext, items: HFModel[]): void {
+  const { withoutTag, declaredNonOpen, unknownTags } = summarizeLicenseDrops(items);
+  if (unknownTags.length > 0) ctx.log("info", `[huggingface] unrecognized license tags: ${unknownTags.join(", ")}`);
+  if (withoutTag > 0 || declaredNonOpen > 0) {
+    ctx.log(
+      "info",
+      `[huggingface] license gate: ${declaredNonOpen}/${items.length} rows declared non-open, ${withoutTag} declared no license`,
+    );
+  }
 }
 
 export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> => {
@@ -52,10 +68,10 @@ export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourceP
         ctx.log("info", `[huggingface] short response: got ${items.length}/${bucketLimit} rows`);
       }
       const kept = items
-        .map(mapModel)
+        .map(mapListModel)
         .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m));
       const bucket = dedupeBy(kept, (m) => m.id);
-      if (bucket.length === 0) throw zeroUpstream("HuggingFace", "usable models", `raw=${items.length}, kept=0`);
+      requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
       if (kept.length < items.length)
         ctx.log("info", `[huggingface] filtered ${items.length - kept.length}/${items.length} rows`);
       return { rows: bucket };
@@ -68,7 +84,7 @@ export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceMo
   cachedPayload(ctx, cacheKeys.openSourceReleases, SLOW_TTL_MS, async () => {
     const items = await fetchHFModels(ctx, "createdAt", "-1", normalizeModelLimit(SOURCE_LIMITS.openSourceReleases));
     const deduped = dedupeBy(
-      items.map(mapModel).filter((m): m is OpenSourceModelEntry => m !== null),
+      items.map(mapListModel).filter((m): m is OpenSourceModelEntry => m !== null),
       (m) => m.id,
     );
     const mapped = deduped.filter(isOpenReleaseEntry);
@@ -78,7 +94,7 @@ export const getReleases = (ctx: AppContext): Promise<SourcePayload<OpenSourceMo
         `[huggingface] releases kept ${mapped.length}/${deduped.length} (raw=${items.length}, incl. other-licensed drops)`,
       );
     const sorted = mapped.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
-    if (sorted.length === 0) throw zeroUpstream("HuggingFace", "usable releases", `raw=${items.length}, kept=0`);
+    requireRows(sorted, "HuggingFace", "usable releases", `raw=${items.length}, kept=0`);
     return { rows: sorted };
   });
 

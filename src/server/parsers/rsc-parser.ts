@@ -41,34 +41,32 @@ export function* traverse(root: unknown): Generator<unknown> {
   }
 }
 
-function findInTree<T>(root: unknown, pred: (n: unknown) => T | null): T | null {
-  for (const node of traverse(root)) {
-    const hit = pred(node);
-    if (hit) return hit;
-  }
-  return null;
-}
-
-export function findNextData<T>(root: unknown, key: string): T[] | null {
-  if (typeof key !== "string" || !key) return null;
-  return findInTree<T[]>(root, (n) => {
-    if (n === null || typeof n !== "object") return null;
-    const r = (n as Record<string, unknown>)[key];
-    return Array.isArray(r) ? (r as T[]) : null;
-  });
-}
-
-export function findLongestData<T>(root: unknown, key: string): T[] | null {
+/**
+ * First — or, with `longest`, largest — array stored under `key` anywhere in the
+ * flight tree. `longest` keeps the first-encountered candidate on a length tie,
+ * and only that mode treats an empty array as no match.
+ */
+function findArrayInTree<T>(root: unknown, key: string, longest: boolean): T[] | null {
   if (typeof key !== "string" || !key) return null;
   let best: T[] | null = null;
   for (const node of traverse(root)) {
     if (node === null || typeof node !== "object") continue;
-    const r = (node as Record<string, unknown>)[key];
-    if (Array.isArray(r) && (!best || r.length > best.length)) {
-      best = r as T[];
-    }
+    const raw = (node as Record<string, unknown>)[key];
+    if (!Array.isArray(raw)) continue;
+    const arr = raw as T[];
+    if (!longest) return arr;
+    if (!best || arr.length > best.length) best = arr;
   }
+  if (!longest) return null;
   return best && best.length > 0 ? best : null;
+}
+
+export function findNextData<T>(root: unknown, key: string): T[] | null {
+  return findArrayInTree<T>(root, key, false);
+}
+
+export function findLongestData<T>(root: unknown, key: string): T[] | null {
+  return findArrayInTree<T>(root, key, true);
 }
 
 export function parseRscPayloads<T>(body: unknown, markers: readonly string[], extract: RscExtractor<T>): T[][] {
@@ -90,14 +88,8 @@ export function parseRscPayloads<T>(body: unknown, markers: readonly string[], e
       unresolved -= scanOversizedMarkers(line, markers, results, extract);
       continue;
     }
-    let anyMarker = false;
-    for (let mi = 0; mi < markers.length; mi++) {
-      if (!results[mi] && isMarkerBoundary(line, markers[mi]!)) {
-        anyMarker = true;
-        break;
-      }
-    }
-    if (!anyMarker) continue;
+    const boundaries = markers.map((m) => isMarkerBoundary(line, m));
+    if (!boundaries.some((hit, mi) => hit && !results[mi])) continue;
     const raws: string[] = [];
     const prefixed = STREAM_LINE_RE.exec(line)?.[1];
     if (prefixed && prefixed.length <= MAX_RSC_BYTES) raws.push(prefixed);
@@ -114,7 +106,7 @@ export function parseRscPayloads<T>(body: unknown, markers: readonly string[], e
       return trees.get(raw);
     };
     for (let mi = 0; mi < markers.length; mi++) {
-      if (results[mi] || !isMarkerBoundary(line, markers[mi]!)) continue;
+      if (results[mi] || !boundaries[mi]) continue;
       for (const raw of raws) {
         const tree = treeOf(raw);
         if (tree === undefined) continue;
@@ -126,7 +118,6 @@ export function parseRscPayloads<T>(body: unknown, markers: readonly string[], e
         }
       }
     }
-    if (unresolved === 0) break;
   }
   for (let mi = 0; mi < markers.length; mi++) {
     if (!results[mi]) throw rscNotFound(markers[mi]!, body, maxLineLen);

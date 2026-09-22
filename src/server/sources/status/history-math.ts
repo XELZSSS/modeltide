@@ -4,7 +4,6 @@ import type {
   SourceHealthLevel,
   SourceHistorySummary,
   SourceId,
-  SourceLevel,
   StatusEvent,
   UptimeSample,
 } from "@/shared/types";
@@ -50,6 +49,16 @@ interface OpenIncident {
   index: number;
 }
 
+/**
+ * Why a sample is not fully healthy: the failure detail when it is down, the
+ * provider's degradation warning when it is merely degraded.
+ */
+function sampleReason(sample: UptimeSample): string | null {
+  if (!sample.ok) return sample.error ?? null;
+  if (sample.warn === true) return sample.warnReason ?? null;
+  return null;
+}
+
 export function deriveEvents(id: SourceId, samples: UptimeSample[]): StatusEvent[] {
   const events: StatusEvent[] = [];
   let open: OpenIncident | null = null;
@@ -58,26 +67,29 @@ export function deriveEvents(id: SourceId, samples: UptimeSample[]): StatusEvent
       const ev = events[open.index];
       if (ev) ev.durationMin = Math.round((at - open.at) / ONE_MINUTE);
     }
-    if (pushUp) events.push({ id, type: "up", at: new Date(at).toISOString(), durationMin: null });
+    if (pushUp) events.push({ id, type: "up", at: new Date(at).toISOString(), durationMin: null, detail: null });
     open = null;
   };
   for (const sample of samples) {
-    const level: SourceLevel = !sample.ok ? "error" : sample.warn === true ? "warn" : "ok";
-    if (level === "error") {
-      if (open?.type === "degraded") close(sample.t, false);
-      if (!open) {
-        open = { type: "down", at: sample.t, index: events.length };
-        events.push({ id, type: "down", at: new Date(sample.t).toISOString(), durationMin: null });
-      }
-    } else if (level === "warn") {
-      if (open?.type === "down") close(sample.t, true);
-      if (!open) {
-        open = { type: "degraded", at: sample.t, index: events.length };
-        events.push({ id, type: "degraded", at: new Date(sample.t).toISOString(), durationMin: null });
-      }
-    } else if (open) {
-      close(sample.t, true);
+    const want: OpenIncident["type"] | null = !sample.ok ? "down" : sample.warn === true ? "degraded" : null;
+    // Leaving an incident emits "up" except when sliding straight into "down".
+    if (open && open.type !== want) close(sample.t, want === null || (open.type === "down" && want === "degraded"));
+    if (want && !open) {
+      open = { type: want, at: sample.t, index: events.length };
+      events.push({
+        id,
+        type: want,
+        at: new Date(sample.t).toISOString(),
+        durationMin: null,
+        detail: sampleReason(sample),
+      });
+      continue;
     }
+    // A running incident takes the newest reason: providers rewrite their warning
+    // text while the incident is open.
+    const detail = sampleReason(sample);
+    const ev = open ? events[open.index] : undefined;
+    if (ev && detail != null) ev.detail = detail;
   }
   return events;
 }
@@ -97,6 +109,11 @@ function pruneWindows(recent: UptimeSample[], daily: DayBucket[], now: number): 
   };
 }
 
+function rollbackLastSample(daily: DayBucket[], last: UptimeSample): void {
+  const lastBucket = daily.find((b) => b.day === utcDay(last.t));
+  if (lastBucket) applySampleDelta(lastBucket, last, -1);
+}
+
 export function mergeSample(
   entry: HistorySourceEntry | undefined,
   sample: UptimeSample,
@@ -105,18 +122,16 @@ export function mergeSample(
   const prevEntry = entry ?? emptyEntry();
   const recent = [...prevEntry.recent];
   const last = recent.at(-1);
-  const isUpsert = last != null && sample.t >= last.t && sample.t - last.t < SAMPLE_UPSERT_WINDOW_MS / 2;
   if (last != null && sample.t <= last.t) return prevEntry;
+  const isUpsert = last != null && sample.t - last.t < SAMPLE_UPSERT_WINDOW_MS / 2;
+  const daily = prevEntry.daily.map((b) => ({ ...b }));
   if (isUpsert) {
-    const lastBucket = prevEntry.daily.find((b) => b.day === utcDay(last.t));
-    if (lastBucket) applySampleDelta(lastBucket, last, -1);
+    rollbackLastSample(daily, last);
     recent[recent.length - 1] = sample;
   } else {
     recent.push(sample);
   }
-  const prunedRecent = recent.filter((s) => s.t > now - RECENT_WINDOW_MS);
 
-  const daily = prevEntry.daily.map((b) => ({ ...b }));
   const day = utcDay(sample.t);
   let bucket = daily.find((b) => b.day === day);
   if (!bucket) {
@@ -125,7 +140,7 @@ export function mergeSample(
   }
   applySampleDelta(bucket, sample, 1);
 
-  return pruneWindows(prunedRecent, daily, now);
+  return pruneWindows(recent, daily, now);
 }
 
 export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now: number): SourceHistorySummary {
@@ -149,5 +164,6 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
     uptime24h,
     uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
     avgLatency24h: avgLatency(entry.recent, now - RECENT_WINDOW_MS),
+    detail: last ? sampleReason(last) : null,
   };
 }

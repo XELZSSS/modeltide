@@ -1,36 +1,48 @@
 import type { AppContext } from "@/server/context";
-import { UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
+import { PROVIDER_CONCURRENCY, UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
 import { errMsg, runCapped } from "@/server/infra/task-pool";
-import { PROVIDER_CONCURRENCY } from "@/server/config";
 import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/incident-parser";
 import { parseOk, type ParseResult } from "@/server/parsers/parse-result";
-import type { SourceLevel } from "@/shared/types";
+import type { SourceId, SourceLevel } from "@/shared/types";
 
 interface ProviderStatusResult {
   ok: boolean;
   warn: boolean;
+  /** The provider's own degradation warning, when it is degraded but up. */
+  warnReason: string | null;
   status: number | null;
   latencyMs: number;
+  /** The provider's outage detail, when it is down. */
   error: string | null;
 }
 
-type HealthParse = (raw: unknown) => ParseResult<{ level: SourceLevel; error: string }>;
+type HealthParse = (raw: unknown) => ParseResult<{ level: SourceLevel; detail: string }>;
 
+/** Bounds one provider message; statuspage component/incident names are upstream-controlled. */
+const DETAIL_MAX_CHARS = 200;
+
+/**
+ * Prefers the provider's active incident names — that is the warning text a
+ * human sees on their status page — and falls back to the off-nominal
+ * components, prefixed with the page's own headline ("Minor Service Outage").
+ */
 const parseStatuspageHealth: HealthParse = (raw) => {
   const parsed = parseStatuspageSummary(raw);
   if (!parsed.ok) return parsed;
-  return parseOk({
-    level: parsed.data.level,
-    error: `degraded: ${parsed.data.degradedComponents.slice(0, 3).join(", ")}`,
-  });
+  const { level, pageDescription, activeIncidents, degradedComponents } = parsed.data;
+  const names = activeIncidents.length > 0 ? activeIncidents : degradedComponents;
+  const head = pageDescription || (level === "error" ? "Outage" : "Degraded");
+  const detail = names.length > 0 ? `${head}: ${names.slice(0, 3).join("; ")}` : head;
+  return parseOk({ level, detail: detail.slice(0, DETAIL_MAX_CHARS) });
 };
 
 const parseGoogleCloudHealth: HealthParse = (raw) => {
   const parsed = parseGoogleCloudIncidents(raw);
   if (!parsed.ok) return parsed;
+  const { level, openIncidents } = parsed.data;
   return parseOk({
-    level: parsed.data.level,
-    error: `open incidents: ${parsed.data.openIncidents.slice(0, 3).join("; ")}`,
+    level,
+    detail: `open incidents: ${openIncidents.slice(0, 3).join("; ")}`.slice(0, DETAIL_MAX_CHARS),
   });
 };
 
@@ -54,13 +66,19 @@ async function fetchProviderHealth(
     ctx.log("warn", `[provider-status] ${label} parse failed: ${parsed.error}`);
     return null;
   }
-  const { level, error } = parsed.data;
-  if (level === "error") return { ok: false, warn: false, status: 200, latencyMs, error };
-  return { ok: true, warn: level === "warn", status: 200, latencyMs, error: null };
+  const { level, detail } = parsed.data;
+  return {
+    ok: level !== "error",
+    warn: level === "warn",
+    warnReason: level === "warn" ? detail : null,
+    status: 200,
+    latencyMs,
+    error: level === "error" ? detail : null,
+  };
 }
 
 const PROVIDER_STATUS_TARGETS: readonly {
-  id: ProviderStatusId;
+  id: SourceId;
   url: string;
   label: string;
   parse: HealthParse;
@@ -81,35 +99,18 @@ const PROVIDER_STATUS_TARGETS: readonly {
   { id: "moonshotApi", url: providerStatusEndpoints.moonshotApi, label: "moonshot", parse: parseStatuspageHealth },
 ];
 
-type ProviderStatusId =
-  | "openaiApi"
-  | "anthropicApi"
-  | "googleCloudApi"
-  | "groqApi"
-  | "cohereApi"
-  | "fireworksApi"
-  | "cerebrasApi"
-  | "deepseekApi"
-  | "moonshotApi";
-
-export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<ProviderStatusId, ProviderStatusResult>> {
+export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<SourceId, ProviderStatusResult>> {
   const settled = await runCapped(
-    PROVIDER_STATUS_TARGETS.map(
-      (target) => () =>
-        fetchProviderHealth(ctx, target.url, target.label, target.parse).then((result) => [target.id, result] as const),
-    ),
+    PROVIDER_STATUS_TARGETS.map((target) => async (): Promise<readonly [SourceId, ProviderStatusResult] | null> => {
+      try {
+        const result = await fetchProviderHealth(ctx, target.url, target.label, target.parse);
+        return result ? ([target.id, result] as const) : null;
+      } catch {
+        ctx.log("warn", `[provider-status] ${target.label} sampling threw, skipping round`);
+        return null;
+      }
+    }),
     PROVIDER_CONCURRENCY,
   );
-  const results: (readonly [ProviderStatusId, ProviderStatusResult])[] = [];
-  for (let i = 0; i < settled.length; i++) {
-    const s = settled[i]!;
-    const target = PROVIDER_STATUS_TARGETS[i]!;
-    if (s.status === "fulfilled") {
-      const [id, result] = s.value;
-      if (result !== null) results.push([id, result] as const);
-    } else {
-      ctx.log("warn", `[provider-status] ${target.label} sampling threw, skipping round`);
-    }
-  }
-  return new Map(results);
+  return new Map(settled.flatMap((s) => (s.status === "fulfilled" && s.value ? [s.value] : [])));
 }

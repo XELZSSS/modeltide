@@ -1,27 +1,49 @@
-"use client";
 import { useId, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "@/client/utils/cn";
 import { TabContainer, type TabItem } from "@/client/components/ui/tabs";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { Button } from "@/client/components/ui/button";
-import { useRouter } from "@/client/router";
+import { canGoBack, historyFrom, useRouter } from "@/client/router";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 
-export function BackButton({ labelKey, to }: { labelKey: TranslationKey; to: string }) {
+/**
+ * One back control whose label and action are the same decision, so the two can
+ * never disagree:
+ *
+ * - opened from the list this page belongs to (`from === to`) → the list is
+ *   named ("Back to model rankings") and stepping back returns to that exact
+ *   view, scroll position included;
+ * - opened from anywhere else — a search hit on the home page, another tab, the
+ *   releases page — → a plain "Back" that returns the reader where they came
+ *   from, which is all the generic label promises;
+ * - landed on directly with no history → the list is named and navigated to,
+ *   since there is nothing to go back to.
+ */
+export function BackButton({
+  labelKey,
+  to,
+}: {
+  /** Label used when the button names the destination the page belongs to. */
+  labelKey: TranslationKey;
+  /** The list this page belongs to; the fallback destination on a direct landing. */
+  to: string;
+}) {
   const router = useRouter();
   const { t } = useTranslation();
+  const from = historyFrom();
+  const label = from == null || from === to ? t(labelKey) : t("back");
   const goBack = () => {
-    const raw = typeof window !== "undefined" ? (window.history.state as { idx?: unknown } | null)?.idx : undefined;
-    const idx = typeof raw === "number" && Number.isInteger(raw) ? raw : undefined;
-    if (idx != null && idx > 0) router.back();
+    // Step back whenever there is an entry to step into — it is the list the
+    // label names when we came from there, the reader's own page otherwise.
+    if (canGoBack()) router.back();
     // replace, not push: no extra history entry for a direct landing.
     else router.replace(to);
   };
   return (
     <Button size="sm" variant="outline" onClick={goBack} className="self-start">
-      <ArrowLeft className="size-4" /> {t(labelKey)}
+      <ArrowLeft className="size-4" /> {label}
     </Button>
   );
 }
@@ -117,7 +139,6 @@ interface TabbedPageProps {
   actions?: ReactNode;
   compact?: boolean;
   kicker?: string;
-  countLabel?: string;
   tabs: TabItem[];
   activeTab: string;
   onTabChange: (id: string) => void;
@@ -132,7 +153,6 @@ export function TabbedPage({
   actions,
   compact,
   kicker,
-  countLabel,
   tabs,
   activeTab,
   onTabChange,
@@ -143,11 +163,6 @@ export function TabbedPage({
   return (
     <PageContainer>
       <PageHeader compact={compact} title={title} description={description} actions={actions} kicker={kicker} />
-      {countLabel && (
-        <div className="flex items-center gap-2 -mt-2 mb-4">
-          <span className="ui-meta tabular-nums">{countLabel}</span>
-        </div>
-      )}
       <TabContainer
         tabs={tabs}
         activeTab={activeTab}

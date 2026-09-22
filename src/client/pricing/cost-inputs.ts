@@ -1,4 +1,3 @@
-"use client";
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import type { TranslationKey } from "@/shared/i18n";
 import { calcMonthlyCost } from "@/client/utils/cost-estimator";
