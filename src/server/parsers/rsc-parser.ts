@@ -1,17 +1,28 @@
 import { UpstreamError } from "@/server/infra/errors";
-import { utf8ByteLength } from "@/shared/utils";
+import { utf8ByteLength } from "@/server/infra/hash";
 import {
   isMarkerBoundary,
   iterateLines,
-  rscNotFound,
+  rscNotFoundMessage,
   scanOversizedMarkers,
   STREAM_LINE_RE,
   MAX_RSC_BYTES,
   MAX_RSC_LINE_CHARS,
   type RscExtractor,
 } from "@/server/parsers/rsc-scanner";
+import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
 
 const MAX_RSC_NODES = 50_000;
+
+/** `traverse` ceilings arrive as thrown errors; anything else a step throws is a bug and propagates. */
+function scanStep<T>(step: () => T): ParseResult<T> {
+  try {
+    return parseOk(step());
+  } catch (err) {
+    if (!(err instanceof UpstreamError)) throw err;
+    return parseFail(err.message);
+  }
+}
 
 export function* traverse(root: unknown): Generator<unknown> {
   const seen = new Set<object>();
@@ -41,11 +52,7 @@ export function* traverse(root: unknown): Generator<unknown> {
   }
 }
 
-/**
- * First — or, with `longest`, largest — array stored under `key` anywhere in the
- * flight tree. `longest` keeps the first-encountered candidate on a length tie,
- * and only that mode treats an empty array as no match.
- */
+/** `longest` keeps the first candidate on a tie; only that mode treats an empty array as no match. */
 function findArrayInTree<T>(root: unknown, key: string, longest: boolean): T[] | null {
   if (typeof key !== "string" || !key) return null;
   let best: T[] | null = null;
@@ -69,15 +76,20 @@ export function findLongestData<T>(root: unknown, key: string): T[] | null {
   return findArrayInTree<T>(root, key, true);
 }
 
-export function parseRscPayloads<T>(body: unknown, markers: readonly string[], extract: RscExtractor<T>): T[][] {
-  if (typeof body !== "string") throw new UpstreamError("RSC body is not a string");
+export function parseRscPayloads<T>(
+  body: unknown,
+  markers: readonly string[],
+  extract: RscExtractor<T>,
+): ParseResult<T[][]> {
+  if (typeof body !== "string") return parseFail("RSC body is not a string");
   if (!Array.isArray(markers) || markers.length === 0 || markers.some((m) => typeof m !== "string" || !m)) {
-    throw new UpstreamError("RSC markers are invalid");
+    return parseFail("RSC markers are invalid");
   }
-  if (typeof extract !== "function") throw new UpstreamError("RSC extractor is invalid");
+  if (typeof extract !== "function") return parseFail("RSC extractor is invalid");
   const byteLength = utf8ByteLength(body);
-  if (byteLength > MAX_RSC_BYTES)
-    throw new UpstreamError(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);
+  if (byteLength > MAX_RSC_BYTES) {
+    return parseFail(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);
+  }
   const results: (T[] | null)[] = markers.map(() => null);
   let unresolved = markers.length;
   let maxLineLen = 0;
@@ -85,7 +97,9 @@ export function parseRscPayloads<T>(body: unknown, markers: readonly string[], e
     if (unresolved === 0) break;
     if (line.length > maxLineLen) maxLineLen = line.length;
     if (line.length > MAX_RSC_LINE_CHARS) {
-      unresolved -= scanOversizedMarkers(line, markers, results, extract);
+      const oversize = scanStep(() => scanOversizedMarkers(line, markers, results, extract));
+      if (!oversize.ok) return oversize;
+      unresolved -= oversize.data;
       continue;
     }
     const boundaries = markers.map((m) => isMarkerBoundary(line, m));
@@ -110,7 +124,9 @@ export function parseRscPayloads<T>(body: unknown, markers: readonly string[], e
       for (const raw of raws) {
         const tree = treeOf(raw);
         if (tree === undefined) continue;
-        const res = extract(tree, markers[mi]!);
+        const scanned = scanStep(() => extract(tree, markers[mi]!));
+        if (!scanned.ok) return scanned;
+        const res = scanned.data;
         if (res && res.length > 0) {
           results[mi] = res;
           unresolved--;
@@ -120,11 +136,12 @@ export function parseRscPayloads<T>(body: unknown, markers: readonly string[], e
     }
   }
   for (let mi = 0; mi < markers.length; mi++) {
-    if (!results[mi]) throw rscNotFound(markers[mi]!, body, maxLineLen);
+    if (!results[mi]) return parseFail(rscNotFoundMessage(markers[mi]!, body, maxLineLen));
   }
-  return results as T[][];
+  return parseOk(results as T[][]);
 }
 
-export function parseRscPayload<T>(body: string, marker: string, extract: RscExtractor<T>): T[] {
-  return parseRscPayloads(body, [marker], extract)[0]!;
+export function parseRscPayload<T>(body: unknown, marker: string, extract: RscExtractor<T>): ParseResult<T[]> {
+  const scanned = parseRscPayloads(body, [marker], extract);
+  return scanned.ok ? parseOk(scanned.data[0]!) : scanned;
 }

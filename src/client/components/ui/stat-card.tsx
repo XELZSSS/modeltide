@@ -21,7 +21,7 @@ export const StatCard = memo(function StatCard({
           )}
           <p className="ui-meta font-medium truncate">{label}</p>
         </div>
-        <div className="ui-mono-value text-2xl font-semibold tracking-tight break-words min-w-0">{value}</div>
+        <div className="ui-mono-value text-2xl font-semibold tracking-title wrap-anywhere min-w-0">{value}</div>
       </CardContent>
     </Card>
   );

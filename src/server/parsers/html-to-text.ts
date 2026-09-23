@@ -27,8 +27,8 @@ const BLOCK_TAGS = new Set([
 ]);
 
 function tagNameOf(tagInner: string): string {
-  // Optional leading `/`: closing block tags need a separator too.
-  const m = /^\/?[^\s/>]+/.exec(tagInner.trim());
+  // Optional leading `/`; a real tag name starts with a letter, so `< 3s` is text, not markup.
+  const m = /^\/?[a-zA-Z][a-zA-Z0-9-]*/.exec(tagInner.trim());
   return (m?.[0] ?? "").toLowerCase().replace(/^\//, "");
 }
 
@@ -78,6 +78,12 @@ export function stripHtml(s: unknown): string {
     }
     const inner = s.slice(i + 1, end);
     const name = tagNameOf(inner);
+    if (!name) {
+      // A bare `<` (from a decoded `&lt;`) is text: it must not swallow up to the next `>`.
+      parts.push(s[i]!);
+      i += 1;
+      continue;
+    }
     if (name === "script" || name === "style") {
       const closeRe = name === "script" ? SCRIPT_CLOSE_RE : STYLE_CLOSE_RE;
       closeRe.lastIndex = end + 1;

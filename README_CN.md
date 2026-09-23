@@ -4,10 +4,7 @@
 
 <strong>AI 模型数据看板</strong> —— 排行、发布、资讯、对比、状态监测
 
-<p>
-  <a href="./README_CN.md"><img src="https://img.shields.io/badge/阅读-中文-1677ff?style=for-the-badge" alt="中文" /></a>
-  <a href="./README.md"><img src="https://img.shields.io/badge/Read-English-111827?style=for-the-badge" alt="English" /></a>
-</p>
+中文 · [English](./README.md)
 
 <p>
   <a href="https://react.dev"><img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React" /></a>
@@ -32,9 +29,7 @@
 
 ## 架构
 
-单个 Cloudflare Worker 承载全部：
-
-- **前端**：Vite 8 SPA，页面导航由静态资产层直接服务
+- **前端**：Vite SPA，页面导航由静态资产层直接服务
 - **API**：`/api/*` 在 Worker 中运行，结果缓存于 KV/内存
 - **定时任务**：每 30 分钟——状态采样 + 缓存预热
 
@@ -45,19 +40,20 @@ modeltide/
 ├── src/client/     # SPA：视图、路由、组件、查询
 ├── src/server/     # 数据源、解析器、缓存
 ├── src/shared/     # 共享类型/配置/国际化
+├── src/contract/   # 接口契约：路径 → 载荷
 ├── src/styles/     # 样式
 ├── worker/         # Worker 入口：API + cron
 ├── public/         # 静态资源 + Service Worker
-├── scripts/        # 构建检查
+├── scripts/        # 构建脚本
 ├── index.html      # SPA 入口
-├── vite.config.ts
+├── vite.config.ts  # Vite 配置
 ├── wrangler.jsonc  # 部署配置
 └── package.json    # 依赖
 ```
 
 ## 快速开始
 
-要求 Node.js ≥ 22.22
+要求 Node.js ≥ 22.22.2
 
 ```bash
 npm install
@@ -66,35 +62,27 @@ npm run dev      # http://localhost:5173
 
 ## 常用命令
 
-| 命令                 | 说明                         |
-| -------------------- | ---------------------------- |
-| `npm run dev`        | 开发服务器                   |
-| `npm run build`      | 生产构建                     |
-| `npm run preview`    | 预览生产构建                 |
-| `npm run check`      | 类型检查 + Lint + 测试       |
-| `npm run deploy`     | 检查 + 构建 + 部署到 Workers |
-| `npm run test`       | 运行测试                     |
-| `npm run test:watch` | 测试监听模式                 |
-| `npm run lint`       | 静态检查                     |
-| `npm run type-check` | 类型检查                     |
-| `npm run format`     | 代码格式化                   |
-| `npm run clean`      | 清理构建产物                 |
-| `npm run audit`      | 依赖安全扫描                 |
+| 命令             | 说明                 |
+| ---------------- | -------------------- |
+| `npm run dev`    | 开发服务器           |
+| `npm run build`  | 生产构建             |
+| `npm run test`   | 运行测试             |
+| `npm run lint`   | 静态检查             |
+| `npm run format` | 代码格式化           |
+| `npm run deploy` | 构建并部署到 Workers |
+| `npm run clean`  | 清理构建产物         |
+| `npm run audit`  | 依赖安全扫描         |
 
 ## 部署
 
 1. Fork 本仓库
-2. (推荐)创建 KV 命名空间并替换 `wrangler.jsonc` 中的 ID
-3. (可选)`npx wrangler secret put HF_TOKEN` 配置只读 [HF token](https://huggingface.co/settings/tokens)，供 Hugging Face 路由使用
-4. (可选)`npx wrangler secret put STATUS_PING_URL` 配置 [Healthchecks.io](https://healthchecks.io/docs/monitoring_cron_jobs/) ping URL，cron 停止运行时会收到警告
-5. `npx wrangler login` 登录一次，然后 `npm run deploy`（会先执行 `npm run check`：类型检查、Lint、测试，通过后再构建并部署；也可在 Workers Builds 连接仓库自动部署——该路径同样必须执行 `npm run deploy`，因为提交进仓库的 `CACHE_VERSION` 只有经过构建才会重新生成）
+2. (推荐)创建 KV 命名空间并替换 `wrangler.jsonc` 中的 ID——未配置时数据退回内存缓存，
+   状态历史不持久化
+3. (可选)`npx wrangler secret put STATUS_PING_URL`，填入
+   [Healthchecks.io](https://healthchecks.io/docs/monitoring_cron_jobs/) 的 ping URL，cron 停止运行时会收到告警
+4. `npx wrangler login` 登录一次，然后 `npm run deploy`
 
-|          | 未配置 KV | 配置 KV                           |
-| -------- | --------- | --------------------------------- |
-| 数据     | 内存缓存  | KV 缓存（30分/1小时/2小时/6小时） |
-| 状态历史 | 仅内存    | 保留 30 天                        |
-
-`CACHE_VERSION` 由数据层代码的内容哈希自动生成（`scripts/gen-cache-version.cjs`）——无需手动改版本号，旧 KV 条目自然过期
+`CACHE_VERSION` 由数据层代码内容哈希自动生成，无需手动维护。
 
 ## 许可证
 

@@ -6,7 +6,7 @@ export const Badge = memo(function Badge({ className, children }: { className?: 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide leading-5 px-2 py-0.5 transition-colors border border-border text-text-secondary bg-bg-secondary/60",
+        "inline-flex items-center gap-1 text-xs font-medium uppercase tracking-label leading-5 px-2 py-0.5 transition-colors border border-border text-text-secondary bg-bg-secondary/60",
         className,
       )}
     >

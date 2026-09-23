@@ -1,9 +1,7 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  // Only non-default options are listed: semi/singleQuote/trailingComma/
-  // tabWidth/endOfLine already match oxfmt's defaults.
   "printWidth": 120,
   // Required: the default reorders package.json keys.
   "sortPackageJson": false,
-  "ignorePatterns": ["dist/**", "node_modules/**", ".wrangler/**", "coverage/**", "package-lock.json", "public/sw.js"]
+  "ignorePatterns": ["dist/**", "node_modules/**", ".wrangler/**", "package-lock.json"]
 }

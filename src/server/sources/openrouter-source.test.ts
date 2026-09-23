@@ -33,7 +33,6 @@ function directoryRow(id: string): PricingRow {
   return { id, pricing: { prompt: "0.000001", completion: "0.000002" } };
 }
 
-/** Routes ctx.http.json by URL and records how often each endpoint was hit. */
 function orCtx(responses: Record<string, unknown>) {
   const hits: Record<string, number> = {};
   const logs: [string, string][] = [];
@@ -66,10 +65,10 @@ describe("getOpenRouterRankings", () => {
     });
     const payload = await getOpenRouterRankings(ctx);
     expect(payload.partial).toBeUndefined();
-    expect(payload.tokenUsageRankings.map((r) => r.id)).toEqual(["openai/gpt-5", "acme/coder"]);
-    expect(payload.tokenUsageRankings[0]?.pricing).toEqual({ input: 1, output: 2, cacheHit: null, cacheWrite: null });
-    expect(payload.tokenUsageRankings[0]?.rank).toBe(1);
-    expect(payload.tokenUsageRankings[0]?.change).toBe(100);
+    expect(payload.data.map((r) => r.id)).toEqual(["openai/gpt-5", "acme/coder"]);
+    expect(payload.data[0]?.pricing).toEqual({ input: 1, output: 2, cacheHit: null, cacheWrite: null });
+    expect(payload.data[0]?.rank).toBe(1);
+    expect(payload.data[0]?.change).toBe(100);
   });
 
   it("serves rankings without pricing when the directory fails", async () => {
@@ -79,8 +78,32 @@ describe("getOpenRouterRankings", () => {
     });
     const payload = await getOpenRouterRankings(ctx);
     expect(payload.partial).toBe(true);
-    expect(payload.tokenUsageRankings[0]?.pricing).toBeUndefined();
+    expect(payload.data[0]?.pricing).toBeUndefined();
     expect(logs.some(([level, msg]) => level === "warn" && msg.includes("directory empty"))).toBe(true);
+    expect(storedTtl(kvStore)).toBeLessThanOrEqual(PARTIAL_FAIL_TTL_MS);
+  });
+
+  it("marks the payload partial when a ranking row is discarded by schema drift", async () => {
+    const { ctx, kvStore, logs } = orCtx({
+      [RANKINGS_URL]: { data: [row(), { model_permaslug: "", total_prompt_tokens: 1 }] },
+      [DIRECTORY_URL]: { data: [directoryRow("openai/gpt-5")] },
+    });
+    const payload = await getOpenRouterRankings(ctx);
+    expect(payload.partial).toBe(true);
+    expect(payload.data).toHaveLength(1);
+    expect(logs.some(([level, msg]) => level === "warn" && msg.includes("schema drift"))).toBe(true);
+    expect(storedTtl(kvStore)).toBeLessThanOrEqual(PARTIAL_FAIL_TTL_MS);
+  });
+
+  it("marks the payload partial when a directory row lacks usable pricing", async () => {
+    const { ctx, kvStore } = orCtx({
+      [RANKINGS_URL]: { data: [row()] },
+      [DIRECTORY_URL]: {
+        data: [directoryRow("openai/gpt-5"), { id: "broken/model", pricing: { prompt: "oops" } }],
+      },
+    });
+    const payload = await getOpenRouterRankings(ctx);
+    expect(payload.partial).toBe(true);
     expect(storedTtl(kvStore)).toBeLessThanOrEqual(PARTIAL_FAIL_TTL_MS);
   });
 

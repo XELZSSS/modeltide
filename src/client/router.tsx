@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { isInternalHref } from "@/shared/utils";
+import { isInternalHref } from "@/client/utils/url";
 
 const ROUTE_CHANGE = "routechange";
 
@@ -9,7 +9,6 @@ function emitRouteChange(): void {
 
 interface HistoryState {
   idx?: unknown;
-  /** URL the entry was pushed from, so a detail page can tell "back" from "somewhere else". */
   from?: unknown;
 }
 
@@ -17,21 +16,16 @@ function historyState(): HistoryState | null {
   return (window.history.state as HistoryState | null) ?? null;
 }
 
-function historyIndex(): number {
+export function historyIndex(): number {
   const raw = historyState()?.idx;
   return typeof raw === "number" && Number.isInteger(raw) && raw >= 0 ? raw : 0;
 }
 
-/**
- * URL of the entry one step back in this session's history, or null for a landing
- * (or after a `replace`, which keeps the entry's original origin).
- */
 export function historyFrom(): string | null {
   const raw = historyState()?.from;
   return typeof raw === "string" ? raw : null;
 }
 
-/** True once this session has pushed an entry, i.e. "back" has somewhere in-app to go. */
 export function canGoBack(): boolean {
   return historyIndex() > 0;
 }
@@ -55,13 +49,29 @@ export function navigate(to: string, replace = false): void {
   emitRouteChange();
 }
 
+let popstateNavigation = false;
+
 function subscribe(onChange: () => void): () => void {
-  window.addEventListener("popstate", onChange);
-  window.addEventListener(ROUTE_CHANGE, onChange);
-  return () => {
-    window.removeEventListener("popstate", onChange);
-    window.removeEventListener(ROUTE_CHANGE, onChange);
+  const onPopstate = () => {
+    popstateNavigation = true;
+    onChange();
   };
+  const onRouteChange = () => {
+    popstateNavigation = false;
+    onChange();
+  };
+  window.addEventListener("popstate", onPopstate);
+  window.addEventListener(ROUTE_CHANGE, onRouteChange);
+  return () => {
+    window.removeEventListener("popstate", onPopstate);
+    window.removeEventListener(ROUTE_CHANGE, onRouteChange);
+  };
+}
+
+/** True when the last route change came from browser back/forward rather than `navigate`; the
+ *  pathname alone cannot tell the two apart. */
+export function isPopstateNavigation(): boolean {
+  return popstateNavigation;
 }
 
 export function useRouter(): { push: (to: string) => void; replace: (to: string) => void; back: () => void } {

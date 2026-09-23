@@ -24,13 +24,6 @@ export interface OpenRouterRankEntry {
   isFree?: boolean;
 }
 
-export interface OpenRouterRankingsPayload {
-  tokenUsageRankings: OpenRouterRankEntry[];
-  fetchedAt: string;
-  /** True when the pricing directory was empty and rankings ship without prices. */
-  partial?: boolean;
-}
-
 export interface OpenSourceModelEntry {
   id: string;
   author: string | null;
@@ -55,32 +48,12 @@ export interface AgentRankEntry {
   license: string | null;
 }
 
-export interface AgentRankingsPayload {
-  entries: AgentRankEntry[];
-  fetchedAt: string;
-}
-
 export interface ClosedReleaseEntry {
   id: string;
   model: string;
   provider: string;
   releaseDate: string;
   link: string | null;
-}
-
-export interface OfficialPriceModel {
-  id: string;
-  name: string;
-  provider: string;
-  input: number | null;
-  cachedInput: number | null;
-  cacheWrite: number | null;
-  output: number | null;
-}
-
-export interface OfficialPricingPayload {
-  models: OfficialPriceModel[];
-  fetchedAt: string;
 }
 
 export interface HallucinationRankingEntry {

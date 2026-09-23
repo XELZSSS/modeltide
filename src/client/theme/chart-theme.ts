@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import type { LegendOptions, ScaleOptions, TooltipCallbacks, TooltipItem, TooltipModel } from "chart.js";
+import { axisDashedBorderStyle, axisGridStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 
 export interface ChartTheme {
   grid: string;
@@ -51,17 +53,37 @@ function resolveChartTheme(): ChartTheme {
 }
 
 let sharedTheme: ChartTheme | null = null;
+let sharedSignature = "";
 const listeners = new Set<(theme: ChartTheme) => void>();
 let observing = false;
+
+function themeSignature(theme: ChartTheme): string {
+  return [
+    theme.grid,
+    theme.tick,
+    theme.tickSecondary,
+    theme.tooltipBg,
+    theme.tooltipText,
+    ...theme.palette,
+    ...theme.donut,
+  ].join("\u0000");
+}
+
+function publish(next: ChartTheme): void {
+  const signature = themeSignature(next);
+  // <html> class changes the palette does not depend on (scroll locks, sheets) must not recompute charts.
+  if (signature === sharedSignature) return;
+  sharedSignature = signature;
+  sharedTheme = next;
+  for (const listener of listeners) listener(next);
+}
 
 function ensureObserver(): void {
   if (observing || typeof document === "undefined") return;
   observing = true;
   sharedTheme = resolveChartTheme();
-  const notify = () => {
-    sharedTheme = resolveChartTheme();
-    for (const listener of listeners) listener(sharedTheme!);
-  };
+  sharedSignature = themeSignature(sharedTheme);
+  const notify = () => publish(resolveChartTheme());
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
   const observer = new MutationObserver(notify);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
@@ -69,10 +91,7 @@ function ensureObserver(): void {
 }
 
 export function useChartTheme(): ChartTheme {
-  const [theme, setTheme] = useState<ChartTheme>(() => {
-    ensureObserver();
-    return sharedTheme ?? resolveChartTheme();
-  });
+  const [theme, setTheme] = useState<ChartTheme>(() => sharedTheme ?? resolveChartTheme());
   useEffect(() => {
     ensureObserver();
     const listener = (next: ChartTheme) => setTheme(next);
@@ -120,4 +139,34 @@ export function hexToRgba(hex: string, alpha: number): string {
 
 export function legendStyle(theme: ChartTheme) {
   return { labels: { color: theme.tickSecondary, font: { size: 12 } } };
+}
+
+interface CartesianChartOptions<Type extends "line" | "bar", X extends "category" | "linear"> {
+  x: ScaleOptions<X>;
+  y: ScaleOptions<"linear">;
+  legend?: Partial<LegendOptions<Type>>;
+  tooltip?: {
+    callbacks?: Partial<TooltipCallbacks<Type, TooltipModel<Type>, TooltipItem<Type>>>;
+  };
+  interaction?: { mode: "index"; intersect: boolean };
+}
+
+/** Option shell shared by the cartesian charts; the return type must stay inferred to remain
+ *  assignable to the concrete `ChartOptions<"line">` / `ChartOptions<"bar">`. */
+export function cartesianChartOptions<Type extends "line" | "bar", X extends "category" | "linear" = "category">(
+  theme: ChartTheme,
+  { x, y, legend, tooltip, interaction }: CartesianChartOptions<Type, X>,
+) {
+  return {
+    ...chartBase,
+    ...(interaction ? { interaction } : {}),
+    scales: {
+      x: { grid: axisGridStyle(theme), border: axisDashedBorderStyle(theme), ...x },
+      y: { grid: axisGridStyle(theme), border: axisDashedBorderStyle(theme), ...y },
+    },
+    plugins: {
+      legend: legend ?? legendStyle(theme),
+      tooltip: { ...defaultTooltipOptions(theme), callbacks: tooltip?.callbacks },
+    },
+  };
 }

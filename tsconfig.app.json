@@ -3,15 +3,12 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    // `@cloudflare/workers-types` (not a 585KB generated cloudflare-env.d.ts)
-    // supplies KVNamespace/Fetcher for the src/server files this project also
-    // compiles, so the generated file must not be a build input.
-    "types": ["vite/client", "node", "@cloudflare/workers-types"]
+    // Client + shared only: src/server is compiled by tsconfig.worker.json (KVNamespace, Fetcher).
+    "types": ["vite/client", "node"]
   },
   "include": [
     "src/client/**/*.ts",
     "src/client/**/*.tsx",
-    "src/server/**/*.ts",
     "src/shared/**/*.ts",
     "vite.config.ts",
     "vitest.config.ts",

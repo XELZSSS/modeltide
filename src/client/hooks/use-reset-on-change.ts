@@ -1,10 +1,6 @@
 import { useState } from "react";
 
-/**
- * Watch a key and report when it changes, so derived state can reset without
- * an extra render frame. The setState-during-render below is the sanctioned
- * React pattern for derived state (same render pass, no commit flash).
- */
+/** Reset derived state when a key changes; the setState-during-render is React's sanctioned pattern. */
 export function useResetOnChange(key: string | number): boolean {
   const [prev, setPrev] = useState(key);
   if (prev !== key) {

@@ -1,22 +1,23 @@
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq, normalizePercent } from "@/shared/utils";
-import { formatBoolean, formatScore, formatPercent, formatSpeed, priceDisplayPrecision } from "@/client/utils/format";
-import { getOutputSpeed } from "@/client/utils/cost-estimator";
+import { priceDisplayPrecision } from "@/client/utils/format";
 import { modelId } from "@/client/utils/model-utils";
 import {
   resolveEffectivePricing,
   PRICE_LEGS,
-  type OfficialGetter,
   type PriceLegId,
   type PriceLegPick,
-} from "@/client/utils/pricing-merge";
+} from "@/client/utils/pricing";
 import { ceilToStep } from "@/client/theme/chart-theme";
 export interface CompareRow<T> {
   id?: string;
   label: string;
   getValue?: (m: T) => string;
   getNumeric?: (m: T) => number | null | undefined;
+  /** Winners are decided on values quantized to these decimals, so two cells printing
+   *  the same text can never be marked against each other. */
+  displayDecimals?: number | ((v: number) => number);
   bestIs?: "max" | "min";
   worstIs?: "max" | "min";
 }
@@ -44,9 +45,8 @@ function collectNumeric<T>(
   getKey: (m: T, index: number) => string,
 ): { key: string; val: number }[] | null {
   if (!row.getNumeric || !row.bestIs) return null;
-  // Quantized exactly as `usdString` renders it, so two cells showing the same
-  // price can never be ranked against each other.
-  const atDisplayPrecision = (v: number) => Number(v.toFixed(priceDisplayPrecision(v)));
+  const decimals = row.displayDecimals ?? priceDisplayPrecision;
+  const atDisplayPrecision = (v: number) => Number(v.toFixed(typeof decimals === "function" ? decimals(v) : decimals));
   const values = models
     .map((model, index) => ({ key: getKey(model, index), val: row.getNumeric!(model) }))
     .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val))
@@ -77,33 +77,12 @@ function decideRowWinners<T>(
   return perModel;
 }
 
-function metric(
-  t: TFunction,
-  labelKey: Parameters<TFunction>[0],
-  getScore: (m: ArtificialAnalysisModel) => number | null | undefined,
-  pct = false,
-): CompareRow<ArtificialAnalysisModel> {
-  const value = pct ? (m: ArtificialAnalysisModel) => normalizePercent(getScore(m)) : getScore;
-  return {
-    id: labelKey,
-    label: t(labelKey),
-    getValue: pct ? (m) => formatPercent(t, value(m)) : (m) => formatScore(t, getScore(m)),
-    getNumeric: value,
-    bestIs: "max",
-    worstIs: "min",
-  };
-}
-
 function nonNegative(v: number | null | undefined): number | null {
   if (typeof v !== "number" || !Number.isFinite(v)) return null;
   return Math.max(0, v);
 }
 
-/**
- * `intelligence_index` is the one AA metric the server stores raw; the other two indices are
- * already percent-normalized server-side (parsers/aa/model-compact.ts), so running the
- * fraction heuristic on them again multiplied any sub-1% score by 100.
- */
+/** `intelligence_index` is the one AA metric the server stores raw; the rest are already percent-normalized. */
 function rawIndexScore(v: number | null | undefined): number | null {
   const scaled = v != null && v > 0 && v <= 1 ? v * 100 : v;
   return nonNegative(scaled);
@@ -147,11 +126,24 @@ export function radarMaxFor(rows: RadarRow[], fallback = 100): number {
   return ceilToStep(peak, 20);
 }
 
+interface CompareValueRow {
+  metric: string;
+  /** One score per compared model, in model order; null where that model has none. */
+  values: (number | null)[];
+}
+
+export function buildValueRows(t: TFunction, models: ArtificialAnalysisModel[]): CompareValueRow[] {
+  const keys = models.map((model) => modelId(model));
+  return buildRadarData(t, models).map((row) => ({
+    metric: row.metric,
+    values: keys.map((key) => (key ? (row.values[key] ?? null) : null)),
+  }));
+}
+
 const PRICE_LEG_ORDER: PriceLegId[] = ["promptPrice", "completionPrice", "cacheHitPrice", "cacheWritePrice"];
 
-export function buildPriceRows(t: TFunction, getOfficial?: OfficialGetter): CompareRow<ArtificialAnalysisModel>[] {
-  const leg = (pick: PriceLegPick) => (m: ArtificialAnalysisModel) =>
-    pick(resolveEffectivePricing(m.pricing, getOfficial?.(m)));
+export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
+  const leg = (pick: PriceLegPick) => (m: ArtificialAnalysisModel) => pick(resolveEffectivePricing(m.pricing));
   return PRICE_LEG_ORDER.map((id): CompareRow<ArtificialAnalysisModel> => ({
     id,
     label: t(id),
@@ -159,39 +151,4 @@ export function buildPriceRows(t: TFunction, getOfficial?: OfficialGetter): Comp
     bestIs: "min",
     worstIs: "max",
   }));
-}
-
-export function buildCompareRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
-  return [
-    {
-      id: "creator",
-      label: t("creator"),
-      getValue: (model) => model.model_creators?.name || t("notAvailable"),
-    },
-    {
-      id: "releaseDate",
-      label: t("releaseDate"),
-      getValue: (model) => model.release_date || t("notAvailable"),
-    },
-    metric(t, "intelligenceIndex", (m) => m.intelligence_index),
-    metric(t, "coding", (m) => m.coding_index),
-    metric(t, "agentic", (m) => m.agentic_index),
-    metric(t, "gpqa", (m) => m.benchmarks?.gpqa, true),
-    metric(t, "hle", (m) => m.benchmarks?.hle, true),
-    metric(t, "scicode", (m) => m.benchmarks?.scicode, true),
-    metric(t, "ifbench", (m) => m.benchmarks?.ifbench, true),
-    {
-      id: "outputSpeed",
-      label: t("outputSpeed"),
-      getValue: (model) => formatSpeed(t, getOutputSpeed(model)),
-      getNumeric: getOutputSpeed,
-      bestIs: "max",
-      worstIs: "min",
-    },
-    {
-      id: "openWeights",
-      label: t("openWeights"),
-      getValue: (model) => formatBoolean(t, model.is_open_weights),
-    },
-  ];
 }

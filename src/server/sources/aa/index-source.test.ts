@@ -13,9 +13,7 @@ import { getModelDirectory } from "@/server/sources/openrouter-directory";
 
 const MODEL = { id: "m1", slug: "gpt-5", name: "GPT-5", intelligenceIndex: 80, isOpenWeights: false };
 
-/** One flight line carrying both markers the index page is parsed for. */
 const indexBody = `1:${JSON.stringify({ models: [MODEL] })}`;
-/** Enrichment pages are separate documents, each with its own marker. */
 const modelsPage = `2:${JSON.stringify({ initialModels: [{ slug: "gpt-5", creator: { name: "OpenAI" } }] })}`;
 const omnisciencePage = `2:${JSON.stringify({
   initialModels: [
@@ -23,14 +21,13 @@ const omnisciencePage = `2:${JSON.stringify({
   ],
 })}`;
 
-/** Counting fake upstream for the AA legs the index build reads; `legsUp` can flip mid-test. */
-function aaCtx(legsUp: () => boolean = () => true) {
+function aaCtx(legsUp: () => boolean = () => true, omniscience: string = omnisciencePage) {
   const http = fakeHttp({
     text: (url) => {
       if (url.endsWith(upstreamEndpoints.aaIndex)) return indexBody;
       if (!legsUp()) throw new Error("leg down");
       if (url.endsWith(upstreamEndpoints.aaModels)) return modelsPage;
-      if (url.endsWith(upstreamEndpoints.aaOmniscience)) return omnisciencePage;
+      if (url.endsWith(upstreamEndpoints.aaOmniscience)) return omniscience;
       throw new Error(`unexpected url ${url}`);
     },
   });
@@ -57,7 +54,6 @@ describe("getIntelligenceIndex", () => {
     const first = await getIntelligenceIndex(ctx);
     const second = await getIntelligenceIndex(ctx);
     expect(second.fetchedAt).toBe(first.fetchedAt);
-    // The closed-release consumer shares the same cached fetch.
     await getIntelligenceIndexResult(ctx);
     expect(callsTo(upstreamEndpoints.aaIndex)).toBe(1);
   });
@@ -79,9 +75,7 @@ describe("getIntelligenceIndex", () => {
     expect(callsTo(upstreamEndpoints.aaModels)).toBe(1);
     expect(callsTo(upstreamEndpoints.aaOmniscience)).toBe(1);
 
-    // Second build: expire the index entry and its raw body, as both would after
-    // their own ceiling. The enrichment bodies keep their 2h TTL, so the rebuild
-    // refetches the index page once and neither enrichment page.
+    // The enrichment bodies keep their 2h TTL: the rebuild refetches the index only.
     kvStore.delete(`v-test:${cacheKeys.intelligenceIndex}`);
     kvStore.delete(`v-test:${cacheKeys.aaIndexBody}`);
     resetModuleCachesForTests();
@@ -106,5 +100,16 @@ describe("getIntelligenceIndex", () => {
     const recovered = await getIntelligenceIndex(ctx);
     expect(callsTo(upstreamEndpoints.aaModels)).toBe(2);
     expect(recovered.partial).toBeUndefined();
+  });
+
+  it("stays complete when the omniscience page carries no omniscience rows", async () => {
+    const pageWithoutOmniscience = `2:${JSON.stringify({
+      initialModels: [{ slug: "gpt-5", creator: { name: "OpenAI" } }],
+    })}`;
+    const { ctx } = aaCtx(() => true, pageWithoutOmniscience);
+
+    const payload = await getIntelligenceIndex(ctx);
+    expect(payload.partial).toBeUndefined();
+    expect((await getIntelligenceIndexResult(ctx)).enrichFailed).toBe(false);
   });
 });

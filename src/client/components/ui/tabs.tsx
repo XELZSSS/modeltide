@@ -12,8 +12,8 @@ const tabButtonVariants = cva(
         false: "text-text-secondary hoverable:hover:text-text-primary",
       },
       size: {
-        sm: "px-1 py-1.5 text-xs tracking-wide",
-        md: "px-1 py-2 text-sm tracking-wide",
+        sm: "px-1 py-1.5 text-xs tracking-label",
+        md: "px-1 py-2 text-sm tracking-label",
       },
     },
     defaultVariants: { active: false, size: "md" },
@@ -66,11 +66,7 @@ export const TabButton = memo(function TabButton({
   );
 });
 
-/**
- * Shared roving-focus move for Arrow/Home/End over a list of options. Returns
- * the next index, or null when the key is not a navigation key (or the list is
- * empty / the current index is unknown) so callers can leave the event alone.
- */
+/** Roving-focus move for Arrow/Home/End; null means "not a navigation key" — leave the event alone. */
 export function nextIndexForKey(key: string, index: number, length: number): number | null {
   if (length === 0 || index < 0) return null;
   if (key === "ArrowRight" || key === "ArrowDown") return (index + 1) % length;

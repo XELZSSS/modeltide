@@ -6,8 +6,6 @@ import { ChartCard } from "@/client/components/ui/chart-frame";
 import { buildPriceRows, type CompareRow, type Winner } from "./compare-logic";
 import { CompareTable, WinnerValue } from "@/client/features/compare/compare-table";
 import { CostEstimator } from "@/client/features/compare/price-compare/estimator";
-import { LiteLLMVsRouterTable } from "@/client/features/compare/price-compare/price-compare-table";
-import { useOfficialPricing } from "@/client/pricing/official-pricing-hook";
 import { MODEL_SOURCES } from "@/client/config/nav-config";
 import { ComparePageLayout } from "./compare-layout";
 
@@ -17,8 +15,7 @@ const PriceChart = lazy(() =>
 
 const PriceCompareContent = memo(function PriceCompareContent({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
-  const { getOfficial } = useOfficialPricing();
-  const priceRows = useMemo(() => buildPriceRows(t, getOfficial), [t, getOfficial]);
+  const priceRows = useMemo(() => buildPriceRows(t), [t]);
   const renderPrice = useCallback(
     (row: CompareRow<ArtificialAnalysisModel>, model: ArtificialAnalysisModel, winner: Winner | null): ReactNode => {
       const value = row.getNumeric?.(model);
@@ -41,7 +38,6 @@ const PriceCompareContent = memo(function PriceCompareContent({ models }: { mode
         <PriceChart priceRows={priceRows} models={models} />
       </Suspense>
       <CostEstimator models={models} />
-      <LiteLLMVsRouterTable models={models} />
     </>
   );
 });
@@ -54,10 +50,7 @@ function PriceChartFallback() {
 export function PriceCompareView() {
   const { t } = useTranslation();
   return (
-    <ComparePageLayout
-      backTo={`${MODEL_SOURCES.aa.backTo}&view=pricing`}
-      title={t("priceComparison")}
-    >
+    <ComparePageLayout backTo={`${MODEL_SOURCES.aa.backTo}&view=pricing`} title={t("priceComparison")}>
       {(models) => <PriceCompareContent models={models} />}
     </ComparePageLayout>
   );

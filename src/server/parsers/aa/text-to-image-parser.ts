@@ -7,6 +7,19 @@ import {
 } from "@/server/parsers/parser-primitives";
 import type { TextToImageModel } from "@/shared/types";
 import type { RawEntry } from "@/server/parsers/upstream-types";
+import { findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc-parser";
+import { parseFail, type ParseResult } from "@/server/parsers/parse-result";
+
+/** Row-level validity stays with `mapEntry`: a body we cannot map is a zero-row document. */
+export function parseTextToImageRows(body: unknown): ParseResult<Record<string, unknown>[]> {
+  if (typeof body !== "string" || !body) return parseFail("Text-to-image returned an empty body");
+  const scanned = parseRscPayload<Record<string, unknown>>(
+    body,
+    "textToImage",
+    (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
+  );
+  return scanned.ok ? scanned : parseFail(`Text-to-image parse failed: ${scanned.error}`);
+}
 
 export function mapEntry(raw: unknown): Omit<TextToImageModel, "rank"> | null {
   if (!isRecord(raw)) return null;

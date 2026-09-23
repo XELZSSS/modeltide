@@ -1,5 +1,5 @@
 import { BACKOFF_MAX_MS, MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
-import { utf8ByteLength } from "@/shared/utils";
+import { utf8ByteLength } from "@/server/infra/hash";
 import { UpstreamError } from "@/server/infra/errors";
 
 interface FetchOptions extends Omit<RequestInit, "headers"> {
@@ -15,10 +15,6 @@ export interface ProbeResult {
   error: string | null;
 }
 
-function isAbortError(err: unknown): boolean {
-  return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
-}
-
 function parseRetryAfterMs(res: Response): number | null {
   const raw = res.headers.get("retry-after");
   if (!raw) return null;
@@ -26,7 +22,7 @@ function parseRetryAfterMs(res: Response): number | null {
   // `Retry-After: 0`/blank means retry now, skipping backoff when it's needed most.
   const trimmed = raw.trim();
   const secs = Number(trimmed);
-  if (trimmed !== "" && Number.isFinite(secs) && secs > 0) {
+  if (trimmed !== "" && Number.isFinite(secs) && secs >= 0) {
     return Math.min(secs, CAP_MS / 1000) * 1000;
   }
   const date = Date.parse(raw);
@@ -41,17 +37,17 @@ function buildHeaders(userAgent: string, accept: string, extra?: Record<string, 
   return { "user-agent": userAgent, accept, ...extra };
 }
 
-async function fetchBodyText(url: string, res: Response, maxBytes: number): Promise<string> {
+async function fetchBodyText(url: string, res: Response, maxBytes: number, signal: AbortSignal): Promise<string> {
   const contentLength = res.headers.get("content-length")?.trim();
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
     void res.body?.cancel()?.catch(() => {});
     throw new UpstreamError(`Upstream payload too large for ${url}`);
   }
-  const body = await readBodyText(res, url, maxBytes);
-  if (utf8ByteLength(body) > maxBytes) {
+  const { text, bytes } = await readBodyText(res, url, maxBytes, signal);
+  if (bytes > maxBytes) {
     throw new UpstreamError(`Upstream payload too large for ${url}`);
   }
-  return body;
+  return text;
 }
 
 const BACKOFF_BASE_MS = 500;
@@ -79,16 +75,21 @@ function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-async function readBodyText(res: Response, url: string, maxBytes: number): Promise<string> {
+async function readBodyText(
+  res: Response,
+  url: string,
+  maxBytes: number,
+  signal: AbortSignal,
+): Promise<{ text: string; bytes: number }> {
   const body = res.body;
   if (!body) {
     try {
-      return await res.text();
+      const text = await res.text();
+      return { text, bytes: utf8ByteLength(text) };
     } catch (e) {
-      const timedOut = isAbortError(e);
       throw new UpstreamError(
         `Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
-        timedOut ? { timeout: true } : undefined,
+        signal.aborted ? { timeout: true } : { retryable: true },
       );
     }
   }
@@ -112,10 +113,9 @@ async function readBodyText(res: Response, url: string, maxBytes: number): Promi
     if (e instanceof UpstreamError) throw e;
     await reader.cancel().catch(() => {});
     // Keep the timeout flag, or a stalled body reports 502 and cools down as non-timeout.
-    const timedOut = isAbortError(e);
     throw new UpstreamError(
       `Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
-      timedOut ? { timeout: true } : undefined,
+      signal.aborted ? { timeout: true } : { retryable: true },
     );
   } finally {
     reader.releaseLock();
@@ -126,7 +126,7 @@ async function readBodyText(res: Response, url: string, maxBytes: number): Promi
     merged.set(c, offset);
     offset += c.byteLength;
   }
-  return new TextDecoder().decode(merged);
+  return { text: new TextDecoder().decode(merged), bytes: total };
 }
 
 export class HttpClient {
@@ -135,7 +135,12 @@ export class HttpClient {
     this.defaultSignal = opts?.signal;
   }
 
-  private async doFetch(url: string, init: FetchOptions, accept: string): Promise<Response> {
+  private async doFetch<T>(
+    url: string,
+    init: FetchOptions,
+    accept: string,
+    read: (res: Response, signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
     const { timeoutMs = 10_000, retries = 0, headers: initHeaders, signal: initSignalOpt, ...rest } = init;
     const initSignal = initSignalOpt ?? this.defaultSignal;
     const headers = buildHeaders(USER_AGENT, accept, initHeaders);
@@ -149,22 +154,33 @@ export class HttpClient {
       let timedOut = false;
       try {
         res = await fetch(url, { headers, signal, ...rest });
-      } catch (e) {
-        // This signal is the cron's deadline, never a client disconnect → timeout.
-        timedOut = isAbortError(e);
+      } catch {
+        // Only AbortSignal.timeout and the cron deadline abort here, never a client disconnect.
+        timedOut = signal.aborted;
         failMsg = timedOut ? `Upstream timeout for ${url}` : `Upstream network error for ${url}`;
       }
       let retryAfter: number | null = null;
       if (res) {
-        if (res.ok) return res;
-        void res.body?.cancel()?.catch(() => {});
-        if (res.status >= 400 && res.status < 500 && res.status !== 429 && res.status !== 408) {
-          throw new UpstreamError(`HTTP ${res.status} for ${url}`, { status: res.status });
+        if (res.ok) {
+          try {
+            // Read inside the retry loop: a 200 can still fail halfway through its body stream.
+            return await read(res, signal);
+          } catch (err) {
+            if (!(err instanceof UpstreamError) || !err.retryable || signal.aborted || initSignal?.aborted) throw err;
+            failMsg = err.message;
+            failStatus = null;
+            timedOut = false;
+          }
+        } else {
+          void res.body?.cancel()?.catch(() => {});
+          if (res.status >= 400 && res.status < 500 && res.status !== 429 && res.status !== 408) {
+            throw new UpstreamError(`HTTP ${res.status} for ${url}`, { status: res.status });
+          }
+          retryAfter = res.status === 429 ? parseRetryAfterMs(res) : null;
+          failMsg = `HTTP ${res.status} for ${url}`;
+          failStatus = res.status;
+          timedOut = false;
         }
-        retryAfter = res.status === 429 ? parseRetryAfterMs(res) : null;
-        failMsg = `HTTP ${res.status} for ${url}`;
-        failStatus = res.status;
-        timedOut = false;
       }
       if (attempt === retries)
         throw new UpstreamError(failMsg!, timedOut ? { timeout: true } : { status: failStatus ?? undefined });
@@ -178,18 +194,20 @@ export class HttpClient {
   }
 
   async json<T>(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<T> {
-    const res = await this.doFetch(url, init ?? {}, "application/json");
-    const body = await fetchBodyText(url, res, maxBytes);
-    try {
-      return JSON.parse(body) as T;
-    } catch {
-      throw new UpstreamError(`Upstream returned invalid JSON for ${url}`);
-    }
+    return this.doFetch(url, init ?? {}, "application/json", async (res, signal) => {
+      const body = await fetchBodyText(url, res, maxBytes, signal);
+      try {
+        return JSON.parse(body) as T;
+      } catch {
+        throw new UpstreamError(`Upstream returned invalid JSON for ${url}`);
+      }
+    });
   }
 
   async text(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
-    const res = await this.doFetch(url, init ?? {}, "text/html,application/xhtml+xml,*/*");
-    return fetchBodyText(url, res, maxBytes);
+    return this.doFetch(url, init ?? {}, "text/html,application/xhtml+xml,*/*", (res, signal) =>
+      fetchBodyText(url, res, maxBytes, signal),
+    );
   }
 
   async probe(url: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<ProbeResult> {
@@ -205,10 +223,10 @@ export class HttpClient {
       const latencyMs = Date.now() - started;
       void res.body?.cancel()?.catch(() => {});
       return { ok: res.ok, status: res.status, latencyMs, error: res.ok ? null : `HTTP ${res.status}` };
-    } catch (e) {
+    } catch {
       const latencyMs = Date.now() - started;
       if (this.defaultSignal?.aborted) return { ok: false, status: null, latencyMs, error: "aborted" };
-      return { ok: false, status: null, latencyMs, error: isAbortError(e) ? "timeout" : "network error" };
+      return { ok: false, status: null, latencyMs, error: timeout.aborted ? "timeout" : "network error" };
     }
   }
 }

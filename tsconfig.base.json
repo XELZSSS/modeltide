@@ -8,8 +8,7 @@
     "moduleDetection": "force",
     "paths": { "@/*": ["./src/*"] },
     "noEmit": true,
-    // Config files import each other with explicit `.ts` specifiers so Vite's
-    // future-native config loader (Node ESM resolution) can resolve them.
+    // Config files import each other with explicit `.ts` specifiers for Vite's Node-ESM loader.
     "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,

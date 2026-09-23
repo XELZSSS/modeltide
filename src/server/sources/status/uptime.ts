@@ -1,7 +1,6 @@
 import type { AppContext } from "@/server/context";
 import { errMsg } from "@/server/infra/task-pool";
-
-const FIRST_LAUNCH_KEY = "uptime:first-launch";
+import { FIRST_LAUNCH_KEY } from "./schema";
 
 let memoryFirstLaunch: number | null = null;
 
@@ -24,16 +23,12 @@ function memoryUptime(now: number): UptimePayload {
   return uptimePayload(memoryFirstLaunch, now);
 }
 
-/** Test seam: the memo is per-isolate and would otherwise outlive a test case. */
 export function resetUptimeMemoForTests(): void {
   memoFirstLaunch = null;
   memoryFirstLaunch = null;
 }
 
-/**
- * Written once at first launch and never changed after, while this payload is
- * prefetched on every app load: one KV read per isolate is enough.
- */
+/** Written once at first launch and never changed: one KV read per isolate suffices. */
 export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
   const now = Date.now();
   if (memoFirstLaunch != null) return uptimePayload(memoFirstLaunch, now);
@@ -52,8 +47,7 @@ export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
     try {
       await ctx.kv.put(FIRST_LAUNCH_KEY, String(resolved));
     } catch (err) {
-      // Not memoized: the next call retries the write instead of pinning a
-      // start time that was never persisted.
+      // Not memoized: the next call retries the write instead of pinning an unpersisted start.
       ctx.log("warn", `[uptime] failed to persist first launch: ${errMsg(err)}`);
       return uptimePayload(resolved, now);
     }

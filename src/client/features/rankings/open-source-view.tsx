@@ -2,7 +2,7 @@ import { formatShortNumber } from "@/client/utils/format";
 import { shortModelId } from "@/client/utils/model-utils";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/components/data/table";
-import { monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table-columns";
+import { monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import type { useTranslation } from "@/client/providers";
 

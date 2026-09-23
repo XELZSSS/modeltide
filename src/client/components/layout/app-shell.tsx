@@ -1,10 +1,29 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { usePathname } from "@/client/router";
+import { isPopstateNavigation, historyIndex, usePathname, useSearchParams } from "@/client/router";
 import { useSettingsStore } from "@/client/stores";
 import { useTranslation } from "@/client/providers";
 import { DesktopNav, MobileNav, MobileMoreSheet } from "./navigation";
+import { ErrorBoundary } from "@/client/router/suspense-query";
 
 const SettingsSheet = lazy(() => import("./settings-sheet").then((m) => ({ default: m.SettingsSheet })));
+
+function SettingsErrorBoundary({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <ErrorBoundary
+      errorTitle={t("errorBoundaryTitle")}
+      retryLabel={t("errorBoundaryRetry")}
+      offlineMessage={t("offlineRetry")}
+    >
+      <Suspense fallback={null}>
+        <SettingsSheet open={open} onClose={onClose} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
+/** Scroll offset per history entry; module scope because `<main>` is remounted on every route change. */
+const scrollOffsets = new Map<number, number>();
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
@@ -13,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const mainRef = useRef<HTMLElement>(null);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeMore = useCallback(() => setMobileMoreOpen(false), []);
@@ -30,12 +50,30 @@ export function AppShell({ children }: { children: ReactNode }) {
     document.documentElement.classList.toggle("dark", dark);
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
     const metas = document.querySelectorAll("meta[name='theme-color']");
-    for (const meta of metas) meta.setAttribute("content", dark ? "#000000" : "#ffffff");
+    for (const meta of metas) meta.setAttribute("content", dark ? "#1a1a1a" : "#fafbfc");
   }, [themeMode]);
 
   useEffect(() => {
-    mainRef.current?.scrollTo({ top: 0 });
-  }, [pathname]);
+    const main = mainRef.current;
+    if (!main) return;
+    // Kept per entry rather than read on leave: the element is gone once the next route renders.
+    const record = () => scrollOffsets.set(historyIndex(), main.scrollTop);
+    main.addEventListener("scroll", record, { passive: true });
+    return () => main.removeEventListener("scroll", record);
+  }, []);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    const idx = historyIndex();
+    if (isPopstateNavigation()) {
+      main.scrollTo({ top: scrollOffsets.get(idx) ?? 0 });
+      return;
+    }
+    // This entry is new from here on, and the entries ahead are gone with the push: drop their offsets.
+    for (const key of scrollOffsets.keys()) if (key >= idx) scrollOffsets.delete(key);
+    main.scrollTo({ top: 0 });
+  }, [pathname, searchParams]);
 
   return (
     <div className="min-h-screen h-[100dvh] flex flex-col bg-bg-primary overflow-x-hidden pt-[env(safe-area-inset-top,0px)]">
@@ -56,11 +94,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
       <MobileNav onMoreOpen={openMore} onSettingsOpen={openSettings} />
-      {settingsOpen && (
-        <Suspense fallback={null}>
-          <SettingsSheet open={settingsOpen} onClose={closeSettings} />
-        </Suspense>
-      )}
+      {settingsOpen && <SettingsErrorBoundary open onClose={closeSettings} />}
       <MobileMoreSheet open={mobileMoreOpen} onClose={closeMore} />
     </div>
   );

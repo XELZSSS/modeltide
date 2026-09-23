@@ -8,7 +8,12 @@ import {
   str,
   strOr,
 } from "@/server/parsers/parser-primitives";
-import { BENCHMARK_KEYS, MODALITY_KEYS, ABSOLUTE_SCORE_BENCHMARKS, type BenchmarkKey } from "@/shared/config";
+import {
+  BENCHMARK_KEYS,
+  MODALITY_KEYS,
+  ABSOLUTE_SCORE_BENCHMARKS,
+  type BenchmarkKey,
+} from "@/shared/config";
 import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
 import { normalizePercent, unclampedPercent } from "@/shared/utils";
 
@@ -23,13 +28,7 @@ const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   automation_bench: "automationBenchPartialScore",
 };
 
-/**
- * Every benchmark key but `ABSOLUTE_SCORE_BENCHMARKS` is stored on the 0-100
- * scale the renderer expects. Scaling here (rather than leaving raw fractions
- * for the client to guess at) keeps one payload from mixing scales per key, and
- * `unclampedPercent` keeps omniscience's negative scores negative instead of
- * flattening them to 0.
- */
+/** Benchmarks use the 0-100 scale the renderer expects, `ABSOLUTE_SCORE_BENCHMARKS` excepted. */
 function compactBenchmarks(m: Record<string, unknown>): Partial<Record<BenchmarkKey, number | null>> {
   const benchmarks: Partial<Record<BenchmarkKey, number | null>> = {};
   for (const key of BENCHMARK_KEYS) {
@@ -61,26 +60,6 @@ function compactPricing(m: Record<string, unknown>): ModelPricing | undefined {
   return Object.keys(pricing).length > 0 ? pricing : undefined;
 }
 
-// Default cost model: 50% cache-hit, 5% write, 2M in + 3M out x 22 workdays.
-const CACHE_HIT_RATE = 0.5;
-const CACHE_WRITE_RATE = 0.05;
-const DAILY_INPUT_TOKENS_M = 2;
-const DAILY_OUTPUT_TOKENS_M = 3;
-const WORKDAYS_PER_MONTH = 22;
-
-function defaultMonthlyCost(pricing: ModelPricing | undefined): number | null {
-  if (!pricing || typeof pricing.input !== "number" || typeof pricing.output !== "number") return null;
-  const hasWrite = typeof pricing.cacheWrite === "number";
-  const writeRate = hasWrite ? Math.min(CACHE_WRITE_RATE, 1 - CACHE_HIT_RATE) : 0;
-  const freshRate = 1 - CACHE_HIT_RATE - writeRate;
-  const cached = typeof pricing.cacheHit === "number" ? pricing.cacheHit : pricing.input;
-  const writeLeg = hasWrite ? writeRate * pricing.cacheWrite! : 0;
-  const inputRate = CACHE_HIT_RATE * cached + writeLeg + freshRate * pricing.input;
-  const daily = DAILY_INPUT_TOKENS_M * inputRate + DAILY_OUTPUT_TOKENS_M * pricing.output;
-  const monthly = daily * WORKDAYS_PER_MONTH;
-  return Number.isFinite(monthly) ? Math.round(monthly * 100) / 100 : null;
-}
-
 function compactOmniscience(
   omniscienceBreakdown: Record<string, unknown> | undefined,
   omniscience: number | null,
@@ -106,9 +85,8 @@ function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unkn
     const outputMo = bool(m[`outputModality${suffix}`]);
     if (outputMo !== undefined) model[`output_modality_${mo}`] = outputMo;
   }
-  // Upstream quirk: the index body publishes the image/speech/video flags but
-  // omits text and has no output flag at all. Only a record that describes part
-  // of its modalities gets the text fallback; an explicit flag always wins.
+  // Upstream quirk: the index body omits the text flags; only a record that describes part of
+  // its modalities gets the text fallback, and an explicit flag always wins.
   const describesModalities = MODALITY_KEYS.some(
     (mo) => model[`input_modality_${mo}`] !== undefined || model[`output_modality_${mo}`] !== undefined,
   );
@@ -152,11 +130,7 @@ export function compact(m: unknown): ArtificialAnalysisModel {
 
   model.benchmarks = compactBenchmarks(rec);
   const pricing = compactPricing(rec);
-  if (pricing) {
-    model.pricing = pricing;
-    const defCost = defaultMonthlyCost(pricing);
-    if (defCost != null) model.defaultMonthlyCost = defCost;
-  }
+  if (pricing) model.pricing = pricing;
   const speed = numCoerce(rec.medianCanonicalAnswerOutputSpeed);
   if (speed != null) model.speed = { median_output_speed: speed };
   const breakdown = compactOmniscience(omniscienceBreakdown, numCoerce(rec.omniscience));

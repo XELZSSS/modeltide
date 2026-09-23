@@ -11,14 +11,13 @@ import {
   formatTokens,
   orNA,
 } from "@/client/utils/format";
-import { unclampedPercent } from "@/shared/utils";
-import { getOutputSpeed } from "@/client/utils/cost-estimator";
-import { resolveBlendedPrice, resolveEffectivePricing, PRICE_LEGS } from "@/client/utils/pricing-merge";
+import { computeBlendPrice, unclampedPercent } from "@/shared/utils";
+import { getOutputSpeed } from "@/client/utils/model-utils";
+import { resolveEffectivePricing, PRICE_LEGS } from "@/client/utils/pricing";
 import { InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { PageSection } from "@/client/components/layout";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
-import { useOfficialPricing } from "@/client/pricing/official-pricing-hook";
 import { createDetailView } from "./detail-views";
 import { useSuspenseArtificialRankingsState } from "@/client/api/api-queries";
 
@@ -71,17 +70,9 @@ export function ModelDetailContent({
   showBenchmarks?: boolean;
 }) {
   const { t } = useTranslation();
-  const { getOfficial, isPending: officialPending } = useOfficialPricing();
-  const official = useMemo(() => getOfficial?.(model), [getOfficial, model]);
-  const pricing = useMemo(() => resolveEffectivePricing(model.pricing, official), [model.pricing, official]);
-  const blended = useMemo(() => resolveBlendedPrice(model, official), [model, official]);
+  const pricing = useMemo(() => resolveEffectivePricing(model.pricing), [model.pricing]);
+  const blended = useMemo(() => computeBlendPrice(pricing), [pricing]);
   const cacheWrite = PRICE_LEGS.cacheWritePrice(pricing);
-  const priceValue = (v: number | null | undefined) =>
-    officialPending ? (
-      <span className="ui-skeleton inline-block h-4 w-20 align-middle" aria-hidden="true" />
-    ) : (
-      <>{formatPricePerMillion(v, t)}</>
-    );
   const hasAnyModality = MODALITY_KEYS.some(
     (key) =>
       model[`input_modality_${key}` as keyof ArtificialAnalysisModel] ||
@@ -97,29 +88,26 @@ export function ModelDetailContent({
     <div className="flex flex-col gap-4">
       <StatGrid columns={4}>
         {scoreStats.map(([labelKey, value]) => (
-          <StatCard key={labelKey} label={t(labelKey)} value={formatScore(t, value)} />
+          <StatCard key={labelKey} label={t(labelKey)} value={formatScore(value, t)} />
         ))}
       </StatGrid>
       <InfoGrid>
         <InfoCard title={t("modelInfo")}>
           <InfoRow label={t("creator")} value={orNA(model.model_creators?.name, t)} />
           <InfoRow label={t("releaseDate")} value={orNA(model.release_date, t)} />
-          <InfoRow label={t("openWeights")} value={formatBoolean(t, model.is_open_weights)} />
-          <InfoRow label={t("reasoning")} value={formatBoolean(t, model.is_reasoning === true)} />
+          <InfoRow label={t("openWeights")} value={formatBoolean(model.is_open_weights, t)} />
+          <InfoRow label={t("reasoning")} value={formatBoolean(model.is_reasoning === true, t)} />
           {model.parameters != null && <InfoRow label={t("parameters")} value={formatTokens(model.parameters, t)} />}
           {model.size_class && <InfoRow label={t("sizeClass")} value={titleCaseSizeClass(model.size_class)} />}
         </InfoCard>
         <InfoCard title={t("pricing")}>
-          {officialPending && <span className="sr-only">{t("loading")}</span>}
-          <div aria-busy={officialPending}>
-            <InfoRow label={t("promptPrice")} value={priceValue(PRICE_LEGS.promptPrice(pricing))} />
-            <InfoRow label={t("completionPrice")} value={priceValue(PRICE_LEGS.completionPrice(pricing))} />
-            <InfoRow label={t("cacheHitPrice")} value={priceValue(PRICE_LEGS.cacheHitPrice(pricing))} />
-            {cacheWrite != null && !officialPending && (
-              <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(cacheWrite, t)} />
-            )}
-            <InfoRow label={t("blendedPrice")} value={priceValue(blended)} />
-          </div>
+          <InfoRow label={t("promptPrice")} value={formatPricePerMillion(PRICE_LEGS.promptPrice(pricing), t)} />
+          <InfoRow label={t("completionPrice")} value={formatPricePerMillion(PRICE_LEGS.completionPrice(pricing), t)} />
+          <InfoRow label={t("cacheHitPrice")} value={formatPricePerMillion(PRICE_LEGS.cacheHitPrice(pricing), t)} />
+          {cacheWrite != null && (
+            <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(cacheWrite, t)} />
+          )}
+          <InfoRow label={t("blendedPrice")} value={formatPricePerMillion(blended, t)} />
         </InfoCard>
       </InfoGrid>
       {showBenchmarks && model.benchmarks && Object.values(model.benchmarks).some((v) => v != null) && (
@@ -132,7 +120,7 @@ export function ModelDetailContent({
                   : null
                 : unclampedPercent(value);
               return display == null ? null : (
-                <StatCard key={key} label={benchmarkLabel(key, t)} value={formatScore(t, display)} />
+                <StatCard key={key} label={benchmarkLabel(key, t)} value={formatScore(display, t)} />
               );
             })}
           </StatGrid>

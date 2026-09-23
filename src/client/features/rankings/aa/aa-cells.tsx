@@ -3,7 +3,7 @@ import { useTranslation } from "@/client/providers";
 import { cn } from "@/client/utils/cn";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelId } from "@/client/utils/model-utils";
-import { RankingNameCell } from "@/client/components/data/table-columns";
+import { RankingNameCell } from "@/client/components/data/table/table-columns";
 import { Button } from "@/client/components/ui/button";
 import { ModelDetailContent } from "@/client/features/models/model-details/aa-detail";
 

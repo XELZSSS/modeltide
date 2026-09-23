@@ -2,26 +2,29 @@ import { Fragment, Suspense, lazy } from "react";
 import { SafeLink as Link } from "@/client/router";
 import { useTranslation } from "@/client/providers";
 import {
-  useSuspenseArtificialRankings,
-  useSuspenseClosedReleases,
+  useSuspenseArtificialRankingsState,
+  useSuspenseClosedReleasesState,
   useSuspenseHomeDashboard,
   useSuspenseHallucinationRankings,
   useSuspenseOpenSourceReleases,
   useSuspenseStatusHistory,
 } from "@/client/api/api-queries";
-import { SuspenseQuery, PartialNotice } from "@/client/components/feedback";
+import { PartialNotice } from "@/client/components/feedback";
+import { SuspenseQuery } from "@/client/router/suspense-query";
+import { unwrapObject } from "@/client/api/payload-normalize";
 import { SearchInput } from "@/client/search/search-input";
 import { ChartCard } from "@/client/components/ui/chart-frame";
 import { PageContainer, PageSection } from "@/client/components/layout";
 import { Dot } from "@/client/components/ui/primitives";
-import { resolveEventStyle } from "@/client/features/status/status-events";
+import { eventDurationLabel, resolveEventStyle } from "@/client/features/status/status-events";
 import { sourceLabelKey } from "@/shared/config";
+import type { StatusHistoryPayload } from "@/shared/types";
 import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { useHomeStats } from "./use-home-stats";
 import { KpiStrip, ProviderSpeedCard, TextToImageSection } from "./home-cards";
 
-const IndexLineChart = lazy(() => import("./home-charts").then((m) => ({ default: m.IndexLineChart })));
+const IndexAreaChart = lazy(() => import("./home-charts").then((m) => ({ default: m.IndexAreaChart })));
 const UsageDonut = lazy(() => import("./usage-donut").then((m) => ({ default: m.UsageDonut })));
 const StatisticsSection = lazy(() => import("./statistics-section").then((m) => ({ default: m.StatisticsSection })));
 
@@ -30,10 +33,11 @@ const EVENT_LINK_CLASS =
 
 function useLatestEventSummary() {
   const { data } = useSuspenseStatusHistory();
-  const latest = (data.events ?? [])[0] ?? null;
+  const history = unwrapObject<StatusHistoryPayload>(data, "statusHistory");
+  const latest = (history.events ?? [])[0] ?? null;
   if (!latest) return { latest: null as null, summary: undefined, lastSample: undefined, level: "unknown" as const };
-  const summary = data.sources.find((s) => s.id === latest.id);
-  const samples = data.recent?.[latest.id] ?? [];
+  const summary = history.sources.find((s) => s.id === latest.id);
+  const samples = history.recent?.[latest.id] ?? [];
   const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
   return { latest, summary, lastSample, level: resolveLevel(summary) };
 }
@@ -62,7 +66,7 @@ function HomeLatestEvents() {
       key: "uptime",
       className: "text-text-secondary font-mono",
       title: t("uptime24h"),
-      text: formatUptimePct(t, summary?.uptime24h ?? null),
+      text: formatUptimePct(summary?.uptime24h ?? null, t),
     },
     {
       key: "latency",
@@ -89,9 +93,7 @@ function HomeLatestEvents() {
       </span>
       <span className="flex items-center gap-2 text-xs text-text-secondary shrink-0">
         {latest.type !== "up" && (
-          <span className="font-mono whitespace-nowrap">
-            {latest.durationMin == null ? t("eventOngoing") : t("eventDurationMin", { value: latest.durationMin })}
-          </span>
+          <span className="font-mono whitespace-nowrap">{eventDurationLabel(t, latest.durationMin)}</span>
         )}
         <span className="whitespace-nowrap">{formatRelativeTime(latest.at, t, lang)}</span>
       </span>
@@ -101,10 +103,10 @@ function HomeLatestEvents() {
 
 function HomeContent() {
   const { t } = useTranslation();
-  const artificialData = useSuspenseArtificialRankings();
+  const { items: artificialData, partial: artificialPartial } = useSuspenseArtificialRankingsState();
   const hallucinationRankings = useSuspenseHallucinationRankings();
   const dashboardData = useSuspenseHomeDashboard();
-  const closedReleases = useSuspenseClosedReleases();
+  const { items: closedReleases, partial: closedReleasesPartial } = useSuspenseClosedReleasesState();
   const openSourceReleases = useSuspenseOpenSourceReleases();
   const { trendingStats, hallucinationStats, kpiStrip, providerStats, t2iModels } = useHomeStats(
     artificialData,
@@ -126,7 +128,7 @@ function HomeContent() {
         </div>
       </div>
 
-      {dashboardData.partial && <PartialNotice />}
+      {(dashboardData.partial || closedReleasesPartial || artificialPartial) && <PartialNotice />}
 
       <div className="mb-5 sm:mb-6">
         <KpiStrip kpis={kpiStrip} />
@@ -136,11 +138,22 @@ function HomeContent() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
           <div className="lg:col-span-6">
             <Suspense fallback={<ChartCard loading title={t("intelligenceIndex")} subtitle={t("artificialSource")} />}>
-              <IndexLineChart models={artificialData} />
+              <IndexAreaChart models={artificialData} />
             </Suspense>
           </div>
           <div className="lg:col-span-3">
-            <Suspense fallback={<ChartCard loading />}>
+            <Suspense
+              fallback={
+                <ChartCard
+                  loading
+                  className="h-full"
+                  contentClassName="flex flex-col h-full"
+                  title={t("opensourceTaskShare")}
+                  subtitle={t("openSourceDataSource")}
+                  skeletonHeight="flex-1 min-h-[200px] h-[200px] sm:h-[240px]"
+                />
+              }
+            >
               <UsageDonut models={dashboardData.opensource} />
             </Suspense>
           </div>

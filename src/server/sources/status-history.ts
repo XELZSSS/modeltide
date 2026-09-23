@@ -1,19 +1,18 @@
 import type { AppContext } from "@/server/context";
 import { cacheKeys } from "@/server/config";
-import { buildHistoryPayload, ensureFreshSamples, getUptime } from "@/server/sources/status";
-import { cached } from "@/server/sources/pipeline";
+import { STATUS_TTL_MS } from "@/shared/config";
+import { buildHistoryPayload, ensureFreshSamplesWithHealth, getUptime } from "@/server/sources/status";
+import type { SourcePayload, StatusHistoryPayload } from "@/shared/types";
+import { cachedPayload } from "@/server/sources/pipeline";
 
-const STATUS_PAYLOAD_TTL_MS = 30_000;
-
-export async function getStatusHistory(ctx: AppContext) {
-  return cached(
+export function getStatusHistory(ctx: AppContext): Promise<SourcePayload<StatusHistoryPayload>> {
+  return cachedPayload(
     ctx,
     cacheKeys.statusHistoryPayload,
-    STATUS_PAYLOAD_TTL_MS,
+    STATUS_TTL_MS,
     async () => {
-      const [store, uptime] = await Promise.all([ensureFreshSamples(ctx), getUptime(ctx)]);
-      const data = buildHistoryPayload(store, uptime, Date.now(), ctx.kv != null);
-      return { data, ttl: STATUS_PAYLOAD_TTL_MS };
+      const [fresh, uptime] = await Promise.all([ensureFreshSamplesWithHealth(ctx), getUptime(ctx)]);
+      return { rows: buildHistoryPayload(fresh.store, uptime, Date.now(), fresh.persisted) };
     },
     { memoryOnly: true },
   );

@@ -1,10 +1,5 @@
 # Normalise text files to LF in the repository and in the working tree.
-#
-# Why: the repo stored a mix of CRLF and LF blobs, and on Windows
-# (core.autocrlf=true) a checkout produced CRLF. oxfmt emits LF, so
-# `oxfmt --check` reported "Format issues found in above 233 files" — every
-# file, including untouched ones — and the documented format gate could never
-# pass locally.
+# oxfmt emits LF, so a CRLF checkout makes every file look misformatted.
 #
 # One-time follow-up to rewrite the existing blobs (EOL-only change):
 #   git add --renormalize .

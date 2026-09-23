@@ -112,6 +112,6 @@ describe("getAgentRankings (RSC flight path)", () => {
     const payload = await getAgentRankings(ctx);
     expect(requested).toHaveLength(1);
     expect(requested[0]).toMatchObject({ url: expect.stringContaining("/leaderboard/agent"), rsc: true });
-    expect(payload.entries).toHaveLength(3);
+    expect(payload.data).toHaveLength(3);
   });
 });

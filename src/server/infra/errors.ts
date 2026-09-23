@@ -1,10 +1,8 @@
+// Errors are classified by class and field, never by name; this is the only place that sniffs names.
 export function isTimeoutLike(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    (err.name === "TimeoutError" ||
-      err.name === "AbortError" ||
-      (err as { causedByTimeout?: boolean }).causedByTimeout === true)
-  );
+  if (err instanceof UpstreamError) return err.causedByTimeout;
+  if (err instanceof Error) return err.name === "TimeoutError" || err.name === "AbortError";
+  return false;
 }
 
 export class ApiError extends Error {
@@ -30,11 +28,8 @@ export class ClientAbortError extends ApiError {
   }
 }
 
-/**
- * Re-throw the caller's abort when every leg was aborted: a join source that
- * reports a client abandon as an upstream failure cools the whole key down for
- * FAILURE_COOLDOWN_MS.
- */
+// Re-throw the caller's abort when every leg was aborted: reporting a client abandon as an
+// upstream failure would cool the whole key down for FAILURE_COOLDOWN_MS.
 export function rethrowIfAllAborted(legs: readonly PromiseSettledResult<unknown>[]): void {
   if (legs.length === 0) return;
   if (!legs.every((leg) => leg.status === "rejected" && leg.reason instanceof ClientAbortError)) return;
@@ -43,12 +38,13 @@ export function rethrowIfAllAborted(legs: readonly PromiseSettledResult<unknown>
 
 export class UpstreamError extends ApiError {
   readonly causedByTimeout: boolean;
-  /** Origin HTTP status when the failure came from an upstream response. */
+  readonly retryable: boolean;
   readonly statusCode?: number;
-  constructor(msg: string, opts?: { timeout?: boolean; status?: number }) {
+  constructor(msg: string, opts?: { timeout?: boolean; status?: number; retryable?: boolean }) {
     super(msg, opts?.timeout ? 504 : 502);
     this.name = "UpstreamError";
     this.causedByTimeout = opts?.timeout === true;
+    this.retryable = opts?.retryable === true;
     if (opts?.status != null) this.statusCode = opts.status;
   }
 }

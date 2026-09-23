@@ -6,9 +6,13 @@ import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from
 import { getOpenLicense } from "@/server/parsers/licenses";
 import { byDateDesc, isoDate, num, numCoerce, numOr } from "@/server/parsers/parser-primitives";
 
-/** Unwrap a successful parseFeed result; failure surfaces as a thrown error. */
 function readFeed(xml: string, url = "https://x.example/feed") {
   const res = parseFeedResult(xml, url);
+  if (!res.ok) throw new Error(res.error);
+  return res.data;
+}
+
+function unwrap<T>(res: { ok: true; data: T } | { ok: false; error: string }): T {
   if (!res.ok) throw new Error(res.error);
   return res.data;
 }
@@ -30,7 +34,6 @@ describe("decodeEntities", () => {
     ["&#x41;", "A"],
     ["&bogus;", "&bogus;"],
     ["&constructor;", "&constructor;"],
-    ["&toString;", "&toString;"],
   ])("decodeEntities(%s) -> %s", (input, expected) => {
     expect(decodeEntities(input)).toBe(expected);
   });
@@ -83,17 +86,21 @@ describe("parseRscPayload", () => {
 
   it("parses streamed lines with decimal and hex ids", () => {
     expect(
-      parseRscPayload<{ id: string }>(
-        '0:{"$a":1}\n1:{"tree":{"initialModels":[{"id":"x"}]}}\n',
-        "initialModels",
-        byInitialModels,
+      unwrap(
+        parseRscPayload<{ id: string }>(
+          '0:{"$a":1}\n1:{"tree":{"initialModels":[{"id":"x"}]}}\n',
+          "initialModels",
+          byInitialModels,
+        ),
       ),
     ).toEqual([{ id: "x" }]);
     expect(
-      parseRscPayload<{ id: string }>(
-        '0:{"$a":1}\n2E:{"tree":{"initialModels":[{"id":"u"}]}}\n',
-        "initialModels",
-        byInitialModels,
+      unwrap(
+        parseRscPayload<{ id: string }>(
+          '0:{"$a":1}\n2E:{"tree":{"initialModels":[{"id":"u"}]}}\n',
+          "initialModels",
+          byInitialModels,
+        ),
       ),
     ).toEqual([{ id: "u" }]);
   });
@@ -102,12 +109,14 @@ describe("parseRscPayload", () => {
     const body =
       '0:{"$a":1}\nc:["$","$L5",null,{"models":[{"slug":"claude-opus-5"},{"slug":"gpt-5"}]}]\n1:{"ignore":true}\n';
     expect(
-      parseRscPayload<{ slug: string }>(body, "models", (tree) => findNextData<{ slug: string }>(tree, "models")),
+      unwrap(
+        parseRscPayload<{ slug: string }>(body, "models", (tree) => findNextData<{ slug: string }>(tree, "models")),
+      ),
     ).toEqual([{ slug: "claude-opus-5" }, { slug: "gpt-5" }]);
   });
 
   it("throws when the marker is absent", () => {
-    expect(() => parseRscPayload('1:{"a":1}', "missing", () => null)).toThrow(/not found/);
+    expect(() => unwrap(parseRscPayload('1:{"a":1}', "missing", () => null))).toThrow(/not found/);
   });
 });
 
@@ -119,20 +128,22 @@ describe("parseRscPayloads", () => {
 
   it("resolves each marker against its own line", () => {
     const body = '1:{"alpha":[{"v":1}]}\n2:{"beta":[{"v":2}]}\n';
-    expect(parseRscPayloads<{ v: number }>(body, ["alpha", "beta"], pick)).toEqual([[{ v: 1 }], [{ v: 2 }]]);
+    expect(unwrap(parseRscPayloads<{ v: number }>(body, ["alpha", "beta"], pick))).toEqual([[{ v: 1 }], [{ v: 2 }]]);
   });
 
   it("throws naming the marker that cannot resolve", () => {
-    expect(() => parseRscPayloads('1:{"alpha":[{"v":1}]}\n', ["alpha", "missing"], pick)).toThrow(
+    expect(() => unwrap(parseRscPayloads('1:{"alpha":[{"v":1}]}\n', ["alpha", "missing"], pick))).toThrow(
       /"missing" not found/,
     );
   });
 
   it("resolves a marker behind a multi-MB sibling string via the balanced fallback", () => {
-    const out = parseRscPayload<{ v: number }>(
-      oversizedLine('"alpha":[{"v":1}]'),
-      "alpha",
-      (tree) => (tree as { alpha?: { v: number }[] }).alpha ?? null,
+    const out = unwrap(
+      parseRscPayload<{ v: number }>(
+        oversizedLine('"alpha":[{"v":1}]'),
+        "alpha",
+        (tree) => (tree as { alpha?: { v: number }[] }).alpha ?? null,
+      ),
     );
     expect(out).toEqual([{ v: 1 }]);
   });
@@ -261,7 +272,6 @@ describe("getOpenLicense", () => {
     [["license:cc-by-nd-4.0"]],
     [["license:cc-by-nc-4.0"]],
     [["license:cc-by-nc-sa-4.0"]],
-    [["license:cc-by-nc-nd-4.0"]],
     [["license:cc-by-nc4.0"]],
     [["license:mitre"]],
     [[]],

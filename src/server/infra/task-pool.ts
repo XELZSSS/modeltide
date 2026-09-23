@@ -1,3 +1,48 @@
+function abortError(): Error {
+  return new Error("Aborted");
+}
+
+async function runTask<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return task();
+  if (signal.aborted) throw abortError();
+
+  // Race the signal: a task that never observes it must not leave the pool waiting forever.
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const onAbort = (): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      reject(abortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve()
+      .then(() => (settled ? undefined : task()))
+      .then(
+        (value) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          resolve(value as T);
+        },
+        (reason: unknown) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          reject(reason);
+        },
+      );
+  });
+}
+
+/** Raised for a task a pool deadline stopped before its body ever started. */
+export class TaskNotRunError extends Error {
+  constructor() {
+    super("Pool deadline passed before the task started");
+    this.name = "TaskNotRunError";
+  }
+}
+
 export async function runCapped<T>(
   tasks: readonly (() => Promise<T>)[],
   concurrency: number,
@@ -13,7 +58,7 @@ export async function runCapped<T>(
           const j = cursor;
           cursor += 1;
           if (results[j] === undefined) {
-            results[j] = { status: "rejected", reason: new Error("Aborted") };
+            results[j] = { status: "rejected", reason: new TaskNotRunError() };
           }
         }
         return;
@@ -23,7 +68,7 @@ export async function runCapped<T>(
       const task = tasks[i];
       if (!task) break;
       try {
-        results[i] = { status: "fulfilled", value: await task() };
+        results[i] = { status: "fulfilled", value: await runTask(task, opts?.signal) };
       } catch (reason) {
         results[i] = { status: "rejected", reason };
       }

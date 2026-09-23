@@ -1,8 +1,10 @@
-import type { ArtificialAnalysisModel, OfficialPriceModel } from "@/shared/types";
+import type { ArtificialAnalysisModel } from "@/shared/types";
 import { isFiniteNumber } from "@/shared/utils";
-import { getOutputSpeed } from "@/client/utils/cost-estimator";
-import { resolveEffectivePricing } from "@/client/utils/pricing-merge";
 import type { ModelSource } from "@/client/config/nav-config";
+
+export function getOutputSpeed(model: ArtificialAnalysisModel): number | null {
+  return model.speed?.median_output_speed ?? null;
+}
 
 export function modelId(m: { id?: string; slug?: string }): string {
   return m.id || m.slug || "";
@@ -25,7 +27,7 @@ export function modelDisplayName(m: { short_name?: string | null; name?: string 
   return m?.short_name || m?.name || "";
 }
 
-function groupByProvider(models: ArtificialAnalysisModel[], unknownLabel = "Unknown") {
+function groupByProvider(models: ArtificialAnalysisModel[], unknownLabel: string) {
   const providers = new Map<string, { name: string; color: string; models: ArtificialAnalysisModel[] }>();
   for (const m of models) {
     const name = m.model_creators?.name || unknownLabel;
@@ -53,17 +55,11 @@ export interface ProviderStats {
   avgIntelligence: number | null;
 }
 
-export function computeProviderStats(
-  models: ArtificialAnalysisModel[],
-  unknownLabel = "Unknown",
-  getOfficial?: (m: ArtificialAnalysisModel) => OfficialPriceModel | undefined,
-): ProviderStats[] {
+export function computeProviderStats(models: ArtificialAnalysisModel[], unknownLabel: string): ProviderStats[] {
   return groupByProvider(models, unknownLabel)
     .map(({ name, color, models: group }) => {
       const count = group.length;
-      const prices = group
-        .map((m) => resolveEffectivePricing(m.pricing, getOfficial?.(m)).input)
-        .filter(isFiniteNumber);
+      const prices = group.map((m) => m.pricing?.input).filter(isFiniteNumber);
       const avgPrice = avg(prices);
       const avgSpeed = avg(group.map(getOutputSpeed).filter(isFiniteNumber));
       const avgIntelligence = avg(group.map((m) => m.intelligence_index).filter(isFiniteNumber));

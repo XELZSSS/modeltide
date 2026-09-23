@@ -10,22 +10,17 @@
   "vars": {},
 
   "assets": {
-    // Not used with the Cloudflare Vite plugin (it points at the client build
-    // output automatically); kept for `wrangler deploy` parity.
+    // Unused with the Cloudflare Vite plugin; kept for `wrangler deploy` parity.
     "directory": "./dist/client",
     "not_found_handling": "single-page-application",
-    // The Worker's non-API branch calls env.ASSETS.fetch, and wrangler only wires
-    // that binding when a name is declared here — without it the binding is
-    // undefined and any non-API request reaching the Worker answers a plain-text
-    // 500. "/api" is listed explicitly because "/api/*" does not match the bare
-    // path, which would otherwise fall through to the SPA shell (HTML, 200).
+    // Wrangler wires env.ASSETS only when a name is declared here; without it a non-API request 500s.
+    // "/api" is listed explicitly because "/api/*" does not match the bare path.
     "binding": "ASSETS",
     "run_worker_first": ["/api", "/api/*"],
   },
 
   "triggers": {
-    // Off-peak minutes (13/43): keep the 30-min cadence but avoid the global
-    // :00/:30 cron stampede on shared upstreams (HF, RSS, AA, ...).
+    // Off-peak minutes (13/43): keeps the 30-min cadence off the global :00/:30 cron stampede.
     "crons": ["13,43 * * * *"],
   },
 
@@ -37,6 +32,7 @@
     "mode": "smart",
   },
 
+  // Replace this placeholder with the account-specific ID before deploying.
   "kv_namespaces": [{ "binding": "CACHE", "id": "df8295997e6f42a7803a9d25b7e12f25" }],
 
   "dev": {

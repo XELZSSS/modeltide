@@ -1,14 +1,15 @@
-import { isSuitableNewsItem, isRecord } from "@/server/parsers/parser-primitives";
+import { isSuitableNewsItem, isRecord, truncateSafe } from "@/server/parsers/parser-primitives";
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
 import { MAX_FEED_BYTES } from "@/server/config";
-import { utf8ByteLength, sourceNameFromUrl as channelHost } from "@/shared/utils";
+import { utf8ByteLength } from "@/server/infra/hash";
+import { sourceNameFromUrl as channelHost } from "@/server/parsers/url";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
 
 import { decodeEntities } from "@/server/parsers/html-entities";
 import { stripHtml } from "@/server/parsers/html-to-text";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
-import { SOURCE_LIMITS } from "@/shared/config";
+import { SOURCE_LIMITS } from "@/server/config/limits";
 
 const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
 const UNSAFE_LINK_CHARS_RE = /["<>\s]/;
@@ -42,13 +43,6 @@ function textOf(v: unknown): string | null {
     if (typeof t === "number" && Number.isFinite(t)) return String(t);
   }
   return null;
-}
-
-function truncateSafe(s: string, max: number): string {
-  if (s.length <= max) return s;
-  const cut = max - 1;
-  const c = s.charCodeAt(cut);
-  return c >= 0xd800 && c <= 0xdbff ? s.slice(0, cut) : s.slice(0, max);
 }
 
 function cleanTitle(raw: string): string {
@@ -148,8 +142,7 @@ function parseChannel(feed: unknown, sourceUrl: string): ParseResult<NewsItem[]>
   if (records.length === 0 && rawItems.length > 0) {
     return parseFail(`Unrecognized feed items at ${sourceUrl}`);
   }
-  // Cap work before mapping: a hostile feed could stuff thousands of items
-  // inside the 2MB byte cap.
+  // Cap work before mapping: a hostile feed could stuff thousands of items inside the 2MB byte cap.
   const bounded = records.slice(0, MAX_ITEMS_PER_FEED * 4);
   const parsed = bounded
     .map((item) => toNewsItem(item, source))

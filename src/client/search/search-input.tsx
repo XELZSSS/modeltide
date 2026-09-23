@@ -1,252 +1,61 @@
-import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react";
-import { useResetOnChange } from "@/client/hooks/use-reset-on-change";
-import { useRouter } from "@/client/router";
-import { Loader2, Search, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/client/utils/cn";
-import { Input } from "@/client/components/ui/input";
+import { useRouter } from "@/client/router";
 import { useTranslation } from "@/client/providers";
-import { useSearchStore } from "@/client/stores";
-import type { SearchResult } from "@/shared/types";
+import { useRouteSearchTerm } from "@/client/stores";
+import type { SearchResult } from "@/client/search/types";
 import { useSearchAllRankings, MIN_QUERY } from "@/client/search/use-search";
+import { Combobox, useCombobox } from "@/client/search/combobox";
 
 export function SearchInput({ className }: { className?: string }) {
   const { t } = useTranslation();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const inputId = useId();
-  const listboxId = useId();
-  const statusId = useId();
 
-  const searchTerm = useSearchStore((s) => s.searchTerm);
-  const setSearchTerm = useSearchStore((s) => s.setSearchTerm);
-  const { inputValue, setInputValue, debounced, setDebouncedDirect } = useDebouncedTerm("", 200);
-  const canSearch = inputValue.trim().length >= MIN_QUERY;
+  const { term: searchTerm, setTerm: setSearchTerm } = useRouteSearchTerm();
 
-  useEffect(() => {
-    if (debounced !== searchTerm) setSearchTerm(debounced);
-  }, [debounced, searchTerm, setSearchTerm]);
-
-  // The corpus queries warm while the box is focused, so the burst lands before the
-  // term is long enough for the dropdown; an untouched, unfocused box stays silent.
+  // The corpus queries warm while the box is focused; an untouched, unfocused box stays silent.
   const { results, isPending, isError } = useSearchAllRankings(searchTerm, { suspended: !isOpen, warm: isFocused });
-  // The query only sees the debounced term, so the raw input still being ahead of it
-  // means "nothing has run yet", not "no matches".
-  const pending = isPending || inputValue !== searchTerm;
 
-  const clearSearch = () => {
-    setDebouncedDirect("");
-  };
-
-  function goToResult(result: SearchResult | undefined): void {
-    if (!result) return;
-    clearSearch();
-    router.push(result.link);
-    setIsOpen(false);
-  }
-
-  const { clampedIndex, setActiveIndex, handleKeyDown } = useListKeyboard(
-    results.length,
-    (idx) => goToResult(results[idx]),
-    () => {
-      setIsOpen(false);
-      inputRef.current?.focus();
+  const combobox = useCombobox({
+    initialValue: searchTerm,
+    minQuery: MIN_QUERY,
+    itemCount: results.length,
+    isOpen,
+    setIsOpen,
+    setIsFocused,
+    onSelect: (index) => {
+      const result = results[index];
+      if (result) router.push(result.link);
     },
-  );
-
-  useClickOutside(containerRef, () => setIsOpen(false));
-
-  useEffect(() => {
-    if (!isOpen || clampedIndex < 0) return;
-    listRef.current
-      ?.querySelector(`#${CSS.escape(`${listboxId}-option-${clampedIndex}`)}`)
-      ?.scrollIntoView({ block: "nearest" });
-  }, [clampedIndex, isOpen, listboxId]);
-
-  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-      e.preventDefault();
-      if (canSearch) setIsOpen(true);
-      return;
-    }
-    if (!isOpen) return;
-    handleKeyDown(e);
-  }
-
-  return (
-    <div ref={containerRef} className={cn("relative w-full sm:w-72 min-w-0 max-w-full", className)}>
-      <label htmlFor={inputId} className="sr-only">
-        {t("searchPlaceholder")}
-      </label>
-      <div className="flex h-9 items-center gap-2 min-w-0 max-w-full ui-card px-3 transition-colors duration-fast focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-ring/30">
-        <Search size={16} className="text-text-secondary shrink-0" aria-hidden="true" />
-        <Input
-          ref={inputRef}
-          id={inputId}
-          type="text"
-          value={inputValue}
-          role="combobox"
-          aria-expanded={isOpen}
-          aria-controls={listboxId}
-          aria-activedescendant={clampedIndex >= 0 ? `${listboxId}-option-${clampedIndex}` : undefined}
-          aria-autocomplete="list"
-          aria-describedby={statusId}
-          autoComplete="off"
-          onChange={(e) => {
-            setInputValue(e.target.value);
-            setIsOpen(e.target.value.trim().length >= MIN_QUERY);
-            setActiveIndex(-1);
-          }}
-          onFocus={() => {
-            setIsFocused(true);
-            if (canSearch) {
-              setIsOpen(true);
-              setActiveIndex(-1);
-            }
-          }}
-          onBlur={() => setIsFocused(false)}
-          onKeyDown={onKeyDown}
-          placeholder={t("searchPlaceholder")}
-          className="flex-1 border-0 bg-transparent px-0 h-full focus:border-transparent focus:ring-0"
-        />
-        <button
-          type="button"
-          aria-label={t("clear")}
-          aria-hidden={inputValue ? undefined : true}
-          tabIndex={inputValue ? 0 : -1}
-          onClick={() => {
-            clearSearch();
-            setIsOpen(false);
-            setActiveIndex(-1);
-            inputRef.current?.focus();
-          }}
-          className={cn(
-            "shrink-0 p-1 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-            !inputValue && "invisible pointer-events-none",
-          )}
-        >
-          <X size={14} className="text-text-secondary" />
-        </button>
-      </div>
-
-      {isOpen && canSearch && (
-        <div
-          id={listboxId}
-          ref={listRef}
-          role="listbox"
-          className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay-md z-40 animate-fade-in"
-        >
-          <div className="p-1.5">
-            <SearchDropdown
-              listboxId={listboxId}
-              results={results}
-              isPending={pending}
-              isError={isError}
-              activeIndex={clampedIndex}
-              onHover={setActiveIndex}
-              onSelect={goToResult}
-            />
-          </div>
-        </div>
-      )}
-      <div id={statusId} role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {isOpen && canSearch && !pending && t("searchResultsCount", { count: results.length })}
-      </div>
-    </div>
-  );
-}
-
-function useDebouncedTerm(
-  initial: string,
-  delayMs = 200,
-): {
-  inputValue: string;
-  setInputValue: (v: string) => void;
-  debounced: string;
-  setDebouncedDirect: (v: string) => void;
-} {
-  const [inputValue, setInputValue] = useState(initial);
-  const [debounced, setDebounced] = useState(initial);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      setDebounced(inputValue);
-    }, delayMs);
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [inputValue, delayMs]);
-  const setDebouncedDirect = useCallback((v: string) => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    setDebounced(v);
-    setInputValue(v);
-  }, []);
-  return { inputValue, setInputValue, debounced, setDebouncedDirect };
-}
-
-function useClickOutside(ref: RefObject<HTMLElement | null>, onOutside: () => void) {
-  const onOutsideRef = useRef(onOutside);
-  useEffect(() => {
-    onOutsideRef.current = onOutside;
   });
 
   useEffect(() => {
-    function handle(e: Event) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onOutsideRef.current();
-    }
-    document.addEventListener("pointerdown", handle);
-    document.addEventListener("focusin", handle);
-    return () => {
-      document.removeEventListener("pointerdown", handle);
-      document.removeEventListener("focusin", handle);
-    };
-  }, [ref]);
-}
+    if (combobox.debounced !== searchTerm) setSearchTerm(combobox.debounced);
+  }, [combobox.debounced, searchTerm, setSearchTerm]);
 
-function useListKeyboard(itemCount: number, onSelect: (index: number) => void, onClose?: () => void) {
-  const [activeIndex, setActiveIndex] = useState(-1);
-  if (useResetOnChange(itemCount)) setActiveIndex(-1);
+  // The query sees only the debounced term, so input ahead of it means "nothing has run yet".
+  const pending = isPending || combobox.inputValue !== searchTerm;
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setActiveIndex(-1);
-        onClose?.();
-        return;
-      }
-      if (itemCount === 0) {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") e.preventDefault();
-        return;
-      }
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveIndex((i) => (i + 1) % itemCount);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveIndex((i) => (i <= 0 ? itemCount - 1 : i - 1));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        const clamped = activeIndex < 0 ? -1 : Math.min(activeIndex, itemCount - 1);
-        if (clamped >= 0) onSelect(clamped);
-        setActiveIndex(-1);
-      }
-    },
-    [itemCount, activeIndex, onSelect, onClose],
+  return (
+    <Combobox
+      controller={combobox}
+      className={className}
+      status={pending ? null : t("searchResultsCount", { count: results.length })}
+    >
+      <SearchDropdown
+        listboxId={combobox.listboxId}
+        results={results}
+        isPending={pending}
+        isError={isError}
+        activeIndex={combobox.activeIndex}
+        onHover={combobox.onHover}
+        onSelect={combobox.onSelectIndex}
+      />
+    </Combobox>
   );
-
-  const clampedIndex = activeIndex < 0 ? -1 : Math.min(activeIndex, itemCount - 1);
-
-  return { clampedIndex, setActiveIndex, handleKeyDown };
 }
 
 function SearchDropdown({
@@ -264,7 +73,7 @@ function SearchDropdown({
   isError: boolean;
   activeIndex: number;
   onHover: (i: number) => void;
-  onSelect: (r: SearchResult) => void;
+  onSelect: (index: number) => void;
 }) {
   const { t } = useTranslation();
   if (isPending && results.length === 0) {
@@ -292,7 +101,6 @@ function SearchDropdown({
   return (
     <>
       {results.map((result, index) => (
-        // A <div>: the combobox input drives selection via aria-activedescendant.
         <div
           key={`${result.source}-${result.id}-${index}`}
           id={`${listboxId}-option-${index}`}
@@ -303,12 +111,10 @@ function SearchDropdown({
             activeIndex === index ? "bg-hover" : "hoverable:hover:bg-hover",
           )}
           onMouseEnter={() => onHover(index)}
-          // Keep focus on the input. A row is not focusable, so the browser's
-          // mousedown default moves focus to the body — the focusin listener in
-          // useClickOutside then closes the list and unmounts this row before its
-          // click is delivered, so the selection silently disappeared.
+          // Keep focus on the input: a mousedown default moves focus to the body, whose focusin
+          // closes the list and unmounts this row before its click is delivered.
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onSelect(result)}
+          onClick={() => onSelect(index)}
         >
           <span className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-text-primary truncate">{result.name}</span>

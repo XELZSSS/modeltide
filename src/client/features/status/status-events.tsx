@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { useTranslation } from "@/client/providers";
 import type { StatusEvent } from "@/shared/types";
+import type { TFunction } from "@/shared/i18n";
 import { cn } from "@/client/utils/cn";
 import { formatRelativeTime } from "@/client/utils/format";
 import { sourceLabelKey } from "@/shared/config";
@@ -15,9 +16,12 @@ const EVENT_STYLES = {
 
 type EventType = keyof typeof EVENT_STYLES;
 
-/** Unknown future event types fall back to "up" styling so a backend addition can't crash the UI. */
 export function resolveEventStyle(type: string): (typeof EVENT_STYLES)[EventType] {
   return Object.hasOwn(EVENT_STYLES, type) ? EVENT_STYLES[type as EventType] : EVENT_STYLES.up;
+}
+
+export function eventDurationLabel(t: TFunction, durationMin: number | null): string {
+  return durationMin == null ? t("eventOngoing") : t("eventDurationMin", { value: durationMin });
 }
 
 const StatusEventRow = memo(function StatusEventRow({
@@ -37,7 +41,6 @@ const StatusEventRow = memo(function StatusEventRow({
   return (
     <div className="flex items-start justify-between gap-3 px-4 py-3">
       <div className="flex items-start gap-2 min-w-0">
-        {/* mt-1.5 centres the 8px dot on the 20px first line now that the row is top-aligned. */}
         <Dot size="sm" color={style.color} className="mt-1.5" />
         <div className="min-w-0">
           <div className="text-sm">
@@ -57,11 +60,7 @@ const StatusEventRow = memo(function StatusEventRow({
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0 text-xs text-text-secondary">
-        {event.type !== "up" && (
-          <span className="font-mono">
-            {event.durationMin == null ? t("eventOngoing") : t("eventDurationMin", { value: event.durationMin })}
-          </span>
-        )}
+        {event.type !== "up" && <span className="font-mono">{eventDurationLabel(t, event.durationMin)}</span>}
         {showTime && <span>{formatRelativeTime(event.at, t, lang)}</span>}
       </div>
     </div>
@@ -84,9 +83,9 @@ export const StatusEventList = memo(function StatusEventList({
   }
   return (
     <div className="ui-card divide-y divide-border">
-      {events.map((event, idx) => (
+      {events.map((event) => (
         <StatusEventRow
-          key={`${event.id}-${event.at}-${event.type}-${idx}`}
+          key={`${event.id}-${event.at}-${event.type}`}
           event={event}
           showSource={showSource}
           showTime={showTime}

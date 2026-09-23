@@ -1,7 +1,7 @@
 import { formatIndex, formatPercent } from "@/client/utils/format";
 import type { HallucinationRankingEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/components/data/table";
-import { monoCol, type DataTableColumn } from "@/client/components/data/table-columns";
+import { monoCol, type DataTableColumn } from "@/client/components/data/table/table-columns";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import type { useTranslation } from "@/client/providers";
 
@@ -12,11 +12,11 @@ function buildHallColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableC
       (item) => item.model,
       (item) => item.model,
     ),
-    monoCol("hallucinationRate", t("hallucinationRate"), (item) => formatPercent(t, item.hallucinationRate), {
+    monoCol("hallucinationRate", t("hallucinationRate"), (item) => formatPercent(item.hallucinationRate, t), {
       emphasis: "strong",
     }),
-    monoCol("accuracy", t("accuracy"), (item) => formatPercent(t, item.accuracy), { hiddenMd: true }),
-    monoCol("attemptRate", t("attemptRate"), (item) => formatPercent(t, item.attemptRate), { hiddenMd: true }),
+    monoCol("accuracy", t("accuracy"), (item) => formatPercent(item.accuracy, t), { hiddenMd: true }),
+    monoCol("attemptRate", t("attemptRate"), (item) => formatPercent(item.attemptRate, t), { hiddenMd: true }),
     monoCol("omniscienceIndex", t("omniscienceIndex"), (item) => formatIndex(item.omniscienceIndex), {
       hiddenMd: true,
     }),

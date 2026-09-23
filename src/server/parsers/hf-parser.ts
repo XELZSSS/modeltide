@@ -8,10 +8,10 @@ import {
   isValidRowId,
 } from "@/server/parsers/parser-primitives";
 import type { NewsItem, OpenSourceModelEntry } from "@/shared/types";
-import { SOURCE_LIMITS } from "@/shared/config";
+import { SOURCE_LIMITS } from "@/server/config/limits";
 import { upstreamConfig } from "@/server/config";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
-import { getOpenLicense, getOpenLicenseId, isRecognizedNonOpenLicense, licenseTagId } from "@/server/parsers/licenses";
+import { getOpenLicenseId, isRecognizedNonOpenLicense, licenseTagId } from "@/server/parsers/licenses";
 import { dedupeBy } from "@/shared/utils";
 import type { DailyPaperEntry, HFModel } from "@/server/parsers/upstream-types";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
@@ -22,58 +22,58 @@ function resolveAuthor(m: HFModel, id: string): string | null {
   return strOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
 }
 
-export interface LicenseDrops {
-  /** Rows that declare no `license:` tag at all. */
+interface LicenseDrops {
   withoutTag: number;
-  /** Rows that declare one the gate rejects: non-open or unrecognized. */
   declaredNonOpen: number;
-  /** Unrecognized tag ids (HF's own non-open sentinels excluded), capped. */
   unknownTags: string[];
 }
 
-/**
- * Why rows lose their license. Both causes leave `license` null, so the sources
- * would otherwise report one indistinguishable drop count; splitting them keeps
- * "no license declared" (upstream habit, mostly fresh research repos) apart from
- * "declared, but not open" in the fetch logs.
- */
-export function summarizeLicenseDrops(items: unknown[], cap = 5): LicenseDrops {
-  const unknown = new Set<string>();
-  let withoutTag = 0;
-  let declaredNonOpen = 0;
-  for (const raw of items) {
-    if (!isRecord(raw)) continue;
-    const tags = (raw as HFModel).tags;
-    const ids = Array.isArray(tags) ? tags.map(licenseTagId).filter((id): id is string => id != null) : [];
+const MAX_UNKNOWN_LICENSE_TAGS = 5;
+
+export class LicenseDropTally {
+  private withoutTag = 0;
+  private declaredNonOpen = 0;
+  private readonly unknownTags = new Set<string>();
+
+  record(ids: readonly string[], license: string | null): void {
     if (ids.length === 0) {
-      withoutTag++;
-      continue;
+      this.withoutTag += 1;
+      return;
     }
-    if (getOpenLicenseId(ids) != null) continue;
-    declaredNonOpen++;
+    if (license != null) return;
+    this.declaredNonOpen += 1;
     for (const id of ids) {
-      if (isRecognizedNonOpenLicense(id) || unknown.has(id)) continue;
-      if (unknown.size >= cap) break;
-      unknown.add(id);
+      if (isRecognizedNonOpenLicense(id) || this.unknownTags.has(id)) continue;
+      if (this.unknownTags.size >= MAX_UNKNOWN_LICENSE_TAGS) break;
+      this.unknownTags.add(id);
     }
   }
-  return { withoutTag, declaredNonOpen, unknownTags: [...unknown] };
+
+  drops(): LicenseDrops {
+    return { withoutTag: this.withoutTag, declaredNonOpen: this.declaredNonOpen, unknownTags: [...this.unknownTags] };
+  }
 }
 
-/**
- * Detail shape: keeps `tags`, which only the model page renders. Lists ship the
- * same row through `mapListModel` instead — `tags` is about half of a list row
- * and no list, table, compare or search consumer reads it.
- */
+/** Detail shape: keeps `tags`, which only the model page renders. */
 export function mapModel(m: unknown): OpenSourceModelEntry | null {
   return toEntry(m, true);
 }
 
-export function mapListModel(m: unknown): OpenSourceModelEntry | null {
-  return toEntry(m, false);
+export function mapListModel(m: unknown, tally?: LicenseDropTally): OpenSourceModelEntry | null {
+  return toEntry(m, false, tally);
 }
 
-function toEntry(m: unknown, includeTags: boolean): OpenSourceModelEntry | null {
+export function isOpenReleaseEntry(m: { license: string | null; createdAt: string | null }): boolean {
+  if (m.license == null) return false;
+  if (m.createdAt == null) return false;
+  return true;
+}
+
+export function keepOpenSourceRanking(m: { downloads: number }): boolean {
+  return Number.isFinite(m.downloads) && m.downloads > 0;
+}
+
+function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): OpenSourceModelEntry | null {
   if (!isRecord(m)) return null;
   const model = m as HFModel;
   if (!isValidRowId(model.id)) return null;
@@ -81,7 +81,9 @@ function toEntry(m: unknown, includeTags: boolean): OpenSourceModelEntry | null 
   const downloads = numIntCoerceNonNegative(model.downloads) ?? 0;
   const likes = numIntCoerceNonNegative(model.likes) ?? 0;
   const tags = Array.isArray(model.tags) ? model.tags.filter((t): t is string => typeof t === "string") : [];
-  const license = getOpenLicense(tags);
+  const licenseIds = tags.map(licenseTagId).filter((licenseId): licenseId is string => licenseId != null);
+  const license = getOpenLicenseId(licenseIds);
+  tally?.record(licenseIds, license);
   const entry: OpenSourceModelEntry = {
     id,
     author: resolveAuthor(model, id),

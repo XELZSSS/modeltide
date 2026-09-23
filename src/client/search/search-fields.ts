@@ -15,11 +15,8 @@ interface SourceSearchRow {
 
 type SearchFieldAccessor<T> = (item: T) => (string | null | undefined)[];
 
-/**
- * The single per-source field list, shared by the global dropdown and the table row filter:
- * both must match on the same superset so a term that finds a row in the dropdown also
- * finds it in the table underneath.
- */
+/** Single per-source field list, shared by the dropdown and the table row filter: both must match
+ *  on the same superset, or a term hits a row in one and not the other. */
 export const SEARCH_FIELDS = {
   aa: (m: ArtificialAnalysisModel) => [m.name, m.slug, m.short_name, m.model_creators?.name],
   or: (e: OpenRouterRankEntry) => [e.name, e.id, e.creator],

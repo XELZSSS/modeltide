@@ -49,7 +49,7 @@ export const ProviderSpeedCard = memo(function ProviderSpeedCard({
                 {p.name}
               </LabeledDot>
               <span className="text-sm font-semibold font-mono ml-3 shrink-0">
-                {formatSpeed(t, p.avgSpeed)} {t("tokensPerSecond")}
+                {formatSpeed(p.avgSpeed, t)} {t("tokensPerSecond")}
               </span>
             </div>
           ))}
@@ -90,7 +90,7 @@ export const TextToImageSection = memo(function TextToImageSection({ models }: {
   return (
     <PageSection title={t("textToImage")} description={t("artificialSource")}>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {models.slice(0, 8).map((entry) => (
+        {models.map((entry) => (
           <TextToImageCard key={entry.id} entry={entry} />
         ))}
       </div>

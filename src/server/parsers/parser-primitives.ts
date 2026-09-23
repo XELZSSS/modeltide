@@ -22,12 +22,6 @@ export const numCoerceNonNegative = (v: unknown): number | null => {
   return n != null && n >= 0 ? n : null;
 };
 
-/** Strictly positive: a 0 rate means "not priced", not "free". */
-export const numCoercePositive = (v: unknown): number | null => {
-  const n = numCoerce(v);
-  return n != null && n > 0 ? n : null;
-};
-
 const ISO_LIKE_RE = /^\d{4}-\d{2}-\d{2}(?:[T ]\S*)?$/;
 export const isoDate = (v: unknown): string | null => {
   if (typeof v !== "string") return null;
@@ -57,11 +51,13 @@ export const numIntCoerceNonNegative = (v: unknown): number | null => {
 
 export const titleCase = (s: string): string => (s ? s[0]!.toUpperCase() + s.slice(1).toLowerCase() : s);
 
-export const humanizeId = (id: string): string =>
-  id
-    .split("-")
-    .map((part) => (part ? part[0]!.toUpperCase() + part.slice(1) : part))
-    .join(" ");
+/** Length cap that never cuts between the halves of a surrogate pair. */
+export function truncateSafe(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = max - 1;
+  const c = s.charCodeAt(cut);
+  return c >= 0xd800 && c <= 0xdbff ? s.slice(0, cut) : s.slice(0, max);
+}
 
 /** Date.parse with a -Infinity fallback so unparseable dates always sort last. */
 export function parseTs(v: unknown, positiveOnly = false): number {
@@ -71,10 +67,7 @@ export function parseTs(v: unknown, positiveOnly = false): number {
   return t;
 }
 
-/**
- * Descending date; unparseable dates sink to the bottom and two of them compare
- * equal instead of producing a NaN comparator (`-Infinity - -Infinity`).
- */
+/** Two unparseable dates compare equal instead of producing a NaN comparator (`-Infinity - -Infinity`). */
 export function byDateDesc<T>(getDate: (item: T) => unknown): (a: T, b: T) => number {
   return (a, b) => {
     const ta = parseTs(getDate(a));
@@ -83,10 +76,6 @@ export function byDateDesc<T>(getDate: (item: T) => unknown): (a: T, b: T) => nu
   };
 }
 
-/**
- * Descending numeric score; null/unfinite scores sink to the bottom, and two
- * scoreless items compare equal instead of producing a NaN comparator.
- */
 export function byNumberDesc<T>(score: (item: T) => number | null | undefined): (a: T, b: T) => number {
   return (a, b) => {
     const sa = score(a);
@@ -113,7 +102,6 @@ const PLACEHOLDER_TEXTS = new Set([
   "test",
 ]);
 
-// Shared XSS payload fragment — single source for the three gates below.
 const XSS_BAD_SRC = String.raw`javascript:|vbscript:|<script|data:text\/html`;
 
 const UNSUITABLE_RE = new RegExp(
@@ -184,27 +172,10 @@ export function isValidTextToImageEntry(entry: {
   return true;
 }
 
-export function isUsablePricing(input: number | null | undefined, output: number | null | undefined): boolean {
-  if (input == null && output == null) return false;
-  if (input != null && (!Number.isFinite(input) || input < 0)) return false;
-  if (output != null && (!Number.isFinite(output) || output < 0)) return false;
-  return true;
-}
-
 export function isValidOpenRouterDirectoryRow(m: unknown): boolean {
   if (!isRecord(m)) return false;
   if (!isValidRowId(m.id)) return false;
   if (m.pricing == null || typeof m.pricing !== "object") return false;
-  return true;
-}
-
-export function keepOpenSourceRanking(m: { downloads: number }): boolean {
-  return Number.isFinite(m.downloads) && m.downloads > 0;
-}
-
-export function isOpenReleaseEntry(m: { license: string | null; createdAt: string | null }): boolean {
-  if (m.license == null) return false;
-  if (m.createdAt == null) return false;
   return true;
 }
 

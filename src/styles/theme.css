@@ -3,6 +3,7 @@
   --color-bg-secondary: var(--bg-secondary);
   --color-bg-tertiary: var(--bg-tertiary);
   --color-bg-card: var(--bg-card);
+  --color-bg-overlay: var(--bg-overlay);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
@@ -18,12 +19,16 @@
   --color-success-light: var(--success-light);
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
+  --color-degraded: var(--degraded);
   --color-info: var(--info);
   --color-info-light: var(--info-light);
   --color-nav-bg: var(--nav-bg);
 
-  /* Flat language: intentional zero-radius ladder (xs→full all 0).
-     Keep the scale so future rounding is a token-only change. */
+  /* Declared so utilities.css media queries and MOBILE_QUERY in providers.tsx name the same boundary. */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+
+  /* Intentional zero-radius ladder; keep the scale so rounding stays a token-only change. */
   --radius-sm: 0;
   --radius-md: 0;
   --radius-lg: 0;
@@ -31,26 +36,27 @@
   --radius-2xl: 0;
   --radius-full: 0;
 
-  /* Elevation: card stays border-only (no shadow); overlay only. */
-  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.12);
-  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.18);
+  /* Numeric z utilities only — Tailwind v4 emits no named z-* utilities (z-nav/z-dropdown silently
+     compiled to nothing). Ladder: nav 30 < dropdown 40 < toast 45 < sheet 50 < skip 100. */
 
-  /* Layering: numeric z utilities only (Tailwind v4 does not emit named
-     z-* utilities, so z-nav/z-dropdown/... silently compiled to nothing).
-     Ladder: nav 30 < dropdown 40 < toast 45 < sheet 50 < skip 100. */
-
-  /* Motion (replaces hardcoded 0.2s cubic-bezier). */
   --duration-fast: 150ms;
   --duration-base: 200ms;
   --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
 
+  /* Tracking tightens as type grows: no heading sets looser than the body beneath it; label steps are the exception. */
+  --tracking-text: 0.01em;
+  --tracking-label: 0.025em;
+  --tracking-caps: 0.14em;
+  --tracking-title: -0.01em;
+  --tracking-display: -0.02em;
+
   --font-sans:
-    "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Symbol", "PingFang SC",
+    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Symbol", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
     sans-serif;
   --font-mono:
-    "JetBrains Mono Variable", ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono",
-    "Segoe UI Symbol", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", monospace;
+    "IBM Plex Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Segoe UI Symbol",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", monospace;
 }
 
 :root {
@@ -59,6 +65,7 @@
   --bg-secondary: #f1f4f7;
   --bg-tertiary: #e3e8ee;
   --bg-card: #ffffff;
+  --bg-overlay: #ffffff;
   --text-primary: #1e2430;
   --text-secondary: #5b6675;
   --text-tertiary: #8b96a5;
@@ -74,6 +81,8 @@
   --success-light: color-mix(in srgb, var(--success) 10%, transparent);
   --warning: #9a6b0a;
   --warning-light: color-mix(in srgb, var(--warning) 10%, transparent);
+  /* Degraded-but-up: the warning hue muted toward the page background. */
+  --degraded: color-mix(in srgb, var(--warning) 55%, var(--bg-primary));
   --info: #2f6d8a;
   --info-light: color-mix(in srgb, var(--info) 10%, transparent);
   --nav-bg: rgba(250, 251, 252, 0.85);
@@ -97,17 +106,20 @@
 
 .dark {
   color-scheme: dark;
-  --bg-primary: #161a20;
-  --bg-secondary: #1e242c;
-  --bg-tertiary: #2a323c;
-  --bg-card: #1b2028;
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #3a3a3a;
+  /* Cards keep one visible step above the page: a literal step, not a reference to --bg-primary. */
+  --bg-card: #232323;
+  /* Overlays sit a step above the cards; own token so tuning the skeleton/badge well cannot move the sheet. */
+  --bg-overlay: #2d2d2d;
   --text-primary: #e8edf3;
   --text-secondary: #9aa5b4;
   --text-tertiary: #6e7887;
   --border: rgba(232, 237, 243, 0.16);
   --accent: #8ba3d6;
   --accent-light: color-mix(in srgb, var(--accent) 12%, transparent);
-  --accent-contrast: #161a20;
+  --accent-contrast: #1a1a1a;
   --hover: color-mix(in srgb, var(--accent) 9%, transparent);
   --selected: color-mix(in srgb, var(--accent) 14%, transparent);
   --ring: var(--accent);
@@ -116,9 +128,10 @@
   --success-light: color-mix(in srgb, var(--success) 14%, transparent);
   --warning: #d3a24a;
   --warning-light: color-mix(in srgb, var(--warning) 14%, transparent);
+  --degraded: color-mix(in srgb, var(--warning) 55%, var(--bg-primary));
   --info: #6aa5c2;
   --info-light: color-mix(in srgb, var(--info) 14%, transparent);
-  --nav-bg: rgba(22, 26, 32, 0.85);
+  --nav-bg: rgba(26, 26, 26, 0.85);
   --chart-1: #8ba3d6;
   --chart-2: #e8edf3;
   --chart-3: #9aa5b4;

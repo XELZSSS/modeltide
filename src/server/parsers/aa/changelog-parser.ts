@@ -1,6 +1,7 @@
 import { isRecord, isUnsuitableContent, str } from "@/server/parsers/parser-primitives";
 import { extractNeedleJsonArrays, MAX_SCAN_CHARS } from "@/server/parsers/rsc-scanner";
 import type { ChangelogRawEntry } from "@/server/parsers/upstream-types";
+import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
 
 export interface ChangelogModel {
   slug: string;
@@ -52,9 +53,10 @@ function toChangelogModel(e: ChangelogRawEntry): ChangelogModel | null {
   return { slug, name, releaseSlug, releaseName, releaseDate, creatorName };
 }
 
-export function parseChangelogModels(html: unknown): ChangelogModel[] {
-  if (typeof html !== "string" || !html) return [];
-  if (html.length > 8_000_000) return [];
+/** No usable row means an empty result, not a failure: `requireRows` owns the zero-row verdict. */
+export function parseChangelogModels(html: unknown): ParseResult<ChangelogModel[]> {
+  if (typeof html !== "string" || !html) return parseFail("Changelog page is not a string");
+  if (html.length > 8_000_000) return parseFail(`Changelog page too large (${html.length} chars)`);
   let best: ChangelogModel[] = [];
   for (const v of extractModelsArrays(html)) {
     if (!Array.isArray(v)) continue;
@@ -64,5 +66,5 @@ export function parseChangelogModels(html: unknown): ChangelogModel[] {
       .filter((m): m is ChangelogModel => m !== null);
     if (mapped.length > best.length) best = mapped;
   }
-  return best;
+  return parseOk(best);
 }

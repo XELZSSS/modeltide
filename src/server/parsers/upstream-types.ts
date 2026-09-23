@@ -25,6 +25,15 @@ export interface ModelRow {
   change: number | null;
 }
 
+/**
+ * Benchmark metadata OpenRouter mirrors from Artificial Analysis, keyed onto an
+ * AA model by `normalizeModelKey`.
+ */
+export interface ModelMetaEntry {
+  intelligenceIndex?: number;
+  agenticIndex?: number;
+}
+
 /** OpenRouter `/api/v1/models` row (pricing + AA benchmark metadata). */
 export interface PricingRow {
   id: string;
@@ -49,16 +58,6 @@ export interface RawEntry {
   upper95ci?: unknown;
   price?: unknown;
   creator?: unknown;
-}
-
-/** LiteLLM `model_prices_and_context_window.json` entry. */
-export interface LitellmEntry {
-  mode?: unknown;
-  litellm_provider?: unknown;
-  input_cost_per_token?: unknown;
-  output_cost_per_token?: unknown;
-  cache_read_input_token_cost?: unknown;
-  cache_creation_input_token_cost?: unknown;
 }
 
 /** Hugging Face `/api/daily_papers` entry. */

@@ -1,5 +1,4 @@
-import { UpstreamError } from "@/server/infra/errors";
-import { fnv1aHash } from "@/shared/utils";
+import { fnv1aHash } from "@/server/infra/hash";
 
 function balancedJsonEnd(text: string, openIdx: number, budget: number): number {
   if (budget <= 0 || openIdx < 0 || openIdx >= text.length) return -1;
@@ -31,7 +30,6 @@ function balancedJsonEnd(text: string, openIdx: number, budget: number): number 
   return -1;
 }
 
-/** Balanced `[…]`/`{…}` slice starting at openAt, or null when unbalanced. */
 function balancedJsonSlice(text: string, openAt: number, budgetChars: number): string | null {
   const end = balancedJsonEnd(text, openAt, budgetChars);
   return end === -1 ? null : text.slice(openAt, end);
@@ -76,11 +74,11 @@ export function* iterateLines(body: string): Generator<string> {
   }
 }
 
-export function rscNotFound(marker: string, body: string, maxLineLen = 0): UpstreamError {
-  return new UpstreamError(
+export function rscNotFoundMessage(marker: string, body: string, maxLineLen = 0): string {
+  return (
     `RSC marker "${marker}" not found or payload empty. body length=${body.length}` +
-      (maxLineLen > 0 ? ` maxLine=${maxLineLen}` : "") +
-      ` hash=${fnv1aHash(body.slice(0, 1024))}`,
+    (maxLineLen > 0 ? ` maxLine=${maxLineLen}` : "") +
+    ` hash=${fnv1aHash(body.slice(0, 1024))}`
   );
 }
 
@@ -147,11 +145,6 @@ function parseWindowCandidates(
   }
 }
 
-/**
- * Pulls the payload for one marker out of a parsed flight tree. `marker` lets a
- * caller resolve several markers from a single body scan; 1-arg extractors stay
- * assignable.
- */
 export type RscExtractor<T> = (data: unknown, marker: string) => T[] | null;
 
 function offerTreeToMarkers<T>(
@@ -218,11 +211,6 @@ function skipWs(text: string, pos: number): number {
   return pos;
 }
 
-/**
- * Position of the value after a needle's `:`, or null when the needle isn't
- * followed by a colon. Shared by the candidate collector and the window scanner
- * so both locate values identically.
- */
 function valuePosAfterColon(text: string, at: number): number | null {
   let c = skipWs(text, at);
   if (text[c] !== ":") return null;
@@ -256,26 +244,26 @@ function parseJsonArrayAt(window: string, openAt: number, found: unknown[]): boo
 }
 
 function scanNeedleWindow(window: string, needle: string, unescape: boolean, found: unknown[]): boolean {
-  const haystack = unescape ? unescapeEmbedded(window) : window;
-  let parsed = false;
-  let at = haystack.indexOf(needle);
-  while (at !== -1) {
-    const valueAt = valuePosAfterColon(haystack, at + needle.length);
-    if (valueAt !== null) {
-      if (haystack[valueAt] === "[" && parseJsonArrayAt(haystack, valueAt, found)) parsed = true;
+  const scan = (haystack: string): boolean => {
+    let parsed = false;
+    let at = haystack.indexOf(needle);
+    while (at !== -1) {
+      const valueAt = valuePosAfterColon(haystack, at + needle.length);
+      if (valueAt !== null) {
+        if (haystack[valueAt] === "[" && parseJsonArrayAt(haystack, valueAt, found)) parsed = true;
+      }
+      at = haystack.indexOf(needle, at + needle.length);
     }
-    at = haystack.indexOf(needle, at + needle.length);
-  }
-  return parsed;
+    return parsed;
+  };
+  // Unescaping is a fallback, never the first pass: on a plain-JSON window it turns valid JSON
+  // into invalid JSON — silently dropping the whole array.
+  if (scan(window)) return true;
+  return unescape ? scan(unescapeEmbedded(window)) : false;
 }
 
-/**
- * Work ceilings for the needle scan. Every candidate costs a ≥256KB slice plus
- * a regex unescape and a full-window scan, so a hostile or regressed upstream
- * body that repeats the needle (e.g. `"models":[0],` thousands of times inside
- * the 2MB feed cap) could otherwise burn gigabytes of character work and abort
- * on the Workers CPU limit. Mirrors the RSC path's MAX_OVERSIZED_WORK_CHARS.
- */
+// Work ceilings for the needle scan: a hostile body repeating the needle could otherwise
+// burn gigabytes of character work and abort on the Workers CPU limit.
 const MAX_NEEDLE_CANDIDATES = 256;
 const MAX_NEEDLE_WORK_CHARS = 64 * 1024 * 1024;
 

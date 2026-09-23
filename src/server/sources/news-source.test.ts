@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getNews } from "@/server/sources/news-source";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
 import { fakeHttp, testCtx } from "@/server/test-helpers";
-import { rssConfig } from "@/server/config";
-import { PARTIAL_FAIL_TTL_MS, SOURCE_LIMITS } from "@/shared/config";
+import { rssConfig } from "@/server/sources/news-feeds";
+import { PARTIAL_FAIL_TTL_MS } from "@/shared/config";
+import { SOURCE_LIMITS } from "@/server/config/limits";
 import { UpstreamError, ValidationError } from "@/server/infra/errors";
 import type { NewsCategory, NewsItem } from "@/shared/types";
 
@@ -36,7 +37,6 @@ function paper(id: string, title: string, upvotes = 10) {
   return { paper: { id, title, upvotes, publishedAt: "2026-09-02T00:00:00Z" } };
 }
 
-/** Fake upstream routed by URL: a missing feed fails the fetch, like a down leg. */
 function newsCtx(feeds: Record<string, string>, papers: unknown[] = []) {
   const http = fakeHttp({ text: feeds, json: () => papers });
   const { ctx, kvStore } = testCtx(new Map<string, string>(), { http });

@@ -1,16 +1,11 @@
-import { isoDate, byDateDesc } from "@/server/parsers/parser-primitives";
+import { isoDate, byDateDesc, isRecord, str } from "@/server/parsers/parser-primitives";
 import { upstreamConfig } from "@/server/config";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 
-import type { ChangelogModel } from "@/server/parsers/aa";
+import type { ChangelogModel } from "@/server/parsers/aa/changelog-parser";
 import { dedupeBy } from "@/shared/utils";
 
-// NOTE: deliberately no open/closed classification. Upstream only publishes
-// `isOpenWeights` for the top rows of its tables (32 index / 25 openness page /
-// 28 models page) and never for the 656-row catalog or the changelog itself —
-// 67/275 changelog coverage, so any split would mislabel ~2/3 of the rows as
-// closed (Qwen, DeepSeek, Granite, MiniCPM, Ling …). A release is a release;
-// the client merges this leg with the Hugging Face open-source feed.
+// NOTE: deliberately no open/closed classification — upstream publishes `isOpenWeights` only for top rows.
 
 function toClosedEntry(id: unknown, model: unknown, provider: unknown, rawDate: unknown): ClosedReleaseEntry | null {
   if (typeof id !== "string" || typeof model !== "string" || typeof provider !== "string") return null;
@@ -36,12 +31,12 @@ function toClosedRelease(e: ChangelogModel): ClosedReleaseEntry | null {
 }
 
 function toClosedReleaseFromIndex(m: unknown): ClosedReleaseEntry | null {
-  if (m === null || typeof m !== "object") return null;
+  if (!isRecord(m)) return null;
   const rec = m as Partial<ArtificialAnalysisModel>;
-  const slug = typeof rec.slug === "string" ? rec.slug : typeof rec.id === "string" ? rec.id : "";
-  const name = typeof rec.name === "string" ? rec.name : "";
+  const slug = typeof rec.slug === "string" ? rec.slug : str(rec.id);
+  const name = str(rec.name);
   const creator = typeof rec.model_creators?.name === "string" ? rec.model_creators.name : "Unknown";
-  const date = typeof rec.release_date === "string" ? rec.release_date : "";
+  const date = str(rec.release_date);
   if (!slug || !name) return null;
   return toClosedEntry(slug, name, creator, date);
 }
@@ -58,10 +53,7 @@ export function toClosedReleasesFromIndex(models: unknown): ClosedReleaseEntry[]
 
 export function toClosedReleases(changelog: unknown): ClosedReleaseEntry[] {
   if (!Array.isArray(changelog)) return [];
-  const records = changelog.filter(
-    (e): e is ChangelogModel =>
-      e !== null && typeof e === "object" && typeof (e as { slug?: unknown }).slug === "string",
-  );
+  const records = changelog.filter((e): e is ChangelogModel => isRecord(e) && typeof e.slug === "string");
   const sorted = [...records].sort(byDateDesc((e) => e.releaseDate));
   const entries = dedupeBy(sorted, (e) => e.releaseSlug)
     .map(toClosedRelease)

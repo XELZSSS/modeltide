@@ -1,10 +1,10 @@
 import { SLOW_TTL_MS } from "@/shared/config";
 import { MAX_JSON_BYTES, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig, upstreamEndpoints } from "@/server/config";
-import type { AgentRankEntry, AgentRankingsPayload } from "@/shared/types";
+import type { AgentRankEntry, SourcePayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { fetchRscText } from "@/server/sources/rsc-fetcher";
 import { parseAgentBoards } from "@/server/parsers/agent-arena-parser";
-import { cached, requireParsed, requireRows } from "@/server/sources/pipeline";
+import { cachedPayload, requireParsed, requireRows } from "@/server/sources/pipeline";
 
 const AGENT_PATH = upstreamEndpoints.agentBoard;
 
@@ -19,8 +19,7 @@ async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
   return requireRows(entries, "Agent board", "rows from the flight payload", `body=${body.length}B, markup changed?`);
 }
 
-export const getAgentRankings = (ctx: AppContext): Promise<AgentRankingsPayload> =>
-  cached(ctx, cacheKeys.agentRankings, SLOW_TTL_MS, async () => {
-    const entries = await fetchAgentBoard(ctx);
-    return { data: { entries, fetchedAt: new Date().toISOString() } };
-  });
+export const getAgentRankings = (ctx: AppContext): Promise<SourcePayload<AgentRankEntry[]>> =>
+  cachedPayload(ctx, cacheKeys.agentRankings, SLOW_TTL_MS, async () => ({
+    rows: await fetchAgentBoard(ctx),
+  }));

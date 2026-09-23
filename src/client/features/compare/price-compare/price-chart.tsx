@@ -7,16 +7,12 @@ registerBar();
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { ChartCard, ChartFrame } from "@/client/components/ui/chart-frame";
 import { useTranslation } from "@/client/providers";
-import { useChartTheme, hexToRgba, legendStyle, seriesColor } from "@/client/theme/chart-theme";
-import {
-  axisDashedBorderStyle,
-  axisGridStyle,
-  axisTickStyle,
-  chartBase,
-  defaultTooltipOptions,
-} from "@/client/utils/charts";
+import { cartesianChartOptions, hexToRgba, seriesColor, useChartTheme } from "@/client/theme/chart-theme";
+import { axisGridStyle, axisTickStyle } from "@/client/utils/charts";
 import type { CompareRow } from "@/client/features/compare/compare-logic";
 import { modelDisplayName } from "@/client/utils/model-utils";
+
+const PRICE_AXIS_MAX = 100;
 
 export const PriceChart = memo(function PriceChart({
   priceRows,
@@ -49,33 +45,20 @@ export const PriceChart = memo(function PriceChart({
   );
 
   const options = useMemo<ChartOptions<"bar">>(
-    () => ({
-      ...chartBase,
-      scales: {
-        x: {
-          ticks: axisTickStyle(theme),
-          grid: { display: false },
-          border: axisGridStyle(theme),
-        },
+    () =>
+      cartesianChartOptions<"bar">(theme, {
+        x: { ticks: axisTickStyle(theme), grid: { display: false }, border: axisGridStyle(theme) },
         y: {
-          ticks: {
-            ...axisTickStyle(theme),
-            callback: (value) => `$${value}`,
-          },
-          grid: axisGridStyle(theme),
-          border: axisDashedBorderStyle(theme),
+          min: 0,
+          suggestedMax: PRICE_AXIS_MAX,
+          ticks: { ...axisTickStyle(theme), callback: (value) => `$${value}` },
         },
-      },
-      plugins: {
-        legend: legendStyle(theme),
         tooltip: {
-          ...defaultTooltipOptions(theme),
           callbacks: {
             label: (ctx) => (ctx.parsed.y == null ? "—" : `$${Number(ctx.parsed.y).toFixed(2)}`),
           },
         },
-      },
-    }),
+      }),
     [theme],
   );
 

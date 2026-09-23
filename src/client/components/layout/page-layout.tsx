@@ -8,35 +8,12 @@ import { canGoBack, historyFrom, useRouter } from "@/client/router";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 
-/**
- * One back control whose label and action are the same decision, so the two can
- * never disagree:
- *
- * - opened from the list this page belongs to (`from === to`) → the list is
- *   named ("Back to model rankings") and stepping back returns to that exact
- *   view, scroll position included;
- * - opened from anywhere else — a search hit on the home page, another tab, the
- *   releases page — → a plain "Back" that returns the reader where they came
- *   from, which is all the generic label promises;
- * - landed on directly with no history → the list is named and navigated to,
- *   since there is nothing to go back to.
- */
-export function BackButton({
-  labelKey,
-  to,
-}: {
-  /** Label used when the button names the destination the page belongs to. */
-  labelKey: TranslationKey;
-  /** The list this page belongs to; the fallback destination on a direct landing. */
-  to: string;
-}) {
+export function BackButton({ labelKey, to }: { labelKey: TranslationKey; to: string }) {
   const router = useRouter();
   const { t } = useTranslation();
   const from = historyFrom();
   const label = from == null || from === to ? t(labelKey) : t("back");
   const goBack = () => {
-    // Step back whenever there is an entry to step into — it is the list the
-    // label names when we came from there, the reader's own page otherwise.
     if (canGoBack()) router.back();
     // replace, not push: no extra history entry for a direct landing.
     else router.replace(to);
@@ -57,21 +34,18 @@ export function PageHeader({
   description,
   actions,
   compact,
-  kicker,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
   compact?: boolean;
-  kicker?: string;
 }) {
   return (
     <header
       className={cn("flex flex-col sm:flex-row sm:items-end justify-between gap-4", compact ? "mb-6" : "mb-8 sm:mb-12")}
     >
       <div className="min-w-0">
-        {kicker && <p className="ui-kicker mb-3">{kicker}</p>}
-        <h1 className={compact ? "text-xl sm:text-2xl font-semibold tracking-tight" : "ui-page-title"}>{title}</h1>
+        <h1 className={compact ? "text-xl sm:text-2xl font-semibold tracking-title" : "ui-page-title"}>{title}</h1>
         {description && <p className="ui-body-secondary mt-3 max-w-2xl text-balance">{description}</p>}
       </div>
       {actions && (
@@ -138,7 +112,6 @@ interface TabbedPageProps {
   description?: string;
   actions?: ReactNode;
   compact?: boolean;
-  kicker?: string;
   tabs: TabItem[];
   activeTab: string;
   onTabChange: (id: string) => void;
@@ -152,7 +125,6 @@ export function TabbedPage({
   description,
   actions,
   compact,
-  kicker,
   tabs,
   activeTab,
   onTabChange,
@@ -162,7 +134,7 @@ export function TabbedPage({
 }: TabbedPageProps) {
   return (
     <PageContainer>
-      <PageHeader compact={compact} title={title} description={description} actions={actions} kicker={kicker} />
+      <PageHeader compact={compact} title={title} description={description} actions={actions} />
       <TabContainer
         tabs={tabs}
         activeTab={activeTab}

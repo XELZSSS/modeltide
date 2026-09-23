@@ -1,9 +1,9 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { useSuspenseAgentRankings } from "@/client/api/api-queries";
+import { useSuspenseAgentRankingsState } from "@/client/api/api-queries";
 import type { AgentRankEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/components/data/table";
 import { cn } from "@/client/utils/cn";
-import { rightCol, trendClass, type DataTableColumn } from "@/client/components/data/table-columns";
+import { rightCol, trendClass, type DataTableColumn } from "@/client/components/data/table/table-columns";
 import type { useTranslation } from "@/client/providers";
 
 function buildAgentColumns(t: ReturnType<typeof useTranslation>["t"]): DataTableColumn<AgentRankEntry>[] {
@@ -52,13 +52,10 @@ const getAgentRowId = (entry: AgentRankEntry) => `${entry.rank}|${entry.id}`;
 const getAgentSearchFields = (entry: AgentRankEntry) => [entry.name, entry.id, entry.creator];
 
 export function AgentRankingsView() {
-  const { data } = useSuspenseAgentRankings();
-  const entries = Array.isArray((data as { entries?: unknown })?.entries)
-    ? (data as { entries: AgentRankEntry[] }).entries
-    : [];
+  const { items } = useSuspenseAgentRankingsState();
   return (
     <RankedTableView
-      rows={entries}
+      rows={items}
       getRowId={getAgentRowId}
       getSearchFields={getAgentSearchFields}
       buildBodyColumns={buildAgentColumns}

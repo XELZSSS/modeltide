@@ -28,13 +28,8 @@ export interface HomeProviderStat {
 
 const top7 = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, 7).map(map);
 
-/**
- * Head of the same merged feed the releases page renders (Hugging Face +
- * Artificial Analysis), so the home KPI always matches its first row. (The
- * intelligence index carries its own release_date per model, which lags the
- * changelog and must not be used here.)
- */
-export function pickLatestReleaseName(
+/** A model's own `release_date` lags the changelog and must not be used here. */
+function pickLatestReleaseName(
   openSourceReleases: OpenSourceModelEntry[],
   closedReleases: ClosedReleaseEntry[],
 ): string | null {
@@ -51,8 +46,8 @@ export function useHomeStats(
 ) {
   // Trending order mirrors the official models page; downloads are reference only.
   const openSourceRankings = dashboardData.opensource;
-  const t2iModels = useMemo(() => dashboardData.textToImage?.data ?? [], [dashboardData.textToImage?.data]);
-  const latestOpenRouterModel = dashboardData.orRankings?.tokenUsageRankings?.[0] ?? null;
+  const t2iModels = useMemo(() => dashboardData.textToImage ?? [], [dashboardData.textToImage]);
+  const latestOpenRouterModel = dashboardData.orRankings?.[0] ?? null;
 
   const trendingStats = useMemo<HomeBarStat[]>(
     () =>

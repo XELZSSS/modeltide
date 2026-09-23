@@ -1,6 +1,6 @@
 import { persist } from "zustand/middleware";
 import { create } from "zustand";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { STORAGE_KEYS } from "@/shared/config";
 import { modelId } from "@/client/utils/model-utils";
@@ -55,7 +55,7 @@ export const useCompareStore = create<CompareState>()(
       pruneCompare: (validIds) =>
         set((state) => {
           const kept = state.compareIds.filter((id) => validIds.has(id));
-          // Same-object return keeps a no-op prune from notifying subscribers (and re-rendering).
+          // Same-object return: a no-op prune must not notify subscribers.
           return kept.length === state.compareIds.length ? state : { compareIds: kept, lastExceedAt: null };
         }),
       clearCompare: () => set({ compareIds: [], lastExceedAt: null }),
@@ -87,4 +87,16 @@ export function useCompareModels(rankings: ArtificialAnalysisModel[]): Artificia
     () => compareIds.map((id) => rankingMap.get(id)).filter((m): m is ArtificialAnalysisModel => m != null),
     [compareIds, rankingMap],
   );
+}
+
+/** Drops stored ids the model list no longer has; a stale id still counts against MAX_COMPARE. */
+export function usePruneCompareIds(models: ArtificialAnalysisModel[], opts?: { ready?: boolean }): void {
+  const pruneCompare = useCompareStore((s) => s.pruneCompare);
+  const validIds = useMemo(() => new Set(models.map(modelId).filter(Boolean)), [models]);
+  const ready = opts?.ready ?? true;
+  useEffect(() => {
+    // Only a loaded, non-empty list may drop them: a failed or empty list proves nothing.
+    if (!ready || validIds.size === 0) return;
+    pruneCompare(validIds);
+  }, [validIds, ready, pruneCompare]);
 }

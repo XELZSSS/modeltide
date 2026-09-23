@@ -47,7 +47,7 @@ const Th = memo(function CompareTh({
     <th
       scope={scope}
       className={cn(
-        "px-4 py-3 text-xs font-medium text-text-tertiary",
+        "px-4 py-3.5 text-xs font-medium text-text-tertiary",
         align === "right" ? "text-right" : "text-left",
         className,
       )}
@@ -60,7 +60,7 @@ const Th = memo(function CompareTh({
 
 const Td = memo(function CompareTd({ align = "left", className, style, children }: CompareCellProps) {
   return (
-    <td className={cn("px-4 py-3 text-sm", align === "right" && "text-right", className)} style={style}>
+    <td className={cn("px-4 py-3.5 text-sm", align === "right" && "text-right", className)} style={style}>
       {children}
     </td>
   );
@@ -78,7 +78,6 @@ export const WinnerMark = memo(function WinnerMark() {
   return <TrendingUp size={12} className="inline ml-0.5 text-success" aria-hidden="true" />;
 });
 
-/** Shared value cell: applies the win/loss styling and marks in one place. */
 export const WinnerValue = memo(function WinnerValue({ value, winner }: { value: string; winner: Winner | null }) {
   return (
     <span
@@ -119,7 +118,7 @@ function DesktopTable({ rows, models, getKey, getName, getColor, renderValue, wi
             </thead>
             <tbody>
               {rows.map((row) => (
-                <Tr key={rowKey(row)} className="hoverable:hover:bg-hover transition-colors">
+                <Tr key={rowKey(row)}>
                   <Th scope="row" className="text-text-secondary sticky left-0 bg-bg-card z-10">
                     {row.label}
                   </Th>

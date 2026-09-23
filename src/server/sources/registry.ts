@@ -1,68 +1,72 @@
 import type { AppContext } from "@/server/context";
 import { buildContext, type Env } from "@/server/context";
 import { qEnum, qNum, qStr, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
+import type { ApiDomain, DomainPayload } from "@/contract/api-contract";
 import { apiPaths, MAX_MODEL_LIMIT, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
 import { getAgentRankings } from "@/server/sources/agent-arena-source";
 import { getIntelligenceIndex } from "@/server/sources/aa/index-source";
 import { getClosedReleases } from "@/server/sources/closed-releases-source";
 import { getHomeDashboard } from "@/server/sources/home-source";
 import { getNews } from "@/server/sources/news-source";
-import { getOfficialPricing } from "@/server/sources/pricing-source";
 import { getModelById, getModels, getReleases } from "@/server/sources/hf-source";
 import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
 import { getStatusHistory } from "@/server/sources/status-history";
 
 export type WarmTier = "core" | "hourly" | "static";
 
-interface SourceManifestEntry<Q extends QuerySchema = QuerySchema> {
-  path: string;
+interface SourceDefinition<D extends ApiDomain, Q extends QuerySchema> {
   query?: Q;
   cache?: { browser: string; cdn: string };
-  handler(ctx: AppContext, params: ValidatedQuery<Q>): Promise<unknown>;
+  handler(ctx: AppContext, params: ValidatedQuery<Q>): Promise<DomainPayload<D>>;
   warm?: WarmTier;
   warmParams?: ValidatedQuery<Q>[];
 }
 
-const OPEN_SOURCE_SORTS = ["trendingScore", "downloads", "likes", "createdAt", "lastModified"] as const;
-// Upstream rejects ascending order for every sort key ("only descending sort is
-// supported"), so the enum admits only -1: a `direction=1` request now fails
-// validation with a 400 instead of reaching Hugging Face and surfacing as a 502.
-const SORT_DIRECTIONS = ["-1"] as const;
-
-function defineSource<S extends QuerySchema>(entry: SourceManifestEntry<S>): SourceManifestEntry {
-  return entry as SourceManifestEntry;
+interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends SourceDefinition<
+  D,
+  Q
+> {
+  readonly domain: D;
+  readonly path: string;
 }
 
-export const SOURCES: readonly SourceManifestEntry[] = [
-  defineSource({
-    path: apiPaths.artificialIndex,
+const OPEN_SOURCE_SORTS = ["trendingScore", "downloads", "likes", "createdAt", "lastModified"] as const;
+// Upstream rejects ascending sort ("only descending sort is supported"): -1 only.
+const SORT_DIRECTIONS = ["-1"] as const;
+
+/** The payload type comes from `ApiContract`, not a hand-written type argument: route and contract cannot drift. */
+function defineSource<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
+  domain: D,
+  def: SourceDefinition<D, Q>,
+): SourceEntry<D, Q> {
+  return { domain, path: apiPaths[domain], ...def };
+}
+
+/** Keyed by API domain: `satisfies` makes a missing route a compile error. */
+const ENTRIES = {
+  artificialIndex: defineSource("artificialIndex", {
     handler: (ctx) => getIntelligenceIndex(ctx),
     warm: "core",
   }),
-  defineSource({
-    path: apiPaths.homeDashboard,
+  homeDashboard: defineSource("homeDashboard", {
     handler: (ctx) => getHomeDashboard(ctx),
     warm: "core",
   }),
-  defineSource({
-    path: apiPaths.news,
+  news: defineSource("news", {
     query: { category: qEnum(NEWS_CATEGORIES, NEWS_CATEGORIES[0]) },
     handler: (ctx, params) => getNews(ctx, params.category),
     warm: "hourly",
     warmParams: NEWS_CATEGORIES.map((category) => ({ category })),
   }),
-  defineSource({
-    path: apiPaths.agentRankings,
+  agentRankings: defineSource("agentRankings", {
     handler: (ctx) => getAgentRankings(ctx),
     warm: "hourly",
   }),
-  defineSource({
-    path: apiPaths.openSourceReleases,
+  openSourceReleases: defineSource("openSourceReleases", {
     handler: (ctx) => getReleases(ctx),
     warm: "hourly",
   }),
-  defineSource({
-    path: apiPaths.openSourceModels,
+  openSourceModels: defineSource("openSourceModels", {
     query: {
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
       direction: qEnum(SORT_DIRECTIONS, OPEN_SOURCE_MODELS_DEFAULTS.direction),
@@ -77,34 +81,27 @@ export const SOURCES: readonly SourceManifestEntry[] = [
     warm: "hourly",
     warmParams: [{ ...OPEN_SOURCE_MODELS_DEFAULTS }],
   }),
-  defineSource({
-    path: apiPaths.officialPricing,
-    handler: (ctx) => getOfficialPricing(ctx),
-    warm: "static",
-  }),
-  defineSource({
-    path: apiPaths.closedReleases,
+  closedReleases: defineSource("closedReleases", {
     handler: (ctx) => getClosedReleases(ctx),
     warm: "static",
   }),
-  defineSource({
-    path: apiPaths.openSourceModel,
+  openSourceModel: defineSource("openSourceModel", {
     query: { id: qStr({ maxLength: 200 }) },
     handler: (ctx, params) => getModelById(ctx, params.id),
   }),
-  defineSource({
-    path: apiPaths.openRouterRankings,
+  openRouterRankings: defineSource("openRouterRankings", {
     handler: (ctx) => getOpenRouterRankings(ctx),
   }),
-  defineSource({
-    path: apiPaths.statusHistory,
+  statusHistory: defineSource("statusHistory", {
     cache: {
       browser: "public, max-age=15",
       cdn: "public, max-age=30, stale-while-revalidate=30",
     },
     handler: (ctx) => getStatusHistory(ctx),
   }),
-];
+} satisfies Record<ApiDomain, unknown>;
+
+export const SOURCES: readonly SourceEntry[] = Object.values(ENTRIES);
 
 export function warmTasks(env: Env, tier: WarmTier, taskTimeoutMs: number): (() => Promise<unknown>)[] {
   const tasks: (() => Promise<unknown>)[] = [];

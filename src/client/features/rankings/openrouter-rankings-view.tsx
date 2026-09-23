@@ -5,14 +5,15 @@ import {
   monoCol,
   rightCol,
   trendClass,
-} from "@/client/components/data/table-columns";
+} from "@/client/components/data/table/table-columns";
 import { modelNameCol, RankedTableView } from "@/client/components/data/table";
 import { formatShortNumber, formatTrend } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
-import type { OpenRouterRankEntry, OpenRouterRankingsPayload } from "@/shared/types";
+import type { OpenRouterRankEntry, SourcePayload } from "@/shared/types";
 import type { TranslationKey } from "@/shared/i18n";
 import { ShieldAlert } from "lucide-react";
 import { EmptyState, PartialNotice } from "@/client/components/feedback";
+import { unwrapListPartial } from "@/client/api/payload-normalize";
 import { OpenRouterModelDetail } from "@/client/features/models/model-details/openrouter-detail";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { useTranslation } from "@/client/providers";
@@ -56,19 +57,22 @@ const renderExpandedDetail = (item: OpenRouterRankEntry) => (
   </div>
 );
 
-export function OpenRouterRankingsView({ data }: { data?: OpenRouterRankingsPayload }) {
+export function OpenRouterRankingsView({ data }: { data?: SourcePayload<OpenRouterRankEntry[]> }) {
   const { t } = useTranslation();
 
   if (!data) {
     return <EmptyState icon={ShieldAlert} message={t("noRankingsData")} />;
   }
 
+  const { data: rows, partial } = unwrapListPartial<OpenRouterRankEntry>(data, "openRouterRankings");
+
   return (
     <>
-      {data.partial === true && <PartialNotice />}
+      {partial && <PartialNotice />}
       <RankedTableView
-        rows={data.tokenUsageRankings ?? []}
+        rows={rows}
         getRowId={getModelRowId}
+        getRowName={(model) => model.name}
         getSearchFields={SEARCH_FIELDS.or}
         buildBodyColumns={buildOpenRouterBodyColumns}
         renderExpandedRow={renderExpandedDetail}

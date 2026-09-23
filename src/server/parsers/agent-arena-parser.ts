@@ -1,5 +1,5 @@
 import { numCoerce, isRecord, strOrNull, byNumberDesc, isUnsuitableContent } from "@/server/parsers/parser-primitives";
-import { SOURCE_LIMITS } from "@/shared/config";
+import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { AgentRankEntry } from "@/shared/types";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
 
@@ -45,17 +45,34 @@ function toAgentSignalRow(e: unknown): AgentSignalRow | null {
   };
 }
 
-function extractSignalEntries(tree: unknown, signal: string): AgentSignalEntry[] | null {
-  if (typeof signal !== "string" || !signal) return null;
+const SIGNAL_NAMES: ReadonlySet<string> = new Set(AGENT_SIGNALS);
+
+/** All five boards in one walk; keyed by the tree so the memo dies with the parse that built it. */
+const BOARDS_BY_TREE = new WeakMap<object, Map<string, AgentSignalEntry[]>>();
+
+function scanSignalBoards(tree: unknown): Map<string, AgentSignalEntry[]> {
+  const boards = new Map<string, AgentSignalEntry[]>();
   for (const node of traverse(tree)) {
-    if (!isRecord(node) || node.name !== signal) continue;
+    if (!isRecord(node)) continue;
+    const signal = node.name;
+    if (typeof signal !== "string" || boards.has(signal) || !SIGNAL_NAMES.has(signal)) continue;
     const entries = node.entries;
-    if (Array.isArray(entries) && entries.length > 0) return entries as AgentSignalEntry[];
+    if (Array.isArray(entries) && entries.length > 0) boards.set(signal, entries as AgentSignalEntry[]);
   }
-  return null;
+  return boards;
 }
 
-export function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[]): AgentRankEntry[] {
+function extractSignalEntries(tree: unknown, signal: string): AgentSignalEntry[] | null {
+  if (typeof signal !== "string" || !signal || tree === null || typeof tree !== "object") return null;
+  let boards = BOARDS_BY_TREE.get(tree);
+  if (!boards) {
+    boards = scanSignalBoards(tree);
+    BOARDS_BY_TREE.set(tree, boards);
+  }
+  return boards.get(signal) ?? null;
+}
+
+function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[]): AgentRankEntry[] {
   const required = boards.length;
   const acc = new Map<
     string,
@@ -100,16 +117,16 @@ export function parseAgentBoards(body: unknown): ParseResult<AgentRankEntry[]> {
   if (typeof body !== "string" || !body) {
     return parseFail("Agent board returned an empty body");
   }
-  let perSignal: AgentSignalEntry[][];
-  try {
-    perSignal = parseRscPayloads<AgentSignalEntry>(body, AGENT_SIGNALS, extractSignalEntries);
-  } catch (err) {
-    return parseFail(`Agent board could not be extracted: ${err instanceof Error ? err.message : String(err)}`);
+  const scanned = parseRscPayloads<AgentSignalEntry>(body, AGENT_SIGNALS, extractSignalEntries);
+  if (!scanned.ok) {
+    return parseFail(`Agent board could not be extracted: ${scanned.error}`);
   }
+  const perSignal = scanned.data;
   const boards = AGENT_SIGNALS.map((signal, i) => ({
     signal,
     rows: (perSignal[i] ?? []).map(toAgentSignalRow).filter((r): r is AgentSignalRow => r !== null),
   }));
+  // An empty board is structural drift, not a document that carried no rows.
   const empty = boards.find((b) => b.rows.length === 0);
   if (empty) {
     return parseFail(zeroUpstreamMessage(`Agent board "${empty.signal}"`, "usable rows", "markup changed?"));

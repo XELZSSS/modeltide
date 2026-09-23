@@ -1,43 +1,21 @@
 import { parseTs } from "@/server/parsers/parser-primitives";
-import { NEWS_TTL_MS, SOURCE_LIMITS, ttlForRatio } from "@/shared/config";
-import { rssConfig, FAST_FETCH_OPTS, MAX_FEED_BYTES, NEWS_LEG_CONCURRENCY, cacheKeys } from "@/server/config";
-import { runCapped, errMsg } from "@/server/infra/task-pool";
+import { NEWS_TTL_MS, ttlForRatio } from "@/shared/config";
+import { SOURCE_LIMITS } from "@/server/config/limits";
+import { FAST_FETCH_OPTS, MAX_FEED_BYTES, NEWS_LEG_CONCURRENCY, cacheKeys } from "@/server/config";
+import { errMsg } from "@/server/infra/task-pool";
+import { runLegs } from "@/server/sources/join-legs";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError } from "@/server/infra/errors";
 import { FEED_ACCEPT, parseFeed } from "@/server/parsers/rss-feed-parser";
 
 import { fetchDailyPapersItems } from "@/server/sources/hf-papers-source";
-import { dedupeBy, normalizeNewsLink } from "@/shared/utils";
+import { rssConfig } from "@/server/sources/news-feeds";
+import { dedupeBy } from "@/shared/utils";
+import { normalizeNewsLink } from "@/server/parsers/url";
 
 import type { SourcePayload } from "@/shared/types";
 import { cachedPayload, requireParsed, requireRows } from "@/server/sources/pipeline";
-
-type LegResult = PromiseSettledResult<NewsItem[]>[];
-
-function collectLegItems(results: LegResult): { allItems: NewsItem[]; failCount: number } {
-  return {
-    allItems: results.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
-    failCount: results.filter((r) => r.status === "rejected").length,
-  };
-}
-
-function logLegFailures(
-  ctx: AppContext,
-  category: NewsCategory,
-  legLabels: string[],
-  results: LegResult,
-  failCount: number,
-): void {
-  if (failCount === 0) return;
-  ctx.log(
-    "warn",
-    `[news] ${failCount}/${results.length} feeds failed for "${category}": ${results
-      .map((r, i) => (r.status === "rejected" ? `${legLabels[i] ?? i}: ${errMsg(r.reason)}` : null))
-      .filter(Boolean)
-      .join("; ")}`,
-  );
-}
 
 function sortNewestFirst(
   ctx: AppContext,
@@ -74,29 +52,33 @@ async function fetchNews(
 ): Promise<{ items: NewsItem[]; failCount: number; total: number }> {
   const urls = rssConfig[category];
   if (!urls || urls.length === 0) throw new ValidationError(`Unknown news category "${category}"`);
-  const legTasks: (() => Promise<NewsItem[]>)[] = urls.map(
-    (url) => async () =>
+  const legs = urls.map((url) => ({
+    label: url,
+    run: async () =>
       requireParsed(
         parseFeed(
           await ctx.http.text(url, { headers: { accept: FEED_ACCEPT }, ...FAST_FETCH_OPTS }, MAX_FEED_BYTES),
           url,
         ),
       ),
-  );
-  const legLabels: string[] = [...urls];
+  }));
   if (category === "research") {
-    legTasks.push(() => fetchDailyPapersItems(ctx));
-    legLabels.push("hf-daily-papers");
+    legs.push({ label: "hf-daily-papers", run: () => fetchDailyPapersItems(ctx) });
   }
-  const results = await runCapped(legTasks, NEWS_LEG_CONCURRENCY);
-  const { allItems, failCount } = collectLegItems(results);
-  if (failCount === results.length)
-    throw new UpstreamError(`All ${results.length} RSS feed(s) for "${category}" failed`);
-  logLegFailures(ctx, category, legLabels, results, failCount);
-  // Every leg's parser already drops unsuitable titles/links before returning
-  // (feed.ts / huggingface.ts), so items reaching here are pre-validated.
+  const { values, failures } = await runLegs(legs, { concurrency: NEWS_LEG_CONCURRENCY });
+  const allItems = values.flatMap((items) => items ?? []);
+  if (failures.length === values.length)
+    throw new UpstreamError(`All ${values.length} RSS feed(s) for "${category}" failed`);
+  if (failures.length > 0) {
+    ctx.log(
+      "warn",
+      `[news] ${failures.length}/${values.length} feeds failed for "${category}": ${failures
+        .map((f) => `${f.label}: ${errMsg(f.reason)}`)
+        .join("; ")}`,
+    );
+  }
   const { suitable, papers } = sortNewestFirst(ctx, category, allItems);
-  return { items: pickNewsItems(suitable, papers), failCount, total: results.length };
+  return { items: pickNewsItems(suitable, papers), failCount: failures.length, total: values.length };
 }
 
 export const getNews = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>

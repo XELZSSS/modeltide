@@ -1,24 +1,76 @@
-// @ts-check
-const fs = require("fs");
-const path = require("path");
+// A `/` opens a regex only where a value is expected; erring toward "allowed" is safe, the span is copied verbatim.
+const REGEX_PRECEDING = new Set([
+  "(",
+  ",",
+  "=",
+  ":",
+  "[",
+  "!",
+  "&",
+  "|",
+  "?",
+  "{",
+  "}",
+  ";",
+  "+",
+  "-",
+  "*",
+  "%",
+  "<",
+  ">",
+  "~",
+  "^",
+]);
 
-function* walkTs(dir) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) yield* walkTs(full);
-    else if (/\.(ts|tsx)$/.test(entry.name)) yield full;
+const REGEX_KEYWORDS = new Set([
+  "return",
+  "typeof",
+  "case",
+  "in",
+  "of",
+  "do",
+  "else",
+  "instanceof",
+  "void",
+  "delete",
+  "new",
+  "throw",
+  "yield",
+  "await",
+]);
+
+function scanRegex(src, start) {
+  let inClass = false;
+  for (let j = start + 1; j < src.length; j++) {
+    const ch = src[j];
+    // A regex literal cannot span an unescaped newline, so a misread division gives up here.
+    if (ch === "\n") return -1;
+    if (ch === "\\") {
+      j += 1;
+      continue;
+    }
+    if (ch === "[") inClass = true;
+    else if (ch === "]") inClass = false;
+    else if (ch === "/" && !inClass) {
+      let k = j + 1;
+      while (k < src.length && /[a-zA-Z]/.test(src[k])) k += 1;
+      return k;
+    }
   }
+  return -1;
 }
 
-/**
- * Literal-aware scan shared by the two source views below. String, template and
- * `${}`-interpolation content always comes through verbatim; only code outside a
- * literal is reshaped.
- *
- * With `dropWhitespace`, code whitespace and block-comment placeholders are
- * removed as well, so a formatting-only edit leaves the output unchanged.
- */
-function scanSource(src, { dropWhitespace = false } = {}) {
+function regexAllowed(out) {
+  let j = out.length - 1;
+  while (j >= 0 && /\s/.test(out[j])) j -= 1;
+  if (j < 0) return true;
+  if (REGEX_PRECEDING.has(out[j])) return true;
+  const m = /([A-Za-z_$][A-Za-z0-9_$]*)$/.exec(out.slice(Math.max(0, j - 31), j + 1));
+  return m != null && REGEX_KEYWORDS.has(m[1]);
+}
+
+// String, template and `${}`-interpolation content comes through verbatim; only code is reshaped.
+function scanSource(src) {
   let out = "";
   let i = 0;
   const n = src.length;
@@ -63,17 +115,23 @@ function scanSource(src, { dropWhitespace = false } = {}) {
     if (c === "/" && next === "*") {
       const end = src.indexOf("*/", i + 2);
       i = end === -1 ? n : end + 2;
-      if (!dropWhitespace) out += " ";
+      out += " ";
       continue;
     }
-    if (c === "/" && next === "/") {
+    // A trailing backslash is only legal in a regex literal, so a `//` after one is part of the pattern.
+    if (c === "/" && next === "/" && out[out.length - 1] !== "\\") {
       const end = src.indexOf("\n", i + 2);
       i = end === -1 ? n : end;
       continue;
     }
-    if (dropWhitespace && /\s/.test(c)) {
-      i += 1;
-      continue;
+    // Copy a regex literal whole, so a `//` or `/*` inside it is never taken for a comment.
+    if (c === "/" && regexAllowed(out)) {
+      const end = scanRegex(src, i);
+      if (end > 0) {
+        out += src.slice(i, end);
+        i = end;
+        continue;
+      }
     }
     out += c;
     i += 1;
@@ -81,25 +139,10 @@ function scanSource(src, { dropWhitespace = false } = {}) {
   return out;
 }
 
-/** Comment-free source; code whitespace is left alone. */
+// Comment-free source view compared by cache-version hashing, code whitespace left alone.
+// Formatting-only edits are intentionally allowed to change the version; over-invalidating is safe.
 function stripComments(src) {
   return scanSource(src);
 }
 
-/**
- * Comment- and whitespace-free source view for cache-version hashing.
- *
- * Whitespace inside a literal is data, so it survives: `"a b"` and `"ab"` stay
- * distinct, as do the spaces in a `String.raw` pattern. Whitespace in code is
- * not, so the hash stays put across formatting and moves only when the code or a
- * literal actually changes.
- *
- * Regex literals are not tracked — the scanner cannot tell `/…/` from division —
- * so whitespace inside a bare regex is dropped too. Keep such a pattern in a
- * template literal when its spacing is load-bearing.
- */
-function normalizeSource(src) {
-  return scanSource(src, { dropWhitespace: true });
-}
-
-module.exports = { walkTs, stripComments, normalizeSource };
+module.exports = { stripComments };

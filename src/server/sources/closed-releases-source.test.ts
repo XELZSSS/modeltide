@@ -37,8 +37,6 @@ describe("getClosedReleases", () => {
   beforeEach(() => resetModuleCachesForTests());
 
   it("falls back to the index when the changelog leg rejects", async () => {
-    // The regression: Promise.all rejected on the first failure, so a healthy
-    // index plus a broken changelog returned 502 instead of using the fallback.
     vi.mocked(getChangelogModels).mockRejectedValue(new Error("markup changed"));
     vi.mocked(getIntelligenceIndexResult).mockResolvedValue(indexResult([closedModel("vendor/a")]));
     const { ctx } = testCtx();

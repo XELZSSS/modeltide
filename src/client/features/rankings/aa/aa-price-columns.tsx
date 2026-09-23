@@ -7,17 +7,16 @@ import {
   mobilePrimaryCol,
   rightCol,
   type DataTableColumn,
-} from "@/client/components/data/table-columns";
+} from "@/client/components/data/table/table-columns";
 import { computeBlendPrice } from "@/shared/utils";
 import { modelId } from "@/client/utils/model-utils";
 import {
   resolveEffectivePricing,
   PRICE_LEGS,
-  type OfficialGetter,
+  type EffectivePricing,
   type PriceLegPick,
-} from "@/client/utils/pricing-merge";
+} from "@/client/utils/pricing";
 import { CompareModelCell } from "@/client/features/rankings/aa/aa-cells";
-import type { EffectivePricing } from "@/client/utils/pricing-merge";
 
 export interface PricingRow {
   model: ArtificialAnalysisModel;
@@ -28,23 +27,12 @@ export function buildPricingColumns(
   t: TFunction,
   compareSet: Set<string>,
   onToggleCompare: (m: ArtificialAnalysisModel) => void,
-  effectiveMap?: Map<string, EffectivePricing>,
-  getOfficial?: OfficialGetter,
-  opts?: { pending?: boolean },
+  effectiveMap: Map<string, EffectivePricing>,
 ): DataTableColumn<PricingRow>[] {
-  const pending = opts?.pending === true;
-  const pendingBar = (width: string) => (
-    <span className="ui-skeleton inline-block h-4 align-middle" style={{ width }} aria-hidden="true" />
-  );
   const getEff = (model: ArtificialAnalysisModel): EffectivePricing =>
-    effectiveMap?.get(modelId(model)) ?? resolveEffectivePricing(model.pricing, getOfficial?.(model));
-  const pricingLegCol = (id: string, header: string, getLeg: PriceLegPick, opts?: { hiddenMd?: boolean }) =>
-    rightCol(
-      id,
-      header,
-      (row: PricingRow) => (pending ? pendingBar("4rem") : formatDollar(getLeg(getEff(row.model)), t)),
-      opts,
-    );
+    effectiveMap.get(modelId(model)) ?? resolveEffectivePricing(model.pricing);
+  const pricingLegCol = (id: string, header: string, getLeg: PriceLegPick) =>
+    rightCol(id, header, (row: PricingRow) => formatDollar(getLeg(getEff(row.model)), t), { hiddenMd: true });
   return [
     col(
       "model",
@@ -55,17 +43,12 @@ export function buildPricingColumns(
     rightCol("provider", t("provider"), (row) => (
       <RightAlignedText>{row.model.model_creators?.name || t("notAvailable")}</RightAlignedText>
     )),
-    pricingLegCol("cacheHitPrice", t("cacheHitPrice"), PRICE_LEGS.cacheHitPrice, { hiddenMd: true }),
+    pricingLegCol("cacheHitPrice", t("cacheHitPrice"), PRICE_LEGS.cacheHitPrice),
     rightCol("blendedPrice", t("blendedPrice"), (row: PricingRow) =>
-      pending ? pendingBar("4.5rem") : formatDollar(computeBlendPrice(getEff(row.model)), t),
+      formatDollar(computeBlendPrice(getEff(row.model)), t),
     ),
-    pricingLegCol("promptPrice", t("promptPrice"), PRICE_LEGS.promptPrice, { hiddenMd: true }),
-    pricingLegCol("completionPrice", t("completionPrice"), PRICE_LEGS.completionPrice, { hiddenMd: true }),
-    {
-      ...mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) =>
-        pending ? pendingBar("5rem") : formatDollar(row.monthlyCost, t),
-      ),
-      hiddenMd: true,
-    },
+    pricingLegCol("promptPrice", t("promptPrice"), PRICE_LEGS.promptPrice),
+    pricingLegCol("completionPrice", t("completionPrice"), PRICE_LEGS.completionPrice),
+    mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.monthlyCost, t), { hiddenMd: true }),
   ];
 }

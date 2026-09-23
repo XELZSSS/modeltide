@@ -3,7 +3,7 @@ import type { Chart as ChartJS, TooltipOptions } from "chart.js";
 import type { ChartTheme } from "@/client/theme/chart-theme";
 
 const CHART_FONT_FAMILY =
-  "'Inter Variable', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif";
+  "'IBM Plex Sans', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif";
 const CHART_FONT_SIZE = 12;
 
 export function applyChartDefaults(chart: typeof ChartJS): void {

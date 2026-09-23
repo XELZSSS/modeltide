@@ -3,14 +3,16 @@ import { SafeLink as Link } from "@/client/router";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { useSuspenseStatusHistory } from "@/client/api/api-queries";
-import { PartialNotice, SuspenseQuery } from "@/client/components/feedback";
+import { unwrapObject } from "@/client/api/payload-normalize";
+import { PartialNotice } from "@/client/components/feedback";
+import { SuspenseQuery } from "@/client/router/suspense-query";
 import { PageContainer, PageHeader, PageSection } from "@/client/components/layout";
 import { Card, CardContent } from "@/client/components/ui/card";
 import { Dot, LabeledDot } from "@/client/components/ui/primitives";
 import { cn } from "@/client/utils/cn";
 import { formatUptime, formatUptimePct } from "@/client/utils/format";
 import { sourceLabelKey } from "@/shared/config";
-import type { DayBucket, SourceHistorySummary } from "@/shared/types";
+import type { DayBucket, SourceHistorySummary, StatusHistoryPayload } from "@/shared/types";
 import { LEVEL_STYLES, recentlyDegradedIds, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./status-parts";
 import { StatusEventList } from "./status-events";
@@ -31,8 +33,6 @@ const SourceCard = memo(function SourceCard({
   const label = labelKey ? t(labelKey) : summary.id;
   const level = resolveLevel(summary);
   const style = LEVEL_STYLES[level];
-  // The card used to say only "Degraded" / "Failure"; the source's own warning or
-  // probe error is what tells the reader whether it matters.
   const detail = level === "ok" ? null : (summary.detail ?? null);
   return (
     <Link
@@ -65,7 +65,7 @@ const SourceCard = memo(function SourceCard({
         ).map(([labelKey, value]) => (
           <span key={labelKey}>
             {t(labelKey)}
-            <span className="ui-mono-value text-xs text-text-primary ml-1.5">{formatUptimePct(t, value)}</span>
+            <span className="ui-mono-value text-xs text-text-primary ml-1.5">{formatUptimePct(value, t)}</span>
           </span>
         ))}
         <ChevronRight
@@ -80,15 +80,15 @@ const SourceCard = memo(function SourceCard({
 function StatusContent() {
   const { t } = useTranslation();
   const { data } = useSuspenseStatusHistory();
-  const levels = data.sources.map((s) => resolveLevel(s));
-  const degradedIds = recentlyDegradedIds(data.events ?? []);
+  const history = unwrapObject<StatusHistoryPayload>(data, "statusHistory");
+  const levels = history.sources.map((s) => resolveLevel(s));
+  const degradedIds = recentlyDegradedIds(history.recent);
   const erroring = levels.filter((l) => l === "error").length;
   const warning = levels.filter((l) => l === "warn").length;
-  const hasData = data.sources.some((s) => s.checkedAt != null);
+  const hasData = history.sources.some((s) => s.checkedAt != null);
   // Unprobed sources must not read as healthy (1 probed-OK + 13 silent).
   const unprobed = levels.filter((l) => l === "unknown").length;
-  const sourceCount = data.sources.length;
-  // Priority order: no data > errors > warnings > still probing > all ok.
+  const sourceCount = history.sources.length;
   let overall: { color: string; message: string };
   if (!hasData) overall = { color: "var(--text-tertiary)", message: t("historyAccumulating") };
   else if (erroring > 0)
@@ -104,9 +104,9 @@ function StatusContent() {
 
   return (
     <PageContainer>
-      <PageHeader title={t("statusPageTitle")} kicker={t("kickerStatus")} description={t("sourceStatus")} />
+      <PageHeader title={t("statusPageTitle")} description={t("sourceStatus")} />
 
-      {data.persisted === false && <PartialNotice message={t("memoryModeNotice")} />}
+      {history.persisted === false && <PartialNotice message={t("memoryModeNotice")} />}
 
       <Card>
         <CardContent className="flex items-center justify-between gap-3 flex-wrap py-4">
@@ -116,18 +116,18 @@ function StatusContent() {
           </div>
           <span className="ui-caption shrink-0">
             {t("serviceUptime")}
-            <span className="ui-mono-value text-xs text-text-primary ml-1.5">{formatUptime(t, data.uptimeMs)}</span>
+            <span className="ui-mono-value text-xs text-text-primary ml-1.5">{formatUptime(history.uptimeMs, t)}</span>
           </span>
         </CardContent>
       </Card>
 
       <PageSection>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in">
-          {data.sources.map((summary) => (
+          {history.sources.map((summary) => (
             <SourceCard
               key={summary.id}
               summary={summary}
-              buckets={data.daily[summary.id] ?? EMPTY_BUCKETS}
+              buckets={history.daily[summary.id] ?? EMPTY_BUCKETS}
               recentlyDegraded={degradedIds.has(summary.id)}
             />
           ))}
@@ -137,7 +137,7 @@ function StatusContent() {
       {hasData && (
         <PageSection title={t("recentEvents")}>
           <StatusEventList
-            events={(data.events ?? []).slice(0, 15)}
+            events={(history.events ?? []).slice(0, 15)}
             emptyMessage={t("noRecentEvents")}
             showSource
             showTime

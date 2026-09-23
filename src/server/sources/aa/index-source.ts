@@ -1,71 +1,59 @@
 import { byNumberDesc, isValidModelIdentity } from "@/server/parsers/parser-primitives";
 import type { AppContext } from "@/server/context";
-import { DEFAULT_TTL_MS, ttlFor } from "@/shared/config";
+import { DEFAULT_TTL_MS } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { parseRscPayloads, findNextData } from "@/server/parsers/rsc-parser";
+import { parseRscPayload, findNextData } from "@/server/parsers/rsc-parser";
 
 import { getModelDirectory } from "@/server/sources/openrouter-directory";
+import { compact } from "@/server/parsers/aa/model-compact";
 import {
   backfillFromMeta,
-  compact,
   compactOmniscienceEnrich,
   findModelArray,
   mergeBySlug,
   type IntelligenceIndexResult,
-} from "@/server/parsers/aa";
-import { fetchAaRsc, fetchAndParseEnrich } from "@/server/sources/aa/aa-fetch";
+} from "@/server/parsers/aa/model-enrich";
+import { fetchAaRsc, getAndParseEnrich } from "@/server/sources/aa/aa-fetch";
 import type { SourcePayload } from "@/shared/types";
+import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 import { upstreamEndpoints } from "@/server/config";
-import { cached, requireRows } from "@/server/sources/pipeline";
+import { cachedPayload, cachedRaw, requireParsed, requireRows } from "@/server/sources/pipeline";
 
-/**
- * The raw index page, kept under its own key: the changelog leg derives its rows
- * from the very same body instead of downloading the 905 KB /changelog page.
- */
 export function getAaIndexBody(ctx: AppContext): Promise<string> {
-  return cached(ctx, cacheKeys.aaIndexBody, DEFAULT_TTL_MS, async () => ({
-    data: await fetchAaRsc(ctx, upstreamEndpoints.aaIndex),
-  }));
+  return cachedRaw(ctx, cacheKeys.aaIndexBody, DEFAULT_TTL_MS, () => fetchAaRsc(ctx, upstreamEndpoints.aaIndex));
 }
 
 async function fetchIntelligenceIndex(ctx: AppContext): Promise<Omit<IntelligenceIndexResult, "fetchedAt">> {
-  const [indexBody, [modelsPageModels, omniscienceEnrich], openRouterMeta] = await Promise.all([
+  const [indexBody, [modelsEnrich, omniscienceEnrich], openRouterMeta] = await Promise.all([
     getAaIndexBody(ctx),
     Promise.all([
-      fetchAndParseEnrich<Record<string, unknown>>(
-        ctx,
-        "/models",
-        upstreamEndpoints.aaModels,
-        "initialModels",
-        (tree) => findNextData(tree, "initialModels"),
-        { cacheKey: cacheKeys.aaModelsEnrich },
-      ),
-      fetchAndParseEnrich<Record<string, unknown>>(
-        ctx,
-        "/omniscience",
-        upstreamEndpoints.aaOmniscience,
-        "initialModels",
-        (tree) => {
-          const arr = findNextData<Record<string, unknown>>(tree, "initialModels");
-          return Array.isArray(arr) && arr.some((m) => m.omniscienceBreakdown != null) ? arr : null;
-        },
-        { cacheKey: cacheKeys.aaOmniscienceEnrich, map: (arr) => arr.map(compactOmniscienceEnrich) },
-      ),
+      getAndParseEnrich<Record<string, unknown>>(ctx, cacheKeys.aaModelsEnrich, {
+        label: "/models",
+        path: upstreamEndpoints.aaModels,
+        marker: "initialModels",
+        extract: (tree) => findNextData(tree, "initialModels"),
+      }),
+      getAndParseEnrich<Record<string, unknown>>(ctx, cacheKeys.aaOmniscienceEnrich, {
+        label: "/omniscience",
+        path: upstreamEndpoints.aaOmniscience,
+        marker: "initialModels",
+        extract: (tree) => findNextData(tree, "initialModels"),
+        // Drop here, not in the extractor: an empty leg must stay successful, not partial.
+        map: (arr) =>
+          arr.map(compactOmniscienceEnrich).filter((m) => m.omniscience != null || m.omniscienceBreakdown != null),
+      }),
     ]),
     getModelDirectory(ctx)
       .then((d) => d.meta)
-      .catch(() => ({}) as Record<string, import("@/server/parsers/openrouter-parser").ModelMetaEntry>),
+      .catch(() => ({}) as Record<string, ModelMetaEntry>),
   ]);
 
-  const [indexModels, catalog] = parseRscPayloads(indexBody, ["intelligenceIndex", "models"], findModelArray) as [
-    Record<string, unknown>[],
-    Record<string, unknown>[],
-  ];
+  // The marker only selects the line to parse: one marker is all the page must carry.
+  const indexModels = requireParsed(parseRscPayload(indexBody, "intelligenceIndex", findModelArray));
 
-  const enrichFailures = [modelsPageModels, omniscienceEnrich].filter((a) => a.length === 0).length;
-  const [primary, secondary] = indexModels.length > 0 ? [indexModels, catalog] : [catalog, indexModels];
-  const merged = mergeBySlug(primary, secondary, modelsPageModels, omniscienceEnrich)
+  const enrichFailures = [modelsEnrich, omniscienceEnrich].filter((leg) => leg.failed).length;
+  const merged = mergeBySlug(indexModels, modelsEnrich.rows, omniscienceEnrich.rows)
     .map(compact)
     .filter((m) => isValidModelIdentity(m.id, m.slug, m.name));
   const models = merged.sort(byNumberDesc((m) => m.intelligence_index));
@@ -73,23 +61,20 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<Omit<Intelligenc
     models,
     "Artificial Analysis parsing",
     "models",
-    `catalog=${catalog.length}, kept=0, enrichFailures=${enrichFailures}`,
+    `raw=${indexModels.length}, kept=0, enrichFailures=${enrichFailures}`,
   );
   const backfilled = backfillFromMeta(models, openRouterMeta);
   if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
   return { models, enrichFailed: enrichFailures > 0 };
 }
 
-export const getIntelligenceIndexResult = (ctx: AppContext): Promise<IntelligenceIndexResult> =>
-  cached(ctx, cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async () => {
+export const getIntelligenceIndex = (ctx: AppContext): Promise<SourcePayload<ArtificialAnalysisModel[]>> =>
+  cachedPayload<ArtificialAnalysisModel[]>(ctx, cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async () => {
     const { models, enrichFailed } = await fetchIntelligenceIndex(ctx);
-    return {
-      data: { models, enrichFailed, fetchedAt: new Date().toISOString() },
-      ttl: ttlFor(enrichFailed),
-    };
+    return { rows: models, partial: enrichFailed };
   });
 
-export const getIntelligenceIndex = async (ctx: AppContext): Promise<SourcePayload<ArtificialAnalysisModel[]>> => {
-  const { models, enrichFailed, fetchedAt } = await getIntelligenceIndexResult(ctx);
-  return { data: models, fetchedAt, ...(enrichFailed ? { partial: true } : {}) };
+export const getIntelligenceIndexResult = async (ctx: AppContext): Promise<IntelligenceIndexResult> => {
+  const { data, fetchedAt, partial } = await getIntelligenceIndex(ctx);
+  return { models: data, enrichFailed: partial === true, fetchedAt };
 };

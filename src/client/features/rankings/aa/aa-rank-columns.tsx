@@ -7,7 +7,7 @@ import {
   mobilePrimaryCol,
   rightCol,
   type DataTableColumn,
-} from "@/client/components/data/table-columns";
+} from "@/client/components/data/table/table-columns";
 import { CompareModelCell } from "@/client/features/rankings/aa/aa-cells";
 
 function scoreColumn(
@@ -25,7 +25,7 @@ function scoreColumn(
       const value = accessor(model);
       return (
         <RightAlignedText className={value == null ? "text-text-tertiary" : undefined}>
-          {value == null ? t("notAvailable") : formatScore(t, value)}
+          {value == null ? t("notAvailable") : formatScore(value, t)}
         </RightAlignedText>
       );
     },

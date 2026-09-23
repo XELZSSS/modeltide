@@ -1,7 +1,8 @@
 import { lazy } from "react";
 import { useParams } from "@/client/router";
 import { MODEL_SOURCES, type ModelSource } from "@/client/config/nav-config";
-import { NotFound, SuspenseQuery } from "@/client/components/feedback";
+import { NotFound } from "@/client/components/feedback";
+import { SuspenseQuery } from "@/client/router/suspense-query";
 import { PageContainer } from "@/client/components/layout";
 
 const SOURCE_COMPONENTS: Record<ModelSource, React.ComponentType<{ decodedId: string }>> = {

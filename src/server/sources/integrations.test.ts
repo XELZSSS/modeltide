@@ -7,7 +7,6 @@ import {
 import { parseDailyPapers as parseDailyPapersResult } from "@/server/parsers/hf-parser";
 import { fakeHttp, testCtx } from "@/server/test-helpers";
 
-/** Unwrap a successful ParseResult; failure surfaces as a thrown error. */
 function unwrap<T>(res: { ok: true; data: T } | { ok: false; error: string }): T {
   if (!res.ok) throw new Error(res.error);
   return res.data;

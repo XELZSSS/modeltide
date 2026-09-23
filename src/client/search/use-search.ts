@@ -6,7 +6,7 @@ import {
   useOpenRouterRankings,
 } from "@/client/api/api-queries";
 import { modelDetailPath } from "@/client/utils/model-utils";
-import type { SearchResult, SearchResultSource } from "@/shared/types";
+import type { SearchResult, SearchResultSource } from "@/client/search/types";
 import type {
   ArtificialAnalysisModel,
   HallucinationRankingEntry,
@@ -15,7 +15,8 @@ import type {
 } from "@/shared/types";
 import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
-import { matchTerm, normalizeModelKey, fuzzyMatch } from "@/shared/utils";
+import { matchTerm, fuzzyMatch, usableFields } from "@/client/search/match";
+import { normalizeModelKey } from "@/shared/utils";
 
 type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
 
@@ -25,7 +26,6 @@ interface SourceConfig {
   map(item: SearchItem): SearchResult;
 }
 
-/** Erases one source's item type here instead of at every field/map call site. */
 function defineSource<T extends SearchItem>(
   items: readonly T[],
   getFields: (item: T) => (string | undefined | null)[],
@@ -38,7 +38,7 @@ function collect(config: SourceConfig, term: string): { result: SearchResult; ma
   const out: { result: SearchResult; match: number }[] = [];
   const missed: SearchItem[] = [];
   for (const item of config.items) {
-    const fields = config.getFields(item).filter((v): v is string => typeof v === "string" && v.length > 0);
+    const fields = usableFields(config.getFields(item));
     const { matched, score } = matchTerm(fields, term);
     if (matched) out.push({ result: config.map(item), match: score });
     else missed.push(item);
@@ -64,17 +64,10 @@ const MAX_RESULTS = 20;
 
 const EMPTY_ARRAY: never[] = [];
 
-/** Minimum trimmed query length that starts a search. */
 export const MIN_QUERY = 2;
 
-/**
- * Corpus priority for equally relevant hits. It also decides which entry survives
- * the dedupe below: one model lives in several corpora (hallucination rankings are
- * derived from the AA models), and their `score`s are different metrics — letting
- * an intelligence index race an omniscience index picked the winner, so the same
- * model could resolve to a different detail page (with a different back
- * destination) depending on which metric happened to be larger.
- */
+/** Corpus priority for equally relevant hits; it also picks which entry survives dedupe below:
+ *  one model lives in several corpora and their `score`s are different metrics. */
 const SOURCE_PRIORITY: Record<SearchResultSource, number> = {
   modelRankings: 0,
   openRouterRankings: 1,
@@ -82,12 +75,7 @@ const SOURCE_PRIORITY: Record<SearchResultSource, number> = {
   hallucinationRankings: 3,
 };
 
-/**
- * Orders hits by relevance, then by corpus priority, then by the corpus's own
- * score (only ever comparing like with like), and collapses the same model down
- * to its highest-priority entry.
- */
-export function rankSearchHits(hits: { result: SearchResult; match: number }[]): SearchResult[] {
+function rankSearchHits(hits: { result: SearchResult; match: number }[]): SearchResult[] {
   const ordered = [...hits].sort(
     (a, b) =>
       b.match - a.match ||
@@ -108,17 +96,17 @@ export function rankSearchHits(hits: { result: SearchResult; match: number }[]):
 
 export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: boolean; warm?: boolean }): SearchState {
   const baseEnabled = searchTerm.trim().length >= MIN_QUERY;
-  // `warm` (the search box has focus) loads the corpora before the term is long enough, so
-  // the first two keystrokes read from cache instead of fanning out four full-dataset
-  // requests. It overrides `suspended`, which only gates the term-driven search.
-  const enabled = opts?.warm === true || (baseEnabled && opts?.suspended !== true);
+  // `warm` is "the search box is focused": focus alone must not fan the four corpora out, but one
+  // typed character is; it overrides `suspended`, which only gates the term-driven search.
+  const warmEnabled = opts?.warm === true && searchTerm.trim().length > 0;
+  const enabled = warmEnabled || (baseEnabled && opts?.suspended !== true);
   const artificialQ = useArtificialRankings(enabled);
   const openSourceQ = useAllOpenSourceModels(enabled);
   const orQ = useOpenRouterRankings(enabled);
 
   const artificialData = artificialQ.data ?? EMPTY_ARRAY;
   const openSourceRankings = openSourceQ.data ?? EMPTY_ARRAY;
-  const openRouterData = orQ.data?.tokenUsageRankings ?? EMPTY_ARRAY;
+  const openRouterData = orQ.data?.data ?? EMPTY_ARRAY;
   const hallucinationRankings = useHallucinationRankings(artificialData, enabled);
 
   const error = [artificialQ.error, openSourceQ.error, orQ.error].find((e): e is Error | null => e != null) ?? null;

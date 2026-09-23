@@ -25,12 +25,8 @@ export const BENCHMARK_KEYS = [
 
 export type BenchmarkKey = (typeof BENCHMARK_KEYS)[number];
 
-/**
- * Benchmarks whose upstream value is an absolute score (GDPval ships dollars),
- * not a percentage. They are the one exception to the 0-100 scale every other
- * benchmark key is stored in, so both the parser and the renderer skip scaling
- * them.
- */
+/** GDPval ships an absolute score (dollars), not a percentage: the one exception to the 0-100 scale
+ * every other benchmark key is stored in, so parser and renderer skip scaling them. */
 export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["gdpval"]);
 
 export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {

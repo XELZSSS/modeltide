@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SOURCES } from "@/server/sources/registry";
+import { SOURCES, warmTasks, type WarmTier } from "@/server/sources/registry";
+import type { Env } from "@/server/context";
 import { validateQuery, type QuerySchema } from "@/server/infra/query-validation";
 import { ValidationError } from "@/server/infra/errors";
 import { MAX_MODEL_LIMIT, apiPaths } from "@/shared/config";
@@ -73,5 +74,23 @@ describe("SOURCES manifest", () => {
     // Hourly, not every fire: the 13 feeds are ~4 MB decoded per refresh.
     expect(news?.warm).toBe("hourly");
     expect(categories.map((c) => c.category)).toEqual(["industry", "opensource", "hardware", "funding", "research"]);
+  });
+});
+
+describe("warmTasks", () => {
+  // A tier change not mirrored in the counts below stops the source being warmed, silently.
+  it.each([
+    ["core, warmed on every fire", "core", 2],
+    ["hourly, warmed on the off-peak fire", "hourly", 8],
+    ["static, warmed every 6th hour", "static", 1],
+  ] as [string, WarmTier, number][])("%s expands %i tasks", (_label, tier, expected) => {
+    expect(warmTasks({} as Env, tier, 1_000)).toHaveLength(expected);
+  });
+
+  it("dispatches every warm-annotated source exactly once across the three tiers", () => {
+    const dispatched = (["core", "hourly", "static"] as const).flatMap((tier) => warmTasks({} as Env, tier, 1_000));
+    const declared = SOURCES.filter((s) => s.warm).reduce((n, s) => n + (s.warmParams?.length || 1), 0);
+    expect(declared).toBeGreaterThan(0);
+    expect(dispatched).toHaveLength(declared);
   });
 });

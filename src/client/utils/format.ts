@@ -2,6 +2,7 @@ import { BENCHMARK_LABELS, ONE_DAY, ONE_HOUR, ONE_MINUTE } from "@/shared/config
 import type { Lang, TFunction, TranslationKey } from "@/shared/i18n";
 import { isFiniteNumber } from "@/shared/utils";
 import { isHttpUrl } from "@/shared/utils/url";
+import { isProtocolRelative } from "@/client/utils/url";
 
 function compactParts(n: number) {
   return { abs: Math.abs(n), sign: n < 0 ? "-" : "" };
@@ -57,21 +58,21 @@ export function formatTokens(n: number | null | undefined, t?: TFunction): strin
   return String(parseFloat(n.toFixed(1)));
 }
 
-export function formatScore(t: TFunction, n?: number | null) {
+export function formatScore(n: number | null | undefined, t: TFunction) {
   if (!isFiniteNumber(n)) return t("notAvailable");
   if (Math.abs(n) > 1_000_000) return t("notAvailable");
   return n.toFixed(2);
 }
 
-export function formatPercent(t: TFunction, v: number | null | undefined): string {
+export function formatPercent(v: number | null | undefined, t: TFunction): string {
   return isFiniteNumber(v) ? `${v.toFixed(1)}%` : t("notAvailable");
 }
 
-export function formatUptimePct(t: TFunction, v: number | null | undefined): string {
+export function formatUptimePct(v: number | null | undefined, t: TFunction): string {
   return isFiniteNumber(v) ? `${(v * 100).toFixed(2)}%` : t("uptimeNoData");
 }
 
-export function formatSpeed(t: TFunction, v: number | null | undefined): string {
+export function formatSpeed(v: number | null | undefined, t: TFunction): string {
   return isFiniteNumber(v) ? formatIndex(v) : t("notAvailable");
 }
 
@@ -86,7 +87,7 @@ export function formatTrend(change?: number | null, t?: TFunction): string {
   return `${change > 0 ? "+" : ""}${change.toFixed(1)}%`;
 }
 
-export function formatBoolean(t: TFunction, value?: boolean | null) {
+export function formatBoolean(value: boolean | null | undefined, t: TFunction) {
   if (value === true) return t("yes");
   if (value === false) return t("no");
   return t("notAvailable");
@@ -96,10 +97,7 @@ export function orNA(value: string | null | undefined, t: TFunction): string {
   return value || t("notAvailable");
 }
 
-/**
- * Sub-cent prices need the extra digits or they render as a flat $0.00; exported so the
- * compare view can rank cells on exactly the precision it displays them with.
- */
+/** Sub-cent prices need the extra digits or they render as $0.00; the compare view ranks on this precision. */
 export function priceDisplayPrecision(v: number): number {
   const abs = Math.abs(v);
   if (abs === 0 || abs.toFixed(2) !== "0.00") return 2;
@@ -139,7 +137,7 @@ export function safeHref(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
   const cleaned = stripControlChars(url);
   if (!cleaned) return undefined;
-  if (cleaned.startsWith("//") || cleaned.startsWith("/\\")) return undefined;
+  if (isProtocolRelative(cleaned)) return undefined;
   if (cleaned.startsWith("/")) return cleaned;
   return isHttpUrl(cleaned) ? cleaned : undefined;
 }
@@ -175,9 +173,12 @@ function localeOf(lang: string): string {
 }
 
 export function formatDate(isoString: string | number | Date, lang: string): string {
-  const date = new Date(isoString);
+  // Must parse what the branch below tests: a padded date-only string falls back to the lenient
+  // parser, which reads it as LOCAL midnight, so UTC rendering shows the previous day.
+  const input = typeof isoString === "string" ? isoString.trim() : isoString;
+  const date = new Date(input);
   if (Number.isNaN(date.getTime())) return String(isoString);
-  if (typeof isoString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(isoString.trim())) {
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
     return date.toLocaleDateString(localeOf(lang), { timeZone: "UTC" });
   }
   return date.toLocaleDateString(localeOf(lang));
@@ -190,7 +191,7 @@ export function benchmarkLabel(key: string, t: TFunction): string {
   return labelKey ? t(labelKey) : key;
 }
 
-export function formatUptime(t: TFunction, ms: number): string {
+export function formatUptime(ms: number, t: TFunction): string {
   if (!isFiniteNumber(ms) || ms < 0) return t("uptimeNoData");
   const days = Math.floor(ms / ONE_DAY);
   const hours = Math.floor((ms % ONE_DAY) / ONE_HOUR);

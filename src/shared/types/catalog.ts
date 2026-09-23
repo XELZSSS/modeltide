@@ -41,7 +41,6 @@ export interface ArtificialAnalysisModel {
   agentic_index?: number | null;
   benchmarks?: Partial<Record<BenchmarkKey, number | null>>;
   pricing?: ModelPricing;
-  defaultMonthlyCost?: number | null;
   speed?: ModelSpeed;
   input_modality_text?: boolean;
   input_modality_image?: boolean;

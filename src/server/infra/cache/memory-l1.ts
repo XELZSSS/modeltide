@@ -1,9 +1,16 @@
 import { L1_MAX_TTL_MS, L1_TTL_CAP_MS, MEMORY_CACHE_MAX_BYTES, MEMORY_CACHE_MAX_KEYS } from "@/server/config";
+import { HIGH_CARDINALITY_KEY_MARKER } from "@/server/config/keys";
 
 interface MemoryEntry<T> {
   d: T;
   e: number;
+  /** The effective origin TTL, which may be shorter than the requested TTL. */
+  t: number;
 }
+
+// Caller-controlled keys are unbounded: the family gets a quarter of the map and only displaces itself.
+const CAPPED_FAMILY_MAX_KEYS = Math.floor(MEMORY_CACHE_MAX_KEYS / 4);
+const CAPPED_FAMILY_MAX_BYTES = MEMORY_CACHE_MAX_BYTES / 4;
 
 export class MemoryL1 {
   private map = new Map<string, { entry: MemoryEntry<unknown>; bytes: number }>();
@@ -24,9 +31,10 @@ export class MemoryL1 {
     this.map.delete(vk);
   }
 
-  set(vk: string, data: unknown, ttl: number, bytes: number): void {
+  set(vk: string, data: unknown, ttl: number, bytes: number, effectiveTtl = ttl): void {
     this.delete(vk);
     if (bytes > MEMORY_CACHE_MAX_BYTES) return;
+    if (vk.includes(HIGH_CARDINALITY_KEY_MARKER)) this.evictFromCappedFamily(bytes);
     if (this.map.size >= MEMORY_CACHE_MAX_KEYS) {
       const now = Date.now();
       for (const [k, item] of this.map) {
@@ -43,13 +51,31 @@ export class MemoryL1 {
       if (!oldest.done) this.delete(oldest.value);
       else break;
     }
-    this.map.set(vk, { entry: { d: data, e: Date.now() + ttl }, bytes });
+    this.map.set(vk, { entry: { d: data, e: Date.now() + ttl, t: effectiveTtl }, bytes });
     this.bytes += bytes;
   }
 
   clear(): void {
     this.map.clear();
     this.bytes = 0;
+  }
+
+  /** Frees the family's own oldest entries so a capped key never needs a shared one's slot. */
+  private evictFromCappedFamily(bytes: number): void {
+    let keys = 0;
+    let familyBytes = 0;
+    for (const [k, item] of this.map) {
+      if (!k.includes(HIGH_CARDINALITY_KEY_MARKER)) continue;
+      keys += 1;
+      familyBytes += item.bytes;
+    }
+    for (const [k, item] of this.map) {
+      if (keys < CAPPED_FAMILY_MAX_KEYS && familyBytes + bytes <= CAPPED_FAMILY_MAX_BYTES) return;
+      if (!k.includes(HIGH_CARDINALITY_KEY_MARKER)) continue;
+      keys -= 1;
+      familyBytes -= item.bytes;
+      this.delete(k);
+    }
   }
 }
 

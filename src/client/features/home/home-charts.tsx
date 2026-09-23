@@ -1,121 +1,123 @@
 import { memo, useMemo } from "react";
-import { type ChartOptions } from "chart.js";
+import { type ChartOptions, type Plugin } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
 import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
-import { ChartFrame } from "@/client/components/ui/chart-frame";
+import { ChartEmpty, ChartFrame } from "@/client/components/ui/chart-frame";
 import { modelDisplayName, shortModelId } from "@/client/utils/model-utils";
 import { registerLine } from "@/client/utils/charts-register";
 
 registerLine();
-import { useChartTheme, ceilToStep, legendStyle, seriesColor } from "@/client/theme/chart-theme";
-import {
-  defaultTooltipOptions,
-  chartBase,
-  axisTickStyle,
-  axisGridStyle,
-  axisDashedBorderStyle,
-  lineSeriesStyle,
-} from "@/client/utils/charts";
+import { useChartTheme, cartesianChartOptions, seriesColor, hexToRgba } from "@/client/theme/chart-theme";
+import { axisTickStyle, lineSeriesStyle } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
+import {
+  SERIES_KEYS,
+  SERIES_LABEL_KEYS,
+  INDEX_AXIS_MAX,
+  INDEX_AXIS_STEP,
+  buildIndexRows,
+  formatIndexValue,
+  indexAxisX,
+} from "./index-series";
 
-const SERIES_KEYS = ["intelligence_index", "coding_index", "agentic_index"] as const;
-const SERIES_LABEL_KEYS = ["intelligence", "coding", "agentic"] as const;
+/** Area fill opacity: the two baseline fills overlap, so it must stay light enough not to read as a third colour. */
+const AREA_FILL_ALPHA = 0.2;
+const CHART_HEIGHT_CLASS = "h-[200px] sm:h-[240px]";
 
-export const IndexLineChart = memo(function IndexLineChart({ models }: { models: ArtificialAnalysisModel[] }) {
+const tickLabel = (value: string | number): string => formatIndexValue(Number(value));
+
+/** chart.js paints the scales before the datasets, so an area fill covers the axis border; this redraws it. */
+function bottomRule(color: string): Plugin<"line"> {
+  return {
+    id: "indexAreaBottomRule",
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea } = chart;
+      // Half-pixel aligned the way chart.js aligns its own grid lines.
+      const y = Math.round(chartArea.bottom) + 0.5;
+      ctx.save();
+      ctx.beginPath();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = color;
+      ctx.moveTo(chartArea.left, y);
+      ctx.lineTo(chartArea.right, y);
+      ctx.stroke();
+      ctx.restore();
+    },
+  };
+}
+
+/** The two indices are separate evaluations of the same model, so each series is filled from its own score. */
+export const IndexAreaChart = memo(function IndexAreaChart({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();
-  const top10 = useMemo(
-    () =>
-      [...models]
-        .filter((m): m is ArtificialAnalysisModel & { intelligence_index: number } => m.intelligence_index != null)
-        .sort((a, b) => b.intelligence_index - a.intelligence_index)
-        .slice(0, 10),
-    [models],
-  );
+  const rows = useMemo(() => buildIndexRows(models), [models]);
+  const plugins = useMemo(() => [bottomRule(theme.grid)], [theme]);
+  const labels = useMemo(() => rows.map((m) => m.short_name || shortModelId(m.name) || m.id || "—"), [rows]);
 
   const data = useMemo(
     () => ({
-      labels: top10.map((m) => m.short_name || shortModelId(m.name) || m.id || "—"),
       datasets: SERIES_KEYS.map((key, slot) => {
         const color = seriesColor(theme, slot);
         return {
           label: t(SERIES_LABEL_KEYS[slot]!),
-          data: top10.map((m) => m[key] ?? null),
+          data: rows.map((m, i) => ({ x: indexAxisX(i, rows.length), y: m[key] })),
           borderColor: color,
-          backgroundColor: color,
+          backgroundColor: hexToRgba(color, AREA_FILL_ALPHA),
+          fill: true,
           ...lineSeriesStyle,
         };
       }),
     }),
-    [top10, t, theme],
+    [rows, t, theme],
   );
 
-  const yMax = useMemo(() => {
-    let peak = 100;
-    for (const m of top10) {
-      for (const k of SERIES_KEYS) {
-        const v = m[k];
-        if (typeof v === "number" && Number.isFinite(v) && v > peak) peak = v;
-      }
-    }
-    return ceilToStep(peak, 20);
-  }, [top10]);
-
   const options = useMemo<ChartOptions<"line">>(
-    () => ({
-      ...chartBase,
-      interaction: { mode: "index", intersect: false },
-      scales: {
+    () =>
+      cartesianChartOptions<"line", "linear">(theme, {
+        interaction: { mode: "index", intersect: false },
         x: {
-          ticks: { display: false },
-          grid: axisGridStyle(theme),
-          border: axisDashedBorderStyle(theme),
+          type: "linear",
+          min: 0,
+          max: INDEX_AXIS_MAX,
+          ticks: { ...axisTickStyle(theme), stepSize: INDEX_AXIS_STEP, callback: tickLabel },
         },
         y: {
           min: 0,
-          max: yMax,
-          ticks: {
-            ...axisTickStyle(theme),
-            stepSize: 20,
-            callback: (value) => Math.round(Number(value)).toString(),
-          },
-          grid: axisGridStyle(theme),
-          border: axisDashedBorderStyle(theme),
+          max: INDEX_AXIS_MAX,
+          ticks: { ...axisTickStyle(theme), stepSize: INDEX_AXIS_STEP, callback: tickLabel },
         },
-      },
-      plugins: {
-        legend: legendStyle(theme),
         tooltip: {
-          ...defaultTooltipOptions(theme),
           callbacks: {
+            title: (items) => labels[items[0]?.dataIndex ?? -1] ?? "",
             label: (ctx) => {
               const y = ctx.parsed.y;
-              return y == null ? `${ctx.dataset.label}: —` : `${ctx.dataset.label}: ${Math.round(Number(y))}`;
+              return `${ctx.dataset.label}: ${y == null ? "—" : formatIndexValue(Number(y))}`;
             },
           },
         },
-      },
-    }),
-    [theme, yMax],
+      }),
+    [theme, labels],
   );
 
   return (
     <Card>
       <CardContent>
         <CardHeader title={t("intelligenceIndex")} subtitle={t("artificialSource")} />
-        {top10.length === 0 ? (
-          <div
-            className="flex h-[200px] sm:h-[240px] items-center justify-center text-center ui-body-secondary"
-            role="status"
-          >
-            {t("noRankingsData")}
-          </div>
+        {rows.length === 0 ? (
+          <ChartEmpty className={CHART_HEIGHT_CLASS}>{t("noRankingsData")}</ChartEmpty>
         ) : (
           <ChartFrame>
-            <Line data={data} options={options} aria-label={t("intelligenceIndex")} role="img" />
+            <Line data={data} options={options} plugins={plugins} aria-label={t("intelligenceIndex")} role="img" />
             <figcaption className="sr-only">
-              {top10.map((m) => `${modelDisplayName(m)}: ${Math.round(m.intelligence_index ?? 0)}`).join(", ")}
+              {rows
+                .map(
+                  (m) =>
+                    `${modelDisplayName(m)}: ${SERIES_KEYS.map(
+                      (key, slot) => `${t(SERIES_LABEL_KEYS[slot]!)} ${formatIndexValue(m[key])}`,
+                    ).join(", ")}`,
+                )
+                .join("; ")}
             </figcaption>
           </ChartFrame>
         )}

@@ -2,17 +2,8 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "@/client/providers";
 import type { DayBucket } from "@/shared/types";
 import { cn } from "@/client/utils/cn";
-import { ONE_DAY, UPTIME_ERROR_RATIO, UPTIME_WARN_RATIO } from "@/shared/config";
-
-const BAR_THRESHOLDS = [
-  { min: UPTIME_WARN_RATIO, className: "bg-success" },
-  { min: UPTIME_ERROR_RATIO, className: "bg-warning" },
-] as const;
-
-function barClass(ratio: number | null): string {
-  if (ratio == null) return "bg-bg-tertiary";
-  return BAR_THRESHOLDS.find((band) => ratio >= band.min)?.className ?? "bg-destructive";
-}
+import { ONE_DAY } from "@/shared/config";
+import { DAY_BAR_CLASSES, dayBarLevel } from "@/client/utils/status-level";
 
 function getLast30Days(now = Date.now()): string[] {
   const out: string[] = [];
@@ -38,15 +29,14 @@ export const UptimeStrip = memo(function UptimeStrip({ buckets }: { buckets: Day
         const bucket = byDay.get(day);
         const ratio = bucket && bucket.total > 0 ? bucket.ok / bucket.total : null;
         const pct = ratio == null ? null : Math.round(ratio * 1000) / 10;
-        return (
-          <span
-            key={day}
-            className={cn("flex-1 h-full", barClass(ratio))}
-            title={
-              bucket && pct != null ? `${bucket.day} · ${pct}% (${bucket.total})` : `${day} · ${t("uptimeNoData")}`
-            }
-          />
-        );
+        const degraded = bucket?.warn ?? 0;
+        const title =
+          bucket && pct != null
+            ? [bucket.day, `${pct}% (${bucket.total})`, degraded > 0 ? t("dayDegraded", { count: degraded }) : null]
+                .filter(Boolean)
+                .join(" · ")
+            : `${day} · ${t("uptimeNoData")}`;
+        return <span key={day} className={cn("flex-1 h-full", DAY_BAR_CLASSES[dayBarLevel(bucket)])} title={title} />;
       })}
     </div>
   );

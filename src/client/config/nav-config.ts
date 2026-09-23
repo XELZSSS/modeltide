@@ -1,4 +1,4 @@
-import type { SearchResultSource } from "@/shared/types";
+import type { SearchResultSource } from "@/client/search/types";
 import type { TranslationKey } from "@/shared/i18n";
 
 export const RANKING_TABS = [
@@ -11,6 +11,9 @@ export const RANKING_TABS = [
 ] as const;
 
 export type RankingTabId = (typeof RANKING_TABS)[number];
+
+/** Tab a `/models` visit lands on when the URL carries no `tab` param. */
+export const DEFAULT_RANKING_TAB: RankingTabId = RANKING_TABS[0];
 
 export type ModelSource = "aa" | "or" | "os" | "hall";
 

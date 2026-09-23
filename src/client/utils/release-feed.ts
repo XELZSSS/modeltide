@@ -1,11 +1,6 @@
 import { shortModelId } from "@/client/utils/model-utils";
 import type { ClosedReleaseEntry, OpenSourceModelEntry } from "@/shared/types";
 
-/**
- * One release event in the feed. A release is just a release: rows carry who
- * published it and when, with no open/closed classification — the Hugging Face
- * side already covers open models and Artificial Analysis the rest.
- */
 export interface ReleaseRow {
   id: string;
   name: string;
@@ -29,8 +24,7 @@ const HF_SOURCE = "Hugging Face";
 
 function fromOpenSourceReleases(releases: OpenSourceModelEntry[]): ReleaseRow[] {
   const seen = new Map<string, ReleaseRow>();
-  // Keyed by model + day: a same-day create/modify pair is one event now that
-  // rows no longer carry a type label telling them apart.
+  // Keyed by model + day: a same-day create/modify pair is one event.
   const add = (id: string, name: string, ts: number) => {
     const date = toReleaseDateStr(ts);
     const key = `${id}|${date}`;
@@ -85,6 +79,5 @@ export function buildReleaseRows(
 }
 
 export const getReleaseRowId = (row: ReleaseRow) => row.id;
-// id keeps the source namespace (e.g. "hf:meta-llama/…"), so search still
-// matches the org even though `name` is the bare model name.
+// id keeps the source namespace, so search still matches the org that `name` drops.
 export const getReleaseSearchFields = (row: ReleaseRow) => [row.name, row.provider, row.id];

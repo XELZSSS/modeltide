@@ -1,14 +1,9 @@
-/**
- * Shared "healthy shape" payloads for the composed home-dashboard test. The
- * `vi.mock()` wiring stays per test file (vitest hoists mocks per module
- * graph); only the data lives here so the fixture can't drift from what
- * src/server/sources/home-source.ts fans in.
- */
+/** Vitest hoists `vi.mock()` per module graph: the wiring stays per test file. */
 const FETCHED_AT = "2026-01-01T00:00:00.000Z";
 
 export function openRouterRankingsPayload() {
   return {
-    tokenUsageRankings: [
+    data: [
       {
         rank: 1,
         id: "a/b",

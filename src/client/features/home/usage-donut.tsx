@@ -3,7 +3,7 @@ import type { ChartOptions } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
 import { useTranslation } from "@/client/providers";
 import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
-import { ChartFrame } from "@/client/components/ui/chart-frame";
+import { ChartEmpty, ChartFrame } from "@/client/components/ui/chart-frame";
 import { formatShortNumber } from "@/client/utils/format";
 import { registerDoughnut } from "@/client/utils/charts-register";
 
@@ -61,12 +61,7 @@ export const UsageDonut = memo(function UsageDonut({ models }: { models: { task:
       <CardContent className="flex flex-col h-full">
         <CardHeader title={t("opensourceTaskShare")} subtitle={t("openSourceDataSource")} />
         {slices.length === 0 ? (
-          <div
-            className="flex min-h-[200px] h-[200px] sm:h-[240px] flex-1 items-center justify-center text-center ui-body-secondary"
-            role="status"
-          >
-            {t("notAvailable")}
-          </div>
+          <ChartEmpty className="min-h-[200px] h-[200px] sm:h-[240px] flex-1">{t("notAvailable")}</ChartEmpty>
         ) : (
           <ChartFrame height="flex-1 min-h-[200px] h-[200px] sm:h-[240px]">
             <Doughnut data={data} options={options} aria-label={t("opensourceTaskShare")} role="img" />

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { fakeHttp, testCtx } from "@/server/test-helpers";
+import { fakeHttp, resetAllModuleStateForTests, testCtx } from "@/server/test-helpers";
 import {
   HISTORY_KEY,
   SAMPLE_LOCK_KEY,
@@ -27,8 +26,7 @@ import type { AppContext } from "@/server/context";
 import type { DayBucket, SourceId, UptimeSample } from "@/shared/types";
 
 beforeEach(() => {
-  resetModuleCachesForTests();
-  resetUptimeMemoForTests();
+  resetAllModuleStateForTests();
 });
 
 const MIN = 60_000;
@@ -50,18 +48,15 @@ describe("getUptime", () => {
 
     const firstLaunchMs = Date.parse(firstLaunchAt);
     expect(firstLaunchMs).toBeGreaterThanOrEqual(before);
-    // First launch stores the same `now` the delta is measured from, so uptime is exactly 0.
     expect(uptimeMs).toBe(0);
     expect(kv.store.get("uptime:first-launch")).toBe(String(firstLaunchMs));
 
-    // Fresh isolate: the persisted value is what a later launch reads back.
     resetUptimeMemoForTests();
     const { ctx: ctx2 } = testCtx(new Map([["uptime:first-launch", String(firstLaunchMs)]]));
     const callStartedAt = Date.now();
     const reused = await getUptime(ctx2);
     const callFinishedAt = Date.now();
     expect(Date.parse(reused.firstLaunchAt)).toBe(firstLaunchMs);
-    // getUptime stamps `now` on entry, so uptimeMs sits inside the call window.
     expect(reused.uptimeMs).toBeGreaterThanOrEqual(callStartedAt - firstLaunchMs);
     expect(reused.uptimeMs).toBeLessThanOrEqual(callFinishedAt - firstLaunchMs);
   });
@@ -112,8 +107,7 @@ describe("mergeSample", () => {
   });
 
   it("prunes daily buckets beyond the 30-day retention", () => {
-    // 2026-07-15 is 46 days before NOW: kept under the old 90-day window,
-    // dropped under the 30-day retention.
+    // 2026-07-15 is 46 days before NOW: outside the 30-day retention.
     const stale: DayBucket = { day: "2026-07-15", total: 10, ok: 10 };
     const entry = mergeSample({ recent: [], daily: [stale] }, sample(0, true), NOW);
     expect(entry.daily.some((b) => b.day === "2026-07-15")).toBe(false);
@@ -135,10 +129,6 @@ const target = (id: SourceId): ProbeTarget => ({ id, url: `https://upstream.test
 const okProbe = (status = 200, latencyMs = 500) => ({ ok: true, status, latencyMs, error: null });
 const failProbe = (error = "network error") => ({ ok: false, status: null, latencyMs: null, error });
 
-/**
- * Route probe results per URL with `vi.when`: URLs listed in `downFor` fail;
- * every other call falls through to the default `okProbe()` implementation.
- */
 function mockProbe(downFor: string[] = []) {
   const down: ProbeResult = { ok: false, status: 503, latencyMs: null, error: "HTTP 503" };
   const probe = vi.fn<(url: string) => Promise<ProbeResult>>();
@@ -184,7 +174,6 @@ describe("aggregateProbes", () => {
       error: "HTTP 503 (upstream.test)",
     });
 
-    // Partial loss keeps the warning text so a degraded event can explain itself.
     expect(
       aggregateProbes([
         { target: target("news"), probe: okProbe(200, 300) },
@@ -321,8 +310,7 @@ describe("buildHistoryPayload", () => {
     );
     const or = payload.sources.find((s) => s.id === historyId)!;
     expect(or.ok).toBe(true);
-    // 2/3 of samples up is below UPTIME_ERROR_RATIO, so the summary is red like
-    // the 30-day strip; it previously stopped at "warn" however low it fell.
+    // 2/3 up is below UPTIME_ERROR_RATIO.
     expect(or.uptime24h).toBeCloseTo(2 / 3, 5);
     expect(or.level).toBe("error");
   });
@@ -335,7 +323,10 @@ describe("buildHistoryPayload", () => {
             recent: [{ ...sample(10, true), warn: true, warnReason: "Minor Service Outage: API latency" }],
             daily: [],
           },
-          news: { recent: [{ ...sample(10, false), error: "2/6 endpoints failed: HTTP 503 (techcrunch.com)" }], daily: [] },
+          news: {
+            recent: [{ ...sample(10, false), error: "2/6 endpoints failed: HTTP 503 (techcrunch.com)" }],
+            daily: [],
+          },
         },
       },
       { firstLaunchAt: new Date(NOW).toISOString(), uptimeMs: 0 },
@@ -345,7 +336,6 @@ describe("buildHistoryPayload", () => {
     expect(payload.sources.find((s) => s.id === "news")?.detail).toBe(
       "2/6 endpoints failed: HTTP 503 (techcrunch.com)",
     );
-    // A healthy source carries no detail rather than a stale one.
     expect(payload.sources.find((s) => s.id === "huggingface")?.detail).toBeNull();
   });
 
@@ -370,7 +360,6 @@ describe("getStatusHistory read-only", () => {
     url.includes("status.cloud.google.com") ? [] : { components: [{ name: "API", status: "operational" }] };
   const okHttpProbe: AppContext["http"]["probe"] = async () => ({ ok: true, status: 200, latencyMs: 500, error: null });
 
-  /** `probe` defaults to a healthy target; a spy can be passed to assert on the calls. */
   function historyCtx(
     kvStore: Map<string, string>,
     probe: AppContext["http"]["probe"] = okHttpProbe,
@@ -388,7 +377,7 @@ describe("getStatusHistory read-only", () => {
   it("stores the provider's own warning text and shows it on the degraded event", async () => {
     const kvStore = new Map<string, string>();
     await recordStatusSamples(historyCtx(kvStore, okHttpProbe, async () => degradedPage));
-    const payload = await getStatusHistory(historyCtx(kvStore));
+    const { data: payload } = await getStatusHistory(historyCtx(kvStore));
     const detail = "Partially Degraded Service: Elevated error rates on the API";
     const page = payload.sources.find((s) => s.id === "openaiApi")!;
     expect(page.level).toBe("warn");
@@ -408,7 +397,7 @@ describe("getStatusHistory read-only", () => {
       incidents: [{ name: "API unavailable", status: "identified", impact: "critical" }],
     };
     await recordStatusSamples(historyCtx(kvStore, okHttpProbe, async () => outage));
-    const payload = await getStatusHistory(historyCtx(kvStore));
+    const { data: payload } = await getStatusHistory(historyCtx(kvStore));
     const detail = "Major Service Outage: API unavailable";
     expect(payload.sources.find((s) => s.id === "openaiApi")?.detail).toBe(detail);
     expect(payload.events.find((e) => e.id === "openaiApi")).toMatchObject({ type: "down", detail });
@@ -417,7 +406,7 @@ describe("getStatusHistory read-only", () => {
   it("serves an empty store without sampling, so reads never touch upstreams", async () => {
     const kvStore = new Map<string, string>();
     const probe = mockProbe();
-    const payload = await getStatusHistory(historyCtx(kvStore, probe));
+    const { data: payload } = await getStatusHistory(historyCtx(kvStore, probe));
     expect(kvStore.has(HISTORY_KEY)).toBe(false);
     expect(probe).not.toHaveBeenCalled();
     expect(payload.sources.every((s) => s.ok === false)).toBe(true);
@@ -428,7 +417,7 @@ describe("getStatusHistory read-only", () => {
     await recordStatusSamples(historyCtx(kvStore));
     expect(kvStore.has(HISTORY_KEY)).toBe(true);
     const probe = mockProbe();
-    const payload = await getStatusHistory(historyCtx(kvStore, probe));
+    const { data: payload } = await getStatusHistory(historyCtx(kvStore, probe));
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(true);
     expect(or.checkedAt).not.toBeNull();
@@ -449,7 +438,7 @@ describe("getStatusHistory read-only", () => {
     const openrouterRankingsUrl = `${upstreamConfig.openrouter}/api/frontend/v1/rankings/models`;
     const probe = mockProbe([openrouterUrl, openrouterRankingsUrl]);
     await recordStatusSamples(historyCtx(kvStore, probe));
-    const payload = await getStatusHistory(historyCtx(kvStore));
+    const { data: payload } = await getStatusHistory(historyCtx(kvStore));
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(or.ok).toBe(false);
     expect(or.uptime24h).toBe(0);
@@ -487,7 +476,7 @@ describe("getStatusHistory read-only", () => {
     };
     const kvStore = new Map<string, string>([[HISTORY_KEY, JSON.stringify(stale)]]);
     const probe = mockProbe();
-    const payload = await getStatusHistory(historyCtx(kvStore, probe));
+    const { data: payload } = await getStatusHistory(historyCtx(kvStore, probe));
     expect(probe).toHaveBeenCalled();
     const or = payload.sources.find((s) => s.id === "openrouter")!;
     expect(Date.now() - Date.parse(or.checkedAt!)).toBeLessThan(60_000);
@@ -497,11 +486,10 @@ describe("getStatusHistory read-only", () => {
 describe("buildTargets", () => {
   it("probes one representative feed per news category plus daily papers", async () => {
     const { NEWS_CATEGORIES } = await import("@/shared/config");
-    const { rssConfig, upstreamConfig, upstreamEndpoints } = await import("@/server/config");
+    const { upstreamConfig, upstreamEndpoints } = await import("@/server/config");
+    const { rssConfig } = await import("@/server/sources/news-feeds");
     const targets = buildTargets();
     const news = targets.filter((t) => t.id === "news");
-    // Every feed is fetched by the news warmup in the same cron fire; the probe
-    // only needs to tell whether the category is reachable.
     expect(news).toHaveLength(NEWS_CATEGORIES.length + 1);
     expect(news.map((t) => t.url)).toEqual([
       ...NEWS_CATEGORIES.map((category) => rssConfig[category][0]),
@@ -510,13 +498,67 @@ describe("buildTargets", () => {
     expect(targets.filter((t) => t.id === "openrouter")).toHaveLength(2);
     expect(targets.filter((t) => t.id === "artificialAnalysis")).toHaveLength(2);
     expect(targets.some((t) => t.id === "arena")).toBe(true);
-    expect(SOURCE_IDS).not.toContain("officialPricing");
     expect(targets.every((t) => (SOURCE_IDS as readonly string[]).includes(t.id))).toBe(true);
     expect(NEWS_CATEGORIES.length).toBeGreaterThan(0);
   });
 });
 
 describe("readStore", () => {
+  it("does not write a memory fallback back after a KV read failure", async () => {
+    const kvStore = new Map<string, string>();
+    const http = fakeHttp({
+      probe: async () => ({ ok: true, status: 200, latencyMs: 1, error: null }),
+      json: async () => ({ status: { indicator: "none" }, components: [], incidents: [] }),
+    });
+    const { ctx, kv } = testCtx(kvStore, { http });
+    await recordStatusSamples(ctx);
+    const originalGet = kv.get.bind(kv);
+    vi.spyOn(kv, "get").mockImplementation(async (key) => {
+      if (key === HISTORY_KEY) throw new Error("KV read unavailable");
+      return originalGet(key);
+    });
+    const put = vi.spyOn(kv, "put");
+    await recordStatusSamples(ctx);
+    expect(put.mock.calls.some(([key]) => key === HISTORY_KEY)).toBe(false);
+  });
+
+  it("does not let a stale writer replace a newer per-source snapshot", async () => {
+    const now = Date.now();
+    const old = {
+      sources: {
+        openrouter: { recent: [{ t: now - 60_000, ok: true, latencyMs: 1, status: 200, error: null }], daily: [] },
+      },
+    };
+    const newer = {
+      sources: {
+        openrouter: {
+          recent: [{ t: now + 60_000, ok: false, latencyMs: null, status: 503, error: "newer" }],
+          daily: [],
+        },
+      },
+    };
+    const kvStore = new Map<string, string>([[HISTORY_KEY, JSON.stringify(old)]]);
+    const http = fakeHttp({
+      probe: async () => ({ ok: true, status: 200, latencyMs: 1, error: null }),
+      json: async () => ({ status: { indicator: "none" }, components: [], incidents: [] }),
+    });
+    const { ctx, kv } = testCtx(kvStore, { http });
+    const originalGet = kv.get.bind(kv);
+    const get = vi.spyOn(kv, "get");
+    let historyReads = 0;
+    get.mockImplementation(async (key) => {
+      if (key !== HISTORY_KEY) return originalGet(key);
+      historyReads += 1;
+      return historyReads === 1 ? JSON.stringify(old) : historyReads === 2 ? JSON.stringify(newer) : null;
+    });
+    const put = vi.spyOn(kv, "put");
+    await recordStatusSamples(ctx, now);
+    const historyWrite = put.mock.calls.find(([key]) => key === HISTORY_KEY);
+    expect(historyWrite).toBeDefined();
+    const written = JSON.parse(historyWrite![1]) as { sources: { openrouter: { recent: UptimeSample[] } } };
+    expect(written.sources.openrouter.recent.at(-1)?.t).toBe(now + 60_000);
+  });
+
   it("drops corrupt entries and salvages readable per-source data instead of throwing", async () => {
     const corrupt = new Map<string, string>([[HISTORY_KEY, "truncated-json{{{"]]);
     await expect(readStore(testCtx(corrupt).ctx)).resolves.toEqual({ sources: {} });
@@ -529,6 +571,22 @@ describe("readStore", () => {
     const raw = JSON.stringify({ sources: { openrouter: good, news: "garbage-not-an-entry" } });
     const { ctx } = testCtx(new Map<string, string>([[HISTORY_KEY, raw]]));
     await expect(readStore(ctx)).resolves.toEqual({ sources: { openrouter: good } });
+  });
+
+  it("rejects semantically invalid samples and buckets during salvage", async () => {
+    const validSample = { t: Date.now() - 60_000, ok: true, latencyMs: 1, status: 200, error: null };
+    const raw = JSON.stringify({
+      sources: {
+        arena: { recent: [validSample], daily: [] },
+        openrouter: {
+          recent: [validSample, { ...validSample, t: validSample.t - 1 }],
+          daily: [{ day: "2026-01-02", total: 1, ok: 2 }],
+        },
+        unknownSource: { recent: [validSample], daily: [] },
+      },
+    });
+    const { ctx } = testCtx(new Map([[HISTORY_KEY, raw]]));
+    await expect(readStore(ctx)).resolves.toEqual({ sources: { arena: { recent: [validSample], daily: [] } } });
   });
 
   it("reports the newest sample across all sources", () => {

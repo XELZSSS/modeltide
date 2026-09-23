@@ -25,7 +25,6 @@ function changelogHtml(entries: unknown[]): string {
   return `<html><body><script>self.__next_f.push([1,"${payload}"])</script></body></html>`;
 }
 
-/** Fake upstream routed by URL: a missing route fails the fetch, like a down leg. */
 function aaCtx(routes: Record<string, string>) {
   const http = fakeHttp({ text: routes });
   const { ctx, kvStore } = testCtx(new Map<string, string>(), { http });
@@ -45,7 +44,6 @@ describe("getChangelogModels", () => {
 
   it("falls back to /changelog when the index body cannot be read", async () => {
     const entries = [changelogEntry("only", "2026-01-01")];
-    // No route for the index page: the index-body read rejects.
     const { ctx, calls } = aaCtx({ [CHANGELOG_URL]: changelogHtml(entries) });
     expect((await getChangelogModels(ctx)).map((m) => m.slug)).toEqual(["only"]);
     expect(calls).toEqual([INDEX_URL, CHANGELOG_URL]);

@@ -5,16 +5,17 @@ import {
   numCoerceNonNegative,
   numOr,
   obj,
+  str,
   strOrNull,
   titleCase,
   isValidOpenRouterDirectoryRow,
 } from "@/server/parsers/parser-primitives";
-import { PER_MILLION, perMillionOrNull } from "@/shared/config";
+import { PER_MILLION, perMillionOrNull } from "@/server/config/limits";
 import type { OpenRouterRankEntry } from "@/shared/types";
 
 import { normalizeModelKey } from "@/shared/utils";
 
-import type { ModelRow, PricingRow } from "@/server/parsers/upstream-types";
+import type { ModelMetaEntry, ModelRow, PricingRow } from "@/server/parsers/upstream-types";
 
 export interface PricingEntry {
   input: number;
@@ -24,11 +25,6 @@ export interface PricingEntry {
 }
 
 type PricingRecord = Record<string, PricingEntry>;
-
-export interface ModelMetaEntry {
-  intelligenceIndex?: number;
-  agenticIndex?: number;
-}
 
 export interface DirectoryCacheEntry {
   pricing: PricingRecord;
@@ -75,8 +71,7 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
     if (pricingEntry) {
       const idKey = strOrNull(m.id);
       const slugKey = strOrNull(m.canonical_slug);
-      // Rankings address a variant by its dated permaslug (`<canonical_slug>:<variant>`),
-      // so a variant row must also be findable under that composed key.
+      // Rankings address a variant by its dated permaslug, so a variant row needs that composed key.
       let variantSlugKey: string | null = null;
       if (idKey && slugKey) {
         const variantAt = idKey.lastIndexOf(":");
@@ -137,7 +132,7 @@ const CODING_RE = /\b(?:coder|coding|code|codex)\b/;
 const REASONING_RE = /\b(?:reasoning|thought)\b/;
 const REASONING_SUFFIX_RE = /-(?:r1|o1)\b/;
 export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry["category"] {
-  const v = `${typeof slug === "string" ? slug : ""} ${typeof name === "string" ? name : ""}`.toLowerCase();
+  const v = `${str(slug)} ${str(name)}`.toLowerCase();
   if (CODING_RE.test(v)) return "coding";
   if (REASONING_RE.test(v) || REASONING_SUFFIX_RE.test(v)) return "reasoning";
   return "general";
@@ -172,12 +167,7 @@ function usageTotal(row: ModelRow): number {
 
 interface Group {
   agg: ModelRow;
-  /**
-   * Highest-usage row. It is the single source for every per-variant field the
-   * entry exposes (`variant`, `change`, pricing variant), so the trend column
-   * always describes the variant the row is labelled with — a batch or stealth
-   * row can never contribute a change to a standard/free-labelled entry.
-   */
+  /** Highest-usage row; it is the single source for every per-variant field the entry exposes. */
   dominant: ModelRow;
   dominantTokens: number;
 }
@@ -217,10 +207,10 @@ function groupRows(rows: unknown): Map<string, Group> {
       continue;
     }
     for (const k of SUM_KEYS) {
-      const cur = numOr(group.agg[k], NaN);
-      const add = numOr(row[k], NaN);
-      if (!Number.isFinite(cur) && !Number.isFinite(add)) continue;
-      group.agg[k] = (Number.isFinite(cur) ? cur : 0) + (Number.isFinite(add) ? add : 0);
+      const cur = numCoerce(group.agg[k]);
+      const add = numCoerce(row[k]);
+      if (cur == null && add == null) continue;
+      group.agg[k] = (cur ?? 0) + (add ?? 0);
     }
     if (tokens > group.dominantTokens) {
       group.dominant = row;

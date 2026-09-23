@@ -1,3 +1,4 @@
-export { useSearchStore } from "@/client/stores/search-store";
+export { useRouteSearchTerm, useSearchStore } from "@/client/stores/search-store";
 export { useSettingsStorageSync, useSettingsStore } from "@/client/stores/settings-store";
-export { useCompareStore, useCompareModels } from "@/client/stores/compare-store";
+export { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores/compare-store";
+export { useCostStore } from "@/client/stores/cost-store";

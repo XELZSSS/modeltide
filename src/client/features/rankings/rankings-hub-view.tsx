@@ -2,24 +2,23 @@ import { lazy, memo, useMemo, type ComponentType } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import {
-  useSuspenseArtificialRankings,
+  useHallucinationRankings,
   useSuspenseArtificialRankingsState,
   useSuspenseOpenSourceModels,
   useSuspenseOpenRouterRankings,
-  useSuspenseHallucinationRankings,
 } from "@/client/api/api-queries";
-import { PartialNotice, SuspenseQuery } from "@/client/components/feedback";
+import { PartialNotice } from "@/client/components/feedback";
+import { SuspenseQuery } from "@/client/router/suspense-query";
 import { SearchInput } from "@/client/search/search-input";
 import { type TabItem } from "@/client/components/ui/tabs";
 import { TabbedPage } from "@/client/components/layout";
 import { useClientTab } from "@/client/hooks/use-client-tab";
-import { monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table-columns";
+import { col, monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns";
 import { LabeledDot } from "@/client/components/ui/primitives";
 import { SearchableDataTable } from "@/client/components/data/table";
 import { formatScore, formatPricePerMillion, formatSpeed } from "@/client/utils/format";
 import { computeProviderStats, type ProviderStats } from "@/client/utils/model-utils";
-import { useOfficialPricing } from "@/client/pricing/official-pricing-hook";
-import { MODEL_SOURCES, RANKING_TABS, type RankingTabId } from "@/client/config/nav-config";
+import { DEFAULT_RANKING_TAB, MODEL_SOURCES, RANKING_TABS, type RankingTabId } from "@/client/config/nav-config";
 
 const ArtificialAnalysisView = lazy(() => import("./aa-view").then((m) => ({ default: m.ArtificialAnalysisView })));
 const OpenRouterRankingsView = lazy(() =>
@@ -40,8 +39,6 @@ const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   providerCompare: MODEL_SOURCES.aa.sourceLabelKey,
 };
 
-/** Same-shaped tabs (query → `<View rankings>`) share one factory; tabs that need
- *  extra props or chrome stay hand-written below. */
 function defineRankingsTab<T>(useRankings: () => T, View: ComponentType<{ rankings: T }>): ComponentType {
   return memo(function RankingsTab() {
     const rankings = useRankings();
@@ -59,7 +56,19 @@ const ModelRankingsTab = memo(function ModelRankingsTab() {
   );
 });
 const OpenSourceTab = defineRankingsTab(useSuspenseOpenSourceModels, RankingViewsModule.OpenSource);
-const HallucinationRankingsTab = defineRankingsTab(useSuspenseHallucinationRankings, RankingViewsModule.Hallucination);
+
+/** When the `/omniscience` enrichment leg fails every row loses its breakdown and the
+ *  table renders empty, so the payload's `partial` flag must show a notice. */
+const HallucinationRankingsTab = memo(function HallucinationRankingsTab() {
+  const { items, partial } = useSuspenseArtificialRankingsState();
+  const rankings = useHallucinationRankings(items);
+  return (
+    <>
+      {partial && <PartialNotice />}
+      <RankingViewsModule.Hallucination rankings={rankings} />
+    </>
+  );
+});
 
 const OpenRouterTab = memo(function OpenRouterTab() {
   const { data } = useSuspenseOpenRouterRankings();
@@ -72,19 +81,14 @@ const getProviderRowId = (p: ProviderStats) => p.name;
 const getProviderSearchFields = (p: ProviderStats) => [p.name];
 
 const ProviderCompareTab = memo(function ProviderCompareTab() {
-  const data = useSuspenseArtificialRankings();
-  const { getOfficial } = useOfficialPricing();
+  const { items, partial } = useSuspenseArtificialRankingsState();
   const { t } = useTranslation();
-  const providerStats = useMemo(() => computeProviderStats(data, t("unknown"), getOfficial), [data, t, getOfficial]);
+  const providerStats = useMemo(() => computeProviderStats(items, t("unknown")), [items, t]);
   const columns = useMemo<DataTableColumn<ProviderStats>[]>(
     () => [
-      {
-        id: "name",
-        header: t("provider"),
-        cell: (p) => <LabeledDot color={p.color}>{p.name}</LabeledDot>,
-      },
+      col("name", t("provider"), (p) => <LabeledDot color={p.color}>{p.name}</LabeledDot>),
       monoCol("count", t("modelCount"), (p) => p.count),
-      monoCol("avgIntelligence", t("avgIntelligence"), (p) => formatScore(t, p.avgIntelligence), {
+      monoCol("avgIntelligence", t("avgIntelligence"), (p) => formatScore(p.avgIntelligence, t), {
         mobilePrimary: true,
       }),
       monoCol("avgPrice", t("avgPrice"), (p) => formatPricePerMillion(p.avgPrice, t), { hiddenMd: true }),
@@ -93,7 +97,7 @@ const ProviderCompareTab = memo(function ProviderCompareTab() {
         t("avgSpeed"),
         (p) => (
           <span className="text-sm text-text-primary">
-            {p.avgSpeed != null ? `${formatSpeed(t, p.avgSpeed)} ${t("tokensPerSecond")}` : t("notAvailable")}
+            {p.avgSpeed != null ? `${formatSpeed(p.avgSpeed, t)} ${t("tokensPerSecond")}` : t("notAvailable")}
           </span>
         ),
         { hiddenMd: true },
@@ -102,12 +106,15 @@ const ProviderCompareTab = memo(function ProviderCompareTab() {
     [t],
   );
   return (
-    <SearchableDataTable
-      columns={columns}
-      data={providerStats}
-      getRowId={getProviderRowId}
-      getSearchFields={getProviderSearchFields}
-    />
+    <>
+      {partial && <PartialNotice />}
+      <SearchableDataTable
+        columns={columns}
+        data={providerStats}
+        getRowId={getProviderRowId}
+        getSearchFields={getProviderSearchFields}
+      />
+    </>
   );
 });
 
@@ -122,7 +129,7 @@ const TAB_COMPONENTS: Record<RankingTabId, ComponentType> = {
 
 export function RankingsHubView() {
   const { t } = useTranslation();
-  const [activeTabId, handleTabChange] = useClientTab("tab", RANKING_TABS, RANKING_TABS[0]);
+  const [activeTabId, handleTabChange] = useClientTab("tab", RANKING_TABS, DEFAULT_RANKING_TAB);
   const tabs: TabItem[] = useMemo(() => RANKING_TABS.map((id) => ({ id, label: t(id) })), [t]);
   const ActiveContent = TAB_COMPONENTS[activeTabId];
 
@@ -130,7 +137,6 @@ export function RankingsHubView() {
     <TabbedPage
       compact
       title={t(activeTabId)}
-      kicker={t("kickerRankings")}
       description={t(TAB_SOURCE_LABEL[activeTabId])}
       actions={<SearchInput />}
       tabs={tabs}

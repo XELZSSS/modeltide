@@ -8,11 +8,9 @@ import type { SourceId, SourceLevel } from "@/shared/types";
 interface ProviderStatusResult {
   ok: boolean;
   warn: boolean;
-  /** The provider's own degradation warning, when it is degraded but up. */
   warnReason: string | null;
   status: number | null;
   latencyMs: number;
-  /** The provider's outage detail, when it is down. */
   error: string | null;
 }
 
@@ -21,11 +19,6 @@ type HealthParse = (raw: unknown) => ParseResult<{ level: SourceLevel; detail: s
 /** Bounds one provider message; statuspage component/incident names are upstream-controlled. */
 const DETAIL_MAX_CHARS = 200;
 
-/**
- * Prefers the provider's active incident names — that is the warning text a
- * human sees on their status page — and falls back to the off-nominal
- * components, prefixed with the page's own headline ("Minor Service Outage").
- */
 const parseStatuspageHealth: HealthParse = (raw) => {
   const parsed = parseStatuspageSummary(raw);
   if (!parsed.ok) return parsed;
@@ -98,6 +91,8 @@ const PROVIDER_STATUS_TARGETS: readonly {
   { id: "deepseekApi", url: providerStatusEndpoints.deepseekApi, label: "deepseek", parse: parseStatuspageHealth },
   { id: "moonshotApi", url: providerStatusEndpoints.moonshotApi, label: "moonshot", parse: parseStatuspageHealth },
 ];
+
+export const PROVIDER_STATUS_TARGET_COUNT = PROVIDER_STATUS_TARGETS.length;
 
 export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<SourceId, ProviderStatusResult>> {
   const settled = await runCapped(

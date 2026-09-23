@@ -1,12 +1,12 @@
-import { SafeLink as Link, usePathname } from "@/client/router";
+import { SafeLink as Link } from "@/client/router";
 import { ArrowLeft, TriangleAlert, type LucideIcon, Loader2 } from "lucide-react";
-import { Button, buttonVariants } from "@/client/components/ui/button";
+import { buttonVariants } from "@/client/components/ui/button";
 import { Card } from "@/client/components/ui/card";
+import { hasContractSkew, subscribeContractSkew } from "@/client/api/api-client";
 import { useTranslation } from "@/client/providers";
-import { Component, Fragment, type ReactNode, type ErrorInfo, memo, Suspense } from "react";
+import { memo, type ReactNode, useSyncExternalStore } from "react";
 import { PageContainer } from "@/client/components/layout";
 import { cn } from "@/client/utils/cn";
-import { QueryErrorResetBoundary } from "@tanstack/react-query";
 
 export function EmptyState({
   icon: Icon,
@@ -38,68 +38,6 @@ export function EmptyState({
   );
 }
 
-interface ErrorBoundaryProps {
-  errorTitle?: string;
-  retryLabel?: string;
-  offlineMessage?: string;
-  children: ReactNode;
-  onReset?: () => void;
-}
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-  resetKey: number;
-}
-
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  static displayName = "ErrorBoundary";
-  override state: ErrorBoundaryState = { hasError: false, error: null, resetKey: 0 };
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
-    return { hasError: true, error };
-  }
-  private handleOnline = () => {
-    // Re-render so the disabled retry button enables without a second click.
-    this.forceUpdate();
-  };
-  override componentDidMount() {
-    window.addEventListener("online", this.handleOnline);
-    window.addEventListener("offline", this.handleOnline);
-  }
-  override componentWillUnmount() {
-    window.removeEventListener("online", this.handleOnline);
-    window.removeEventListener("offline", this.handleOnline);
-  }
-  override componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[ErrorBoundary]", error, info.componentStack);
-  }
-  private handleRetry = () => {
-    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-    this.props.onReset?.();
-    this.setState((s) => ({ hasError: false, error: null, resetKey: s.resetKey + 1 }));
-  };
-  override render() {
-    if (this.state.hasError) {
-      const title = this.props.errorTitle ?? "Error";
-      const retry = this.props.retryLabel ?? "Retry";
-      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
-      return (
-        <div className="flex flex-col items-center gap-3">
-          <EmptyState variant="error" icon={TriangleAlert} title={title} message={this.state.error?.message ?? retry} />
-          {offline && (
-            <p className="ui-caption" role="status">
-              {this.props.offlineMessage ?? "Offline — reconnect and reload to retry"}
-            </p>
-          )}
-          <Button variant="outline" size="sm" onClick={this.handleRetry} disabled={offline}>
-            {retry}
-          </Button>
-        </div>
-      );
-    }
-    return <Fragment key={String(this.state.resetKey)}>{this.props.children}</Fragment>;
-  }
-}
-
 export function NotFound() {
   const { t } = useTranslation();
   return (
@@ -129,17 +67,32 @@ export const Spinner = memo(function Spinner() {
   );
 });
 
-export function PartialNotice({ message }: { message?: string }) {
-  const { t } = useTranslation();
+function Notice({ children }: { children: ReactNode }) {
   return (
     <div
       role="status"
       className="mb-3 flex items-center gap-1.5 border border-warning/30 bg-warning-light px-3 py-2 ui-caption text-text-secondary"
     >
       <TriangleAlert size={14} className="shrink-0 text-warning" aria-hidden="true" />
-      <span className="min-w-0">{message ?? t("partialDataNotice")}</span>
+      <span className="min-w-0">{children}</span>
     </div>
   );
+}
+
+export function PartialNotice({ message }: { message?: string }) {
+  const { t } = useTranslation();
+  return <Notice>{message ?? t("partialDataNotice")}</Notice>;
+}
+
+const neverSkewed = () => false;
+
+/** `/assets/*` is immutable and the service worker answers cache-first, so an open tab can
+ *  outlive the Worker build whose payload shapes it was written against. */
+export function ContractSkewNotice() {
+  const { t } = useTranslation();
+  const stale = useSyncExternalStore(subscribeContractSkew, hasContractSkew, neverSkewed);
+  if (!stale) return null;
+  return <Notice>{t("contractSkewNotice")}</Notice>;
 }
 
 export function CenteredPageState({ children }: { children: ReactNode }) {
@@ -147,29 +100,5 @@ export function CenteredPageState({ children }: { children: ReactNode }) {
     <PageContainer>
       <div className="flex flex-col gap-3 items-center py-16 text-center animate-fade-in">{children}</div>
     </PageContainer>
-  );
-}
-
-export function SuspenseQuery({ children, resetKey: extraKey }: { children: ReactNode; resetKey?: string }) {
-  const { t } = useTranslation();
-  const pathname = usePathname();
-  // Route (plus the caller's own view key) resets the subtree. Query params are left
-  // out: every param in the app is `tab`/`view` state owned by a component inside the
-  // boundary, so keying on them only remounted views that must keep their state.
-  const resetKey = `${pathname}${extraKey ? `:${extraKey}` : ""}`;
-  return (
-    <QueryErrorResetBoundary>
-      {({ reset }) => (
-        <ErrorBoundary
-          key={resetKey}
-          errorTitle={t("errorBoundaryTitle")}
-          retryLabel={t("errorBoundaryRetry")}
-          offlineMessage={t("offlineRetry")}
-          onReset={reset}
-        >
-          <Suspense fallback={<Spinner />}>{children}</Suspense>
-        </ErrorBoundary>
-      )}
-    </QueryErrorResetBoundary>
   );
 }

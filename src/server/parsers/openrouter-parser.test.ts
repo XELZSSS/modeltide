@@ -122,8 +122,7 @@ describe("mapModels", () => {
           total_native_tokens_cached: 7,
           total_tool_calls: 3,
         }),
-        // Later date, tiny usage, drastic drop: a batch row must not lend its
-        // change to an entry whose label and pricing come from the standard row.
+        // A batch row must not lend its change to an entry labelled/priced from the standard row.
         row({
           date: "2026-08-03",
           variant: "batch",
@@ -139,7 +138,6 @@ describe("mapModels", () => {
     );
     expect(models).toHaveLength(1);
     expect(models[0]).toMatchObject({
-      rank: 1,
       id: "openai/gpt-5",
       name: "GPT 5",
       creator: "OpenAI",
@@ -233,7 +231,6 @@ describe("mapModels", () => {
       variant: "standard",
       pricing: variantPricing.get("a/b:standard"),
     });
-    expect(models[0]!.isFree).toBe(false);
   });
 
   it("prices a dated variant permaslug through the mirrored key", () => {

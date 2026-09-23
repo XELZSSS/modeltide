@@ -1,4 +1,4 @@
-import { createContext, use, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, use, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSettingsStorageSync, useSettingsStore } from "@/client/stores";
 import { ApiClientError, isAbortError } from "@/client/api/api-client";
@@ -20,13 +20,27 @@ export function useTranslation() {
   return ctx;
 }
 
+const DOC_META: Record<Lang, { html: string; og: string; ogAlternate: string }> = {
+  zh: { html: "zh-CN", og: "zh_CN", ogAlternate: "en_US" },
+  en: { html: "en", og: "en_US", ogAlternate: "zh_CN" },
+};
+
+/** index.html ships the zh copy of these tags and its pre-paint script owns documentElement.lang
+ *  at first paint; from mount on this is the writer of all of them. */
 function syncDocumentMeta(lang: Lang) {
   if (typeof document === "undefined") return;
-  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-  const desc = document.querySelector('meta[name="description"]');
-  if (desc) {
-    desc.setAttribute("content", createT(lang)("metaDescription"));
+  const locale = DOC_META[lang];
+  document.documentElement.lang = locale.html;
+  const description = createT(lang)("metaDescription");
+  for (const selector of [
+    'meta[name="description"]',
+    'meta[property="og:description"]',
+    'meta[name="twitter:description"]',
+  ]) {
+    document.querySelector(selector)?.setAttribute("content", description);
   }
+  document.querySelector('meta[property="og:locale"]')?.setAttribute("content", locale.og);
+  document.querySelector('meta[property="og:locale:alternate"]')?.setAttribute("content", locale.ogAlternate);
 }
 
 function I18nProvider({ children }: { children: ReactNode }) {
@@ -52,22 +66,43 @@ function I18nProvider({ children }: { children: ReactNode }) {
   return <I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>;
 }
 
+/** Mirrors Tailwind's `md`, declared as --breakpoint-md in src/styles/theme.css. */
 const MOBILE_QUERY = "(max-width: 767px)";
 
+let mobileMedia: MediaQueryList | null | undefined;
+const mobileSubscribers = new Set<() => void>();
+
+function mobileMediaQuery(): MediaQueryList | null {
+  if (mobileMedia === undefined) {
+    mobileMedia =
+      typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(MOBILE_QUERY) : null;
+  }
+  return mobileMedia;
+}
+
+function notifyMobile(): void {
+  for (const listener of mobileSubscribers) listener();
+}
+
+/** One `matchMedia` subscription for the whole page: the shell mounts `useDevice` many times, and
+ *  a listener per call would mean a media-query listener per call. */
+function subscribeMobile(listener: () => void): () => void {
+  const media = mobileMediaQuery();
+  if (!media) return () => {};
+  if (mobileSubscribers.size === 0) media.addEventListener("change", notifyMobile);
+  mobileSubscribers.add(listener);
+  return () => {
+    mobileSubscribers.delete(listener);
+    if (mobileSubscribers.size === 0) media.removeEventListener("change", notifyMobile);
+  };
+}
+
 export function useDevice(): { isMobile: boolean } {
-  const [isMobile, setIsMobile] = useState<boolean>(() =>
-    typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia(MOBILE_QUERY).matches
-      : false,
+  const isMobile = useSyncExternalStore(
+    subscribeMobile,
+    () => mobileMediaQuery()?.matches ?? false,
+    () => false,
   );
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mq = window.matchMedia(MOBILE_QUERY);
-    const onChange = () => setIsMobile(mq.matches);
-    onChange();
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
   return useMemo(() => ({ isMobile }), [isMobile]);
 }
 

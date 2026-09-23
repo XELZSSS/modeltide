@@ -25,7 +25,7 @@ const TASK_LABEL_KEYS: Record<string, TranslationKey> = {
   "question-answering": "taskQuestionAnswering",
 };
 
-export function formatTaskLabel(task: string): string {
+function formatTaskLabel(task: string): string {
   return task
     .split(/[-_]+/)
     .filter(Boolean)
@@ -33,17 +33,11 @@ export function formatTaskLabel(task: string): string {
     .join(" ");
 }
 
-/** Localized task label; falls back to formatted English for unmapped tasks. */
 export function taskLabel(task: string, t: (key: TranslationKey) => string): string {
   const key = TASK_LABEL_KEYS[task];
   return key ? t(key) : formatTaskLabel(task);
 }
 
-/**
- * Share of open-source models by pipeline task. Keeps the top tasks by model
- * count and folds the long tail (plus untagged models) into one "other"
- * slice so the donut stays readable.
- */
 export function aggregateTaskShare(models: { task: string | null | undefined }[]): {
   slices: TaskSlice[];
   total: number;

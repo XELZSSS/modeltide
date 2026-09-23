@@ -6,7 +6,8 @@ import { InfoGrid, StatGrid } from "@/client/components/ui/grids";
 import { Badge, InfoCard, InfoRow } from "@/client/components/ui/primitives";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { useSuspenseOpenRouterRankings } from "@/client/api/api-queries";
-import { PRICE_LEGS, type PriceLegId } from "@/client/utils/pricing-merge";
+import { isPartialPayload, unwrapList } from "@/client/api/payload-normalize";
+import { PRICE_LEGS, type PriceLegId } from "@/client/utils/pricing";
 import { createDetailView } from "./detail-views";
 
 const PRICE_ROW_LEGS = ["cacheHitPrice", "promptPrice", "completionPrice"] as const satisfies readonly PriceLegId[];
@@ -31,7 +32,7 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
         {tokenStats.map(([labelKey, value]) => (
           <StatCard key={labelKey} label={t(labelKey)} value={value} />
         ))}
-        {model.reasoningTokens ? (
+        {model.reasoningTokens != null ? (
           <StatCard label={t("reasoningTokens")} value={formatShortNumber(model.reasoningTokens)} />
         ) : (
           <StatCard label={t("category")} value={categoryLabel(model.category, t)} />
@@ -49,10 +50,12 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
             label={t("totalTokens")}
             value={model.totalTokens != null ? formatShortNumber(model.totalTokens) : t("notAvailable")}
           />
-          {model.cachedTokens ? (
+          {model.cachedTokens != null ? (
             <InfoRow label={t("cachedTokens")} value={formatShortNumber(model.cachedTokens)} />
           ) : null}
-          {model.toolCalls ? <InfoRow label={t("toolCalls")} value={formatShortNumber(model.toolCalls)} /> : null}
+          {model.toolCalls != null ? (
+            <InfoRow label={t("toolCalls")} value={formatShortNumber(model.toolCalls)} />
+          ) : null}
         </InfoCard>
         <InfoCard title={t("pricing")}>
           {priceRows.map(([labelKey, value]) => (
@@ -74,10 +77,10 @@ export function OpenRouterModelDetail({ model }: { model: OpenRouterRankEntry })
 export const OrDetail = createDetailView(
   () => {
     const { data } = useSuspenseOpenRouterRankings();
-    if (data && !Array.isArray(data.tokenUsageRankings)) {
-      throw new Error("openRouterRankings: invalid shape (tokenUsageRankings is not an array)");
-    }
-    return { data: data?.tokenUsageRankings, partial: data?.partial === true };
+    return {
+      data: unwrapList<OpenRouterRankEntry>(data, "openRouterRankings"),
+      partial: isPartialPayload(data),
+    };
   },
   "or",
   OpenRouterModelDetail,

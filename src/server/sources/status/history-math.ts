@@ -8,11 +8,11 @@ import type {
   UptimeSample,
 } from "@/shared/types";
 
-export const SAMPLE_UPSERT_WINDOW_MS = 4 * ONE_MINUTE;
+const SAMPLE_UPSERT_WINDOW_MS = 4 * ONE_MINUTE;
 export const RECENT_WINDOW_MS = ONE_DAY;
-export const RETAINED_DAYS = 30;
+const RETAINED_DAYS = 30;
 
-export interface HistorySourceEntry {
+interface HistorySourceEntry {
   recent: UptimeSample[];
   daily: DayBucket[];
 }
@@ -23,7 +23,7 @@ export interface HistoryStore {
 
 export const emptyEntry = (): HistorySourceEntry => ({ recent: [], daily: [] });
 
-export const utcDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
+const utcDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
 
 function samplesInWindow(samples: UptimeSample[], windowStartMs: number): UptimeSample[] {
   return samples.filter((s) => s.t >= windowStartMs);
@@ -49,10 +49,6 @@ interface OpenIncident {
   index: number;
 }
 
-/**
- * Why a sample is not fully healthy: the failure detail when it is down, the
- * provider's degradation warning when it is merely degraded.
- */
 function sampleReason(sample: UptimeSample): string | null {
   if (!sample.ok) return sample.error ?? null;
   if (sample.warn === true) return sample.warnReason ?? null;
@@ -85,8 +81,7 @@ export function deriveEvents(id: SourceId, samples: UptimeSample[]): StatusEvent
       });
       continue;
     }
-    // A running incident takes the newest reason: providers rewrite their warning
-    // text while the incident is open.
+    // A running incident takes the newest reason: providers rewrite warning text mid-incident.
     const detail = sampleReason(sample);
     const ev = open ? events[open.index] : undefined;
     if (ev && detail != null) ev.detail = detail;
@@ -98,6 +93,10 @@ function applySampleDelta(bucket: DayBucket, sample: UptimeSample, dir: 1 | -1):
   bucket.total = Math.max(0, bucket.total + dir);
   if (sample.ok) {
     bucket.ok = Math.max(0, bucket.ok + dir);
+  }
+  // A degraded sample is also `ok`: the day needs its own counter.
+  if (sample.warn === true) {
+    bucket.warn = Math.max(0, (bucket.warn ?? 0) + dir);
   }
 }
 
@@ -149,6 +148,9 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
   const sumOk = buckets.reduce((a, b) => a + b.ok, 0);
   const sumTotal = buckets.reduce((a, b) => a + b.total, 0);
   const uptime24h = uptimeRatio(entry.recent, now - RECENT_WINDOW_MS);
+  // Reported next to the uptime, never folded in: a degraded-but-up sample was not down.
+  const inWindow = samplesInWindow(entry.recent, now - RECENT_WINDOW_MS);
+  const degradedInWindow = inWindow.filter((s) => s.warn === true).length;
   let level: SourceHealthLevel;
   // Same bands as the 30-day strip: most of the last 24h down is not "warn".
   if (!last) level = "unknown";
@@ -163,6 +165,7 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
     checkedAt: last ? new Date(last.t).toISOString() : null,
     uptime24h,
     uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
+    degraded24h: inWindow.length > 0 ? degradedInWindow / inWindow.length : null,
     avgLatency24h: avgLatency(entry.recent, now - RECENT_WINDOW_MS),
     detail: last ? sampleReason(last) : null,
   };

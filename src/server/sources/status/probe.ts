@@ -1,5 +1,6 @@
 import type { AppContext } from "@/server/context";
-import { PROBE_CONCURRENCY, rssConfig, upstreamConfig, upstreamEndpoints } from "@/server/config";
+import { PROBE_CONCURRENCY, upstreamConfig, upstreamEndpoints, upstreamUrl } from "@/server/config";
+import { rssConfig } from "@/server/sources/news-feeds";
 import type { ProbeResult } from "@/server/infra/http-client";
 import { runCapped } from "@/server/infra/task-pool";
 import type { SourceId } from "@/shared/types";
@@ -10,9 +11,7 @@ export interface ProbeTarget {
 }
 
 export function buildTargets(): ProbeTarget[] {
-  // One representative per news category: the cron's news warmup already fetches
-  // every feed in the same fire, so probing all of them is a duplicated request
-  // that only sways the failure counters.
+  // One representative per news category: the cron warmup already fetches every feed.
   const newsTargets = (Object.keys(rssConfig) as (keyof typeof rssConfig)[]).flatMap((category) => {
     const feed = rssConfig[category][0];
     return feed ? [{ id: "news" as const, url: feed }] : [];
@@ -20,20 +19,20 @@ export function buildTargets(): ProbeTarget[] {
   return [
     {
       id: "artificialAnalysis",
-      url: `${upstreamConfig.artificialAnalysis}${upstreamEndpoints.aaIndex}`,
+      url: upstreamUrl(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaIndex),
     },
-    { id: "openrouter", url: `${upstreamConfig.openrouter}${upstreamEndpoints.openRouterDirectory}` },
-    { id: "openrouter", url: `${upstreamConfig.openrouter}${upstreamEndpoints.openRouterRankings}` },
+    { id: "openrouter", url: upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterDirectory) },
+    { id: "openrouter", url: upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterRankings) },
     {
       id: "artificialAnalysis",
-      url: `${upstreamConfig.artificialAnalysis}${upstreamEndpoints.aaTextToImage}`,
+      url: upstreamUrl(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaTextToImage),
     },
     { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
-    { id: "arena", url: `${upstreamConfig.arena}${upstreamEndpoints.agentBoard}` },
+    { id: "arena", url: upstreamUrl(upstreamConfig.arena, upstreamEndpoints.agentBoard) },
     ...newsTargets,
     {
       id: "news",
-      url: `${upstreamConfig.huggingfaceSite}${upstreamEndpoints.hfDailyPapers}`,
+      url: upstreamUrl(upstreamConfig.huggingfaceSite, upstreamEndpoints.hfDailyPapers),
     },
   ];
 }
@@ -52,7 +51,6 @@ export interface SourceAggregate {
   status: number | null;
   latencyMs: number | null;
   error: string | null;
-  /** Set alongside `warn`: which of the source's endpoints failed, and how. */
   warnReason?: string | null;
 }
 
@@ -65,17 +63,13 @@ function failureNote(target: ProbeTarget, error: string | null): string {
   return `${error ?? "probe failed"} (${new URL(target.url).host})`;
 }
 
-/**
- * What actually failed, for the event/sample detail: a single-endpoint source
- * reports its error outright, a multi-endpoint one (news feeds, the two
- * OpenRouter/AA endpoints) reports the failure count plus up to three concrete
- * endpoint errors.
- */
 function failureDetail(g: MutableAggregate): string {
   if (g.total === 1 && g.failureNotes.length > 0) return g.failureNotes[0]!;
   const shown = g.failureNotes.slice(0, MAX_FAILURE_NOTES).join("; ");
   const suffix = g.failureNotes.length > MAX_FAILURE_NOTES ? "; …" : "";
-  return shown ? `${g.failures}/${g.total} endpoints failed: ${shown}${suffix}` : `${g.failures}/${g.total} endpoints failed`;
+  return shown
+    ? `${g.failures}/${g.total} endpoints failed: ${shown}${suffix}`
+    : `${g.failures}/${g.total} endpoints failed`;
 }
 
 function insertProbe(grouped: Map<SourceId, MutableAggregate>, target: ProbeTarget, probe: ProbeResult): void {
@@ -101,7 +95,6 @@ function insertProbe(grouped: Map<SourceId, MutableAggregate>, target: ProbeTarg
 }
 
 function summarizeGroup(g: MutableAggregate): SourceAggregate {
-  // Partial loss stays visible; one healthy feed used to hide the failure count.
   const degraded = g.failures > 0;
   const detail = degraded ? failureDetail(g) : null;
   return {

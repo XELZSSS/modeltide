@@ -34,18 +34,16 @@ describe("getHomeDashboard", () => {
     mockHealthyOthers();
     vi.mocked(getTextToImageLeaderboard).mockResolvedValue(textToImagePayload());
     const { ctx, kvStore } = testCtx();
-    const data = await getHomeDashboard(ctx);
-    expect(data.textToImage?.data).toEqual([]);
-    expect(data.orRankings?.tokenUsageRankings).toHaveLength(1);
-    expect(data.opensource?.data).toHaveLength(1);
-    // Outer assembly is memory-only (inner legs are KV-cached): zero KV writes.
+    const payload = await getHomeDashboard(ctx);
+    const { data } = payload;
+    expect(data.textToImage).toEqual([]);
+    expect(data.orRankings).toHaveLength(1);
+    expect(data.opensource).toHaveLength(1);
     expect(kvStore.size).toBe(0);
-    await expect(getHomeDashboard(ctx)).resolves.toEqual(data);
+    await expect(getHomeDashboard(ctx)).resolves.toEqual(payload);
   });
 
   it("projects each leg down to the fields the home widgets read", async () => {
-    // Production-shaped rows: 499 OpenRouter entries, 30 text-to-image models and
-    // 200 Hugging Face rows carrying the 100 detail-only tags each.
     const orRows = Array.from({ length: 499 }, (_, i) => ({
       rank: i + 1,
       id: `vendor/model-${i}`,
@@ -77,24 +75,24 @@ describe("getHomeDashboard", () => {
       tags: Array.from({ length: 100 }, (_, t) => `tag-${t}`),
     }));
     const fetchedAt = "2026-01-01T00:00:00.000Z";
-    vi.mocked(getOpenRouterRankings).mockResolvedValue({ tokenUsageRankings: orRows, fetchedAt } as never);
+    vi.mocked(getOpenRouterRankings).mockResolvedValue({ data: orRows, fetchedAt } as never);
     vi.mocked(getTextToImageLeaderboard).mockResolvedValue({ data: t2iRows, fetchedAt } as never);
     vi.mocked(getModels).mockResolvedValue({ data: hfRows, fetchedAt } as never);
 
     const { ctx } = testCtx();
-    const data = await getHomeDashboard(ctx);
-    expect(data.orRankings?.tokenUsageRankings).toEqual(orRows.slice(0, 5));
-    expect(data.textToImage?.data).toEqual(t2iRows.slice(0, 8));
-    // The donut histograms every row, so only the columns are dropped.
-    expect(data.opensource?.data).toHaveLength(hfRows.length);
-    expect(data.opensource?.data[0]).toEqual({ id: "org/model-0", downloads: 1_000_000, task: "text-generation" });
+    const { data } = await getHomeDashboard(ctx);
+    expect(data.orRankings).toEqual(orRows.slice(0, 5));
+    expect(data.textToImage).toEqual(t2iRows.slice(0, 8));
+    // The donut histograms every row: only columns are dropped.
+    expect(data.opensource).toHaveLength(hfRows.length);
+    expect(data.opensource?.[0]).toEqual({ id: "org/model-0", downloads: 1_000_000, task: "text-generation" });
   });
 
   it("nulls the failed leg when an inner source rejects", async () => {
     mockHealthyOthers();
     vi.mocked(getTextToImageLeaderboard).mockRejectedValue(new Error("t2i down"));
     const { ctx } = testCtx();
-    const data = await getHomeDashboard(ctx);
+    const { data } = await getHomeDashboard(ctx);
     expect(data.textToImage).toBeNull();
     expect(data.orRankings).not.toBeNull();
   });

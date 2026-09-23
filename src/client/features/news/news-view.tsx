@@ -4,7 +4,8 @@ import { useDevice, useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import { Pagination } from "@/client/components/ui/pagination";
 import { useSuspenseNewsState } from "@/client/api/api-queries";
-import { SuspenseQuery, EmptyState, PartialNotice } from "@/client/components/feedback";
+import { EmptyState, PartialNotice } from "@/client/components/feedback";
+import { SuspenseQuery } from "@/client/router/suspense-query";
 import { safeHref, formatRelativeTime, formatDate } from "@/client/utils/format";
 import { TabbedPage } from "@/client/components/layout";
 import { useClientTab } from "@/client/hooks/use-client-tab";
@@ -33,9 +34,9 @@ function NewsList({ news }: { news: NewsItem[] }) {
   return (
     <div className="flex flex-col gap-2">
       <ul className="ui-card flex flex-col divide-y divide-border">
-        {currentNews.map((item, idx) => {
+        {currentNews.map((item) => {
           const href = safeHref(item.link);
-          const key = `${getNewsRowId(item)}::${idx}`;
+          const key = getNewsRowId(item);
           const body = (
             <>
               <h2 className="ui-body font-medium leading-relaxed min-w-0 break-words decoration-accent/50 underline-offset-4 group-hover:underline transition-colors duration-fast">
@@ -98,13 +99,7 @@ export function NewsView() {
   const tabs: TabItem[] = useMemo(() => NEWS_CATEGORIES.map((id) => ({ id, label: t(CATEGORY_LABELS[id]) })), [t]);
 
   return (
-    <TabbedPage
-      title={t("aiNews")}
-      kicker={t("kickerNews")}
-      tabs={tabs}
-      activeTab={activeCategory}
-      onTabChange={setActiveCategory}
-    >
+    <TabbedPage title={t("aiNews")} tabs={tabs} activeTab={activeCategory} onTabChange={setActiveCategory}>
       <SuspenseQuery resetKey={activeCategory}>
         <NewsCategoryContent categoryId={activeCategory} />
       </SuspenseQuery>

@@ -3,53 +3,52 @@ import { upstreamConfig } from "@/server/config";
 import { errMsg } from "@/server/infra/task-pool";
 import { parseRscPayload } from "@/server/parsers/rsc-parser";
 import { fetchRscText } from "@/server/sources/rsc-fetcher";
-import { cached } from "@/server/sources/pipeline";
+import { cachedRaw } from "@/server/sources/pipeline";
 import { SLOW_TTL_MS } from "@/shared/config";
 
 export async function fetchAaRsc(ctx: AppContext, path: string, retries = 1): Promise<string> {
   return fetchRscText(ctx, upstreamConfig.artificialAnalysis, path, { retries });
 }
 
-interface EnrichOptions<T> {
-  /**
-   * Enrichment pages move far slower than the index they ride on, so they take
-   * their own longer-lived entry instead of being re-fetched on every rebuild.
-   */
-  cacheKey?: string;
+interface EnrichSpec<T> {
+  label: string;
+  path: string;
+  marker: string;
+  extract: (tree: unknown) => T[] | null;
   map?: (arr: T[]) => T[];
 }
 
-/**
- * Enrichment legs are optional: a failure logs and yields an empty array so the
- * caller keeps its un-enriched rows. A failed fetch writes nothing, so a broken
- * leg is retried on the next build instead of being frozen for a whole TTL.
- */
-export async function fetchAndParseEnrich<T>(
-  ctx: AppContext,
-  label: string,
-  path: string,
-  marker: string,
-  extract: (tree: unknown) => T[] | null,
-  options: EnrichOptions<T> = {},
-): Promise<T[]> {
-  let body: string;
-  try {
-    body = await fetchEnrichBody(ctx, path, options.cacheKey);
-  } catch (err) {
-    ctx.log("warn", `[artificial] ${label} enrichment failed: ${errMsg(err)}`);
-    return [];
-  }
-  try {
-    const arr = parseRscPayload<T>(body, marker, extract);
-    return options.map ? options.map(arr) : arr;
-  } catch (err) {
-    ctx.log("warn", `[artificial] ${label} enrichment parse failed: ${errMsg(err)}`);
-    return [];
-  }
+function fetchEnrichBody(ctx: AppContext, path: string): Promise<string> {
+  return fetchRscText(ctx, upstreamConfig.artificialAnalysis, path, { retries: 0 });
 }
 
-function fetchEnrichBody(ctx: AppContext, path: string, cacheKey?: string): Promise<string> {
-  const load = (): Promise<string> => fetchRscText(ctx, upstreamConfig.artificialAnalysis, path, { retries: 0 });
-  if (!cacheKey) return load();
-  return cached(ctx, cacheKey, SLOW_TTL_MS, async () => ({ data: await load() }));
+interface EnrichResult<T> {
+  rows: T[];
+  /** Empty `rows` with `failed: false`: the payload is complete, not partial. */
+  failed: boolean;
+}
+
+function parseEnrich<T>(ctx: AppContext, spec: EnrichSpec<T>, body: string): EnrichResult<T> {
+  const parsed = parseRscPayload<T>(body, spec.marker, spec.extract);
+  if (!parsed.ok) {
+    ctx.log("warn", `[artificial] ${spec.label} enrichment parse failed: ${parsed.error}`);
+    return { rows: [], failed: true };
+  }
+  return { rows: spec.map ? spec.map(parsed.data) : parsed.data, failed: false };
+}
+
+/** Only the fetch is cached: a failure writes nothing, so the next build retries it. */
+export async function getAndParseEnrich<T>(
+  ctx: AppContext,
+  cacheKey: string,
+  spec: EnrichSpec<T>,
+): Promise<EnrichResult<T>> {
+  let body: string;
+  try {
+    body = await cachedRaw<string>(ctx, cacheKey, SLOW_TTL_MS, () => fetchEnrichBody(ctx, spec.path));
+  } catch (err) {
+    ctx.log("warn", `[artificial] ${spec.label} enrichment failed: ${errMsg(err)}`);
+    return { rows: [], failed: true };
+  }
+  return parseEnrich(ctx, spec, body);
 }

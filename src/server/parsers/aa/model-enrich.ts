@@ -8,8 +8,8 @@ import {
 } from "@/server/parsers/parser-primitives";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { normalizeModelKey } from "@/shared/utils";
-import { findNextData } from "@/server/parsers/rsc-parser";
-import type { ModelMetaEntry } from "@/server/parsers/openrouter-parser";
+import { traverse } from "@/server/parsers/rsc-parser";
+import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 
 export function compactOmniscienceEnrich(m: unknown): Record<string, unknown> {
   const rec = isRecord(m) ? m : {};
@@ -28,25 +28,28 @@ export function compactOmniscienceEnrich(m: unknown): Record<string, unknown> {
   };
 }
 
+/** Picks `initialModels`/`models`, preferring whichever carries `intelligenceIndex` rows. */
 export function findModelArray(tree: unknown): Record<string, unknown>[] | null {
-  const candidates = [
-    findNextData<Record<string, unknown>>(tree, "initialModels"),
-    findNextData<Record<string, unknown>>(tree, "models"),
-  ];
+  let initialModels: Record<string, unknown>[] | null = null;
+  let models: Record<string, unknown>[] | null = null;
+  for (const node of traverse(tree)) {
+    const rec = node as Record<string, unknown>;
+    if (!initialModels && Array.isArray(rec.initialModels)) {
+      initialModels = rec.initialModels as Record<string, unknown>[];
+    }
+    if (!models && Array.isArray(rec.models)) models = rec.models as Record<string, unknown>[];
+    if (initialModels && models) break;
+  }
   let fallback: Record<string, unknown>[] | null = null;
-  for (const arr of candidates) {
-    if (arr?.some((m) => m && typeof m === "object" && "intelligenceIndex" in m)) return arr;
+  for (const arr of [initialModels, models]) {
+    if (arr?.some((m) => isRecord(m) && "intelligenceIndex" in m)) return arr;
     if (!fallback && isModelArray(arr)) fallback = arr;
   }
   return fallback;
 }
 
 function isModelArray(arr: unknown): arr is Record<string, unknown>[] {
-  return (
-    Array.isArray(arr) &&
-    arr.length >= 1 &&
-    arr.some((m) => m && typeof m === "object" && isNonEmptyString((m as { slug?: unknown }).slug))
-  );
+  return Array.isArray(arr) && arr.length >= 1 && arr.some((m) => isRecord(m) && isNonEmptyString(m.slug));
 }
 
 const PROTO_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -137,8 +140,7 @@ export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record
         filled++;
       }
       if (m.agentic_index == null && entry.agenticIndex != null) {
-        // OpenRouter mirrors AA's indices on the same 0-100 scale as
-        // intelligenceIndex, so this is a copy rather than a percent conversion.
+        // OpenRouter mirrors AA's indices on the same 0-100 scale, so this is a copy, not a conversion.
         m.agentic_index = entry.agenticIndex;
         filled++;
       }

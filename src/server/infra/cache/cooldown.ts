@@ -6,18 +6,14 @@ const FAILURE_COOLDOWN_MAX_KEYS = 512;
 class FailureCooldown {
   private lastFail = new Map<string, { at: number; timeout: boolean }>();
 
-  constructor(private windowMs: number = FAILURE_COOLDOWN_MS) {}
-
-  shouldSkip(key: string, windowMs?: number): boolean {
-    const window = windowMs ?? this.windowMs;
+  shouldSkip(key: string, windowMs: number): boolean {
     const entry = this.lastFail.get(key);
     if (entry == null) return false;
-    if (Date.now() - entry.at < window) return true;
+    if (Date.now() - entry.at < windowMs) return true;
     this.lastFail.delete(key);
     return false;
   }
 
-  /** Whether the recorded failure for key was timeout-caused. */
   wasTimeout(key: string): boolean {
     return this.lastFail.get(key)?.timeout === true;
   }
@@ -28,7 +24,7 @@ class FailureCooldown {
     this.lastFail.set(key, { at: now, timeout });
     if (this.lastFail.size <= FAILURE_COOLDOWN_MAX_KEYS) return;
     for (const [k, t] of this.lastFail) {
-      if (now - t.at >= this.windowMs) this.lastFail.delete(k);
+      if (now - t.at >= FAILURE_COOLDOWN_MS) this.lastFail.delete(k);
     }
     while (this.lastFail.size > FAILURE_COOLDOWN_MAX_KEYS) {
       const oldest = this.lastFail.keys().next();

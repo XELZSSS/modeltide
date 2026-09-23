@@ -16,7 +16,7 @@
     font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.6;
-    letter-spacing: 0.01em;
+    letter-spacing: var(--tracking-text);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-variant-numeric: tabular-nums;
@@ -70,7 +70,6 @@
   h5,
   h6 {
     line-height: 1.4;
-    letter-spacing: 0.005em;
   }
 }
 
@@ -102,7 +101,7 @@ main,
     background-color: color-mix(in srgb, var(--text-secondary) 40%, transparent);
   }
 
-  @media (max-width: 767px) {
+  @media (width < 768px) {
     &::-webkit-scrollbar {
       width: 4px;
       height: 4px;
@@ -122,26 +121,17 @@ main,
   font-size: 1.75rem;
   line-height: 1.15;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-display);
   color: var(--text-primary);
   overflow-wrap: break-word;
   min-width: 0;
-}
-
-@utility ui-kicker {
-  font-size: 0.75rem;
-  line-height: 1rem;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
 }
 
 @utility ui-section-title {
   font-size: 1rem;
   line-height: 1.5rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-title);
   color: var(--text-primary);
 }
 
@@ -192,7 +182,7 @@ main,
   white-space: nowrap;
 }
 
-@media (min-width: 640px) {
+@media (width >= 640px) {
   .ui-page-title {
     font-size: 2.75rem;
     line-height: 1.1;
@@ -261,26 +251,16 @@ main,
   }
 }
 
-/* Surface system: cards stay border-only, overlays get tiered elevation.
-   border-border + bg-bg-card scattered across components now funnel through here. */
+/* Flat, border-only surfaces: nothing in the UI carries a shadow. */
 @utility ui-card {
   border: 1px solid var(--border);
   background-color: var(--bg-card);
-  box-shadow: none;
   min-width: 0;
 }
 
-@utility ui-overlay-md {
+@utility ui-overlay {
   border: 1px solid var(--border);
-  background-color: var(--bg-card);
-  box-shadow: var(--shadow-md);
-  min-width: 0;
-}
-
-@utility ui-overlay-lg {
-  border: 1px solid var(--border);
-  background-color: var(--bg-card);
-  box-shadow: var(--shadow-lg);
+  background-color: var(--bg-overlay);
   min-width: 0;
 }
 

@@ -1,67 +1,46 @@
-import type { HomeDashboardData, HomeOpenSourceEntry, SourcePayload } from "@/shared/types";
+import type { HomeDashboardData, HomeOpenSourceEntry } from "@/shared/types";
 import { isPartialDashboard } from "@/shared/utils";
 
-/**
- * Runtime guard for SourcePayload<T[]>. Strict: only accepts the canonical
- * shape `{data: T[], fetchedAt: string, partial?: boolean}`. Malformed
- * payloads throw — ErrorBoundary handles it instead of letting `.filter`
- * crash deep in the table layer.
- *
- * The shape is generation-locked to the code that produced it (server cache
- * entries are hard-cut per CACHE_VERSION, never migrated), so no cross-shape
- * tolerance is needed. Any future drift fails loudly at the API boundary,
- * not inside `dedupeBy`/`filterByTerm`.
- */
-export function unwrapList<T>(payload: unknown, label: string): T[] {
+function payloadData(payload: unknown, label: string): unknown {
   if (payload == null) throw new Error(`${label}: payload is null`);
-  if (typeof payload === "object" && "data" in payload) {
-    const data = (payload as SourcePayload<T[]>).data;
-    if (Array.isArray(data)) return data;
-    throw new Error(`${label}: payload.data is not an array`);
-  }
+  if (typeof payload === "object" && "data" in payload) return (payload as { data: unknown }).data;
   throw new Error(`${label}: invalid payload shape`);
+}
+
+/** No cross-shape tolerance: server cache entries are hard-cut per CACHE_VERSION and never migrated. */
+export function unwrapList<T>(payload: unknown, label: string): T[] {
+  const data = payloadData(payload, label);
+  if (Array.isArray(data)) return data;
+  throw new Error(`${label}: payload.data is not an array`);
+}
+
+/** `data` carries the whole object, null for a model that does not exist. */
+export function unwrapObject<T>(payload: unknown, label: string): T {
+  return payloadData(payload, label) as T;
 }
 
 export interface NormalizedHomeDashboard {
   orRankings: HomeDashboardData["orRankings"];
   textToImage: HomeDashboardData["textToImage"];
   opensource: HomeOpenSourceEntry[];
-  /** True when any dashboard leg failed and was nulled out. */
   partial: boolean;
 }
 
-export function normalizeHomeDashboard(raw: HomeDashboardData, label = "homeDashboard"): NormalizedHomeDashboard {
+export function normalizeHomeDashboard(payload: unknown, label = "homeDashboard"): NormalizedHomeDashboard {
+  const raw = unwrapObject<HomeDashboardData>(payload, label);
   if (!raw || typeof raw !== "object") throw new Error(`${label}: invalid dashboard`);
-  const orRankings = raw.orRankings ?? null;
-  const textToImage = raw.textToImage ?? null;
-  const opensourceRaw = raw.opensource as unknown;
-  let opensource: NormalizedHomeDashboard["opensource"];
-  if (opensourceRaw == null) opensource = [] as unknown as NormalizedHomeDashboard["opensource"];
-  else if (
-    typeof opensourceRaw === "object" &&
-    "data" in opensourceRaw &&
-    Array.isArray((opensourceRaw as SourcePayload<unknown[]>).data)
-  ) {
-    opensource = (opensourceRaw as SourcePayload<NormalizedHomeDashboard["opensource"]>).data;
-  } else {
-    throw new Error(`${label}.opensource: invalid shape`);
-  }
-  const partial = isPartialDashboard(raw);
-  return { orRankings, textToImage, opensource, partial };
+  return {
+    orRankings: raw.orRankings ?? null,
+    textToImage: raw.textToImage ?? null,
+    opensource: raw.opensource ?? [],
+    partial: isPartialDashboard(raw),
+  };
 }
 
-/**
- * Reads the `partial` flag off an unknown payload. Non-object payloads (null,
- * primitives) and objects without the flag read as `false`.
- */
 export function isPartialPayload(payload: unknown): boolean {
   return (payload as { partial?: boolean } | null | undefined)?.partial === true;
 }
 
-/**
- * Non-throwing variant of unwrapList that also surfaces the payload partial
- * flag and whether the payload failed local validation (`malformed`).
- */
 export function unwrapListPartial<T>(
   payload: unknown,
   label: string,

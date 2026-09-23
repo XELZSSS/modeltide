@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel, HallucinationRankingEntry } from "@/shared/types";
@@ -23,9 +23,9 @@ function HallDetailContent({
   const { t } = useTranslation();
   const hallStats: [TranslationKey, ReactNode][] = [
     ["omniscienceIndex", formatIndex(model.omniscienceIndex)],
-    ["accuracy", formatPercent(t, model.accuracy)],
-    ["hallucinationRate", formatPercent(t, model.hallucinationRate)],
-    ["attemptRate", formatPercent(t, model.attemptRate)],
+    ["accuracy", formatPercent(model.accuracy, t)],
+    ["hallucinationRate", formatPercent(model.hallucinationRate, t)],
+    ["attemptRate", formatPercent(model.attemptRate, t)],
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -49,25 +49,39 @@ function HallDetailContent({
   );
 }
 
-/** Cross-match a hallucination entry against the AA index by normalized name keys. */
+function indexAaModels(models: ArtificialAnalysisModel[]): Map<string, ArtificialAnalysisModel[]> {
+  const index = new Map<string, ArtificialAnalysisModel[]>();
+  for (const model of models) {
+    for (const value of [model.name, model.short_name, model.slug]) {
+      if (!value) continue;
+      const key = normalizeModelKey(value);
+      const bucket = index.get(key);
+      if (bucket) bucket.push(model);
+      else index.set(key, [model]);
+    }
+  }
+  return index;
+}
+
 function findAaModelForHall(
-  aaData: ArtificialAnalysisModel[],
+  aaIndex: Map<string, ArtificialAnalysisModel[]>,
   entry: HallucinationRankingEntry,
 ): ArtificialAnalysisModel | undefined {
-  const want = normalizeModelKey(entry.model);
-  const slugWant = normalizeModelKey(entry.slug);
-  const candidates = aaData.filter((m) => {
-    const keys = [m.name, m.short_name, m.slug].filter((v): v is string => !!v).map(normalizeModelKey);
-    return keys.includes(want) || keys.includes(slugWant);
-  });
-  return candidates.length === 1 ? candidates[0] : undefined;
+  const candidates = new Set<ArtificialAnalysisModel>();
+  for (const value of [entry.model, entry.slug]) {
+    if (!value) continue;
+    for (const model of aaIndex.get(normalizeModelKey(value)) ?? []) candidates.add(model);
+  }
+  return candidates.size === 1 ? candidates.values().next().value : undefined;
 }
 
 export function HallDetail({ decodedId }: { decodedId: string }) {
   const aaData = useSuspenseArtificialRankings();
   const hallucinationRankings = useSuspenseHallucinationRankings();
+  const aaIndex = useMemo(() => indexAaModels(aaData), [aaData]);
   const entry = findModel(hallucinationRankings, decodedId, "id", "slug");
-  const aaModel = findModel(aaData, decodedId, "id", "slug") ?? (entry ? findAaModelForHall(aaData, entry) : undefined);
+  const aaModel =
+    findModel(aaData, decodedId, "id", "slug") ?? (entry ? findAaModelForHall(aaIndex, entry) : undefined);
   if (!entry) return <NotFound />;
   return (
     <DetailShell source="hall" title={entry.model}>

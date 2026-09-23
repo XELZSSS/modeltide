@@ -2,7 +2,9 @@ import { Suspense, lazy, memo } from "react";
 import { useParams } from "@/client/router";
 import { useTranslation } from "@/client/providers";
 import { useSuspenseStatusHistory } from "@/client/api/api-queries";
-import { NotFound, SuspenseQuery } from "@/client/components/feedback";
+import { unwrapObject } from "@/client/api/payload-normalize";
+import { NotFound } from "@/client/components/feedback";
+import { SuspenseQuery } from "@/client/router/suspense-query";
 import { PageContainer, PageSection, SectionCard, DetailPageLayout } from "@/client/components/layout";
 import { StatCard } from "@/client/components/ui/stat-card";
 import { StatGrid } from "@/client/components/ui/grids";
@@ -10,7 +12,7 @@ import { ChartSkeleton } from "@/client/components/ui/chart-frame";
 import { formatUptimePct } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
 import { SOURCE_LABELS, SOURCE_IDS } from "@/shared/config";
-import type { DayBucket, SourceId } from "@/shared/types";
+import type { DayBucket, SourceId, StatusHistoryPayload } from "@/shared/types";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./status-parts";
 import { StatusEventList } from "./status-events";
@@ -27,10 +29,11 @@ const EMPTY_BUCKETS: DayBucket[] = [];
 const CONTENT = memo(function Content({ id }: { id: SourceId }) {
   const { t } = useTranslation();
   const { data } = useSuspenseStatusHistory();
-  const summary = data.sources.find((s) => s.id === id);
-  const recent = data.recent[id] ?? EMPTY_SAMPLES;
-  const buckets = data.daily[id] ?? EMPTY_BUCKETS;
-  const events = data.events.filter((e) => e.id === id).slice(0, 10);
+  const history = unwrapObject<StatusHistoryPayload>(data, "statusHistory");
+  const summary = history.sources.find((s) => s.id === id);
+  const recent = history.recent[id] ?? EMPTY_SAMPLES;
+  const buckets = history.daily[id] ?? EMPTY_BUCKETS;
+  const events = history.events.filter((e) => e.id === id).slice(0, 10);
   const level = resolveLevel(summary);
   const detail = summary?.detail ?? null;
 
@@ -44,13 +47,22 @@ const CONTENT = memo(function Content({ id }: { id: SourceId }) {
       >
         <StatGrid columns={4}>
           <StatCard label={t("statusCurrent")} value={t(LEVEL_STYLES[level].labelKey)} />
-          <StatCard label={t("uptime24h")} value={formatUptimePct(t, summary?.uptime24h ?? null)} />
-          <StatCard label={t("uptime7d")} value={formatUptimePct(t, summary?.uptime7d ?? null)} />
+          <StatCard label={t("uptime24h")} value={formatUptimePct(summary?.uptime24h ?? null, t)} />
+          <StatCard label={t("uptime7d")} value={formatUptimePct(summary?.uptime7d ?? null, t)} />
           <StatCard
             label={t("latencyAvg24h")}
             value={summary?.avgLatency24h != null ? `${(summary.avgLatency24h / 1000).toFixed(2)}s` : t("uptimeNoData")}
           />
         </StatGrid>
+
+        {/* Reported on its own: folding degraded time into uptime would make the
+            availability figure stop meaning "was it up". */}
+        {(summary?.degraded24h ?? 0) > 0 && (
+          <p className="ui-caption text-warning">
+            {t("degraded24h")}
+            <span className="ui-mono-value text-xs ml-1.5">{formatUptimePct(summary?.degraded24h ?? null, t)}</span>
+          </p>
+        )}
 
         {detail && (
           <p className={cn("ui-body-secondary break-words", level === "error" ? "text-destructive" : "text-warning")}>
@@ -85,7 +97,7 @@ export function SourceDetailView() {
   const source = params.source;
   if (!isSourceId(source)) return <NotFound />;
   return (
-    <SuspenseQuery key={source}>
+    <SuspenseQuery resetKey={source}>
       <CONTENT id={source} />
     </SuspenseQuery>
   );

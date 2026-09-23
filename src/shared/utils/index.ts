@@ -1,5 +1,10 @@
-export * from "@/shared/utils/dashboard";
-export * from "@/shared/utils/hash";
-export * from "@/shared/utils/numbers";
-export * from "@/shared/utils/text";
-export * from "@/shared/utils/url";
+export { isPartialDashboard } from "@/shared/utils/dashboard";
+export { computeBlendPrice, monthlyCostFor, type CostScenario } from "@/shared/utils/cost";
+export {
+  isFiniteNumber,
+  normalizePercent,
+  unclampedPercent,
+  approxEq,
+} from "@/shared/utils/numbers";
+export { dedupeBy, toStringOrNull, normalizeModelKey } from "@/shared/utils/text";
+export { isHttpUrl } from "@/shared/utils/url";

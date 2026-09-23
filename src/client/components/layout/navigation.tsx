@@ -1,71 +1,106 @@
-import { type ReactNode, useMemo } from "react";
-import { Home, Award, Megaphone, Newspaper, Activity, Settings, MoreHorizontal, ChevronRight } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
+import { Settings, MoreHorizontal, ChevronRight } from "lucide-react";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "@/client/providers";
-import { prefetchQueriesForRoute } from "@/client/api/api-queries";
+import { findRoute, prefetchQueriesForRoute, ROUTES, type NavGroup } from "@/client/config/routes";
 import { SafeLink as Link, usePathname } from "@/client/router";
 import { Sheet, SheetBody, SheetHeader } from "@/client/components/ui/sheet";
 import { REPO_URL } from "@/client/config/nav-config";
 
 interface NavItem {
   path: string;
+  group: NavGroup;
   label: string;
   icon: ReactNode;
-  matchPrefix?: string[];
+  activePrefixes?: readonly string[];
 }
 
 function useNavigation() {
   const { t } = useTranslation();
   return useMemo(() => {
-    const primary: NavItem[] = [
-      { path: "/", label: t("home"), icon: <Home size={18} /> },
-      {
-        path: "/models",
-        label: t("rankings"),
-        icon: <Award size={18} />,
-        matchPrefix: ["/model/", "/compare", "/price-compare"],
-      },
-    ];
-    const secondary: NavItem[] = [
-      { path: "/releases", label: t("navReleases"), icon: <Megaphone size={18} /> },
-      { path: "/news", label: t("aiNews"), icon: <Newspaper size={18} /> },
-      { path: "/status", label: t("navStatus"), icon: <Activity size={18} />, matchPrefix: ["/status"] },
-    ];
-    const all = [...primary, ...secondary];
+    const all = ROUTES.flatMap((route): NavItem[] => {
+      const nav = route.nav;
+      if (!nav) return [];
+      return [
+        {
+          path: nav.path,
+          group: nav.group,
+          label: t(nav.labelKey),
+          icon: nav.icon,
+          activePrefixes: nav.activePrefixes,
+        },
+      ];
+    });
 
-    return { all, mobilePrimary: primary, mobileMore: secondary };
+    return {
+      all,
+      mobilePrimary: all.filter((item) => item.group === "primary"),
+      mobileMore: all.filter((item) => item.group === "secondary"),
+    };
   }, [t]);
 }
 
 function isNavActive(pathname: string, item: NavItem): boolean {
   if (pathname === item.path) return true;
-  if (item.matchPrefix) return item.matchPrefix.some((p) => pathname.startsWith(p));
+  if (item.activePrefixes) return item.activePrefixes.some((p) => pathname.startsWith(p));
   return false;
 }
 
-/** Warm the target route's queries on hover/focus; React Query dedupes repeats. */
-function usePrefetch(): (path: string) => void {
-  const qc = useQueryClient();
-  return useMemo(() => (path: string) => prefetchQueriesForRoute(qc, path), [qc]);
+function warmRoute(qc: QueryClient, path: string): void {
+  prefetchQueriesForRoute(qc, path);
+  void findRoute(path)?.load?.();
 }
 
-/**
- * Pending route-transition feedback is a next/link useLinkStatus feature with
- * no equivalent in the dependency-free router; the label renders statically.
- */
+/** Pointer crossing time tolerated before a nav hover warms anything; a passing pointer must stay free. */
+const HOVER_PREFETCH_DELAY_MS = 150;
+
+interface PrefetchControls {
+  hover: (path: string) => void;
+  immediate: (path: string) => void;
+  cancel: () => void;
+}
+
+function usePrefetch(): PrefetchControls {
+  const qc = useQueryClient();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancel = useCallback(() => {
+    if (timer.current === null) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+  }, []);
+  useEffect(() => cancel, [cancel]);
+  return useMemo(
+    () => ({
+      hover: (path: string) => {
+        cancel();
+        timer.current = setTimeout(() => {
+          timer.current = null;
+          warmRoute(qc, path);
+        }, HOVER_PREFETCH_DELAY_MS);
+      },
+      immediate: (path: string) => {
+        cancel();
+        warmRoute(qc, path);
+      },
+      cancel,
+    }),
+    [qc, cancel],
+  );
+}
+
 interface DesktopNavProps {
   onSettingsOpen: () => void;
 }
 
 const DESKTOP_ICON_BUTTON =
-  "p-1.5 text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
+  "p-1.5 text-text-secondary hoverable:hover:text-text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
 
 export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
   const pathname = usePathname();
   const { all } = useNavigation();
   const { t } = useTranslation();
 
-  const prefetch = usePrefetch();
+  const { hover, immediate, cancel } = usePrefetch();
 
   return (
     <nav
@@ -82,8 +117,10 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
                 href={item.path}
                 aria-label={item.label}
                 aria-current={active ? "page" : undefined}
-                onMouseEnter={() => prefetch(item.path)}
-                onFocus={() => prefetch(item.path)}
+                onMouseEnter={() => hover(item.path)}
+                onMouseLeave={cancel}
+                onFocus={() => immediate(item.path)}
+                onBlur={cancel}
                 className={`relative px-3 py-1.5 text-sm font-medium transition-colors duration-fast whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 ${
                   active ? "text-text-primary" : "text-text-secondary hoverable:hover:text-text-primary"
                 }`}
@@ -155,7 +192,7 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
   const pathname = usePathname();
   const { t } = useTranslation();
   const { mobilePrimary, mobileMore } = useNavigation();
-  const prefetch = usePrefetch();
+  const { immediate } = usePrefetch();
 
   const isMoreActive = mobileMore.some((n) => isNavActive(pathname, n));
 
@@ -172,7 +209,7 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
             href={item.path}
             aria-label={item.label}
             aria-current={active ? "page" : undefined}
-            onTouchStart={() => prefetch(item.path)}
+            onTouchStart={() => immediate(item.path)}
             className={mobileBarItemClass(active)}
           >
             {active && <ActiveIndicator />}
@@ -213,7 +250,7 @@ export function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps) {
         <nav className="divide-y divide-border" aria-label={t("navSecondary")}>
           {mobileMore.map((item) => {
             const active = isNavActive(pathname, item);
-            return <NavRow key={item.path} item={item} active={active} onClose={onClose} onHover={prefetch} />;
+            return <NavRow key={item.path} item={item} active={active} onClose={onClose} prefetch={prefetch} />;
           })}
         </nav>
       </SheetBody>
@@ -225,21 +262,23 @@ function NavRow({
   item,
   active,
   onClose,
-  onHover,
+  prefetch,
 }: {
   item: NavItem;
   active: boolean;
   onClose: () => void;
-  onHover: (path: string) => void;
+  prefetch: PrefetchControls;
 }) {
   return (
     <Link
       href={item.path}
       onClick={onClose}
       aria-current={active ? "page" : undefined}
-      onTouchStart={() => onHover(item.path)}
-      onMouseEnter={() => onHover(item.path)}
-      onFocus={() => onHover(item.path)}
+      onTouchStart={() => prefetch.immediate(item.path)}
+      onMouseEnter={() => prefetch.hover(item.path)}
+      onMouseLeave={prefetch.cancel}
+      onFocus={() => prefetch.immediate(item.path)}
+      onBlur={prefetch.cancel}
       className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors duration-fast focus-visible:outline-none focus-visible:bg-hover ${
         active ? "text-accent" : "text-text-primary hoverable:hover:bg-hover"
       }`}

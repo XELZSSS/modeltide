@@ -2,11 +2,8 @@ import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
 import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 
-/**
- * Fixed-height box every chart renders in. The `figure` is full-height and the
- * canvas is forced to `display: block` so Chart.js never picks up the inline
- * baseline gap; `height` carries the per-chart sizing (default 200/240px).
- */
+/** Fixed-height box for every chart: the canvas is forced to `display: block` so Chart.js never
+ *  picks up the inline baseline gap. */
 export const ChartFrame = memo(function ChartFrame({
   height = "h-[200px] sm:h-[240px]",
   children,
@@ -21,17 +18,25 @@ export const ChartFrame = memo(function ChartFrame({
   );
 });
 
-export const ChartSkeleton = memo(function ChartSkeleton({
-  height,
-  className,
-}: {
-  height?: string;
-  className?: string;
-}) {
+export const ChartSkeleton = memo(function ChartSkeleton({ height }: { height?: string }) {
   return (
     <ChartFrame height={height}>
-      <div className={cn("h-full w-full ui-skeleton", className)} />
+      <div className="h-full w-full ui-skeleton" />
     </ChartFrame>
+  );
+});
+
+export const ChartEmpty = memo(function ChartEmpty({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("flex items-center justify-center text-center ui-body-secondary", className)} role="status">
+      {children}
+    </div>
   );
 });
 

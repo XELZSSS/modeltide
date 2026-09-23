@@ -1,4 +1,4 @@
-/** Stable identifier of a probed upstream source; also the key of `SOURCE_LABELS`. */
+/** Probed upstream source id; also the key of `SOURCE_LABELS`. */
 export type SourceId =
   | "artificialAnalysis"
   | "huggingface"
@@ -15,9 +15,7 @@ export type SourceId =
   | "deepseekApi"
   | "moonshotApi";
 
-/** Decisive health verdict: fully working (ok), degraded but up (warn), or failing (error). */
 export type SourceLevel = "ok" | "warn" | "error";
-/** SourceLevel plus the "never probed" state shown as grey in the UI. */
 export type SourceHealthLevel = SourceLevel | "unknown";
 
 export interface UptimeSample {
@@ -27,9 +25,8 @@ export interface UptimeSample {
   status?: number | null;
   /** Failure detail (probe error, or "x/y endpoints failed: …") on down samples. */
   error?: string | null;
-  /** True when the source is up but degraded (provider page reports an incident). */
   warn?: boolean;
-  /** Degradation warning — what the provider page actually reports. Absent on healthy samples. */
+  /** What the provider page actually reports; absent on healthy samples. */
   warnReason?: string | null;
 }
 
@@ -37,6 +34,8 @@ export interface DayBucket {
   day: string;
   total: number;
   ok: number;
+  /** Degraded samples also count in `ok`, so this is the only record of the day's degradation. */
+  warn?: number;
 }
 
 export interface StatusEvent {
@@ -44,11 +43,8 @@ export interface StatusEvent {
   type: "down" | "up" | "degraded";
   at: string;
   durationMin: number | null;
-  /**
-   * What the incident actually is: the probe failure detail for `down`, the
-   * provider's own degradation warning for `degraded`. Absent in payloads cached
-   * before it existed, and null for `up`.
-   */
+  /** Probe failure detail for `down`, the provider's own degradation warning for `degraded`; null for
+   * `up`, absent in payloads cached before it existed. */
   detail?: string | null;
 }
 
@@ -61,8 +57,9 @@ export interface SourceHistorySummary {
   checkedAt: string | null;
   uptime24h: number | null;
   uptime7d: number | null;
+  /** Share of the last 24h's samples that were degraded but up; kept out of `uptime24h`. */
+  degraded24h: number | null;
   avgLatency24h: number | null;
-  /** Latest failure/degradation detail; absent in payloads cached before it existed. */
   detail?: string | null;
 }
 

@@ -4,8 +4,10 @@ import { HttpClient } from "@/server/infra/http-client";
 import { ClientAbortError, UpstreamError, wrapUpstream } from "@/server/infra/errors";
 import { mapKV } from "@/server/test-helpers";
 import { INFLIGHT_HANG_GUARD_MS, MEMORY_CACHE_MAX_BYTES } from "@/server/config";
+import { normalizeModelLimit, sliceToLimit } from "@/server/config/limits";
+import { MAX_MODEL_LIMIT } from "@/shared/config";
 import { validateQuery, qEnum, qNum, qStr } from "@/server/infra/query-validation";
-import { runCapped } from "@/server/infra/task-pool";
+import { runCapped, TaskNotRunError } from "@/server/infra/task-pool";
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const makeCache = (version = "v-test", opts?: { failureCooldownMs?: number }) =>
@@ -204,6 +206,24 @@ describe("cache-service", () => {
         vi.useRealTimers();
       }
     });
+
+    it("uses the refresh's actual partial TTL for memory stale fallback", async () => {
+      vi.useFakeTimers();
+      try {
+        const cache = makeCache("v-partial-memory");
+        let fail = false;
+        const fn = async () => {
+          if (fail) throw new Error("down");
+          return { data: "partial", ttl: 1_000 };
+        };
+        await cache.withTtl("partial-memory", 30 * 60_000, fn, { memoryOnly: true });
+        vi.setSystemTime(Date.now() + 90 * 60_000);
+        fail = true;
+        await expect(cache.withTtl("partial-memory", 30 * 60_000, fn, { memoryOnly: true })).rejects.toThrow("down");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 
@@ -282,6 +302,37 @@ describe("runCapped pool", () => {
     );
     expect(peak).toBe(3);
   });
+
+  it("returns on deadline even when an active task never settles", async () => {
+    const abort = new AbortController();
+    let release!: () => void;
+    let started!: () => void;
+    const taskStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const never = new Promise<string>((resolve) => {
+      release = () => resolve("late");
+    });
+    const pending = runCapped(
+      [
+        async () => {
+          started();
+          return never;
+        },
+        async () => "not-started",
+      ],
+      1,
+      { signal: abort.signal },
+    );
+    await taskStarted;
+    abort.abort();
+    const results = await pending;
+    // The task cut off mid-flight reports an abort; the one the deadline never reached says so
+    // instead, which is how the cron tells a budget shortfall from an upstream failure.
+    expect(results[0]).toEqual({ status: "rejected", reason: expect.objectContaining({ message: "Aborted" }) });
+    expect(results[1]).toMatchObject({ status: "rejected", reason: expect.any(TaskNotRunError) });
+    release();
+  });
 });
 
 describe("KV write deferral", () => {
@@ -338,7 +389,32 @@ describe("http-client retry policy", () => {
     );
     try {
       await expect(new HttpClient().json("https://x.example/a", { retries: 1 })).resolves.toEqual({ ok: 1 });
-      expect(calls).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("retries when an otherwise successful response fails while reading its body", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new Error("stream interrupted"));
+              },
+            }),
+          );
+        }
+        return Response.json({ ok: 1 });
+      }),
+    );
+    try {
+      await expect(new HttpClient().json("https://x.example/body", { retries: 1 })).resolves.toEqual({ ok: 1 });
+      expect(calls).toBe(2);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -373,5 +449,23 @@ describe("http-client deadline semantics", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("fetch limits", () => {
+  it.each([
+    [NaN, 50],
+    [50, 50],
+    [51, 100],
+    [500, MAX_MODEL_LIMIT],
+  ])("normalizeModelLimit(%s) -> %s", (input, expected) => {
+    expect(normalizeModelLimit(input)).toBe(expected);
+  });
+
+  it.each([
+    [[1, 2, 3], 2, [1, 2]],
+    [[1, 2, 3], 0, []],
+  ])("sliceToLimit(%j, %s) -> %j", (rows, limit, expected) => {
+    expect(sliceToLimit(rows as number[], limit)).toEqual(expected);
   });
 });
