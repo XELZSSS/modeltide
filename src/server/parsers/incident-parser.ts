@@ -7,7 +7,6 @@ const HEALTHY_COMPONENT_STATES = new Set(["operational"]);
 
 const ERROR_COMPONENT_STATES = new Set(["partial_outage", "major_outage", "critical_outage"]);
 
-// Statuspage enum `none|maintenance|minor|major|critical`: `maintenance` and unknown are not errors.
 const ERROR_PAGE_INDICATORS = new Set(["major", "critical"]);
 
 function indicatorLevel(indicator: string): SourceLevel {
@@ -87,7 +86,6 @@ export function parseGoogleCloudIncidents(raw: unknown): ParseResult<{ level: So
   for (const entry of raw.slice(0, 500) as GcpIncidentRaw[]) {
     const incident = obj(entry);
     if (!incident) continue;
-    // `end` marks a resolved incident; any non-empty value counts, so a type regression can't reopen it.
     const endRaw = (incident as Record<string, unknown>).end;
     const ended = endRaw != null && String(endRaw).trim() !== "";
     if (ended) continue;

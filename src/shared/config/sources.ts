@@ -29,8 +29,6 @@ export const SOURCE_LABELS: Record<SourceId, TranslationKey> = {
 
 export const SOURCE_IDS: readonly SourceId[] = Object.keys(SOURCE_LABELS) as SourceId[];
 
-/** Undefined for an unknown id — a payload cached before a deploy can carry a source that has since
- * been renamed away; callers render the raw id. */
 export function sourceLabelKey(id: string): TranslationKey | undefined {
   return Object.hasOwn(SOURCE_LABELS, id) ? SOURCE_LABELS[id as SourceId] : undefined;
 }

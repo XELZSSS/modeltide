@@ -36,13 +36,7 @@ interface CompareCellProps {
   children?: ReactNode;
 }
 
-const Th = memo(function CompareTh({
-  align = "left",
-  className,
-  style,
-  children,
-  scope,
-}: CompareCellProps & { scope?: "col" | "row" }) {
+function Th({ align = "left", className, style, children, scope }: CompareCellProps & { scope?: "col" | "row" }) {
   return (
     <th
       scope={scope}
@@ -56,23 +50,15 @@ const Th = memo(function CompareTh({
       {children}
     </th>
   );
-});
+}
 
-const Td = memo(function CompareTd({ align = "left", className, style, children }: CompareCellProps) {
+function Td({ align = "left", className, style, children }: CompareCellProps) {
   return (
     <td className={cn("px-4 py-3.5 text-sm", align === "right" && "text-right", className)} style={style}>
       {children}
     </td>
   );
-});
-
-const Tr = memo(function CompareTr({ className, children, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
-  return (
-    <tr className={cn("border-b border-border last:border-b-0", className)} {...props}>
-      {children}
-    </tr>
-  );
-});
+}
 
 export const WinnerMark = memo(function WinnerMark() {
   return <TrendingUp size={12} className="inline ml-0.5 text-success" aria-hidden="true" />;
@@ -118,7 +104,7 @@ function DesktopTable({ rows, models, getKey, getName, getColor, renderValue, wi
             </thead>
             <tbody>
               {rows.map((row) => (
-                <Tr key={rowKey(row)}>
+                <tr key={rowKey(row)} className="border-b border-border last:border-b-0">
                   <Th scope="row" className="text-text-secondary sticky left-0 bg-bg-card z-10">
                     {row.label}
                   </Th>
@@ -127,7 +113,7 @@ function DesktopTable({ rows, models, getKey, getName, getColor, renderValue, wi
                       {renderValue(row, model, getWinner(winners, row, model, index))}
                     </Td>
                   ))}
-                </Tr>
+                </tr>
               ))}
             </tbody>
           </table>

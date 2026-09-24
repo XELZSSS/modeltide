@@ -54,7 +54,6 @@ function useCostEstimator(): CostEstimatorState {
 
 type MonthlyCostMap = Map<string, number | null>;
 
-/** Monthly cost per modelId(); keyed so a reordered or filtered list cannot pair a cost with the wrong row. */
 export function useMonthlyCosts(models: ArtificialAnalysisModel[]) {
   const estimator = useCostEstimator();
   const { calc } = estimator;
@@ -67,7 +66,7 @@ export function useMonthlyCosts(models: ArtificialAnalysisModel[]) {
     }
     return map;
   }, [models, calc]);
-  return { ...estimator, monthlyCosts };
+  return useMemo(() => ({ ...estimator, monthlyCosts }), [estimator, monthlyCosts]);
 }
 
 export function useEffectivePricingMap(models: ArtificialAnalysisModel[]) {

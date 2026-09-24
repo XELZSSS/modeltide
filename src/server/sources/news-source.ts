@@ -37,13 +37,15 @@ function sortNewestFirst(
   return { suitable: dated.map((d) => d.item), papers: allItems.filter(isPaper) };
 }
 
+const withLinks = (items: NewsItem[]) => items.map((item) => ({ item, link: normalizeNewsLink(item.link) }));
+
 function pickNewsItems(suitable: NewsItem[], papers: NewsItem[]): NewsItem[] {
-  const paperPicked = dedupeBy(papers, (i) => normalizeNewsLink(i.link)).slice(0, SOURCE_LIMITS.hfPapersQuota);
-  const paperLinks = new Set(paperPicked.map((i) => normalizeNewsLink(i.link)));
-  const restPicked = dedupeBy(suitable, (i) => normalizeNewsLink(i.link))
-    .filter((i) => !paperLinks.has(normalizeNewsLink(i.link)))
-    .slice(0, SOURCE_LIMITS.newsPerCategory - paperPicked.length);
-  return [...paperPicked, ...restPicked];
+  const paperPicked = dedupeBy(withLinks(papers), (r) => r.link).slice(0, SOURCE_LIMITS.hfPapersQuota);
+  const paperLinks = new Set(paperPicked.map((r) => r.link));
+  const restPicked = dedupeBy(withLinks(suitable), (r) => r.link)
+    .filter((r) => !paperLinks.has(r.link))
+    .slice(0, Math.max(0, SOURCE_LIMITS.newsPerCategory - paperPicked.length));
+  return [...paperPicked, ...restPicked].map((r) => r.item);
 }
 
 async function fetchNews(
@@ -68,7 +70,7 @@ async function fetchNews(
   const { values, failures } = await runLegs(legs, { concurrency: NEWS_LEG_CONCURRENCY });
   const allItems = values.flatMap((items) => items ?? []);
   if (failures.length === values.length)
-    throw new UpstreamError(`All ${values.length} RSS feed(s) for "${category}" failed`);
+    throw new UpstreamError(`All ${values.length} RSS feed(s) for "${category}" failed`, { retryable: true });
   if (failures.length > 0) {
     ctx.log(
       "warn",
@@ -82,7 +84,7 @@ async function fetchNews(
 }
 
 export const getNews = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>
-  cachedPayload(ctx, cacheKeys.news(category), NEWS_TTL_MS, async () => {
+  cachedPayload(ctx, cacheKeys.news(category), NEWS_TTL_MS, async (ctx) => {
     const { items, failCount, total } = await fetchNews(ctx, category);
     requireRows(items, `news "${category}"`, "usable items", "all filtered?");
     return { rows: items, partial: failCount > 0, ttl: ttlForRatio(failCount, total, NEWS_TTL_MS) };

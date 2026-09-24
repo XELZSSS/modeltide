@@ -24,7 +24,7 @@ export function modelNameCol<T>(
 type TFn = ReturnType<typeof useTranslation>["t"];
 type BodyBuilder<T> = (t: TFn) => DataTableColumn<T>[];
 
-export function useRankedColumns<T>(buildBodyColumns: BodyBuilder<T>): DataTableColumn<T>[] {
+function useRankedColumns<T>(buildBodyColumns: BodyBuilder<T>): DataTableColumn<T>[] {
   const { t } = useTranslation();
   return useMemo(() => buildBodyColumns(t), [buildBodyColumns, t]);
 }

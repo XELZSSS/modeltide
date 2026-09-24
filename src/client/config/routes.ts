@@ -1,4 +1,4 @@
-import { createElement, lazy, type ComponentType, type ReactNode } from "react";
+import { createElement, type ComponentType, type ReactNode } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { Home, Award, Megaphone, Newspaper, Activity } from "lucide-react";
 import {
@@ -9,7 +9,6 @@ import {
   qNewsRaw,
   qOpenRouter,
   qOpenSourceModelsRaw,
-  qOpenSourceReleasesRaw,
   qStatusHistory,
 } from "@/client/api/api-queries";
 import { HomeView } from "@/client/features/home/home-view";
@@ -17,6 +16,7 @@ import { DEFAULT_RANKING_TAB, type RankingTabId } from "@/client/config/nav-conf
 import { NEWS_CATEGORIES } from "@/shared/config";
 import type { TranslationKey } from "@/shared/i18n";
 
+import { loadableView } from "@/client/router/lazy-view";
 interface Prefetchable {
   prefetch: (qc: QueryClient) => Promise<void>;
 }
@@ -33,12 +33,10 @@ interface RouteNav {
 
 interface RouteEntry {
   key: string;
-  /** Matcher, evaluated in manifest order: exact paths first, then prefixes. */
   match: (pathname: string) => boolean;
   View: ComponentType;
   titleKey: TranslationKey;
   prefetch: readonly Prefetchable[];
-  /** The route's chunk, warmed on the same intent as `prefetch`: data alone does not show a lazy view. */
   load?: () => Promise<unknown>;
   nav?: RouteNav;
 }
@@ -52,16 +50,16 @@ const loadNewsView = () => import("@/client/features/news/news-view");
 const loadStatusView = () => import("@/client/features/status/status-view");
 const loadSourceView = () => import("@/client/features/status/source-view");
 
-const RankingsHubView = lazy(() => loadRankingsHubView().then((m) => ({ default: m.RankingsHubView })));
-const ModelDetailView = lazy(() => loadModelView().then((m) => ({ default: m.ModelDetailView })));
-const CompareView = lazy(() => loadCompareView().then((m) => ({ default: m.CompareView })));
-const PriceCompareView = lazy(() => loadPriceCompareView().then((m) => ({ default: m.PriceCompareView })));
-const ReleasesView = lazy(() => loadReleasesView().then((m) => ({ default: m.ReleasesView })));
-const NewsView = lazy(() => loadNewsView().then((m) => ({ default: m.NewsView })));
-const StatusView = lazy(() => loadStatusView().then((m) => ({ default: m.StatusView })));
-const SourceDetailView = lazy(() => loadSourceView().then((m) => ({ default: m.SourceDetailView })));
+const RankingsHubView = loadableView(() => loadRankingsHubView().then((m) => ({ default: m.RankingsHubView })));
+const ModelDetailView = loadableView(() => loadModelView().then((m) => ({ default: m.ModelDetailView })));
+const CompareView = loadableView(() => loadCompareView().then((m) => ({ default: m.CompareView })));
+const PriceCompareView = loadableView(() => loadPriceCompareView().then((m) => ({ default: m.PriceCompareView })));
+const ReleasesView = loadableView(() => loadReleasesView().then((m) => ({ default: m.ReleasesView })));
+const NewsView = loadableView(() => loadNewsView().then((m) => ({ default: m.NewsView })));
+const StatusView = loadableView(() => loadStatusView().then((m) => ({ default: m.StatusView })));
+const SourceDetailView = loadableView(() => loadSourceView().then((m) => ({ default: m.SourceDetailView })));
 
-const newsPrefetch = NEWS_CATEGORIES.map((c) => qNewsRaw(c));
+const newsPrefetch = [qNewsRaw(NEWS_CATEGORIES[0])];
 
 const RANKING_TAB_QUERIES: Record<RankingTabId, readonly Prefetchable[]> = {
   modelRankings: [qArtificialRaw],
@@ -72,14 +70,13 @@ const RANKING_TAB_QUERIES: Record<RankingTabId, readonly Prefetchable[]> = {
   providerCompare: [qArtificialRaw],
 };
 
-/** Order matters: exact paths first, then the two `/…/` prefix routes. */
 export const ROUTES: readonly RouteEntry[] = [
   {
     key: "home",
     match: (p) => p === "/",
     View: HomeView,
     titleKey: "home",
-    prefetch: [qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw, qOpenSourceReleasesRaw, qStatusHistory],
+    prefetch: [qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw, qStatusHistory],
     nav: { path: "/", group: "primary", labelKey: "home", icon: createElement(Home, { size: 18 }) },
   },
   {
@@ -119,7 +116,7 @@ export const ROUTES: readonly RouteEntry[] = [
     View: ReleasesView,
     load: loadReleasesView,
     titleKey: "releases",
-    prefetch: [qOpenSourceReleasesRaw, qClosedReleasesRaw],
+    prefetch: [qClosedReleasesRaw],
     nav: {
       path: "/releases",
       group: "secondary",
@@ -169,7 +166,6 @@ export const ROUTES: readonly RouteEntry[] = [
   },
 ];
 
-/** Prefetches every listed query in order; the calls are fire-and-forget. */
 function prefetchAll(qc: QueryClient, queries: readonly Prefetchable[]): void {
   for (const q of queries) void q.prefetch(qc);
 }

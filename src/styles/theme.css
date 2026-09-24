@@ -1,9 +1,8 @@
-@theme {
+@theme inline {
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
   --color-bg-tertiary: var(--bg-tertiary);
   --color-bg-card: var(--bg-card);
-  --color-bg-overlay: var(--bg-overlay);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
@@ -22,28 +21,11 @@
   --color-degraded: var(--degraded);
   --color-info: var(--info);
   --color-info-light: var(--info-light);
-  --color-nav-bg: var(--nav-bg);
-
-  /* Declared so utilities.css media queries and MOBILE_QUERY in providers.tsx name the same boundary. */
-  --breakpoint-sm: 640px;
-  --breakpoint-md: 768px;
-
-  /* Intentional zero-radius ladder; keep the scale so rounding stays a token-only change. */
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
-  --radius-2xl: 0;
-  --radius-full: 0;
-
-  /* Numeric z utilities only — Tailwind v4 emits no named z-* utilities (z-nav/z-dropdown silently
-     compiled to nothing). Ladder: nav 30 < dropdown 40 < toast 45 < sheet 50 < skip 100. */
 
   --duration-fast: 150ms;
   --duration-base: 200ms;
   --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* Tracking tightens as type grows: no heading sets looser than the body beneath it; label steps are the exception. */
   --tracking-text: 0.01em;
   --tracking-label: 0.025em;
   --tracking-caps: 0.14em;
@@ -81,11 +63,9 @@
   --success-light: color-mix(in srgb, var(--success) 10%, transparent);
   --warning: #9a6b0a;
   --warning-light: color-mix(in srgb, var(--warning) 10%, transparent);
-  /* Degraded-but-up: the warning hue muted toward the page background. */
   --degraded: color-mix(in srgb, var(--warning) 55%, var(--bg-primary));
   --info: #2f6d8a;
   --info-light: color-mix(in srgb, var(--info) 10%, transparent);
-  --nav-bg: rgba(250, 251, 252, 0.85);
   --chart-1: #365899;
   --chart-2: #1e2430;
   --chart-3: #5b6675;
@@ -109,9 +89,7 @@
   --bg-primary: #1a1a1a;
   --bg-secondary: #2d2d2d;
   --bg-tertiary: #3a3a3a;
-  /* Cards keep one visible step above the page: a literal step, not a reference to --bg-primary. */
   --bg-card: #232323;
-  /* Overlays sit a step above the cards; own token so tuning the skeleton/badge well cannot move the sheet. */
   --bg-overlay: #2d2d2d;
   --text-primary: #e8edf3;
   --text-secondary: #9aa5b4;
@@ -131,7 +109,6 @@
   --degraded: color-mix(in srgb, var(--warning) 55%, var(--bg-primary));
   --info: #6aa5c2;
   --info-light: color-mix(in srgb, var(--info) 14%, transparent);
-  --nav-bg: rgba(26, 26, 26, 0.85);
   --chart-1: #8ba3d6;
   --chart-2: #e8edf3;
   --chart-3: #9aa5b4;

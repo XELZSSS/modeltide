@@ -47,7 +47,6 @@ function toAgentSignalRow(e: unknown): AgentSignalRow | null {
 
 const SIGNAL_NAMES: ReadonlySet<string> = new Set(AGENT_SIGNALS);
 
-/** All five boards in one walk; keyed by the tree so the memo dies with the parse that built it. */
 const BOARDS_BY_TREE = new WeakMap<object, Map<string, AgentSignalEntry[]>>();
 
 function scanSignalBoards(tree: unknown): Map<string, AgentSignalEntry[]> {
@@ -87,7 +86,10 @@ function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[])
   >();
   const mean = (xs: number[]): number | null => (xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
   for (const board of boards) {
+    const seenOnBoard = new Set<string>();
     for (const row of board.rows) {
+      if (seenOnBoard.has(row.id)) continue;
+      seenOnBoard.add(row.id);
       let cur = acc.get(row.id);
       if (!cur) {
         cur = { name: row.name, creator: row.creator, license: row.license, scores: [], ciLower: [], ciUpper: [] };
@@ -126,7 +128,6 @@ export function parseAgentBoards(body: unknown): ParseResult<AgentRankEntry[]> {
     signal,
     rows: (perSignal[i] ?? []).map(toAgentSignalRow).filter((r): r is AgentSignalRow => r !== null),
   }));
-  // An empty board is structural drift, not a document that carried no rows.
   const empty = boards.find((b) => b.rows.length === 0);
   if (empty) {
     return parseFail(zeroUpstreamMessage(`Agent board "${empty.signal}"`, "usable rows", "markup changed?"));

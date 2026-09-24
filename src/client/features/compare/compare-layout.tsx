@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "@/client/router";
 import { CenteredPageState, EmptyState } from "@/client/components/feedback";
 import { CompareChipBar } from "./compare-tray";
@@ -8,6 +8,9 @@ import { useSuspenseArtificialRankings } from "@/client/api/api-queries";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { BackButton, DetailPageLayout, PageContainer } from "@/client/components/layout";
 import { SuspenseQuery } from "@/client/router/suspense-query";
+import { modelId } from "@/client/utils/model-utils";
+
+const PRUNE_NOTICE_MS = 8000;
 
 interface ComparePageLayoutProps {
   backTo: string;
@@ -24,7 +27,19 @@ function CompareLayoutContent({ backTo, title, children }: ComparePageLayoutProp
   const rankings = useSuspenseArtificialRankings();
   const models = useCompareModels(rankings);
   usePruneCompareIds(rankings);
-  const pruned = compareIds.length > models.length;
+  const modelIds = useMemo(() => new Set(models.map(modelId).filter(Boolean)), [models]);
+  const hasStaleId = modelIds.size > 0 && compareIds.some((id) => !modelIds.has(id));
+  const [pruned, setPruned] = useState(false);
+  useEffect(() => {
+    if (!hasStaleId) return;
+    const timer = setTimeout(() => setPruned(true), 0);
+    return () => clearTimeout(timer);
+  }, [hasStaleId]);
+  useEffect(() => {
+    if (!pruned) return;
+    const hide = setTimeout(() => setPruned(false), PRUNE_NOTICE_MS);
+    return () => clearTimeout(hide);
+  }, [pruned]);
   const handleClearAndBack = useCallback(() => {
     clearCompare();
     router.replace(backTo);
@@ -33,6 +48,9 @@ function CompareLayoutContent({ backTo, title, children }: ComparePageLayoutProp
   if (models.length < 2) {
     return (
       <CenteredPageState>
+        <div className="w-full">
+          <CompareChipBar models={models} onRemove={removeCompareModel} onClear={handleClearAndBack} />
+        </div>
         <EmptyState message={t("compareLimit")} compact />
         {pruned && (
           <p className="ui-caption" role="status">

@@ -104,9 +104,7 @@ export function ModelDetailContent({
           <InfoRow label={t("promptPrice")} value={formatPricePerMillion(PRICE_LEGS.promptPrice(pricing), t)} />
           <InfoRow label={t("completionPrice")} value={formatPricePerMillion(PRICE_LEGS.completionPrice(pricing), t)} />
           <InfoRow label={t("cacheHitPrice")} value={formatPricePerMillion(PRICE_LEGS.cacheHitPrice(pricing), t)} />
-          {cacheWrite != null && (
-            <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(cacheWrite, t)} />
-          )}
+          {cacheWrite != null && <InfoRow label={t("cacheWritePrice")} value={formatPricePerMillion(cacheWrite, t)} />}
           <InfoRow label={t("blendedPrice")} value={formatPricePerMillion(blended, t)} />
         </InfoCard>
       </InfoGrid>

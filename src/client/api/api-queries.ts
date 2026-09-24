@@ -44,12 +44,10 @@ interface ApiQueryOptions<T> {
   isPartialData?: (data: SourcePayload<T> | undefined) => boolean;
 }
 
-/** Consecutive `partial: true` responses tolerated before polling stops: MAX_PARTIAL_POLLS × PARTIAL_FAIL_TTL_MS. */
 const MAX_PARTIAL_POLLS = 5;
 
 const partialPollBases = new WeakMap<object, number>();
 
-/** Only a settled fetch counts as a poll: React Query re-evaluates this callback on every render. */
 function partialPollInterval<T>(
   query: unknown,
   isPartialData: (data: T | undefined) => boolean,
@@ -68,7 +66,6 @@ function partialPollInterval<T>(
   return settled - base >= MAX_PARTIAL_POLLS ? false : partialRefetchMs;
 }
 
-/** The query string is built with `URLSearchParams`, the encoding the server reads through `url.searchParams`. */
 function createApiQuery<D extends ApiDomain>(
   domain: D,
   key: readonly (string | number)[],
@@ -81,7 +78,6 @@ function createApiQuery<D extends ApiDomain>(
     partialRefetchMs != null && isPartialData != null
       ? (query: unknown) => partialPollInterval<SourcePayload<PayloadOf<D>>>(query, isPartialData, partialRefetchMs)
       : false;
-  // The partial-payload ladder owns `refetchInterval` when configured; `refetchMs` only fills in without one.
   const refetchInterval: number | false | ((query: unknown) => number | false) =
     partialPoll === false ? (refetchMs ?? false) : partialPoll;
   const timing = {
@@ -106,19 +102,19 @@ function suspenseList<T>(q: SuspenseQueryLike, label: string): () => T[] {
   return () => unwrapList<T>(q.useSuspense().data, label);
 }
 
-function suspenseListState<T>(q: SuspenseQueryLike, label: string): () => { items: T[]; partial: boolean } {
+function suspenseListState<T>(
+  q: SuspenseQueryLike,
+  label: string,
+): () => { items: T[]; partial: boolean; malformed: boolean } {
   return () => {
-    const { data, partial } = unwrapListPartial<T>(q.useSuspense().data, label);
-    return { items: data, partial };
+    const { data, partial, malformed } = unwrapListPartial<T>(q.useSuspense().data, label);
+    return { items: data, partial, malformed };
   };
 }
 
 export const qArtificialRaw = createApiQuery("artificialIndex", queryKeys.artificialIndex, {
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
-});
-export const qOpenSourceReleasesRaw = createApiQuery("openSourceReleases", queryKeys.openSourceReleases, {
-  ttl: SLOW_TTL_MS,
 });
 export const qOpenRouter = createApiQuery("openRouterRankings", queryKeys.openRouterRankings, {
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
@@ -132,6 +128,8 @@ export const qHomeDashboardRaw = createApiQuery("homeDashboard", queryKeys.homeD
 });
 export const qOpenSourceModelsRaw = createApiQuery("openSourceModels", queryKeys.openSourceModels, {
   ttl: SLOW_TTL_MS,
+  partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+  isPartialData: isPartialPayload,
   query: {
     sort: OPEN_SOURCE_MODELS_DEFAULTS.sort,
     direction: OPEN_SOURCE_MODELS_DEFAULTS.direction,
@@ -180,22 +178,20 @@ export const useSuspenseArtificialRankingsState = suspenseListState<ArtificialAn
 
 export function useSuspenseHomeDashboard() {
   const { data } = qHomeDashboardRaw.useSuspense();
-  return normalizeHomeDashboard(data);
+  return useMemo(() => normalizeHomeDashboard(data), [data]);
 }
 
 export const useOpenRouterRankings = qOpenRouter.use;
 export const useSuspenseOpenRouterRankings = qOpenRouter.useSuspense;
 
-export const useSuspenseOpenSourceModels = suspenseList<OpenSourceModelEntry>(qOpenSourceModelsRaw, "openSourceModels");
-
-export const useSuspenseOpenSourceReleases = suspenseList<OpenSourceModelEntry>(
-  qOpenSourceReleasesRaw,
-  "openSourceReleases",
+export const useSuspenseOpenSourceModelsState = suspenseListState<OpenSourceModelEntry>(
+  qOpenSourceModelsRaw,
+  "openSourceModels",
 );
 
 function qOpenSourceModel(id: string) {
   return createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
-    ttl: SLOW_TTL_MS,
+    ttl: ONE_MINUTE,
     query: { id },
   });
 }
@@ -210,7 +206,9 @@ export const useSuspenseClosedReleasesState = suspenseListState<ClosedReleaseEnt
   "closedReleases",
 );
 
-export const useSuspenseNewsState = (category: NewsCategory): { items: NewsItem[]; partial: boolean } =>
+export const useSuspenseNewsState = (
+  category: NewsCategory,
+): { items: NewsItem[]; partial: boolean; malformed: boolean } =>
   suspenseListState<NewsItem>(qNewsRaw(category), `news:${category}`)();
 
 export const useSuspenseStatusHistory = qStatusHistory.useSuspense;
@@ -235,30 +233,24 @@ function useUnwrappedPartial<T>(raw: unknown, label: string): UnwrappedListState
 
 export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
   const trending = qOpenSourceModelsRaw.use(enabled);
-  const releases = qOpenSourceReleasesRaw.use(enabled);
 
   const trendingUnwrapped = useUnwrappedPartial<OpenSourceModelEntry>(trending.data, "openSourceModels");
-  const releasesUnwrapped = useUnwrappedPartial<OpenSourceModelEntry>(releases.data, "openSourceReleases");
   const trendingList = trendingUnwrapped.data;
-  const releasesList = releasesUnwrapped.data;
 
   const data = useMemo(
     () =>
       dedupeBy(
-        [...trendingList, ...releasesList].filter((m) => m.id),
+        trendingList.filter((m) => m.id),
         (m) => m.id,
       ),
-    [trendingList, releasesList],
+    [trendingList],
   );
 
   const hasData = data.length > 0;
-  const malformed = trendingUnwrapped.malformed || releasesUnwrapped.malformed;
-  const isPending = enabled && !hasData && !malformed && (trending.isPending || releases.isPending);
-  const isError =
-    enabled &&
-    !hasData &&
-    (trending.isError || releases.isError || (malformed && !trending.isPending && !releases.isPending));
-  const error = isError ? (trending.error ?? releases.error ?? new Error("Malformed open-source payload")) : null;
+  const malformed = trendingUnwrapped.malformed;
+  const isPending = enabled && !hasData && !malformed && trending.isPending;
+  const isError = enabled && !hasData && (trending.isError || (malformed && !trending.isPending));
+  const error = isError ? (trending.error ?? new Error("Malformed open-source payload")) : null;
 
   return {
     data,

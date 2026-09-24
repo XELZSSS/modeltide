@@ -43,11 +43,9 @@ const MODEL_FAMILY_PREFIXES = [
 ];
 const OPEN_PREFIXES = [...SPDX_PREFIXES, ...MODEL_FAMILY_PREFIXES];
 
-// CC clauses that make a licence non-open: NC / ND, with or without a separator before the version.
 const DENIED_CC_CLAUSE_RE = /(?:^|-)n[cd](?:\d|\.|-|$)/;
 const hasDeniedCcClause = (id: string): boolean => id.startsWith("cc-") && DENIED_CC_CLAUSE_RE.test(id);
 
-/** HF licence ids that mean "declared, but not open" rather than "unrecognized". */
 const KNOWN_NON_OPEN = new Set(["other", "unknown", "proprietary"]);
 
 export const isRecognizedNonOpenLicense = (id: string): boolean => KNOWN_NON_OPEN.has(id) || hasDeniedCcClause(id);

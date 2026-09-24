@@ -1,4 +1,4 @@
-export { API_PREFIX, API_DOMAINS, cacheKey, queryKeys, apiPaths } from "@/shared/config/paths";
+export { API_PREFIX, API_DOMAINS, queryKeys, apiPaths } from "@/shared/config/paths";
 export {
   STORAGE_KEYS,
   MAX_MODEL_LIMIT,

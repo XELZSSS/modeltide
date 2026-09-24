@@ -6,16 +6,11 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafbfc" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1a1a" />
-    <!-- The zh copy here is the default for a cold load and for crawlers that do
-      not run the app; syncDocumentMeta in src/client/providers.tsx re-points the
-      description pair and og:locale once the store resolves the language. -->
     <meta name="description" content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析" />
     <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- The two Latin faces carry the above-the-fold text; preloading them keeps the
-      first paint off the fallback face that font-display: swap would replace. -->
     <link rel="preload" href="/fonts/plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/plex-mono-600-latin.woff2" as="font" type="font/woff2" crossorigin />
     <meta property="og:type" content="website" />
@@ -23,7 +18,6 @@
     <meta property="og:description" content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析" />
     <meta property="og:locale" content="zh_CN" />
     <meta property="og:locale:alternate" content="en_US" />
-    <!-- 512px is the largest icon in the repo; a 1200x630 share card is still missing. -->
     <meta property="og:image" content="/icons/icon-512.png" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="ModelTide" />
@@ -33,12 +27,6 @@
     />
     <title>ModelTide</title>
     <style>
-      /* Painted before any stylesheet loads, so these two hexes have to BE
-         src/styles/theme.css's --bg-primary for their theme (:root and .dark).
-         They were pure #ffffff/#000000, which is what the cold load flashed:
-         the canvas repainted to #fafbfc/#1a1a1a one frame later. The manifest's
-         background_color/theme_color is a third copy of the light one, since a
-         manifest cannot carry a per-scheme pair. */
       html {
         background: #fafbfc;
       }
@@ -46,48 +34,29 @@
         background: #1a1a1a;
       }
     </style>
-    <!-- The sha256 of this element is pinned in public/_headers (script-src), so
-      any edit between its tags needs a new hash there. -->
     <script>
-      // Pre-paint theme/lang init, read from the zustand persist shape to avoid a
-      // flash of the wrong colour scheme or lang. This mirror is inherent: an
-      // inline script cannot import, so it cannot call the store or the React
-      // layer. It duplicates exactly four facts, each traced to its owner:
-      //   - STORAGE_KEYS.settings and the persist envelope's `state` key
-      //     (src/client/stores/settings-store.ts)
-      //   - initialThemeMode's dark/light validation and matchMedia dark default
-      //   - initialLang's nav-language rule; the resolved lang is then written to
-      //     documentElement.lang as <zh -> zh-CN, else en>, which syncDocumentMeta
-      //     in src/client/providers.tsx re-applies (and owns) after hydration
-      //   - the dark class, colorScheme and theme-color pair (the active theme's
-      //     --bg-primary, the same two hexes as the style block above), re-applied
-      //     by the same effect in src/client/components/layout/app-shell.tsx
-      // Keep it in step by hand; nothing checks it.
       (function () {
+        var stored = null,
+          lang = null;
         try {
           var raw = localStorage.getItem("settings");
-          var stored = null,
-            lang = null;
           if (raw) {
             var p = JSON.parse(raw);
             var st = p && p.state;
             if (st && (st.themeMode === "dark" || st.themeMode === "light")) stored = st.themeMode;
             if (st && (st.lang === "zh" || st.lang === "en")) lang = st.lang;
           }
-          var dark =
-            stored === "dark" ||
-            (stored == null && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-          if (dark) document.documentElement.classList.add("dark");
-          document.documentElement.style.colorScheme = dark ? "dark" : "light";
-          var metas = document.querySelectorAll("meta[name='theme-color']");
-          // Both media-scoped tags must move together: the browser picks by media,
-          // so a stale dark tag keeps painting the wrong chrome colour.
-          for (var i = 0; i < metas.length; i++) metas[i].setAttribute("content", dark ? "#1a1a1a" : "#fafbfc");
-          // Stored lang wins; otherwise mirror initialLang() in the settings store.
-          var nav = typeof navigator !== "undefined" && navigator.language ? navigator.language : "";
-          var resolved = lang || (/^en/i.test(nav) ? "en" : "zh");
-          document.documentElement.lang = resolved === "zh" ? "zh-CN" : "en";
         } catch (e) {}
+        var dark =
+          stored === "dark" ||
+          (stored == null && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        var metas = document.querySelectorAll("meta[name='theme-color']");
+        for (var i = 0; i < metas.length; i++) metas[i].setAttribute("content", dark ? "#1a1a1a" : "#fafbfc");
+        var nav = typeof navigator !== "undefined" && navigator.language ? navigator.language : "";
+        var resolved = lang || (/^en/i.test(nav) ? "en" : "zh");
+        document.documentElement.lang = resolved === "zh" ? "zh-CN" : "en";
       })();
     </script>
   </head>

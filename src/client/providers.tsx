@@ -25,8 +25,6 @@ const DOC_META: Record<Lang, { html: string; og: string; ogAlternate: string }> 
   en: { html: "en", og: "en_US", ogAlternate: "zh_CN" },
 };
 
-/** index.html ships the zh copy of these tags and its pre-paint script owns documentElement.lang
- *  at first paint; from mount on this is the writer of all of them. */
 function syncDocumentMeta(lang: Lang) {
   if (typeof document === "undefined") return;
   const locale = DOC_META[lang];
@@ -54,10 +52,15 @@ function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = useMemo(
     () =>
-      createT(lang, {
-        onMissingParam: (key, out) => console.warn(`[i18n] missing param for key "${key}": "${out}"`),
-        onMissingKey: (key, l) => console.warn(`[i18n] missing key "${key}" for lang "${l}", fell back to en`),
-      }),
+      createT(
+        lang,
+        import.meta.env.DEV
+          ? {
+              onMissingParam: (key, out) => console.warn(`[i18n] missing param for key "${key}": "${out}"`),
+              onMissingKey: (key, l) => console.warn(`[i18n] missing key "${key}" for lang "${l}", fell back to en`),
+            }
+          : undefined,
+      ),
     [lang],
   );
 
@@ -66,7 +69,6 @@ function I18nProvider({ children }: { children: ReactNode }) {
   return <I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>;
 }
 
-/** Mirrors Tailwind's `md`, declared as --breakpoint-md in src/styles/theme.css. */
 const MOBILE_QUERY = "(max-width: 767px)";
 
 let mobileMedia: MediaQueryList | null | undefined;
@@ -84,8 +86,6 @@ function notifyMobile(): void {
   for (const listener of mobileSubscribers) listener();
 }
 
-/** One `matchMedia` subscription for the whole page: the shell mounts `useDevice` many times, and
- *  a listener per call would mean a media-query listener per call. */
 function subscribeMobile(listener: () => void): () => void {
   const media = mobileMediaQuery();
   if (!media) return () => {};

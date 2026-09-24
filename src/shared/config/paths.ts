@@ -4,7 +4,6 @@ export const API_DOMAINS = {
   artificialIndex: "artificial-analysis-index",
   openSourceModels: "open-source-models",
   openSourceModel: "open-source-model",
-  openSourceReleases: "open-source-releases",
   news: "news",
   openRouterRankings: "openrouter-rankings",
   closedReleases: "closed-releases",

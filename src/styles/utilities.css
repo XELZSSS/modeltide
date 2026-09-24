@@ -251,7 +251,6 @@ main,
   }
 }
 
-/* Flat, border-only surfaces: nothing in the UI carries a shadow. */
 @utility ui-card {
   border: 1px solid var(--border);
   background-color: var(--bg-card);
@@ -262,12 +261,6 @@ main,
   border: 1px solid var(--border);
   background-color: var(--bg-overlay);
   min-width: 0;
-}
-
-@supports not (backdrop-filter: blur(12px)) {
-  .bg-nav-bg {
-    background-color: var(--bg-card) !important;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

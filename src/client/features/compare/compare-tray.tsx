@@ -80,7 +80,7 @@ export const CompareChipBar = memo(function CompareChipBar({
       </div>
       {onCompare && !canCompare && models.length > 0 && <p className="ui-caption w-full">{t("compareLimit")}</p>}
       {showLimit && (
-        <p className="ui-caption text-warning w-full animate-fade-in" role="alert" aria-live="polite">
+        <p className="ui-caption text-warning w-full animate-fade-in" role="alert">
           {t("compareLimitTwo")}
         </p>
       )}

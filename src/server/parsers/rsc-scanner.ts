@@ -1,9 +1,16 @@
 import { fnv1aHash } from "@/server/infra/hash";
 
-function balancedJsonEnd(text: string, openIdx: number, budget: number): number {
+const MAX_NEEDLE_CANDIDATES = 256;
+const MAX_NEEDLE_WORK_CHARS = 64 * 1024 * 1024;
+
+interface ScanSpend {
+  chars: number;
+}
+
+function balancedJsonEnd(text: string, openIdx: number, budget: number, spend?: ScanSpend): number {
   if (budget <= 0 || openIdx < 0 || openIdx >= text.length) return -1;
   const open = text.charCodeAt(openIdx);
-  if (open !== 0x5b /* [ */ && open !== 0x7b /* { */) return -1;
+  if (open !== 0x5b && open !== 0x7b) return -1;
   const maxEnd = Math.min(text.length, openIdx + budget);
   let depth = 0;
   let inStr = false;
@@ -12,26 +19,30 @@ function balancedJsonEnd(text: string, openIdx: number, budget: number): number 
     const c = text.charCodeAt(i);
     if (inStr) {
       if (esc) esc = false;
-      else if (c === 0x5c /* \ */) esc = true;
-      else if (c === 0x22 /* " */) inStr = false;
+      else if (c === 0x5c) esc = true;
+      else if (c === 0x22) inStr = false;
       continue;
     }
-    if (c === 0x22 /* " */) {
+    if (c === 0x22) {
       inStr = true;
       continue;
     }
-    if (c === 0x5b /* [ */ || c === 0x7b /* { */) {
+    if (c === 0x5b || c === 0x7b) {
       depth++;
-    } else if (c === 0x5d /* ] */ || c === 0x7d /* } */) {
+    } else if (c === 0x5d || c === 0x7d) {
       depth--;
-      if (depth === 0) return i + 1;
+      if (depth === 0) {
+        if (spend) spend.chars += i + 1 - openIdx;
+        return i + 1;
+      }
     }
   }
+  if (spend) spend.chars += maxEnd - openIdx;
   return -1;
 }
 
-function balancedJsonSlice(text: string, openAt: number, budgetChars: number): string | null {
-  const end = balancedJsonEnd(text, openAt, budgetChars);
+function balancedJsonSlice(text: string, openAt: number, budgetChars: number, spend?: ScanSpend): string | null {
+  const end = balancedJsonEnd(text, openAt, budgetChars, spend);
   return end === -1 ? null : text.slice(openAt, end);
 }
 
@@ -42,18 +53,34 @@ const MAX_OVERSIZED_WORK_CHARS = MAX_SCAN_CHARS;
 const MAX_OVERSIZED_WINDOWS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
 export const STREAM_LINE_RE = /^[0-9a-fA-F]+:(.*)$/;
 
+function isTrimWhitespace(c: number): boolean {
+  return (
+    (c >= 0x09 && c <= 0x0d) ||
+    c === 0x20 ||
+    c === 0xa0 ||
+    c === 0x1680 ||
+    (c >= 0x2000 && c <= 0x200a) ||
+    c === 0x2028 ||
+    c === 0x2029 ||
+    c === 0x202f ||
+    c === 0x205f ||
+    c === 0x3000 ||
+    c === 0xfeff
+  );
+}
+
 export function isMarkerBoundary(line: string, marker: string): boolean {
   const q = `"${marker}"`;
   let idx = line.indexOf(q);
   while (idx !== -1) {
-    const after = line.slice(idx + q.length);
-    const trimmed = after.trimStart();
-    if (!trimmed) {
-      idx = line.indexOf(q, idx + 1);
-      continue;
+    let at = idx + q.length;
+    while (at < line.length && isTrimWhitespace(line.charCodeAt(at))) at++;
+    if (at < line.length) {
+      const c = line.charCodeAt(at);
+      if (c === 0x3a || c === 0x5b || c === 0x22 || c === 0x2c || c === 0x7d || c === 0x5d) {
+        return true;
+      }
     }
-    const c = trimmed[0]!;
-    if (c === ":" || c === "[" || c === '"' || c === "," || c === "}" || c === "]") return true;
     idx = line.indexOf(q, idx + 1);
   }
   return false;
@@ -232,8 +259,8 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
   return candidates.sort((a, b) => a.start - b.start);
 }
 
-function parseJsonArrayAt(window: string, openAt: number, found: unknown[]): boolean {
-  const slice = balancedJsonSlice(window, openAt, MAX_SCAN_CHARS);
+function parseJsonArrayAt(window: string, openAt: number, found: unknown[], spend: ScanSpend): boolean {
+  const slice = balancedJsonSlice(window, openAt, MAX_SCAN_CHARS, spend);
   if (slice == null) return false;
   try {
     found.push(JSON.parse(slice));
@@ -243,47 +270,47 @@ function parseJsonArrayAt(window: string, openAt: number, found: unknown[]): boo
   }
 }
 
-function scanNeedleWindow(window: string, needle: string, unescape: boolean, found: unknown[]): boolean {
+function scanNeedleWindow(
+  window: string,
+  needle: string,
+  unescape: boolean,
+  found: unknown[],
+  spend: ScanSpend,
+): boolean {
   const scan = (haystack: string): boolean => {
     let parsed = false;
     let at = haystack.indexOf(needle);
     while (at !== -1) {
+      if (spend.chars >= MAX_NEEDLE_WORK_CHARS) return parsed;
       const valueAt = valuePosAfterColon(haystack, at + needle.length);
-      if (valueAt !== null) {
-        if (haystack[valueAt] === "[" && parseJsonArrayAt(haystack, valueAt, found)) parsed = true;
+      if (valueAt !== null && haystack[valueAt] === "[") {
+        if (parseJsonArrayAt(haystack, valueAt, found, spend)) parsed = true;
       }
       at = haystack.indexOf(needle, at + needle.length);
     }
     return parsed;
   };
-  // Unescaping is a fallback, never the first pass: on a plain-JSON window it turns valid JSON
-  // into invalid JSON — silently dropping the whole array.
   if (scan(window)) return true;
   return unescape ? scan(unescapeEmbedded(window)) : false;
 }
-
-// Work ceilings for the needle scan: a hostile body repeating the needle could otherwise
-// burn gigabytes of character work and abort on the Workers CPU limit.
-const MAX_NEEDLE_CANDIDATES = 256;
-const MAX_NEEDLE_WORK_CHARS = 64 * 1024 * 1024;
 
 export function extractNeedleJsonArrays(text: string, needle: string, opts: NeedleScanOptions): unknown[] {
   const found: unknown[] = [];
   const escaped = needle.replace(/"/g, '\\"');
   const locators = escaped === needle ? [needle] : [needle, escaped];
   let candidates = 0;
-  let workLeft = MAX_NEEDLE_WORK_CHARS;
+  const spend: ScanSpend = { chars: 0 };
   for (const { start, valueAt } of collectNeedleCandidates(text, locators)) {
     if (text[valueAt] !== "[") continue;
-    if (candidates >= MAX_NEEDLE_CANDIDATES || workLeft <= 0) break;
+    if (candidates >= MAX_NEEDLE_CANDIDATES || spend.chars >= MAX_NEEDLE_WORK_CHARS) break;
     candidates += 1;
     const windowStart = Math.max(0, start - opts.prefixChars);
     const smallEnd = Math.min(text.length, start + opts.smallSuffixChars);
-    workLeft -= smallEnd - windowStart;
-    if (!scanNeedleWindow(text.slice(windowStart, smallEnd), needle, opts.unescape === true, found)) {
+    spend.chars += smallEnd - windowStart;
+    if (!scanNeedleWindow(text.slice(windowStart, smallEnd), needle, opts.unescape === true, found, spend)) {
       const maxEnd = Math.min(text.length, start + opts.maxSuffixChars);
-      workLeft -= maxEnd - windowStart;
-      scanNeedleWindow(text.slice(windowStart, maxEnd), needle, opts.unescape === true, found);
+      spend.chars += maxEnd - windowStart;
+      scanNeedleWindow(text.slice(windowStart, maxEnd), needle, opts.unescape === true, found, spend);
     }
   }
   return found;

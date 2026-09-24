@@ -3,7 +3,7 @@ import { useTranslation } from "@/client/providers";
 import type { StatusEvent } from "@/shared/types";
 import type { TFunction } from "@/shared/i18n";
 import { cn } from "@/client/utils/cn";
-import { formatRelativeTime } from "@/client/utils/format";
+import { formatDurationMin, formatRelativeTime } from "@/client/utils/format";
 import { sourceLabelKey } from "@/shared/config";
 import { Dot } from "@/client/components/ui/primitives";
 import { EmptyState } from "@/client/components/feedback";
@@ -21,7 +21,7 @@ export function resolveEventStyle(type: string): (typeof EVENT_STYLES)[EventType
 }
 
 export function eventDurationLabel(t: TFunction, durationMin: number | null): string {
-  return durationMin == null ? t("eventOngoing") : t("eventDurationMin", { value: durationMin });
+  return durationMin == null ? t("eventOngoing") : formatDurationMin(durationMin, t);
 }
 
 const StatusEventRow = memo(function StatusEventRow({
@@ -70,20 +70,26 @@ const StatusEventRow = memo(function StatusEventRow({
 export const StatusEventList = memo(function StatusEventList({
   events,
   emptyMessage,
+  sourceId,
+  limit,
   showSource = false,
   showTime = false,
 }: {
   events: StatusEvent[];
   emptyMessage: string;
+  sourceId?: string;
+  limit?: number;
   showSource?: boolean;
   showTime?: boolean;
 }) {
-  if (events.length === 0) {
+  const filtered = sourceId ? events.filter((event) => event.id === sourceId) : events;
+  const visible = limit == null ? filtered : filtered.slice(0, limit);
+  if (visible.length === 0) {
     return <EmptyState compact message={emptyMessage} />;
   }
   return (
     <div className="ui-card divide-y divide-border">
-      {events.map((event) => (
+      {visible.map((event) => (
         <StatusEventRow
           key={`${event.id}-${event.at}-${event.type}`}
           event={event}

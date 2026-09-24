@@ -71,7 +71,6 @@ function themeSignature(theme: ChartTheme): string {
 
 function publish(next: ChartTheme): void {
   const signature = themeSignature(next);
-  // <html> class changes the palette does not depend on (scroll locks, sheets) must not recompute charts.
   if (signature === sharedSignature) return;
   sharedSignature = signature;
   sharedTheme = next;
@@ -151,8 +150,6 @@ interface CartesianChartOptions<Type extends "line" | "bar", X extends "category
   interaction?: { mode: "index"; intersect: boolean };
 }
 
-/** Option shell shared by the cartesian charts; the return type must stay inferred to remain
- *  assignable to the concrete `ChartOptions<"line">` / `ChartOptions<"bar">`. */
 export function cartesianChartOptions<Type extends "line" | "bar", X extends "category" | "linear" = "category">(
   theme: ChartTheme,
   { x, y, legend, tooltip, interaction }: CartesianChartOptions<Type, X>,

@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
+import { SOURCE_LIMITS } from "@/server/config/limits";
 import {
   categoryFrom,
   creatorFromSlug,
@@ -12,7 +13,9 @@ import type { ModelRow } from "@/server/parsers/upstream-types";
 
 beforeEach(() => resetModuleCachesForTests());
 
-function row(over: Partial<ModelRow> = {}): ModelRow {
+type TestRow = ModelRow & { rankingMetricValue?: number };
+
+function row(over: Partial<TestRow> = {}): TestRow {
   return {
     date: "2026-08-01",
     model_permaslug: "openai/gpt-5",
@@ -111,7 +114,7 @@ describe("parseDirectoryRows", () => {
 });
 
 describe("mapModels", () => {
-  it("aggregates rows by permaslug, taking variant, change and pricing from the dominant variant", () => {
+  it("aggregates rows by permaslug, taking variant and pricing from the dominant row and change from the newest date", () => {
     const models = mapModels(
       [
         row(),
@@ -122,7 +125,6 @@ describe("mapModels", () => {
           total_native_tokens_cached: 7,
           total_tool_calls: 3,
         }),
-        // A batch row must not lend its change to an entry labelled/priced from the standard row.
         row({
           date: "2026-08-03",
           variant: "batch",
@@ -149,7 +151,7 @@ describe("mapModels", () => {
       reasoningTokens: 20,
       cachedTokens: 7,
       toolCalls: 3,
-      change: 100,
+      change: -90,
       pricing: pricing.get("openai/gpt-5"),
     });
     expect(models[0]!.isFree).toBe(false);
@@ -165,7 +167,7 @@ describe("mapModels", () => {
     expect(noPricing!.isFree).toBeUndefined();
   });
 
-  it("sorts by total tokens descending and ranks sequentially", () => {
+  it("falls back to the derived total when no row carries an upstream ranking metric", () => {
     const models = mapModels(
       [
         row({ model_permaslug: "a/small", variant_permaslug: "a/small", total_prompt_tokens: 1 }),
@@ -175,6 +177,91 @@ describe("mapModels", () => {
     );
     expect(models.map((m) => m.id)).toEqual(["b/big", "a/small"]);
     expect(models.map((m) => m.rank)).toEqual([1, 2]);
+  });
+
+  it("ranks by the upstream metric, not by the summed window total", () => {
+    const models = mapModels(
+      [
+        row({
+          model_permaslug: "a/window",
+          variant_permaslug: "a/window",
+          total_prompt_tokens: 500,
+          total_completion_tokens: 0,
+          rankingMetricValue: 400,
+        }),
+        row({
+          model_permaslug: "a/window",
+          variant_permaslug: "a/window:batch",
+          date: "2026-07-20",
+          total_prompt_tokens: 500,
+          total_completion_tokens: 0,
+          rankingMetricValue: 600,
+        }),
+        row({
+          model_permaslug: "b/day",
+          variant_permaslug: "b/day",
+          total_prompt_tokens: 700,
+          total_completion_tokens: 0,
+          rankingMetricValue: 700,
+        }),
+      ],
+      new Map(),
+    );
+    expect(models.map((m) => m.id)).toEqual(["b/day", "a/window"]);
+    expect(models.map((m) => m.totalTokens)).toEqual([700, 1000]);
+    expect(models.map((m) => m.rank)).toEqual([1, 2]);
+  });
+
+  it("keeps metric-less groups below metric-bearing ones and breaks metric ties by the derived total", () => {
+    const models = mapModels(
+      [
+        row({
+          model_permaslug: "no/metric",
+          variant_permaslug: "no/metric",
+          total_prompt_tokens: 9_000_000,
+          total_completion_tokens: 0,
+        }),
+        row({
+          model_permaslug: "with/small-metric",
+          variant_permaslug: "with/small-metric",
+          total_prompt_tokens: 1,
+          total_completion_tokens: 0,
+          rankingMetricValue: 1,
+        }),
+        row({
+          model_permaslug: "tie/lower",
+          variant_permaslug: "tie/lower",
+          total_prompt_tokens: 5,
+          total_completion_tokens: 0,
+          rankingMetricValue: 42,
+        }),
+        row({
+          model_permaslug: "tie/higher",
+          variant_permaslug: "tie/higher",
+          total_prompt_tokens: 50,
+          total_completion_tokens: 0,
+          rankingMetricValue: 42,
+        }),
+      ],
+      new Map(),
+    );
+    expect(models.map((m) => m.id)).toEqual(["tie/higher", "tie/lower", "with/small-metric", "no/metric"]);
+  });
+
+  it("caps the emitted entries at the configured ceiling", () => {
+    const overflow = 10;
+    const rows = Array.from({ length: SOURCE_LIMITS.openRouterRankingModels + overflow }, (_, i) =>
+      row({
+        model_permaslug: `bulk/model-${i}`,
+        variant_permaslug: `bulk/model-${i}`,
+        total_prompt_tokens: i,
+        rankingMetricValue: i,
+      }),
+    );
+    const models = mapModels(rows, new Map());
+    expect(models).toHaveLength(SOURCE_LIMITS.openRouterRankingModels);
+    expect(models[0]!.id).toBe(`bulk/model-${SOURCE_LIMITS.openRouterRankingModels + overflow - 1}`);
+    expect(models.at(-1)!.rank).toBe(SOURCE_LIMITS.openRouterRankingModels);
   });
 
   it("keeps multi-variant rows without token data below genuine zero usage", () => {
@@ -234,7 +321,6 @@ describe("mapModels", () => {
   });
 
   it("prices a dated variant permaslug through the mirrored key", () => {
-    // The directory lists the paid base row before its variant, as upstream does.
     const { pricing: record } = parseDirectoryRows([
       {
         id: "acme/m",

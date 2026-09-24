@@ -8,12 +8,7 @@ import {
   str,
   strOr,
 } from "@/server/parsers/parser-primitives";
-import {
-  BENCHMARK_KEYS,
-  MODALITY_KEYS,
-  ABSOLUTE_SCORE_BENCHMARKS,
-  type BenchmarkKey,
-} from "@/shared/config";
+import { BENCHMARK_KEYS, MODALITY_KEYS, ABSOLUTE_SCORE_BENCHMARKS, type BenchmarkKey } from "@/shared/config";
 import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
 import { normalizePercent, unclampedPercent } from "@/shared/utils";
 
@@ -28,15 +23,14 @@ const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   automation_bench: "automationBenchPartialScore",
 };
 
-/** Benchmarks use the 0-100 scale the renderer expects, `ABSOLUTE_SCORE_BENCHMARKS` excepted. */
-function compactBenchmarks(m: Record<string, unknown>): Partial<Record<BenchmarkKey, number | null>> {
+function compactBenchmarks(m: Record<string, unknown>): Partial<Record<BenchmarkKey, number | null>> | undefined {
   const benchmarks: Partial<Record<BenchmarkKey, number | null>> = {};
   for (const key of BENCHMARK_KEYS) {
     const raw = numCoerce(m[BENCHMARK_FIELD_OVERRIDES[key] ?? key]);
     const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : unclampedPercent(raw);
     if (value != null) benchmarks[key] = value;
   }
-  return benchmarks;
+  return Object.keys(benchmarks).length > 0 ? benchmarks : undefined;
 }
 
 function compactCodingIndex(m: Record<string, unknown>): number | null {
@@ -85,8 +79,6 @@ function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unkn
     const outputMo = bool(m[`outputModality${suffix}`]);
     if (outputMo !== undefined) model[`output_modality_${mo}`] = outputMo;
   }
-  // Upstream quirk: the index body omits the text flags; only a record that describes part of
-  // its modalities gets the text fallback, and an explicit flag always wins.
   const describesModalities = MODALITY_KEYS.some(
     (mo) => model[`input_modality_${mo}`] !== undefined || model[`output_modality_${mo}`] !== undefined,
   );
@@ -128,7 +120,8 @@ export function compact(m: unknown): ArtificialAnalysisModel {
   const sizeClass = strOr(rec.sizeClass);
   if (sizeClass != null) model.size_class = sizeClass;
 
-  model.benchmarks = compactBenchmarks(rec);
+  const benchmarks = compactBenchmarks(rec);
+  if (benchmarks) model.benchmarks = benchmarks;
   const pricing = compactPricing(rec);
   if (pricing) model.pricing = pricing;
   const speed = numCoerce(rec.medianCanonicalAnswerOutputSpeed);

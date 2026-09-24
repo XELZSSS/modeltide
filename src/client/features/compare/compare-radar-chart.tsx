@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { ChartOptions } from "chart.js";
 import { Radar } from "react-chartjs-2";
 import { registerRadar } from "@/client/utils/charts-register";
@@ -13,7 +13,7 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName, modelId } from "@/client/utils/model-utils";
 import { buildRadarData, radarMaxFor } from "./compare-logic";
 
-export function CompareRadarChart({ models }: { models: ArtificialAnalysisModel[] }) {
+export const CompareRadarChart = memo(function CompareRadarChart({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();
   const radarData = useMemo(() => buildRadarData(t, models), [models, t]);
@@ -85,4 +85,4 @@ export function CompareRadarChart({ models }: { models: ArtificialAnalysisModel[
       </CardContent>
     </Card>
   );
-}
+});

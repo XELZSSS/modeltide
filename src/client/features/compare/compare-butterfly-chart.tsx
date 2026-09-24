@@ -13,11 +13,9 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName } from "@/client/utils/model-utils";
 import { buildValueRows } from "./compare-logic";
 
-/** Floor of the value axis' half-range, in index points. */
 const AXIS_MAX = 100;
 const AXIS_STEP = 20;
 
-/** Split across the zero line so a metric only one model reports still draws a side. */
 export const CompareButterflyChart = memo(function CompareButterflyChart({
   models,
 }: {
@@ -61,7 +59,6 @@ export const CompareButterflyChart = memo(function CompareButterflyChart({
     () => ({
       ...chartBase,
       indexAxis: "y",
-      // index mode defaults to the x axis; on a horizontal bar that picks the bar end, not the row.
       interaction: { mode: "index", axis: "y", intersect: false },
       scales: {
         x: {
@@ -71,7 +68,11 @@ export const CompareButterflyChart = memo(function CompareButterflyChart({
           max: axisMax,
           border: { dash: [3, 3], color: theme.grid },
           grid: { color: theme.grid },
-          ticks: { ...axisTickStyle(theme), stepSize: AXIS_STEP },
+          ticks: {
+            ...axisTickStyle(theme),
+            stepSize: AXIS_STEP,
+            callback: (value) => String(Math.abs(Number(value))),
+          },
         },
         y: {
           type: "category",
@@ -84,7 +85,6 @@ export const CompareButterflyChart = memo(function CompareButterflyChart({
         legend: legendStyle(theme),
         tooltip: {
           ...defaultTooltipOptions(theme),
-          // `nearest` anchors the card to the bar under the cursor; the default averages the active elements.
           position: "nearest",
           callbacks: {
             title: (items) => rows[items[0]?.dataIndex ?? -1]?.metric ?? "",

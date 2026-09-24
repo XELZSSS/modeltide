@@ -1,5 +1,3 @@
-/** Naming rule: `fetch*` never touches cache; `get*` always caches through the helpers below. */
-
 import type { AppContext } from "@/server/context";
 import type { SourcePayload } from "@/shared/types";
 import type { ParseResult } from "@/server/parsers/parse-result";
@@ -11,7 +9,6 @@ export function requireParsed<T>(result: ParseResult<T>): T {
   throw new UpstreamError(result.error);
 }
 
-/** An upstream that parsed to nothing is a 502, never an empty 200. */
 export function requireRows<T>(rows: T[], label: string, unit: string, detail?: string): T[] {
   if (rows.length === 0) throw zeroUpstream(label, unit, detail);
   return rows;
@@ -19,7 +16,6 @@ export function requireRows<T>(rows: T[], label: string, unit: string, detail?: 
 
 interface CacheScope {
   memoryOnly?: boolean;
-  /** For keys whose value asserts something: a long stale window is worse than an error. */
   staleCapMs?: number;
 }
 
@@ -51,7 +47,7 @@ export function cachedRaw<T>(
   fetch: (ctx: AppContext) => Promise<T>,
   scope?: CacheScope,
 ): Promise<T> {
-  return cached<T>(ctx, key, ttl, async () => ({ data: await fetch(ctx) }), scope);
+  return cached<T>(ctx, key, ttl, async (refreshCtx) => ({ data: await fetch(refreshCtx) }), scope);
 }
 
 export function cachedPayload<T>(
@@ -65,8 +61,8 @@ export function cachedPayload<T>(
     ctx,
     key,
     ttl,
-    async () => {
-      const result = await build(ctx.refreshContext ?? ctx);
+    async (refreshCtx) => {
+      const result = await build(refreshCtx);
       return {
         data: sourcePayload(result.rows, { partial: result.partial }),
         ttl: result.ttl ?? ttlFor(Boolean(result.partial), ttl),

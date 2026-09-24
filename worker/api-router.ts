@@ -2,14 +2,20 @@ import type { Env } from "@/server/context";
 import { handleApiRoute } from "@/server/routes/define-route";
 import { SOURCES } from "@/server/sources/registry";
 
-// SOURCES is the route table; undefined means no route matched and the entrypoint renders its 404.
+export type RouteEntry = (typeof SOURCES)[number];
+
+const ROUTES = new Map<string, RouteEntry>(SOURCES.map((source) => [source.path, source]));
+
+export function resolveRoute(pathname: string): RouteEntry | undefined {
+  return ROUTES.get(pathname);
+}
+
 export function handleApi(
   req: Request,
   env: Env,
   url: URL,
+  route: RouteEntry,
   onDetach?: (work: Promise<unknown>) => void,
-): Promise<Response> | undefined {
-  const source = SOURCES.find((s) => s.path === url.pathname);
-  if (!source) return undefined;
-  return handleApiRoute(req, env, url.pathname, source, onDetach ? { onDetach } : undefined);
+): Promise<Response> {
+  return handleApiRoute(req, env, url.pathname, route, onDetach ? { onDetach } : undefined);
 }

@@ -2,6 +2,7 @@ import { TrendingDown, TrendingUp } from "lucide-react";
 import { useSuspenseAgentRankingsState } from "@/client/api/api-queries";
 import type { AgentRankEntry } from "@/shared/types";
 import { RankedTableView, modelNameCol } from "@/client/components/data/table";
+import { PartialNotice } from "@/client/components/feedback";
 import { cn } from "@/client/utils/cn";
 import { rightCol, trendClass, type DataTableColumn } from "@/client/components/data/table/table-columns";
 import type { useTranslation } from "@/client/providers";
@@ -15,9 +16,8 @@ function buildAgentColumns(t: ReturnType<typeof useTranslation>["t"]): DataTable
     ),
     {
       id: "score",
-      header: t("trend"),
+      header: t("score"),
       align: "right",
-      // Arena reports ratios; the board shows ×100 as % with ▲/▼ and a ± band.
       cell: (item) => {
         if (item.score == null || !Number.isFinite(item.score)) {
           return <span className="ui-mono-value font-semibold">{t("notAvailable")}</span>;
@@ -52,13 +52,16 @@ const getAgentRowId = (entry: AgentRankEntry) => `${entry.rank}|${entry.id}`;
 const getAgentSearchFields = (entry: AgentRankEntry) => [entry.name, entry.id, entry.creator];
 
 export function AgentRankingsView() {
-  const { items } = useSuspenseAgentRankingsState();
+  const { items, partial } = useSuspenseAgentRankingsState();
   return (
-    <RankedTableView
-      rows={items}
-      getRowId={getAgentRowId}
-      getSearchFields={getAgentSearchFields}
-      buildBodyColumns={buildAgentColumns}
-    />
+    <>
+      {partial && <PartialNotice />}
+      <RankedTableView
+        rows={items}
+        getRowId={getAgentRowId}
+        getSearchFields={getAgentSearchFields}
+        buildBodyColumns={buildAgentColumns}
+      />
+    </>
   );
 }

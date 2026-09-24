@@ -11,7 +11,6 @@ const AGENT_PATH = upstreamEndpoints.agentBoard;
 async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
   const body = await fetchRscText(ctx, upstreamConfig.arena, AGENT_PATH, {
     headers: { RSC: "1", accept: "*/*" },
-    // ~1.8MB boards: keep the JSON ceiling so growth doesn't cliff into 502s.
     maxBytes: MAX_JSON_BYTES,
     retries: UPSTREAM_FETCH_OPTS.retries,
   });
@@ -20,6 +19,6 @@ async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
 }
 
 export const getAgentRankings = (ctx: AppContext): Promise<SourcePayload<AgentRankEntry[]>> =>
-  cachedPayload(ctx, cacheKeys.agentRankings, SLOW_TTL_MS, async () => ({
+  cachedPayload(ctx, cacheKeys.agentRankings, SLOW_TTL_MS, async (ctx) => ({
     rows: await fetchAgentBoard(ctx),
   }));

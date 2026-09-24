@@ -21,19 +21,16 @@ import {
   indexAxisX,
 } from "./index-series";
 
-/** Area fill opacity: the two baseline fills overlap, so it must stay light enough not to read as a third colour. */
 const AREA_FILL_ALPHA = 0.2;
 const CHART_HEIGHT_CLASS = "h-[200px] sm:h-[240px]";
 
 const tickLabel = (value: string | number): string => formatIndexValue(Number(value));
 
-/** chart.js paints the scales before the datasets, so an area fill covers the axis border; this redraws it. */
 function bottomRule(color: string): Plugin<"line"> {
   return {
     id: "indexAreaBottomRule",
     afterDatasetsDraw(chart) {
       const { ctx, chartArea } = chart;
-      // Half-pixel aligned the way chart.js aligns its own grid lines.
       const y = Math.round(chartArea.bottom) + 0.5;
       ctx.save();
       ctx.beginPath();
@@ -47,7 +44,6 @@ function bottomRule(color: string): Plugin<"line"> {
   };
 }
 
-/** The two indices are separate evaluations of the same model, so each series is filled from its own score. */
 export const IndexAreaChart = memo(function IndexAreaChart({ models }: { models: ArtificialAnalysisModel[] }) {
   const { t } = useTranslation();
   const theme = useChartTheme();

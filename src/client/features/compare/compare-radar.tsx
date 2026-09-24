@@ -1,10 +1,13 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { useTranslation } from "@/client/providers";
 import { ChartCard } from "@/client/components/ui/chart-frame";
 import type { ArtificialAnalysisModel } from "@/shared/types";
+import { loadableView } from "@/client/router/lazy-view";
 
-const CompareRadarChart = lazy(() => import("./compare-radar-chart").then((m) => ({ default: m.CompareRadarChart })));
-const CompareButterflyChart = lazy(() =>
+const CompareRadarChart = loadableView(() =>
+  import("./compare-radar-chart").then((m) => ({ default: m.CompareRadarChart })),
+);
+const CompareButterflyChart = loadableView(() =>
   import("./compare-butterfly-chart").then((m) => ({ default: m.CompareButterflyChart })),
 );
 

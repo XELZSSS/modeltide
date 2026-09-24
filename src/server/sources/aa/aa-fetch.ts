@@ -24,7 +24,6 @@ function fetchEnrichBody(ctx: AppContext, path: string): Promise<string> {
 
 interface EnrichResult<T> {
   rows: T[];
-  /** Empty `rows` with `failed: false`: the payload is complete, not partial. */
   failed: boolean;
 }
 
@@ -37,18 +36,18 @@ function parseEnrich<T>(ctx: AppContext, spec: EnrichSpec<T>, body: string): Enr
   return { rows: spec.map ? spec.map(parsed.data) : parsed.data, failed: false };
 }
 
-/** Only the fetch is cached: a failure writes nothing, so the next build retries it. */
 export async function getAndParseEnrich<T>(
   ctx: AppContext,
   cacheKey: string,
   spec: EnrichSpec<T>,
 ): Promise<EnrichResult<T>> {
-  let body: string;
   try {
-    body = await cachedRaw<string>(ctx, cacheKey, SLOW_TTL_MS, () => fetchEnrichBody(ctx, spec.path));
+    return await cachedRaw<EnrichResult<T>>(ctx, cacheKey, SLOW_TTL_MS, async (refreshCtx) => {
+      const body = await fetchEnrichBody(refreshCtx, spec.path);
+      return parseEnrich(refreshCtx, spec, body);
+    });
   } catch (err) {
     ctx.log("warn", `[artificial] ${spec.label} enrichment failed: ${errMsg(err)}`);
     return { rows: [], failed: true };
   }
-  return parseEnrich(ctx, spec, body);
 }

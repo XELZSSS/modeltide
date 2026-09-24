@@ -14,29 +14,17 @@ const SW_VERSION_DECL = /const SW_VERSION = "[^"]*";/;
 const SW_SHELL_DECL = /const PRECACHE_SHELL = \[[\s\S]*?\];/;
 const SHELL_ASSET = /<(?:script|link)\b[^>]*\s(?:src|href)="(\/assets\/[^"]+)"/g;
 
-/** Hashes emitted client asset names: CACHE_VERSION keys payloads, so it cannot rotate on a CSS tweak. */
 function clientBundleVersion(): string {
   const hash = createHash("sha256");
-  const files: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else files.push(full);
-    }
-  };
-  walk(clientOutDir);
-  for (const file of files.sort()) {
-    const rel = path.relative(clientOutDir, file).replaceAll("\\", "/");
-    if (rel === "sw.js") continue;
-    hash.update(rel).update("\0");
-    hash.update(fs.readFileSync(file)).update("\0");
+  const assetsDir = path.join(clientOutDir, "assets");
+  for (const name of fs.readdirSync(assetsDir).sort()) {
+    hash.update(name).update("\0");
+    hash.update(fs.readFileSync(path.join(assetsDir, name))).update("\0");
   }
+  hash.update(fs.readFileSync(path.join(clientOutDir, "index.html"))).update("\0");
   return `sha-${hash.digest("hex").slice(0, 12)}`;
 }
 
-// Precaching exactly these keeps a first offline cold start off the SW's 503; the rest of the graph
-// is lazy chunks that would only grow the all-or-nothing install.
 function shellAssets(): string[] {
   const html = fs.readFileSync(path.join(clientOutDir, "index.html"), "utf8");
   const urls = new Set<string>();
@@ -47,13 +35,11 @@ function shellAssets(): string[] {
   return [...urls];
 }
 
-/** Rewrites public/sw.js to the client bundle hash and injects the shell assets Vite emitted. */
 function serviceWorkerVersion(): Plugin {
   return {
     name: "modeltide:sw-version",
     apply: "build",
     closeBundle() {
-      // Both environments run this hook; only the client build has dist/client/sw.js.
       if (this.environment.name !== "client") return;
       const file = path.join(clientOutDir, "sw.js");
       const source = fs.readFileSync(file, "utf8");
@@ -77,8 +63,32 @@ function serviceWorkerVersion(): Plugin {
   };
 }
 
+const INLINE_SCRIPT = /<script>([\s\S]*?)<\/script>/;
+const CSP_SCRIPT_HASH = /'sha256-([A-Za-z0-9+/=]+)'/g;
+
+function cspHashGuard(): Plugin {
+  return {
+    name: "modeltide:csp-hash",
+    apply: "build",
+    closeBundle() {
+      if (this.environment.name !== "client") return;
+      const html = fs.readFileSync(path.join(clientOutDir, "index.html"), "utf8");
+      const script = INLINE_SCRIPT.exec(html)?.[1];
+      if (script === undefined) throw new Error("dist/client/index.html: no inline bootstrap script to check");
+      const digest = createHash("sha256").update(script).digest("base64");
+      const headers = fs.readFileSync(path.join(rootDir, "public", "_headers"), "utf8");
+      const pinned = [...headers.matchAll(CSP_SCRIPT_HASH)].map(([, hash]) => hash);
+      if (!pinned.includes(digest)) {
+        throw new Error(
+          `public/_headers: the inline script hashes to sha256-${digest}, but script-src pins ${pinned.join(", ") || "no sha256 source"}`,
+        );
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cloudflare(), serviceWorkerVersion()],
+  plugins: [react(), tailwindcss(), cloudflare(), serviceWorkerVersion(), cspHashGuard()],
   resolve: {
     alias: srcAlias,
   },

@@ -4,6 +4,7 @@ import { useDevice, useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import { Pagination } from "@/client/components/ui/pagination";
 import { useSuspenseNewsState } from "@/client/api/api-queries";
+import { assertPayloadShape } from "@/client/api/payload-normalize";
 import { EmptyState, PartialNotice } from "@/client/components/feedback";
 import { SuspenseQuery } from "@/client/router/suspense-query";
 import { safeHref, formatRelativeTime, formatDate } from "@/client/utils/format";
@@ -29,12 +30,23 @@ function NewsList({ news }: { news: NewsItem[] }) {
   const { isMobile } = useDevice();
   const { page, totalPages, pagedData: currentNews, goToPage } = usePagedData(news, getNewsRowId, isMobile ? 10 : 20);
 
+  const items = useMemo(
+    () =>
+      currentNews.map((item) => ({
+        item,
+        dateLabel: formatDate(item.pubDate, lang),
+        relativeLabel: formatRelativeTime(item.pubDate, t, lang),
+      })),
+    [currentNews, lang, t],
+  );
+
   if (news.length === 0) return <EmptyState icon={Search} message={t("noResults")} />;
 
   return (
     <div className="flex flex-col gap-2">
-      <ul className="ui-card flex flex-col divide-y divide-border">
-        {currentNews.map((item) => {
+      {}
+      <ul className="ui-card flex flex-col divide-y divide-border animate-fade-in">
+        {items.map(({ item, dateLabel, relativeLabel }) => {
           const href = safeHref(item.link);
           const key = getNewsRowId(item);
           const body = (
@@ -44,9 +56,9 @@ function NewsList({ news }: { news: NewsItem[] }) {
               </h2>
               <div className="flex items-center gap-3 shrink-0 ui-caption mt-1">
                 <span className="hidden sm:inline truncate max-w-48">{item.source}</span>
-                <span className="flex items-center gap-1.5 shrink-0" title={formatDate(item.pubDate, lang)}>
+                <span className="flex items-center gap-1.5 shrink-0" title={dateLabel}>
                   <Clock size={12} aria-hidden="true" />
-                  {formatRelativeTime(item.pubDate, t, lang)}
+                  {relativeLabel}
                 </span>
                 <ExternalLink
                   size={14}
@@ -59,7 +71,7 @@ function NewsList({ news }: { news: NewsItem[] }) {
           const rowClass =
             "group flex items-start justify-between gap-4 px-4 py-3.5 transition-colors duration-fast hoverable:hover:bg-hover focus-visible:outline-none focus-visible:bg-hover";
           return (
-            <li key={key} className="animate-fade-in">
+            <li key={key}>
               {href ? (
                 <a
                   href={href}
@@ -83,7 +95,8 @@ function NewsList({ news }: { news: NewsItem[] }) {
 }
 
 function NewsCategoryContent({ categoryId }: { categoryId: NewsCategory }) {
-  const { items: news, partial } = useSuspenseNewsState(categoryId);
+  const { items: news, partial, malformed } = useSuspenseNewsState(categoryId);
+  assertPayloadShape(malformed, "news");
   return (
     <>
       {partial && <PartialNotice />}

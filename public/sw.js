@@ -1,14 +1,10 @@
-// Rewritten to the built client bundle hash by the vite plugin (vite.config.ts); dev serves this literal.
 const SW_VERSION = "dev-local";
 const CACHE_NAME = `modeltide-${SW_VERSION}`;
 
-// Must match the shared API_PREFIX (src/shared/config/paths.ts); this file cannot import it.
 const API_PREFIX = "/api";
 
 const OTHER_CACHE_MAX = 100;
 
-// Build rewrites this from the emitted index.html (vite.config.ts) and leaves it empty in dev;
-// lazy chunks stay out because install is all-or-nothing.
 const PRECACHE_SHELL = [];
 
 const PRECACHE_URLS = [
@@ -23,7 +19,6 @@ const PRECACHE_URLS = [
 ];
 
 self.addEventListener("install", (event) => {
-  // A failed precache must reject installation: catching it would let a partial cache activate.
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));
 });
 
@@ -59,48 +54,30 @@ function isImmutableAsset(pathname) {
   return pathname.startsWith("/assets/");
 }
 
-function navigationCacheKey(url) {
-  const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") || "/" : url.pathname;
-  return `${url.origin}${pathname}`;
-}
-
-async function handleNavigation(request) {
-  const url = new URL(request.url);
-  const key = navigationCacheKey(url);
+async function handleNavigation(event) {
   try {
-    const res = await fetch(request);
-    if (res && res.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put(key, res.clone()).catch(() => {});
-      // One entry per visited route, all sharing the shell HTML: without a trim here they accumulate forever.
-      await trimOtherCache(cache).catch(() => {});
-    }
-    return res;
+    return await fetch(event.request);
   } catch {
-    const cached = await caches.match(key);
-    if (cached) return cached;
-    // Every pathname answers with the same shell, so the precached "/" serves a navigation with no
-    // exact entry yet; without it the offline user gets a bare 503 and no app.
     const shell = await caches.match("/", { ignoreSearch: true });
     if (shell) return shell;
     return new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
   }
 }
 
-async function handleAsset(request) {
+async function handleAsset(event) {
+  const { request } = event;
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
   if (cached) return cached;
   try {
     const res = await fetch(request);
-    if (res && res.ok) await cache.put(request, res.clone()).catch(() => {});
+    if (res && res.ok) event.waitUntil(cache.put(request, res.clone()).catch(() => {}));
     return res;
   } catch {
     return new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
   }
 }
 
-// The precache and the hashed bundle are the offline floor, so only the rest of the bucket is trimmable.
 const PROTECTED_PATHS = new Set(PRECACHE_URLS);
 
 function isTrimmable(request) {
@@ -120,14 +97,17 @@ async function trimOtherCache(cache) {
   } catch {}
 }
 
-async function handleOther(request) {
+async function writeAndTrim(cache, request, response) {
+  await cache.put(request, response).catch(() => {});
+  await trimOtherCache(cache).catch(() => {});
+}
+
+async function handleOther(event) {
+  const { request } = event;
   const cache = await caches.open(CACHE_NAME);
   try {
     const res = await fetch(request);
-    if (res && res.ok) {
-      await cache.put(request, res.clone()).catch(() => {});
-      await trimOtherCache(cache).catch(() => {});
-    }
+    if (res && res.ok) event.waitUntil(writeAndTrim(cache, request, res.clone()));
     return res;
   } catch {
     const cached = await cache.match(request);
@@ -146,10 +126,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (request.mode === "navigate") {
-    event.respondWith(handleNavigation(request));
+    event.respondWith(handleNavigation(event));
   } else if (isImmutableAsset(url.pathname)) {
-    event.respondWith(handleAsset(request));
+    event.respondWith(handleAsset(event));
   } else {
-    event.respondWith(handleOther(request));
+    event.respondWith(handleOther(event));
   }
 });

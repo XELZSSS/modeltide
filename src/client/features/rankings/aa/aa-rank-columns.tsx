@@ -33,18 +33,9 @@ function scoreColumn(
   );
 }
 
-export function buildRankingColumns(
-  t: TFunction,
-  compareSet: Set<string>,
-  onToggleCompare: (m: ArtificialAnalysisModel) => void,
-): DataTableColumn<ArtificialAnalysisModel>[] {
+export function buildRankingColumns(t: TFunction): DataTableColumn<ArtificialAnalysisModel>[] {
   return [
-    col(
-      "model",
-      t("model"),
-      (model) => <CompareModelCell model={model} compareSet={compareSet} onToggleCompare={onToggleCompare} />,
-      { width: "40%" },
-    ),
+    col("model", t("model"), (model) => <CompareModelCell model={model} />, { width: "40%" }),
     rightCol("creator", t("creator"), (model) => (
       <RightAlignedText>{model.model_creators?.name || t("notAvailable")}</RightAlignedText>
     )),

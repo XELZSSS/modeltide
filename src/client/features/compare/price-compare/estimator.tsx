@@ -15,7 +15,8 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
   const { t } = useTranslation();
   const theme = useChartTheme();
 
-  const { monthlyCosts, ...inputs } = useMonthlyCosts(models);
+  const costState = useMonthlyCosts(models);
+  const { monthlyCosts } = costState;
   const bestMonthlyCost = useMemo(() => {
     const valid = [...monthlyCosts.values()].filter((v): v is number => v !== null);
     return valid.length > 0 ? Math.min(...valid) : null;
@@ -26,7 +27,7 @@ export const CostEstimator = memo(function CostEstimator({ models }: { models: A
       <CardContent>
         <CardHeader title={t("estimatedMonthlyCost")} />
         <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-5">
-          <CostEstimatorInputs state={inputs} layout="label-input-unit" />
+          <CostEstimatorInputs state={costState} layout="label-input-unit" />
         </div>
         <div className="flex flex-col gap-3">
           {models.map((model, index) => {

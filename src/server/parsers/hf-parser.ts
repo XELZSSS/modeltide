@@ -12,7 +12,6 @@ import { SOURCE_LIMITS } from "@/server/config/limits";
 import { upstreamConfig } from "@/server/config";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
 import { getOpenLicenseId, isRecognizedNonOpenLicense, licenseTagId } from "@/server/parsers/licenses";
-import { dedupeBy } from "@/shared/utils";
 import type { DailyPaperEntry, HFModel } from "@/server/parsers/upstream-types";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
 import { stripHtml } from "@/server/parsers/html-to-text";
@@ -54,19 +53,12 @@ export class LicenseDropTally {
   }
 }
 
-/** Detail shape: keeps `tags`, which only the model page renders. */
 export function mapModel(m: unknown): OpenSourceModelEntry | null {
   return toEntry(m, true);
 }
 
 export function mapListModel(m: unknown, tally?: LicenseDropTally): OpenSourceModelEntry | null {
   return toEntry(m, false, tally);
-}
-
-export function isOpenReleaseEntry(m: { license: string | null; createdAt: string | null }): boolean {
-  if (m.license == null) return false;
-  if (m.createdAt == null) return false;
-  return true;
 }
 
 export function keepOpenSourceRanking(m: { downloads: number }): boolean {
@@ -103,7 +95,6 @@ function toNewsItem(entry: unknown): NewsItem | null {
   const paper = isRecord((entry as DailyPaperEntry).paper) ? (entry as DailyPaperEntry).paper! : undefined;
   const rawId = strOrNull(paper?.id);
   const rawTitle = typeof paper?.title === "string" ? paper.title : "";
-  // Papers occasionally ship HTML-escaped titles; strip markup before gating.
   const title = stripHtml(decodeEntities(rawTitle));
   const publishedAt = typeof paper?.publishedAt === "string" ? paper.publishedAt.trim() : "";
   if (!rawId || !title || !Number.isFinite(Date.parse(publishedAt))) return null;
@@ -123,17 +114,23 @@ export function parseDailyPapers(raw: unknown): ParseResult<NewsItem[]> {
   if (!Array.isArray(raw)) {
     return parseFail(`HuggingFace daily papers returned non-array (got ${raw === null ? "null" : typeof raw})`);
   }
-  const capped = raw.slice(0, 500);
-  const items = capped
+  const ranked = raw
+    .slice(0, 500)
     .map((entry) => ({ entry, upvotes: upvotesOf(entry) }))
-    .sort((a, b) => b.upvotes - a.upvotes)
-    .map(({ entry }) => toNewsItem(entry))
-    .filter((x): x is NewsItem => x !== null);
-  const unique = dedupeBy(items, (x) => x.id);
-  if (unique.length === 0) {
+    .sort((a, b) => b.upvotes - a.upvotes);
+  const items: NewsItem[] = [];
+  const seen = new Set<string>();
+  for (const { entry } of ranked) {
+    const item = toNewsItem(entry);
+    if (!item || seen.has(item.id)) continue;
+    seen.add(item.id);
+    items.push(item);
+    if (items.length >= SOURCE_LIMITS.dailyPapers) break;
+  }
+  if (items.length === 0) {
     return parseFail(zeroUpstreamMessage("HuggingFace daily papers", "usable items", `raw=${raw.length}`));
   }
-  return parseOk(unique.slice(0, SOURCE_LIMITS.dailyPapers));
+  return parseOk(items);
 }
 
 function upvotesOf(entry: unknown): number {

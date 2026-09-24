@@ -4,7 +4,6 @@ export type Logger = (level: LogLevel, msg: string, meta?: Record<string, unknow
 
 const LEVEL_RANK: Record<LogLevel, number> = { info: 0, warn: 1, error: 2 };
 
-/** The one threshold every writer honors. */
 const MIN_LEVEL: LogLevel = "info";
 
 function write(level: LogLevel, msg: string, meta?: Record<string, unknown>): void {
@@ -15,7 +14,6 @@ function write(level: LogLevel, msg: string, meta?: Record<string, unknown>): vo
   else console.log(line);
 }
 
-/** Sink for call sites with no AppContext; same threshold and format as createLogger(). */
 export const logger: Logger = write;
 
 export function createLogger(): Logger {

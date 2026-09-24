@@ -12,7 +12,6 @@ import { cachedPayload, requireRows } from "@/server/sources/pipeline";
 import { errMsg } from "@/server/infra/task-pool";
 
 async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedReleaseEntry[]; partial: boolean }> {
-  // No open/closed join: upstream cannot say which releases are open; every row is returned.
   const { values } = await runLegs(
     [
       { label: "index", run: () => getIntelligenceIndexResult(ctx) },
@@ -23,7 +22,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
   const [index, changelog = []] = values;
   const models = index?.models ?? [];
   if (models.length === 0 && changelog.length === 0) {
-    throw new UpstreamError(`Releases: both index and changelog failed`);
+    throw new UpstreamError(`Releases: both index and changelog failed`, { retryable: true });
   }
   const entries = toClosedReleases(changelog);
   ctx.log("info", `[closed-releases] rows=${entries.length} (changelog=${changelog.length}, index=${models.length})`);
@@ -44,7 +43,7 @@ export const getClosedReleases = (ctx: AppContext): Promise<SourcePayload<Closed
     ctx,
     cacheKeys.closedReleases,
     STATIC_TTL_MS,
-    async () => {
+    async (ctx) => {
       const { entries: finalEntries, partial } = await fetchClosedReleases(ctx);
       return { rows: finalEntries, partial };
     },

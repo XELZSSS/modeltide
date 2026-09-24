@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "printWidth": 120,
-  // Required: the default reorders package.json keys.
   "sortPackageJson": false,
   "ignorePatterns": ["dist/**", "node_modules/**", ".wrangler/**", "package-lock.json"]
 }

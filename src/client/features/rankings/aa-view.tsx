@@ -3,7 +3,7 @@ import { useRouter } from "@/client/router";
 import { useTranslation } from "@/client/providers";
 import { useClientTab } from "@/client/hooks/use-client-tab";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { modelDisplayName, modelId } from "@/client/utils/model-utils";
+import { modelId } from "@/client/utils/model-utils";
 import { SearchableDataTable } from "@/client/components/data/table";
 import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
 import { useEffectivePricingMap, useMonthlyCosts } from "@/client/pricing/cost-inputs";
@@ -18,13 +18,12 @@ import { TabButton } from "@/client/components/ui/tabs";
 
 const VIEW_MODES = ["rankings", "pricing"] as const;
 
-/** Stable empty identity: a fresh `[]` literal per render defeated the pricing memos. */
 const EMPTY_MODELS: ArtificialAnalysisModel[] = [];
 
 const getAARowId = (model: ArtificialAnalysisModel) => modelId(model);
-const getAARowName = (model: ArtificialAnalysisModel) => modelDisplayName(model);
+const getAARowName = (model: ArtificialAnalysisModel) => model.name || model.slug || modelId(model);
 const getPricingRowId = (row: PricingRow) => modelId(row.model);
-const getPricingRowName = (row: PricingRow) => modelDisplayName(row.model);
+const getPricingRowName = (row: PricingRow) => row.model.name || row.model.slug || modelId(row.model);
 const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
 
 const renderModelDetail = (model: ArtificialAnalysisModel) => <ModelExpandedDetail model={model} />;
@@ -39,7 +38,8 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
 
   const pricingMode = viewMode === "pricing";
   const effectivePricingMap = useEffectivePricingMap(pricingMode ? rankings : EMPTY_MODELS);
-  const { monthlyCosts, ...costInputs } = useMonthlyCosts(pricingMode ? rankings : EMPTY_MODELS);
+  const costState = useMonthlyCosts(pricingMode ? rankings : EMPTY_MODELS);
+  const { monthlyCosts } = costState;
   const comparedModels = useCompareModels(rankings);
 
   usePruneCompareIds(rankings);
@@ -49,16 +49,8 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
     return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
   }, [monthlyCosts]);
 
-  const compareIds = useCompareStore((s) => s.compareIds);
-  const compareSet = useMemo(() => new Set(compareIds), [compareIds]);
-  const rankingColumns = useMemo(
-    () => [...buildRankingColumns(t, compareSet, toggleCompareModel)],
-    [t, compareSet, toggleCompareModel],
-  );
-  const pricingColumns = useMemo(
-    () => [...buildPricingColumns(t, compareSet, toggleCompareModel, effectivePricingMap)],
-    [t, compareSet, toggleCompareModel, effectivePricingMap],
-  );
+  const rankingColumns = useMemo(() => [...buildRankingColumns(t)], [t]);
+  const pricingColumns = useMemo(() => [...buildPricingColumns(t, effectivePricingMap)], [t, effectivePricingMap]);
 
   const pricingRows = useMemo(
     () => rankings.map((model) => ({ model, monthlyCost: monthlyCosts.get(modelId(model)) ?? null })),
@@ -92,7 +84,7 @@ export function ArtificialAnalysisView({ rankings }: { rankings: ArtificialAnaly
 
       {pricingMode && (
         <div className="flex gap-4 flex-wrap items-center">
-          <CostEstimatorInputs state={costInputs} layout="input-label" avgCost={avgCost} />
+          <CostEstimatorInputs state={costState} layout="input-label" avgCost={avgCost} />
         </div>
       )}
 

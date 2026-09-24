@@ -2,7 +2,6 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022"],
-    // `@cloudflare/workers-types` supplies KVNamespace/Fetcher; cloudflare-env.d.ts must not be a build input.
     "types": ["@cloudflare/workers-types", "node"]
   },
   "include": ["src/server/**/*.ts", "src/shared/**/*.ts", "worker/**/*.ts"],

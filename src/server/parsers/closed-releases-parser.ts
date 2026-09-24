@@ -1,11 +1,10 @@
 import { isoDate, byDateDesc, isRecord, str } from "@/server/parsers/parser-primitives";
 import { upstreamConfig } from "@/server/config";
+import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 
 import type { ChangelogModel } from "@/server/parsers/aa/changelog-parser";
 import { dedupeBy } from "@/shared/utils";
-
-// NOTE: deliberately no open/closed classification — upstream publishes `isOpenWeights` only for top rows.
 
 function toClosedEntry(id: unknown, model: unknown, provider: unknown, rawDate: unknown): ClosedReleaseEntry | null {
   if (typeof id !== "string" || typeof model !== "string" || typeof provider !== "string") return null;
@@ -33,7 +32,7 @@ function toClosedRelease(e: ChangelogModel): ClosedReleaseEntry | null {
 function toClosedReleaseFromIndex(m: unknown): ClosedReleaseEntry | null {
   if (!isRecord(m)) return null;
   const rec = m as Partial<ArtificialAnalysisModel>;
-  const slug = typeof rec.slug === "string" ? rec.slug : str(rec.id);
+  const slug = typeof rec.slug === "string" && rec.slug.trim() !== "" ? rec.slug : str(rec.id);
   const name = str(rec.name);
   const creator = typeof rec.model_creators?.name === "string" ? rec.model_creators.name : "Unknown";
   const date = str(rec.release_date);
@@ -48,7 +47,7 @@ export function toClosedReleasesFromIndex(models: unknown): ClosedReleaseEntry[]
     .filter((e): e is ClosedReleaseEntry => e !== null);
   const deduped = dedupeBy(entries, (e) => e.id);
   deduped.sort((a, b) => b.releaseDate.localeCompare(a.releaseDate));
-  return deduped;
+  return deduped.slice(0, SOURCE_LIMITS.closedReleases);
 }
 
 export function toClosedReleases(changelog: unknown): ClosedReleaseEntry[] {
@@ -58,5 +57,5 @@ export function toClosedReleases(changelog: unknown): ClosedReleaseEntry[] {
   const entries = dedupeBy(sorted, (e) => e.releaseSlug)
     .map(toClosedRelease)
     .filter((e): e is ClosedReleaseEntry => e !== null);
-  return entries;
+  return entries.slice(0, SOURCE_LIMITS.closedReleases);
 }

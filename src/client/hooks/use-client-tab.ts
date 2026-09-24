@@ -1,4 +1,4 @@
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useState } from "react";
 import { navigate, useSearchParams } from "@/client/router";
 
 function resolveInitialTab<T extends string>(validTabs: readonly T[], raw: string | null, fallback: T): T {
@@ -13,7 +13,6 @@ export function useClientTab<T extends string>(
   const searchParams = useSearchParams();
   const paramValue = searchParams.get(paramKey);
   const [tab, setTab] = useState<T>(() => resolveInitialTab(validTabs, paramValue, fallback));
-  const [, startTransition] = useTransition();
   const [prevParamValue, setPrevParamValue] = useState(paramValue);
   if (prevParamValue !== paramValue) {
     setPrevParamValue(paramValue);
@@ -31,9 +30,7 @@ export function useClientTab<T extends string>(
       } catch (err) {
         console.warn(`[tab] failed to sync URL param "${paramKey}":`, err);
       }
-      startTransition(() => {
-        setTab(tabId as T);
-      });
+      setTab(tabId as T);
     },
     [paramKey, validTabs],
   );

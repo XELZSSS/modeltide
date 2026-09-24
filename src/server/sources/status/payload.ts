@@ -1,6 +1,7 @@
 import { SOURCE_IDS } from "@/shared/config";
-import type { StatusHistoryPayload, StatusEvent } from "@/shared/types";
-import { buildSourceSummary, deriveEvents, emptyEntry, type HistoryStore } from "./history-math";
+import type { StatusEvent, StatusHistoryPayload, StatusStoreMode } from "@/shared/types/status";
+import { buildSourceSummary, deriveEvents } from "./history-math";
+import { emptyEntry, type HistoryStore } from "./schema";
 import type { UptimePayload } from "./uptime";
 
 const MAX_EVENTS = 50;
@@ -10,6 +11,7 @@ export function buildHistoryPayload(
   uptime: UptimePayload,
   now = Date.now(),
   persisted = true,
+  storeMode?: StatusStoreMode,
 ): StatusHistoryPayload {
   const recent: StatusHistoryPayload["recent"] = {};
   const daily: StatusHistoryPayload["daily"] = {};
@@ -20,7 +22,7 @@ export function buildHistoryPayload(
     const entry = store.sources[id] ?? emptyEntry();
     recent[id] = [...entry.recent];
     daily[id] = [...entry.daily];
-    events.push(...deriveEvents(id, entry.recent));
+    events.push(...deriveEvents(id, entry.recent, entry.openSince));
     sources.push(buildSourceSummary(id, entry, now));
   }
 
@@ -33,5 +35,6 @@ export function buildHistoryPayload(
     daily,
     events: events.slice(0, MAX_EVENTS),
     persisted,
+    ...(storeMode ? { storeMode } : {}),
   };
 }

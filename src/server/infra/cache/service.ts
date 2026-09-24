@@ -18,9 +18,7 @@ interface CacheStores {
   l1?: MemoryL1;
   inflight?: InflightRegistry;
   failureCooldownMs?: number;
-  /** This caller's liveness: used only to detach it, never to cancel the shared refresh. */
   callerSignal?: AbortSignal;
-  /** Keeps an orphaned refresh alive past the request that started it. */
   onDetach?: (work: Promise<unknown>) => void;
   log?: Logger;
 }
@@ -48,10 +46,22 @@ export class CacheService {
     this.onDetach = stores?.onDetach;
   }
 
-  /** The generic stale window, tightened when the caller capped it: a negative cache has to be re-asked soon. */
   private staleBudget(storedTtl: number, capMs?: number): number {
     const base = maxStaleMs(storedTtl);
     return capMs == null ? base : Math.min(capMs, base);
+  }
+
+  private usableStale<T>(
+    ttl: number,
+    mem: { d: T; e: number; t: number } | undefined,
+    kvHit: { env: StaleEnvelope<T> } | undefined,
+    capMs?: number,
+  ): { value: T } | undefined {
+    if (kvHit) {
+      const env = kvHit.env;
+      return Date.now() - env.e <= this.staleBudget(env.t ?? ttl, capMs) ? { value: env.d } : undefined;
+    }
+    return mem && Date.now() - mem.e <= this.staleBudget(mem.t, capMs) ? { value: mem.d } : undefined;
   }
 
   private async loadStaleOrRefresh<T>(
@@ -63,25 +73,25 @@ export class CacheService {
     kv: KvStore | undefined,
     opts?: { staleCapMs?: number },
   ): Promise<T> {
+    if (this.onDetach) {
+      const stale = this.usableStale(ttl, mem, kvHit, opts?.staleCapMs);
+      if (stale) {
+        const refresh = this.refreshRunner.run(vk, ttl, fn, kv);
+        try {
+          this.onDetach(refresh.then(undefined, () => {}));
+        } catch {}
+        return stale.value;
+      }
+    }
     try {
       return await this.refreshRunner.run(vk, ttl, fn, kv);
     } catch (err) {
-      if (kvHit) {
-        if (Date.now() - kvHit.env.e <= this.staleBudget(kvHit.env.t ?? ttl, opts?.staleCapMs)) {
-          return kvHit.env.d;
-        }
-        throw err;
-      }
-      if (mem) {
-        if (Date.now() - mem.e > this.staleBudget(mem.t, opts?.staleCapMs)) throw err;
-        return mem.d;
-      }
-      throw err;
+      const stale = this.usableStale(ttl, mem, kvHit, opts?.staleCapMs);
+      if (!stale) throw err;
+      return stale.value;
     }
   }
 
-  // An abort rejects only this caller (499) while the shared refresh keeps running; the race must
-  // live here, since `refresh`'s `finally` would release the slot while the promise is pending.
   async withTtl<T>(
     k: string,
     ttl: number,
@@ -98,13 +108,13 @@ export class CacheService {
         if (settled) return;
         settled = true;
         signal.removeEventListener("abort", onAbort);
-        this.onDetach?.(work.then(undefined, () => {}));
         reject(new ClientAbortError(`Client aborted request for ${k}`));
+        try {
+          this.onDetach?.(work.then(undefined, () => {}));
+        } catch {}
       };
       signal.addEventListener("abort", onAbort, { once: true });
-      // An abort can land before listener registration; close that race.
       if (signal.aborted) onAbort();
-      // Both settle paths handled: detached work can't become an unhandled rejection.
       work.then(
         (value) => {
           if (settled) return;

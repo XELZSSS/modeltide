@@ -7,7 +7,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    // Vitest force-exits this long after tests finish, so a leaked handle cannot hang the terminal.
     teardownTimeout: 5000,
     projects: [
       {

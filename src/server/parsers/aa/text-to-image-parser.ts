@@ -10,7 +10,6 @@ import type { RawEntry } from "@/server/parsers/upstream-types";
 import { findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc-parser";
 import { parseFail, type ParseResult } from "@/server/parsers/parse-result";
 
-/** Row-level validity stays with `mapEntry`: a body we cannot map is a zero-row document. */
 export function parseTextToImageRows(body: unknown): ParseResult<Record<string, unknown>[]> {
   if (typeof body !== "string" || !body) return parseFail("Text-to-image returned an empty body");
   const scanned = parseRscPayload<Record<string, unknown>>(

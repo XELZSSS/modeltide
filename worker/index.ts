@@ -13,9 +13,8 @@ import { applyApiHeaders } from "@/server/http/headers";
 import { API_PREFIX } from "@/shared/config";
 import { logger } from "@/server/infra/logger";
 import { methodNotAllowedResponse, notFoundResponse, stripBodyForHead } from "@/server/routes/define-route";
-import { handleApi } from "./api-router";
+import { handleApi, resolveRoute } from "./api-router";
 
-/** Append the Healthchecks `/fail` suffix before any query string or hash. */
 export function failTarget(url: string): string {
   const cut = [url.indexOf("?"), url.indexOf("#")].filter((i) => i >= 0);
   if (cut.length === 0) return url.endsWith("/") ? `${url}fail` : `${url}/fail`;
@@ -35,8 +34,6 @@ export async function pingCronMonitor(env: Env, healthy: boolean): Promise<void>
   }
 }
 
-// `core` must be in EVERY fire: its ceiling is the 30-minute interval between them
-// (shared/config/time.ts). `hourly` rides the off-peak fire only, as NEWS_TTL_MS expects; `static` every 6th hour.
 export function warmTiersFor(fireMinuteUtc: number, fireHourUtc: number): WarmTier[] {
   if (fireMinuteUtc >= 30) return ["core"];
   return ["core", "hourly", ...(fireHourUtc % 6 === 0 ? (["static"] as const) : [])];
@@ -49,19 +46,30 @@ interface ScheduledResult {
   healthy: boolean;
 }
 
-// `sampled === null` is a lock-held skip (healthy); a KV outage rethrows, so it surfaces as false.
-// `warmTotal === 0` is a registry regression, not a quiet round, and must not read as healthy.
+function isPartialPayload(value: unknown): boolean {
+  return typeof value === "object" && value !== null && (value as { partial?: unknown }).partial === true;
+}
+
+export function warmRoundOutcome(results: readonly PromiseSettledResult<unknown>[]): {
+  notRun: number;
+  failed: number;
+  degraded: number;
+  total: number;
+} {
+  const notRun = results.filter((r) => r.status === "rejected" && r.reason instanceof TaskNotRunError).length;
+  const failed = results.filter((r) => r.status === "rejected").length - notRun;
+  const degraded = results.filter((r) => r.status === "fulfilled" && isPartialPayload(r.value)).length;
+  return { notRun, failed, degraded, total: results.length };
+}
+
 export function cronHealthy(sampled: boolean | null, warmFailed: number, warmTotal: number): boolean {
   return sampled !== false && warmTotal > 0 && warmFailed === 0;
 }
 
 async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: number): Promise<ScheduledResult> {
   if (!env.CACHE) {
-    // Don't force healthy:false here — that pinged /fail on every local-dev cron; health comes from cronHealthy.
     logger("warn", "[scheduled] CACHE KV not configured: running with memory-only fallback");
   }
-  // The two legs fan out to several upstreams, so they must not overlap: together they exceed the
-  // per-invocation connection budget even when each task has its own timeout.
   const runSampling = async (): Promise<boolean | null> => {
     try {
       return await recordStatusSamples(buildContext(env, { workSignal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
@@ -77,11 +85,11 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
       );
       const batchSignal = AbortSignal.timeout(warmBatchTimeoutMs(tasks.length));
       const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: batchSignal });
-      const notRun = results.filter((r) => r.status === "rejected" && r.reason instanceof TaskNotRunError).length;
-      const failed = results.filter((r) => r.status === "rejected").length - notRun;
-      if (notRun > 0) logger("warn", `[warm] ${notRun}/${results.length} warmup calls never ran before the deadline`);
-      if (failed > 0) logger("warn", `[warm] ${failed}/${results.length} warmup calls failed`);
-      return { failed, total: results.length - notRun };
+      const { notRun, failed, degraded, total } = warmRoundOutcome(results);
+      if (notRun > 0) logger("warn", `[warm] ${notRun}/${total} warmup calls never ran before the deadline`);
+      if (failed > 0) logger("warn", `[warm] ${failed}/${total} warmup calls failed`);
+      if (degraded > 0) logger("warn", `[warm] ${degraded}/${total} warmup calls cached a partial payload`);
+      return { failed: failed + notRun, total };
     } catch (err) {
       logger("warn", `[warm] warmup failed: ${err instanceof Error ? err.message : String(err)}`);
       return { failed: Number.MAX_SAFE_INTEGER, total: Number.MAX_SAFE_INTEGER };
@@ -97,37 +105,39 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
   };
 }
 
-// Bare `/api` counts too: run_worker_first routes it here, and ASSETS would answer the SPA shell.
 function isApiRequest(url: URL): boolean {
   return url.pathname === API_PREFIX || url.pathname.startsWith(`${API_PREFIX}/`);
 }
 
-// A refresh orphaned by a client disconnect must outlive the request that started it (waitUntil).
 function detachHook(ctx?: ExecutionContext): ((work: Promise<unknown>) => void) | undefined {
   return ctx ? (work) => ctx.waitUntil(work) : undefined;
 }
 
+const STATIC_FILE_RE =
+  /\.(?:js|mjs|css|map|json|webmanifest|txt|xml|wasm|png|jpe?g|gif|svg|webp|avif|ico|bmp|woff2?|ttf|otf|eot)$/i;
 export async function fetchHandler(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const url = new URL(req.url);
   if (!isApiRequest(url)) {
     if (!env.ASSETS) return new Response("Static assets binding not configured", { status: 500 });
     const response = await env.ASSETS.fetch(req);
-    // SPA fallback must never turn a missing hashed JS/CSS file into a cached 200 HTML response.
-    if (url.pathname.startsWith("/assets/") && response.headers.get("content-type")?.includes("text/html")) {
+    if (STATIC_FILE_RE.test(url.pathname) && response.headers.get("content-type")?.includes("text/html")) {
       return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
     }
     return response;
   }
+  const route = resolveRoute(url.pathname);
+  const isHead = req.method === "HEAD";
+  if (!route) return isHead ? stripBodyForHead(notFoundResponse()) : notFoundResponse();
   if (req.method === "OPTIONS") {
     const res = new Response(null, { status: 204 });
+    res.headers.set("Allow", "GET, HEAD, OPTIONS");
     applyApiHeaders(res.headers);
     return res;
   }
   if (req.method !== "GET" && req.method !== "HEAD") {
     return methodNotAllowedResponse();
   }
-  const isHead = req.method === "HEAD";
-  const res = (await handleApi(req, env, url, detachHook(ctx))) ?? notFoundResponse();
+  const res = await handleApi(req, env, url, route, detachHook(ctx));
   return isHead ? stripBodyForHead(res) : res;
 }
 
@@ -141,8 +151,9 @@ export default {
         return scheduledTask(env, at.getUTCMinutes(), at.getUTCHours());
       })()
         .then((result) => pingCronMonitor(env, result.healthy))
-        .catch((err) => {
+        .catch(async (err) => {
           logger("error", `[scheduled] ${err instanceof Error ? err.message : String(err)}`);
+          await pingCronMonitor(env, false);
           throw err;
         }),
     );

@@ -1,27 +1,31 @@
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
+import { UNKNOWN_QUERY_WARN_THROTTLE_MS, throttleGate } from "@/server/config/status";
 import { ApiError, ClientAbortError, UpstreamError, isTimeoutLike } from "@/server/infra/errors";
-import { logger } from "@/server/infra/logger";
+import { logger, type Logger } from "@/server/infra/logger";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
 import type { AppContext } from "@/server/context";
 import type { SourcePayload } from "@/shared/types";
 import { API_VERSION_PARAM } from "@/shared/config/paths";
-import { BROWSER_CACHE_HEADER, BROWSER_NO_STORE_HEADER, CDN_CACHE_HEADER, CDN_NO_STORE_HEADER } from "@/server/config";
-import { applyApiHeaders } from "@/server/http/headers";
+import {
+  BROWSER_CACHE_HEADER,
+  BROWSER_NO_STORE_HEADER,
+  CDN_CACHE_HEADER,
+  CDN_NO_STORE_HEADER,
+  PARTIAL_CACHE_HEADERS,
+  applyApiHeaders,
+  ifNoneMatchSatisfied,
+  payloadEtag,
+} from "@/server/http/headers";
 
-function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string }): void {
-  if (override) {
-    h.set("Cache-Control", override.browser);
-    h.set("CDN-Cache-Control", override.cdn);
-  } else {
-    h.set("Cache-Control", BROWSER_CACHE_HEADER);
-    h.set("CDN-Cache-Control", CDN_CACHE_HEADER);
-  }
-  h.set("Vary", "Accept-Encoding");
+function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string }): string {
+  const browser = override?.browser ?? BROWSER_CACHE_HEADER;
+  h.set("Cache-Control", browser);
+  h.set("CDN-Cache-Control", override?.cdn ?? CDN_CACHE_HEADER);
+  return browser;
 }
 
 function clampStatus(status: number): number {
-  // `new Response` accepts only 200-599, and null-body statuses cannot carry JSON.
   return status >= 200 && status < 600 && status !== 204 && status !== 205 && status !== 304 ? status : 500;
 }
 
@@ -37,13 +41,25 @@ function errorHeaders(): Headers {
 
 const MAX_LOGGED_UNKNOWN_PARAMS = 5;
 
-/** Names come straight from the URL (attacker-controlled): report at most a handful, control-character-free. */
 function loggableParamName(key: string): string {
   return key.replace(/\p{C}/gu, "").slice(0, 64);
 }
 
+const unknownParamWarnGates = new Map<string, ReturnType<typeof throttleGate>>();
+
+function warnUnknownParams(log: Logger, path: string, unknownKeys: string[]): void {
+  let gate = unknownParamWarnGates.get(path);
+  if (!gate) {
+    gate = throttleGate(UNKNOWN_QUERY_WARN_THROTTLE_MS);
+    unknownParamWarnGates.set(path, gate);
+  }
+  if (!gate.open()) return;
+  const shown = unknownKeys.slice(0, MAX_LOGGED_UNKNOWN_PARAMS).map(loggableParamName).join(", ");
+  const truncated = unknownKeys.length > MAX_LOGGED_UNKNOWN_PARAMS ? " …" : "";
+  log("warn", `[query] ${path} ignoring unknown params: ${shown}${truncated}`);
+}
+
 function collectQueryParams(url: URL): Record<string, string | string[]> {
-  // Null-prototype: `?__proto__=x` would otherwise rewrite this object's prototype.
   const raw: Record<string, string | string[]> = Object.create(null) as Record<string, string | string[]>;
   url.searchParams.forEach((value, key) => {
     const existing = Object.hasOwn(raw, key) ? raw[key] : undefined;
@@ -54,7 +70,6 @@ function collectQueryParams(url: URL): Record<string, string | string[]> {
   return raw;
 }
 
-/** Every error body shares one envelope: `{ error: { code, message } }`. */
 function errorJson(status: number, message: string): Response {
   return Response.json({ error: { code: status, message } }, { status, headers: errorHeaders() });
 }
@@ -82,7 +97,7 @@ export function stripBodyForHead(res: Response): Response {
 
 function mapApiError(err: unknown, method: string, path: string): Response {
   if (err instanceof ClientAbortError) {
-    return new Response(null, { status: 499, headers: errorHeaders() });
+    return errorJson(499, "Client closed request");
   }
   if (isTimeoutLike(err)) {
     logger("warn", `[upstream-timeout] ${method} ${path} ${err instanceof Error ? err.message : String(err)}`);
@@ -91,7 +106,6 @@ function mapApiError(err: unknown, method: string, path: string): Response {
   if (err instanceof ApiError) {
     const status = clampStatus(err.status);
     if (status === 502) {
-      // The upstream status stays in the log only: the response body is a fixed generic message.
       const origin = err instanceof UpstreamError && err.statusCode != null ? ` (upstream ${err.statusCode})` : "";
       logger("warn", `[upstream] ${method} ${path} ${err.message}${origin}`);
       return errorJson(502, "Upstream data source temporarily unavailable");
@@ -122,17 +136,23 @@ export async function handleApiRoute<S extends QuerySchema>(
     const rawParams = collectQueryParams(url);
     const schemaKeys = new Set(Object.keys(def.query ?? {}));
     const unknownKeys = Object.keys(rawParams).filter((k) => !schemaKeys.has(k) && k !== API_VERSION_PARAM);
-    if (unknownKeys.length > 0) {
-      const shown = unknownKeys.slice(0, MAX_LOGGED_UNKNOWN_PARAMS).map(loggableParamName).join(", ");
-      const truncated = unknownKeys.length > MAX_LOGGED_UNKNOWN_PARAMS ? " …" : "";
-      context.log("warn", `[query] ${path} ignoring unknown params: ${shown}${truncated}`);
-    }
+    if (unknownKeys.length > 0) warnUnknownParams(context.log, path, unknownKeys);
     const params = validateQuery(rawParams, (def.query ?? {}) as S);
     const payload = await def.handler(context, params);
     const headers = new Headers({ "content-type": "application/json" });
-    applyCacheHeaders(headers, def.cache);
+    const browserCache = applyCacheHeaders(
+      headers,
+      def.cache ?? (payload.partial === true ? PARTIAL_CACHE_HEADERS : undefined),
+    );
     applyApiHeaders(headers);
-    // A HEAD body is dropped anyway; serializing the payload only to throw it away costs the stringify.
+    if (!browserCache.includes("no-store")) {
+      const etag = payloadEtag(payload.fetchedAt);
+      headers.set("ETag", etag);
+      if (ifNoneMatchSatisfied(req.headers.get("if-none-match"), etag)) {
+        headers.delete("content-type");
+        return new Response(null, { status: 304, headers });
+      }
+    }
     return req.method === "HEAD" ? new Response(null, { headers }) : Response.json(payload, { headers });
   } catch (err) {
     return mapApiError(err, req.method, path);

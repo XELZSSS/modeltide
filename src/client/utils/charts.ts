@@ -1,4 +1,3 @@
-// No chart.js import here: helper-only imports must not pull chart.js in.
 import type { Chart as ChartJS, TooltipOptions } from "chart.js";
 import type { ChartTheme } from "@/client/theme/chart-theme";
 

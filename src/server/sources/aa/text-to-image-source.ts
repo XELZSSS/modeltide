@@ -11,7 +11,7 @@ import { fetchAaRsc } from "@/server/sources/aa/aa-fetch";
 import { cachedPayload, requireParsed, requireRows } from "@/server/sources/pipeline";
 
 export const getTextToImageLeaderboard = (ctx: AppContext): Promise<SourcePayload<TextToImageModel[]>> =>
-  cachedPayload<TextToImageModel[]>(ctx, cacheKeys.textToImage, DEFAULT_TTL_MS, async () => {
+  cachedPayload<TextToImageModel[]>(ctx, cacheKeys.textToImage, DEFAULT_TTL_MS, async (ctx) => {
     const body = await fetchAaRsc(ctx, upstreamEndpoints.aaTextToImage);
     let rawModels = requireRows(
       requireParsed(parseTextToImageRows(body)),

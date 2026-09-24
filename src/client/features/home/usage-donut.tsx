@@ -8,7 +8,7 @@ import { formatShortNumber } from "@/client/utils/format";
 import { registerDoughnut } from "@/client/utils/charts-register";
 
 registerDoughnut();
-import { useChartTheme, legendStyle, seriesColor } from "@/client/theme/chart-theme";
+import { useChartTheme, legendStyle } from "@/client/theme/chart-theme";
 import { chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import { aggregateTaskShare, OTHER_TASK_KEY, taskLabel } from "./home-usage";
 
@@ -23,7 +23,7 @@ export const UsageDonut = memo(function UsageDonut({ models }: { models: { task:
       datasets: [
         {
           data: slices.map((s) => s.total),
-          backgroundColor: slices.map((_, i) => theme.donut[i % theme.donut.length] ?? seriesColor(theme, i)),
+          backgroundColor: slices.map((_, i) => theme.donut[i % theme.donut.length]!),
           borderColor: theme.tooltipBg,
           borderWidth: 2,
           borderRadius: 0,

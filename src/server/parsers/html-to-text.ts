@@ -27,12 +27,10 @@ const BLOCK_TAGS = new Set([
 ]);
 
 function tagNameOf(tagInner: string): string {
-  // Optional leading `/`; a real tag name starts with a letter, so `< 3s` is text, not markup.
   const m = /^\/?[a-zA-Z][a-zA-Z0-9-]*/.exec(tagInner.trim());
   return (m?.[0] ?? "").toLowerCase().replace(/^\//, "");
 }
 
-// Hoisted regexes: stripHtml runs per feed item, so reset lastIndex before each exec.
 const SCRIPT_CLOSE_RE = /<\/script\s*>/gi;
 const STYLE_CLOSE_RE = /<\/style\s*>/gi;
 
@@ -79,7 +77,6 @@ export function stripHtml(s: unknown): string {
     const inner = s.slice(i + 1, end);
     const name = tagNameOf(inner);
     if (!name) {
-      // A bare `<` (from a decoded `&lt;`) is text: it must not swallow up to the next `>`.
       parts.push(s[i]!);
       i += 1;
       continue;

@@ -7,12 +7,24 @@ registerBar();
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { ChartCard, ChartFrame } from "@/client/components/ui/chart-frame";
 import { useTranslation } from "@/client/providers";
-import { cartesianChartOptions, hexToRgba, seriesColor, useChartTheme } from "@/client/theme/chart-theme";
+import { cartesianChartOptions, ceilToStep, hexToRgba, seriesColor, useChartTheme } from "@/client/theme/chart-theme";
 import { axisGridStyle, axisTickStyle } from "@/client/utils/charts";
 import type { CompareRow } from "@/client/features/compare/compare-logic";
 import { modelDisplayName } from "@/client/utils/model-utils";
 
-const PRICE_AXIS_MAX = 100;
+const PRICE_AXIS_FLOOR = 1;
+
+function priceAxisMax(rows: CompareRow<ArtificialAnalysisModel>[], models: ArtificialAnalysisModel[]): number {
+  let peak = 0;
+  for (const row of rows) {
+    for (const model of models) {
+      const value = row.getNumeric?.(model);
+      if (typeof value === "number" && Number.isFinite(value)) peak = Math.max(peak, value);
+    }
+  }
+  if (peak <= 0) return PRICE_AXIS_FLOOR;
+  return ceilToStep(peak, 10 ** Math.floor(Math.log10(peak)) / 2);
+}
 
 export const PriceChart = memo(function PriceChart({
   priceRows,
@@ -44,13 +56,15 @@ export const PriceChart = memo(function PriceChart({
     [priceRows, models, theme],
   );
 
+  const axisMax = useMemo(() => priceAxisMax(priceRows, models), [priceRows, models]);
+
   const options = useMemo<ChartOptions<"bar">>(
     () =>
       cartesianChartOptions<"bar">(theme, {
         x: { ticks: axisTickStyle(theme), grid: { display: false }, border: axisGridStyle(theme) },
         y: {
           min: 0,
-          suggestedMax: PRICE_AXIS_MAX,
+          max: axisMax,
           ticks: { ...axisTickStyle(theme), callback: (value) => `$${value}` },
         },
         tooltip: {
@@ -59,7 +73,7 @@ export const PriceChart = memo(function PriceChart({
           },
         },
       }),
-    [theme],
+    [theme, axisMax],
   );
 
   return (

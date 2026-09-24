@@ -7,14 +7,12 @@ function payloadData(payload: unknown, label: string): unknown {
   throw new Error(`${label}: invalid payload shape`);
 }
 
-/** No cross-shape tolerance: server cache entries are hard-cut per CACHE_VERSION and never migrated. */
 export function unwrapList<T>(payload: unknown, label: string): T[] {
   const data = payloadData(payload, label);
   if (Array.isArray(data)) return data;
   throw new Error(`${label}: payload.data is not an array`);
 }
 
-/** `data` carries the whole object, null for a model that does not exist. */
 export function unwrapObject<T>(payload: unknown, label: string): T {
   return payloadData(payload, label) as T;
 }
@@ -53,4 +51,8 @@ export function unwrapListPartial<T>(
     console.warn(`[api] dropping malformed ${label} payload:`, err);
     return { data: [] as T[], partial, malformed: true };
   }
+}
+
+export function assertPayloadShape(malformed: boolean, label: string): void {
+  if (malformed) throw new Error(`${label}: malformed payload`);
 }

@@ -22,8 +22,6 @@ function newestFirst(models: ChangelogModel[]): ChangelogModel[] {
   return models.sort(byDateDesc((m) => m.releaseDate));
 }
 
-// The index page carries the same `models` array as /changelog; a missing body
-// or markup drift must leave the page fetch as the working path.
 async function changelogFromIndexBody(ctx: AppContext): Promise<ChangelogModel[]> {
   try {
     return newestFirst(requireParsed(parseChangelogModels(await getAaIndexBody(ctx))));

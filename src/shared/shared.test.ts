@@ -1,13 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { ttlFor, ttlForRatio, DEFAULT_TTL_MS, PARTIAL_FAIL_TTL_MS } from "@/shared/config";
+import {
+  ttlFor,
+  ttlForRatio,
+  DEFAULT_TTL_MS,
+  NEWS_TTL_MS,
+  PARTIAL_FAIL_TTL_MS,
+  SLOW_TTL_MS,
+  STATIC_TTL_MS,
+  ONE_MINUTE,
+} from "@/shared/config";
 import { dedupeBy, normalizePercent, normalizeModelKey, computeBlendPrice } from "@/shared/utils";
 import { createT, interpolate } from "@/shared/i18n";
 import { en } from "@/shared/i18n/en";
 import { zh } from "@/shared/i18n/zh";
 
 describe("shared/config limits", () => {
-  it("shortens TTL on partial failure", () => {
+  it("shortens TTL on partial failure, floored at a fraction of the cron cadence", () => {
     expect(ttlFor(true)).toBe(PARTIAL_FAIL_TTL_MS);
+    expect(ttlFor(true, NEWS_TTL_MS)).toBe(PARTIAL_FAIL_TTL_MS);
+    expect(ttlFor(true, SLOW_TTL_MS)).toBe(SLOW_TTL_MS / 6);
+    expect(ttlFor(true, STATIC_TTL_MS)).toBe(STATIC_TTL_MS / 6);
+    expect(ttlFor(true, ONE_MINUTE)).toBe(ONE_MINUTE);
+    expect(ttlFor(false, NEWS_TTL_MS)).toBe(NEWS_TTL_MS);
   });
 
   it.each([

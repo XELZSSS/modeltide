@@ -10,12 +10,7 @@ import {
 } from "@/client/components/data/table/table-columns";
 import { computeBlendPrice } from "@/shared/utils";
 import { modelId } from "@/client/utils/model-utils";
-import {
-  resolveEffectivePricing,
-  PRICE_LEGS,
-  type EffectivePricing,
-  type PriceLegPick,
-} from "@/client/utils/pricing";
+import { resolveEffectivePricing, PRICE_LEGS, type EffectivePricing, type PriceLegPick } from "@/client/utils/pricing";
 import { CompareModelCell } from "@/client/features/rankings/aa/aa-cells";
 
 export interface PricingRow {
@@ -25,8 +20,6 @@ export interface PricingRow {
 
 export function buildPricingColumns(
   t: TFunction,
-  compareSet: Set<string>,
-  onToggleCompare: (m: ArtificialAnalysisModel) => void,
   effectiveMap: Map<string, EffectivePricing>,
 ): DataTableColumn<PricingRow>[] {
   const getEff = (model: ArtificialAnalysisModel): EffectivePricing =>
@@ -34,12 +27,7 @@ export function buildPricingColumns(
   const pricingLegCol = (id: string, header: string, getLeg: PriceLegPick) =>
     rightCol(id, header, (row: PricingRow) => formatDollar(getLeg(getEff(row.model)), t), { hiddenMd: true });
   return [
-    col(
-      "model",
-      t("model"),
-      (row) => <CompareModelCell model={row.model} compareSet={compareSet} onToggleCompare={onToggleCompare} />,
-      { width: "35%" },
-    ),
+    col("model", t("model"), (row) => <CompareModelCell model={row.model} />, { width: "35%" }),
     rightCol("provider", t("provider"), (row) => (
       <RightAlignedText>{row.model.model_creators?.name || t("notAvailable")}</RightAlignedText>
     )),

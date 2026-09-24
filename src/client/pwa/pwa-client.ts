@@ -10,12 +10,23 @@ function reloadOnce(): void {
   window.location.reload();
 }
 
+function adoptUpdates(registration: ServiceWorkerRegistration): void {
+  registration.waiting?.postMessage(SKIP_WAITING);
+  registration.addEventListener("updatefound", () => {
+    const installing = registration.installing;
+    if (!installing) return;
+    installing.addEventListener("statechange", () => {
+      if (installing.state === "installed" && navigator.serviceWorker.controller) {
+        installing.postMessage(SKIP_WAITING);
+      }
+    });
+  });
+}
+
 function register(): void {
   void navigator.serviceWorker
     .register(SW_URL)
-    .then((registration) => {
-      registration.waiting?.postMessage(SKIP_WAITING);
-    })
+    .then(adoptUpdates)
     .catch((err) => {
       console.warn("[pwa] service worker registration failed:", err);
     });

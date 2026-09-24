@@ -12,7 +12,6 @@ export const RANKING_TABS = [
 
 export type RankingTabId = (typeof RANKING_TABS)[number];
 
-/** Tab a `/models` visit lands on when the URL carries no `tab` param. */
 export const DEFAULT_RANKING_TAB: RankingTabId = RANKING_TABS[0];
 
 export type ModelSource = "aa" | "or" | "os" | "hall";

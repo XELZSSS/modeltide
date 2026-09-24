@@ -1,7 +1,6 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# Fixed-name icons/fonts: no content hash, so a short TTL.
 /fonts/*
   Cache-Control: public, max-age=86400
 
@@ -11,17 +10,13 @@
 /manifest.webmanifest
   Cache-Control: public, max-age=3600
 
-# Service worker: must revalidate so updates activate promptly.
 /sw.js
   Cache-Control: no-cache, must-revalidate
   Service-Worker-Allowed: /
 
-# /api/* headers are set in code; connect-src 'self' needs a separate VITE_API_BASE origin added here.
 /*
   X-Content-Type-Options: nosniff
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Referrer-Policy: no-referrer
   X-Frame-Options: DENY
-  # script-src admits index.html's pre-paint script by its sha256; the hash covers the exact bytes
-  # between <script> and </script>, so an edit there breaks the app and needs a new hash.
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-zRg/Bqv2fey0hS3TRwFRb1MjnmcDsySn0uDw6uMiTtU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-zeZTe1CH5cJtYV269PPZjuCVF9uETOjMd3sEbOd5zpU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests

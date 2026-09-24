@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import { useMemo, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import { MODEL_SOURCES, type ModelSource } from "@/client/config/nav-config";
 import { NotFound, PartialNotice } from "@/client/components/feedback";
@@ -36,7 +36,7 @@ export function createDetailView<T>(
 ): ComponentType<{ decodedId: string }> {
   return function DetailView({ decodedId }: { decodedId: string }) {
     const { data, partial } = useData();
-    const model = data ? findModel(data, decodedId, ...keys) : undefined;
+    const model = useMemo(() => (data ? findModel(data, decodedId, ...keys) : undefined), [data, decodedId]);
     if (!model) return <NotFound />;
     return (
       <DetailShell source={source} title={titleOf(model)}>

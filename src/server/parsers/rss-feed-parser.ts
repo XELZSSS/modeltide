@@ -142,7 +142,6 @@ function parseChannel(feed: unknown, sourceUrl: string): ParseResult<NewsItem[]>
   if (records.length === 0 && rawItems.length > 0) {
     return parseFail(`Unrecognized feed items at ${sourceUrl}`);
   }
-  // Cap work before mapping: a hostile feed could stuff thousands of items inside the 2MB byte cap.
   const bounded = records.slice(0, MAX_ITEMS_PER_FEED * 4);
   const parsed = bounded
     .map((item) => toNewsItem(item, source))

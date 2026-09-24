@@ -1,11 +1,9 @@
-import { shortModelId } from "@/client/utils/model-utils";
-import type { ClosedReleaseEntry, OpenSourceModelEntry } from "@/shared/types";
+import type { ClosedReleaseEntry } from "@/shared/types";
 
 export interface ReleaseRow {
   id: string;
   name: string;
   provider: string;
-  /** YYYY-MM-DD in UTC. */
   date: string;
   ts: number;
   link: string | null;
@@ -14,42 +12,6 @@ export interface ReleaseRow {
 function parseReleaseTs(value: string): number | null {
   const ts = Date.parse(value);
   return Number.isFinite(ts) ? ts : null;
-}
-
-function toReleaseDateStr(ts: number): string {
-  return new Date(ts).toISOString().slice(0, 10);
-}
-
-const HF_SOURCE = "Hugging Face";
-
-function fromOpenSourceReleases(releases: OpenSourceModelEntry[]): ReleaseRow[] {
-  const seen = new Map<string, ReleaseRow>();
-  // Keyed by model + day: a same-day create/modify pair is one event.
-  const add = (id: string, name: string, ts: number) => {
-    const date = toReleaseDateStr(ts);
-    const key = `${id}|${date}`;
-    if (seen.has(key)) return;
-    seen.set(key, {
-      id: `hf:${id}@${date}`,
-      name,
-      provider: HF_SOURCE,
-      date,
-      ts,
-      link: `https://huggingface.co/${id}`,
-    });
-  };
-  for (const m of releases) {
-    const name = shortModelId(m.id);
-    if (m.createdAt) {
-      const ts = parseReleaseTs(m.createdAt);
-      if (ts != null) add(m.id, name, ts);
-    }
-    if (m.lastModified && m.lastModified !== m.createdAt) {
-      const ts = parseReleaseTs(m.lastModified);
-      if (ts != null) add(m.id, name, ts);
-    }
-  }
-  return [...seen.values()];
 }
 
 function fromClosedReleases(releases: ClosedReleaseEntry[]): ReleaseRow[] {
@@ -69,15 +31,9 @@ function fromClosedReleases(releases: ClosedReleaseEntry[]): ReleaseRow[] {
   return rows;
 }
 
-export function buildReleaseRows(
-  openSourceReleases: OpenSourceModelEntry[],
-  closedReleases: ClosedReleaseEntry[],
-): ReleaseRow[] {
-  return [...fromOpenSourceReleases(openSourceReleases), ...fromClosedReleases(closedReleases)].sort(
-    (a, b) => b.ts - a.ts,
-  );
+export function buildClosedReleaseRows(closedReleases: ClosedReleaseEntry[]): ReleaseRow[] {
+  return fromClosedReleases(closedReleases).sort((a, b) => b.ts - a.ts);
 }
 
 export const getReleaseRowId = (row: ReleaseRow) => row.id;
-// id keeps the source namespace, so search still matches the org that `name` drops.
 export const getReleaseSearchFields = (row: ReleaseRow) => [row.name, row.provider, row.id];

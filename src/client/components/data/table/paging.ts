@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import { dedupeBy } from "@/shared/utils";
 import { useResetOnChange } from "@/client/hooks/use-reset-on-change";
 
-/** Desktop page size; a phone's viewport only fits about half of it. */
 export const DEFAULT_PAGE_SIZE = 20;
 export const MOBILE_PAGE_SIZE = 10;
 
@@ -25,7 +24,6 @@ export function usePagedData<T>(
     setPage(safeTotal);
   }
   const cur = totalPages === 0 ? 1 : Math.min(page, totalPages);
-  // Memoized so the slice keeps its identity: rows are memoized on the page they render.
   const paged = useMemo(
     () => (dedupedData.length > safeSize ? dedupedData.slice((cur - 1) * safeSize, cur * safeSize) : dedupedData),
     [dedupedData, cur, safeSize],

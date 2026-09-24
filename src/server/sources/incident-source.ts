@@ -16,7 +16,6 @@ interface ProviderStatusResult {
 
 type HealthParse = (raw: unknown) => ParseResult<{ level: SourceLevel; detail: string }>;
 
-/** Bounds one provider message; statuspage component/incident names are upstream-controlled. */
 const DETAIL_MAX_CHARS = 200;
 
 const parseStatuspageHealth: HealthParse = (raw) => {

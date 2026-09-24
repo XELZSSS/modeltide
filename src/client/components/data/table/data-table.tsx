@@ -49,7 +49,6 @@ function DataTableInner<T>({ data, columns, getRowId, getRowName, renderExpanded
     totalPages > 1 ? (
       <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} className="justify-center" />
     ) : null;
-  // Stable identity: otherwise the row-body memos never match and every page re-renders its rows.
   const listProps: RowListProps<T> = useMemo(
     () => ({
       pagedData,
@@ -89,7 +88,7 @@ function DataTableInner<T>({ data, columns, getRowId, getRowName, renderExpanded
   );
 }
 
-export const DataTable = memo(DataTableInner) as typeof DataTableInner;
+const DataTable = memo(DataTableInner) as typeof DataTableInner;
 
 interface SearchableDataTableProps<T> extends Omit<DataTableProps<T>, "data"> {
   data: T[];

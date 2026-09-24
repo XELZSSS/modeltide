@@ -5,12 +5,13 @@ import {
   numCoerceNonNegative,
   numOr,
   obj,
+  parseTs,
   str,
   strOrNull,
   titleCase,
   isValidOpenRouterDirectoryRow,
 } from "@/server/parsers/parser-primitives";
-import { PER_MILLION, perMillionOrNull } from "@/server/config/limits";
+import { PER_MILLION, SOURCE_LIMITS, perMillionOrNull } from "@/server/config/limits";
 import type { OpenRouterRankEntry } from "@/shared/types";
 
 import { normalizeModelKey } from "@/shared/utils";
@@ -71,7 +72,6 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
     if (pricingEntry) {
       const idKey = strOrNull(m.id);
       const slugKey = strOrNull(m.canonical_slug);
-      // Rankings address a variant by its dated permaslug, so a variant row needs that composed key.
       let variantSlugKey: string | null = null;
       if (idKey && slugKey) {
         const variantAt = idKey.lastIndexOf(":");
@@ -165,11 +165,18 @@ function usageTotal(row: ModelRow): number {
   return (p ?? 0) + (c ?? 0);
 }
 
+function rankingMetric(row: ModelRow): number | null {
+  return numCoerce((row as unknown as Record<string, unknown>).rankingMetricValue);
+}
+
 interface Group {
   agg: ModelRow;
-  /** Highest-usage row; it is the single source for every per-variant field the entry exposes. */
   dominant: ModelRow;
   dominantTokens: number;
+  latest: ModelRow;
+  latestTs: number;
+  latestTokens: number;
+  metric: number | null;
 }
 
 function changePercent(value: unknown): number | null {
@@ -182,7 +189,6 @@ function resolvePricing(
   id: string,
   variantKey: string | undefined,
 ): PricingEntry | undefined {
-  // Pricing keys are stored lowercased (see parseDirectoryRows); lookups normalize.
   return (variantKey ? pricingMap.get(variantKey.toLowerCase()) : undefined) ?? pricingMap.get(id.toLowerCase());
 }
 
@@ -197,12 +203,18 @@ function groupRows(rows: unknown): Map<string, Group> {
     const row = raw as unknown as ModelRow;
     const id = (idRaw as string).trim();
     const tokens = usageTotal(row);
+    const ts = parseTs(row.date);
+    const metric = rankingMetric(row);
     const group = grouped.get(id);
     if (!group) {
       grouped.set(id, {
         agg: { ...row, model_permaslug: id },
         dominant: row,
         dominantTokens: tokens,
+        latest: row,
+        latestTs: ts,
+        latestTokens: tokens,
+        metric,
       });
       continue;
     }
@@ -216,16 +228,45 @@ function groupRows(rows: unknown): Map<string, Group> {
       group.dominant = row;
       group.dominantTokens = tokens;
     }
+    if (ts > group.latestTs || (ts === group.latestTs && tokens > group.latestTokens)) {
+      group.latest = row;
+      group.latestTs = ts;
+      group.latestTokens = tokens;
+    }
+    if (metric != null && (group.metric == null || metric > group.metric)) group.metric = metric;
   }
   return grouped;
 }
 
+interface RankedGroup {
+  group: Group;
+  derivedTokens: number;
+}
+
+function compareRanked(a: RankedGroup, b: RankedGroup): number {
+  const am = a.group.metric;
+  const bm = b.group.metric;
+  if (am !== bm) {
+    if (am == null) return 1;
+    if (bm == null) return -1;
+    return bm - am;
+  }
+  if (a.derivedTokens !== b.derivedTokens) return b.derivedTokens - a.derivedTokens;
+  const aid = a.group.agg.model_permaslug;
+  const bid = b.group.agg.model_permaslug;
+  return aid === bid ? 0 : aid < bid ? -1 : 1;
+}
+
 export function mapModels(rows: unknown, pricingMap: Map<string, PricingEntry>): OpenRouterRankEntry[] {
-  const grouped = groupRows(rows);
-  const merged = Array.from(grouped.values()).sort((a, b) => usageTotal(b.agg) - usageTotal(a.agg));
+  const ranked: RankedGroup[] = Array.from(groupRows(rows).values()).map((group) => ({
+    group,
+    derivedTokens: usageTotal(group.agg),
+  }));
+  ranked.sort(compareRanked);
+  const merged = ranked.slice(0, SOURCE_LIMITS.openRouterRankingModels);
   const out: OpenRouterRankEntry[] = [];
   for (let i = 0; i < merged.length; i++) {
-    const { agg: row, dominant } = merged[i]!;
+    const { agg: row, dominant, latest } = merged[i]!.group;
     const id = row.model_permaslug;
     const name = titleFromSlug(id) || id;
     const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
@@ -247,7 +288,7 @@ export function mapModels(rows: unknown, pricingMap: Map<string, PricingEntry>):
       cachedTokens: numOr(row.total_native_tokens_cached, 0),
       toolCalls: numOr(row.total_tool_calls, 0),
       requestCount: numOr(row.count, 0),
-      change: changePercent(dominant.change),
+      change: changePercent(latest.change),
       pricing,
       isFree,
     });

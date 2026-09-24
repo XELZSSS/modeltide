@@ -8,7 +8,6 @@ export interface EffectivePricing {
   cacheWrite: number | null;
 }
 
-/** The four priced fields a leg reads; an OpenRouter entry's pricing block also satisfies it. */
 interface PriceLegFields {
   input: number | null;
   output: number | null;
@@ -20,7 +19,6 @@ export type PriceLegId = "promptPrice" | "completionPrice" | "cacheHitPrice" | "
 
 export type PriceLegPick = (pricing: PriceLegFields) => number | null | undefined;
 
-/** The single mapping of price leg to backing field; the id doubles as the i18n key at call sites. */
 export const PRICE_LEGS = {
   promptPrice: (p) => p.input,
   completionPrice: (p) => p.output,

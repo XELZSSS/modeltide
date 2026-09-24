@@ -1,8 +1,11 @@
 import type { AppContext } from "@/server/context";
+import { KV_READ_WARN_THROTTLE_MS, throttleGate } from "@/server/config/status";
 import { errMsg } from "@/server/infra/task-pool";
 import { FIRST_LAUNCH_KEY } from "./schema";
 
 let memoryFirstLaunch: number | null = null;
+
+const kvWarnGate = throttleGate(KV_READ_WARN_THROTTLE_MS);
 
 let memoFirstLaunch: number | null = null;
 
@@ -23,12 +26,6 @@ function memoryUptime(now: number): UptimePayload {
   return uptimePayload(memoryFirstLaunch, now);
 }
 
-export function resetUptimeMemoForTests(): void {
-  memoFirstLaunch = null;
-  memoryFirstLaunch = null;
-}
-
-/** Written once at first launch and never changed: one KV read per isolate suffices. */
 export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
   const now = Date.now();
   if (memoFirstLaunch != null) return uptimePayload(memoFirstLaunch, now);
@@ -37,8 +34,7 @@ export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
   try {
     raw = await ctx.kv.get(FIRST_LAUNCH_KEY);
   } catch (err) {
-    // Not memoized: a transient KV failure must not pin the memory fallback.
-    ctx.log("warn", `[uptime] KV read failed, using memory: ${errMsg(err)}`);
+    if (kvWarnGate.open()) ctx.log("warn", `[uptime] KV read failed, using memory: ${errMsg(err)}`);
     return memoryUptime(now);
   }
   let resolved = raw ? Number(raw) : NaN;
@@ -47,8 +43,7 @@ export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
     try {
       await ctx.kv.put(FIRST_LAUNCH_KEY, String(resolved));
     } catch (err) {
-      // Not memoized: the next call retries the write instead of pinning an unpersisted start.
-      ctx.log("warn", `[uptime] failed to persist first launch: ${errMsg(err)}`);
+      if (kvWarnGate.open()) ctx.log("warn", `[uptime] failed to persist first launch: ${errMsg(err)}`);
       return uptimePayload(resolved, now);
     }
   }

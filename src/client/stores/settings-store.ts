@@ -58,7 +58,6 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: STORAGE_KEYS.settings,
       version: 1,
-      // A version bump without migrate makes zustand destructure `undefined` and skip hydration.
       migrate: (persisted) => persisted as SettingsState,
       storage: localJsonStorage,
       merge: (persisted, current) => {
@@ -73,7 +72,6 @@ export const useSettingsStore = create<SettingsState>()(
   ),
 );
 
-/** Adopts another tab's settings write; equal values must be ignored or the two tabs echo each other. */
 function syncSettingsFromStorageEvent(e: StorageEvent): void {
   if (e.key !== STORAGE_KEYS.settings || e.newValue == null) return;
   try {

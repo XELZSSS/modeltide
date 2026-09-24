@@ -1,13 +1,14 @@
-import { lazy, memo, useMemo, type ComponentType } from "react";
+import { memo, useMemo, type ComponentType } from "react";
 import { useTranslation } from "@/client/providers";
 import type { TranslationKey } from "@/shared/i18n";
 import {
   useHallucinationRankings,
   useSuspenseArtificialRankingsState,
-  useSuspenseOpenSourceModels,
+  useSuspenseOpenSourceModelsState,
   useSuspenseOpenRouterRankings,
 } from "@/client/api/api-queries";
-import { PartialNotice } from "@/client/components/feedback";
+import { assertPayloadShape } from "@/client/api/payload-normalize";
+import { EmptyState, PartialNotice } from "@/client/components/feedback";
 import { SuspenseQuery } from "@/client/router/suspense-query";
 import { SearchInput } from "@/client/search/search-input";
 import { type TabItem } from "@/client/components/ui/tabs";
@@ -16,18 +17,24 @@ import { useClientTab } from "@/client/hooks/use-client-tab";
 import { col, monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns";
 import { LabeledDot } from "@/client/components/ui/primitives";
 import { SearchableDataTable } from "@/client/components/data/table";
+import { isHallucinationDataUnavailable } from "@/client/utils/hallucination";
 import { formatScore, formatPricePerMillion, formatSpeed } from "@/client/utils/format";
 import { computeProviderStats, type ProviderStats } from "@/client/utils/model-utils";
 import { DEFAULT_RANKING_TAB, MODEL_SOURCES, RANKING_TABS, type RankingTabId } from "@/client/config/nav-config";
+import { loadableView } from "@/client/router/lazy-view";
 
-const ArtificialAnalysisView = lazy(() => import("./aa-view").then((m) => ({ default: m.ArtificialAnalysisView })));
-const OpenRouterRankingsView = lazy(() =>
+const ArtificialAnalysisView = loadableView(() =>
+  import("./aa-view").then((m) => ({ default: m.ArtificialAnalysisView })),
+);
+const OpenRouterRankingsView = loadableView(() =>
   import("./openrouter-rankings-view").then((m) => ({ default: m.OpenRouterRankingsView })),
 );
 const RankingViewsModule = {
-  OpenSource: lazy(() => import("./open-source-view").then((m) => ({ default: m.OpenSourceRankingsView }))),
-  Hallucination: lazy(() => import("./hallucination-view").then((m) => ({ default: m.HallucinationRankingsView }))),
-  Agent: lazy(() => import("./agent-view").then((m) => ({ default: m.AgentRankingsView }))),
+  OpenSource: loadableView(() => import("./open-source-view").then((m) => ({ default: m.OpenSourceRankingsView }))),
+  Hallucination: loadableView(() =>
+    import("./hallucination-view").then((m) => ({ default: m.HallucinationRankingsView })),
+  ),
+  Agent: loadableView(() => import("./agent-view").then((m) => ({ default: m.AgentRankingsView }))),
 };
 
 const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
@@ -39,15 +46,9 @@ const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   providerCompare: MODEL_SOURCES.aa.sourceLabelKey,
 };
 
-function defineRankingsTab<T>(useRankings: () => T, View: ComponentType<{ rankings: T }>): ComponentType {
-  return memo(function RankingsTab() {
-    const rankings = useRankings();
-    return <View rankings={rankings} />;
-  });
-}
-
 const ModelRankingsTab = memo(function ModelRankingsTab() {
-  const { items, partial } = useSuspenseArtificialRankingsState();
+  const { items, partial, malformed } = useSuspenseArtificialRankingsState();
+  assertPayloadShape(malformed, "artificialIndex");
   return (
     <>
       {partial && <PartialNotice />}
@@ -55,17 +56,31 @@ const ModelRankingsTab = memo(function ModelRankingsTab() {
     </>
   );
 });
-const OpenSourceTab = defineRankingsTab(useSuspenseOpenSourceModels, RankingViewsModule.OpenSource);
-
-/** When the `/omniscience` enrichment leg fails every row loses its breakdown and the
- *  table renders empty, so the payload's `partial` flag must show a notice. */
-const HallucinationRankingsTab = memo(function HallucinationRankingsTab() {
-  const { items, partial } = useSuspenseArtificialRankingsState();
-  const rankings = useHallucinationRankings(items);
+const OpenSourceTab = memo(function OpenSourceTab() {
+  const { items, partial, malformed } = useSuspenseOpenSourceModelsState();
+  assertPayloadShape(malformed, "openSourceModels");
   return (
     <>
       {partial && <PartialNotice />}
-      <RankingViewsModule.Hallucination rankings={rankings} />
+      <RankingViewsModule.OpenSource rankings={items} />
+    </>
+  );
+});
+
+const HallucinationRankingsTab = memo(function HallucinationRankingsTab() {
+  const { items, partial, malformed } = useSuspenseArtificialRankingsState();
+  const rankings = useHallucinationRankings(items);
+  const { t } = useTranslation();
+  assertPayloadShape(malformed, "artificialIndex");
+  const unavailable = isHallucinationDataUnavailable(items, rankings);
+  return (
+    <>
+      {partial && <PartialNotice />}
+      {unavailable ? (
+        <EmptyState variant="error" message={t("rankingsUnavailable")} />
+      ) : (
+        <RankingViewsModule.Hallucination rankings={rankings} />
+      )}
     </>
   );
 });
@@ -81,7 +96,8 @@ const getProviderRowId = (p: ProviderStats) => p.name;
 const getProviderSearchFields = (p: ProviderStats) => [p.name];
 
 const ProviderCompareTab = memo(function ProviderCompareTab() {
-  const { items, partial } = useSuspenseArtificialRankingsState();
+  const { items, partial, malformed } = useSuspenseArtificialRankingsState();
+  assertPayloadShape(malformed, "artificialIndex");
   const { t } = useTranslation();
   const providerStats = useMemo(() => computeProviderStats(items, t("unknown")), [items, t]);
   const columns = useMemo<DataTableColumn<ProviderStats>[]>(
@@ -145,7 +161,7 @@ export function RankingsHubView() {
       tabFill
       onTabChange={handleTabChange}
     >
-      <SuspenseQuery resetKey={activeTabId}>
+      <SuspenseQuery>
         <ActiveContent />
       </SuspenseQuery>
     </TabbedPage>

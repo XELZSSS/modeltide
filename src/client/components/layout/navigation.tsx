@@ -1,13 +1,12 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
-import { Settings, MoreHorizontal, ChevronRight } from "lucide-react";
+import { Settings, MoreHorizontal } from "lucide-react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "@/client/providers";
 import { findRoute, prefetchQueriesForRoute, ROUTES, type NavGroup } from "@/client/config/routes";
 import { SafeLink as Link, usePathname } from "@/client/router";
-import { Sheet, SheetBody, SheetHeader } from "@/client/components/ui/sheet";
 import { REPO_URL } from "@/client/config/nav-config";
 
-interface NavItem {
+export interface NavItem {
   path: string;
   group: NavGroup;
   label: string;
@@ -15,7 +14,7 @@ interface NavItem {
   activePrefixes?: readonly string[];
 }
 
-function useNavigation() {
+export function useNavigation() {
   const { t } = useTranslation();
   return useMemo(() => {
     const all = ROUTES.flatMap((route): NavItem[] => {
@@ -40,7 +39,7 @@ function useNavigation() {
   }, [t]);
 }
 
-function isNavActive(pathname: string, item: NavItem): boolean {
+export function isNavActive(pathname: string, item: NavItem): boolean {
   if (pathname === item.path) return true;
   if (item.activePrefixes) return item.activePrefixes.some((p) => pathname.startsWith(p));
   return false;
@@ -51,16 +50,15 @@ function warmRoute(qc: QueryClient, path: string): void {
   void findRoute(path)?.load?.();
 }
 
-/** Pointer crossing time tolerated before a nav hover warms anything; a passing pointer must stay free. */
 const HOVER_PREFETCH_DELAY_MS = 150;
 
-interface PrefetchControls {
+export interface PrefetchControls {
   hover: (path: string) => void;
   immediate: (path: string) => void;
   cancel: () => void;
 }
 
-function usePrefetch(): PrefetchControls {
+export function usePrefetch(): PrefetchControls {
   const qc = useQueryClient();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancel = useCallback(() => {
@@ -104,7 +102,7 @@ export function DesktopNav({ onSettingsOpen }: DesktopNavProps) {
 
   return (
     <nav
-      className="hidden md:flex h-12 shrink-0 items-center border-b border-border bg-nav-bg backdrop-blur-md sticky top-0 z-30"
+      className="hidden md:flex h-12 shrink-0 items-center border-b border-border bg-bg-primary sticky top-0 z-30"
       aria-label={t("navPrimary")}
     >
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex items-center gap-1">
@@ -198,7 +196,7 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
 
   return (
     <nav
-      className="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch border-t border-border bg-nav-bg backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)]"
+      className="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch border-t border-border bg-bg-primary pb-[env(safe-area-inset-bottom,0px)]"
       aria-label={t("navPrimaryMobile")}
     >
       {mobilePrimary.map((item) => {
@@ -228,66 +226,5 @@ export function MobileNav({ onMoreOpen, onSettingsOpen }: MobileNavProps) {
         <span>{t("settings")}</span>
       </MobileBarButton>
     </nav>
-  );
-}
-
-interface MobileMoreSheetProps {
-  open: boolean;
-  onClose: () => void;
-}
-
-export function MobileMoreSheet({ open, onClose }: MobileMoreSheetProps) {
-  const pathname = usePathname();
-  const { mobileMore } = useNavigation();
-  const { t } = useTranslation();
-  const prefetch = usePrefetch();
-
-  return (
-    <Sheet open={open} onClose={onClose} ariaLabel={t("navMore")}>
-      <SheetBody>
-        <SheetHeader title={t("more")} onClose={onClose} />
-
-        <nav className="divide-y divide-border" aria-label={t("navSecondary")}>
-          {mobileMore.map((item) => {
-            const active = isNavActive(pathname, item);
-            return <NavRow key={item.path} item={item} active={active} onClose={onClose} prefetch={prefetch} />;
-          })}
-        </nav>
-      </SheetBody>
-    </Sheet>
-  );
-}
-
-function NavRow({
-  item,
-  active,
-  onClose,
-  prefetch,
-}: {
-  item: NavItem;
-  active: boolean;
-  onClose: () => void;
-  prefetch: PrefetchControls;
-}) {
-  return (
-    <Link
-      href={item.path}
-      onClick={onClose}
-      aria-current={active ? "page" : undefined}
-      onTouchStart={() => prefetch.immediate(item.path)}
-      onMouseEnter={() => prefetch.hover(item.path)}
-      onMouseLeave={prefetch.cancel}
-      onFocus={() => prefetch.immediate(item.path)}
-      onBlur={prefetch.cancel}
-      className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors duration-fast focus-visible:outline-none focus-visible:bg-hover ${
-        active ? "text-accent" : "text-text-primary hoverable:hover:bg-hover"
-      }`}
-    >
-      <span className="flex items-center gap-2 min-w-0">
-        <span className={active ? "text-accent shrink-0" : "text-text-secondary shrink-0"}>{item.icon}</span>
-        <span className="text-sm">{item.label}</span>
-      </span>
-      <ChevronRight size={16} className="text-text-tertiary shrink-0" aria-hidden="true" />
-    </Link>
   );
 }

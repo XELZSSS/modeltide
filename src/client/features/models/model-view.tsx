@@ -1,4 +1,4 @@
-import { lazy } from "react";
+import { loadableView } from "@/client/router/lazy-view";
 import { useParams } from "@/client/router";
 import { MODEL_SOURCES, type ModelSource } from "@/client/config/nav-config";
 import { NotFound } from "@/client/components/feedback";
@@ -6,14 +6,16 @@ import { SuspenseQuery } from "@/client/router/suspense-query";
 import { PageContainer } from "@/client/components/layout";
 
 const SOURCE_COMPONENTS: Record<ModelSource, React.ComponentType<{ decodedId: string }>> = {
-  aa: lazy(() => import("@/client/features/models/model-details/aa-detail").then((m) => ({ default: m.AADetail }))),
-  or: lazy(() =>
+  aa: loadableView(() =>
+    import("@/client/features/models/model-details/aa-detail").then((m) => ({ default: m.AADetail })),
+  ),
+  or: loadableView(() =>
     import("@/client/features/models/model-details/openrouter-detail").then((m) => ({ default: m.OrDetail })),
   ),
-  os: lazy(() =>
+  os: loadableView(() =>
     import("@/client/features/models/model-details/open-source-detail").then((m) => ({ default: m.OSDetail })),
   ),
-  hall: lazy(() =>
+  hall: loadableView(() =>
     import("@/client/features/models/model-details/hallucination-detail").then((m) => ({ default: m.HallDetail })),
   ),
 };

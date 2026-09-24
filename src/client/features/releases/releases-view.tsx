@@ -4,13 +4,13 @@ import { RightAlignedText, col, rightCol, type DataTableColumn } from "@/client/
 import { SearchableDataTable } from "@/client/components/data/table";
 import { useTranslation } from "@/client/providers";
 import { formatDate, safeHref } from "@/client/utils/format";
-import { useSuspenseClosedReleasesState, useSuspenseOpenSourceReleases } from "@/client/api/api-queries";
+import { useSuspenseClosedReleasesState } from "@/client/api/api-queries";
 import { PartialNotice } from "@/client/components/feedback";
 import { SuspenseQuery } from "@/client/router/suspense-query";
 import { SearchInput } from "@/client/search/search-input";
 import { PageContainer, PageHeader } from "@/client/components/layout";
 import {
-  buildReleaseRows,
+  buildClosedReleaseRows,
   getReleaseRowId,
   getReleaseSearchFields,
   type ReleaseRow,
@@ -37,15 +37,19 @@ function ReleaseModelCell({
   );
 }
 
+const getReleaseRowName = (row: ReleaseRow) => row.name;
+
 function ReleasesContent() {
   const { t, lang } = useTranslation();
-  const openSourceReleases = useSuspenseOpenSourceReleases();
   const { items: closedReleases, partial } = useSuspenseClosedReleasesState();
 
-  const rows = useMemo(
-    () => buildReleaseRows(openSourceReleases, closedReleases),
-    [openSourceReleases, closedReleases],
-  );
+  const rows = useMemo(() => buildClosedReleaseRows(closedReleases), [closedReleases]);
+
+  const dateLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const row of rows) labels.set(row.id, formatDate(row.date, lang));
+    return labels;
+  }, [rows, lang]);
 
   const columns = useMemo<DataTableColumn<ReleaseRow>[]>(
     () => [
@@ -57,7 +61,7 @@ function ReleasesContent() {
           line={
             <>
               <span className="text-xs text-text-secondary">{row.provider}</span>
-              <span className="ui-meta">{formatDate(row.date, lang)}</span>
+              <span className="ui-meta">{dateLabels.get(row.id)!}</span>
             </>
           }
         />
@@ -74,14 +78,13 @@ function ReleasesContent() {
       rightCol(
         "releaseDate",
         t("releaseDate"),
-        (row) => <span className="ui-mono-value font-normal">{formatDate(row.date, lang)}</span>,
+        (row) => <span className="ui-mono-value font-normal">{dateLabels.get(row.id)!}</span>,
         { width: "18%", hiddenMd: true },
       ),
     ],
-    [t, lang],
+    [t, dateLabels],
   );
 
-  // Stable across renders: `SearchableDataTable` is memoized, so a fresh callback re-renders every row.
   const renderExpanded = useCallback(
     (row: ReleaseRow) => {
       const href = safeHref(row.link);
@@ -94,7 +97,7 @@ function ReleasesContent() {
             rel="noopener noreferrer"
             className="group inline-flex items-center gap-1.5 text-sm text-accent w-fit underline-offset-4 transition-colors duration-fast hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           >
-            {t(row.id.startsWith("aa:") ? "aaModelPage" : "hfModelPage")}
+            {t("aaModelPage")}
             <ExternalLink
               size={14}
               className="md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-fast"
@@ -117,7 +120,7 @@ function ReleasesContent() {
         data={rows}
         columns={columns}
         getRowId={getReleaseRowId}
-        getRowName={(row) => row.name}
+        getRowName={getReleaseRowName}
         getSearchFields={getReleaseSearchFields}
         renderExpandedRow={renderExpanded}
       />

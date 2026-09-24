@@ -8,7 +8,7 @@ import { getIntelligenceIndex } from "@/server/sources/aa/index-source";
 import { getClosedReleases } from "@/server/sources/closed-releases-source";
 import { getHomeDashboard } from "@/server/sources/home-source";
 import { getNews } from "@/server/sources/news-source";
-import { getModelById, getModels, getReleases } from "@/server/sources/hf-source";
+import { getModelById, getModels } from "@/server/sources/hf-source";
 import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
 import { getStatusHistory } from "@/server/sources/status-history";
 
@@ -31,10 +31,8 @@ interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = Q
 }
 
 const OPEN_SOURCE_SORTS = ["trendingScore", "downloads", "likes", "createdAt", "lastModified"] as const;
-// Upstream rejects ascending sort ("only descending sort is supported"): -1 only.
 const SORT_DIRECTIONS = ["-1"] as const;
 
-/** The payload type comes from `ApiContract`, not a hand-written type argument: route and contract cannot drift. */
 function defineSource<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
   domain: D,
   def: SourceDefinition<D, Q>,
@@ -42,7 +40,6 @@ function defineSource<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
   return { domain, path: apiPaths[domain], ...def };
 }
 
-/** Keyed by API domain: `satisfies` makes a missing route a compile error. */
 const ENTRIES = {
   artificialIndex: defineSource("artificialIndex", {
     handler: (ctx) => getIntelligenceIndex(ctx),
@@ -60,10 +57,6 @@ const ENTRIES = {
   }),
   agentRankings: defineSource("agentRankings", {
     handler: (ctx) => getAgentRankings(ctx),
-    warm: "hourly",
-  }),
-  openSourceReleases: defineSource("openSourceReleases", {
-    handler: (ctx) => getReleases(ctx),
     warm: "hourly",
   }),
   openSourceModels: defineSource("openSourceModels", {
@@ -87,10 +80,15 @@ const ENTRIES = {
   }),
   openSourceModel: defineSource("openSourceModel", {
     query: { id: qStr({ maxLength: 200 }) },
+    cache: {
+      browser: "public, max-age=15",
+      cdn: "public, max-age=30, stale-while-revalidate=30",
+    },
     handler: (ctx, params) => getModelById(ctx, params.id),
   }),
   openRouterRankings: defineSource("openRouterRankings", {
     handler: (ctx) => getOpenRouterRankings(ctx),
+    warm: "core",
   }),
   statusHistory: defineSource("statusHistory", {
     cache: {
@@ -103,13 +101,18 @@ const ENTRIES = {
 
 export const SOURCES: readonly SourceEntry[] = Object.values(ENTRIES);
 
+for (const source of SOURCES) {
+  if (source.warm && source.query && !source.warmParams?.length) {
+    throw new Error(`[registry] ${source.path} declares a warm tier without warmParams`);
+  }
+}
+
 export function warmTasks(env: Env, tier: WarmTier, taskTimeoutMs: number): (() => Promise<unknown>)[] {
   const tasks: (() => Promise<unknown>)[] = [];
   for (const source of SOURCES) {
     if (source.warm !== tier) continue;
     const paramSets = source.warmParams?.length ? source.warmParams : [{} as ValidatedQuery<QuerySchema>];
     for (const params of paramSets) {
-      // Per-call timeout so a slow upstream can't starve tasks sharing a deadline.
       tasks.push(() => source.handler(buildContext(env, { workSignal: AbortSignal.timeout(taskTimeoutMs) }), params));
     }
   }

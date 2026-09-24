@@ -53,7 +53,6 @@ function toChangelogModel(e: ChangelogRawEntry): ChangelogModel | null {
   return { slug, name, releaseSlug, releaseName, releaseDate, creatorName };
 }
 
-/** No usable row means an empty result, not a failure: `requireRows` owns the zero-row verdict. */
 export function parseChangelogModels(html: unknown): ParseResult<ChangelogModel[]> {
   if (typeof html !== "string" || !html) return parseFail("Changelog page is not a string");
   if (html.length > 8_000_000) return parseFail(`Changelog page too large (${html.length} chars)`);

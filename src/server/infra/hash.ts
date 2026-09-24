@@ -1,7 +1,3 @@
-const utf8Encoder = new TextEncoder();
-
-// FNV-1a. `seed`/`prime` exist for the second, independent hash a key may need: it shares the
-// loop but not the constants, so it cannot be a second call to the default form.
 export function fnv1aHash(raw: string, seed = 2166136261, prime = 16777619): string {
   let h = seed;
   for (let i = 0; i < raw.length; i++) {
@@ -12,17 +8,18 @@ export function fnv1aHash(raw: string, seed = 2166136261, prime = 16777619): str
 }
 
 export function utf8ByteLength(s: string): number {
-  let ascii = true;
+  let bytes = 0;
   for (let i = 0; i < s.length; i++) {
-    if (s.charCodeAt(i) > 127) {
-      ascii = false;
-      break;
-    }
+    const code = s.charCodeAt(i);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const low = s.charCodeAt(i + 1);
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        bytes += 4;
+        i += 1;
+      } else bytes += 3;
+    } else bytes += 3;
   }
-  if (ascii) return s.length;
-  try {
-    return utf8Encoder.encode(s).length;
-  } catch {
-    return s.length * 3;
-  }
+  return bytes;
 }

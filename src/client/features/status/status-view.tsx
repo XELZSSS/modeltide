@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { SafeLink as Link } from "@/client/router";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "@/client/providers";
@@ -12,12 +12,13 @@ import { Dot, LabeledDot } from "@/client/components/ui/primitives";
 import { cn } from "@/client/utils/cn";
 import { formatUptime, formatUptimePct } from "@/client/utils/format";
 import { sourceLabelKey } from "@/shared/config";
-import type { DayBucket, SourceHistorySummary, StatusHistoryPayload } from "@/shared/types";
+import type { DayBucket, SourceHistorySummary, StatusEvent, StatusHistoryPayload } from "@/shared/types";
 import { LEVEL_STYLES, recentlyDegradedIds, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./status-parts";
 import { StatusEventList } from "./status-events";
 
 const EMPTY_BUCKETS: DayBucket[] = [];
+const EMPTY_EVENTS: StatusEvent[] = [];
 
 const SourceCard = memo(function SourceCard({
   summary,
@@ -81,13 +82,20 @@ function StatusContent() {
   const { t } = useTranslation();
   const { data } = useSuspenseStatusHistory();
   const history = unwrapObject<StatusHistoryPayload>(data, "statusHistory");
-  const levels = history.sources.map((s) => resolveLevel(s));
-  const degradedIds = recentlyDegradedIds(history.recent);
-  const erroring = levels.filter((l) => l === "error").length;
-  const warning = levels.filter((l) => l === "warn").length;
-  const hasData = history.sources.some((s) => s.checkedAt != null);
-  // Unprobed sources must not read as healthy (1 probed-OK + 13 silent).
-  const unprobed = levels.filter((l) => l === "unknown").length;
+  const { degradedIds, erroring, warning, unprobed, hasData } = useMemo(() => {
+    let erroring = 0;
+    let warning = 0;
+    let unprobed = 0;
+    let hasData = false;
+    for (const source of history.sources) {
+      const level = resolveLevel(source);
+      if (level === "error") erroring++;
+      else if (level === "warn") warning++;
+      else if (level === "unknown") unprobed++;
+      if (source.checkedAt != null) hasData = true;
+    }
+    return { degradedIds: recentlyDegradedIds(history.recent), erroring, warning, unprobed, hasData };
+  }, [history]);
   const sourceCount = history.sources.length;
   let overall: { color: string; message: string };
   if (!hasData) overall = { color: "var(--text-tertiary)", message: t("historyAccumulating") };
@@ -106,7 +114,7 @@ function StatusContent() {
     <PageContainer>
       <PageHeader title={t("statusPageTitle")} description={t("sourceStatus")} />
 
-      {history.persisted === false && <PartialNotice message={t("memoryModeNotice")} />}
+      {history.storeMode === "memory" && <PartialNotice message={t("memoryModeNotice")} />}
 
       <Card>
         <CardContent className="flex items-center justify-between gap-3 flex-wrap py-4">
@@ -137,7 +145,8 @@ function StatusContent() {
       {hasData && (
         <PageSection title={t("recentEvents")}>
           <StatusEventList
-            events={(history.events ?? []).slice(0, 15)}
+            events={history.events ?? EMPTY_EVENTS}
+            limit={15}
             emptyMessage={t("noRecentEvents")}
             showSource
             showTime

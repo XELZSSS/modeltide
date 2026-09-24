@@ -78,10 +78,16 @@ function findAaModelForHall(
 export function HallDetail({ decodedId }: { decodedId: string }) {
   const aaData = useSuspenseArtificialRankings();
   const hallucinationRankings = useSuspenseHallucinationRankings();
-  const aaIndex = useMemo(() => indexAaModels(aaData), [aaData]);
-  const entry = findModel(hallucinationRankings, decodedId, "id", "slug");
-  const aaModel =
-    findModel(aaData, decodedId, "id", "slug") ?? (entry ? findAaModelForHall(aaIndex, entry) : undefined);
+  const entry = useMemo(
+    () => findModel(hallucinationRankings, decodedId, "id", "slug"),
+    [hallucinationRankings, decodedId],
+  );
+  const directAa = useMemo(() => findModel(aaData, decodedId, "id", "slug"), [aaData, decodedId]);
+  const fallbackAa = useMemo(
+    () => (!directAa && entry ? findAaModelForHall(indexAaModels(aaData), entry) : undefined),
+    [aaData, directAa, entry],
+  );
+  const aaModel = directAa ?? fallbackAa;
   if (!entry) return <NotFound />;
   return (
     <DetailShell source="hall" title={entry.model}>

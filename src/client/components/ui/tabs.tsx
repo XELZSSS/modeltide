@@ -1,4 +1,4 @@
-import { memo, type ReactNode, type KeyboardEvent } from "react";
+import { memo, useCallback, useMemo, type ReactNode, type KeyboardEvent } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
 import { SegmentedGroup } from "@/client/components/ui/grids";
@@ -66,7 +66,6 @@ export const TabButton = memo(function TabButton({
   );
 });
 
-/** Roving-focus move for Arrow/Home/End; null means "not a navigation key" — leave the event alone. */
 export function nextIndexForKey(key: string, index: number, length: number): number | null {
   if (length === 0 || index < 0) return null;
   if (key === "ArrowRight" || key === "ArrowDown") return (index + 1) % length;
@@ -102,17 +101,26 @@ export const TabContainer = memo(function TabContainer({
   onTabChange,
   children,
 }: TabContainerProps) {
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const nextIndex = nextIndexForKey(
-      event.key,
-      tabs.findIndex((tab) => tab.id === activeTab),
-      tabs.length,
-    );
-    if (nextIndex == null) return;
-    event.preventDefault();
-    onTabChange(tabs[nextIndex]!.id);
-    document.getElementById(`tab-${tabs[nextIndex]!.id}`)?.focus();
-  };
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      const nextIndex = nextIndexForKey(
+        event.key,
+        tabs.findIndex((tab) => tab.id === activeTab),
+        tabs.length,
+      );
+      if (nextIndex == null) return;
+      event.preventDefault();
+      onTabChange(tabs[nextIndex]!.id);
+      document.getElementById(`tab-${tabs[nextIndex]!.id}`)?.focus();
+    },
+    [tabs, activeTab, onTabChange],
+  );
+
+  const selectTab = useMemo(() => {
+    const handlers = new Map<string, () => void>();
+    for (const tab of tabs) handlers.set(tab.id, () => onTabChange(tab.id));
+    return handlers;
+  }, [tabs, onTabChange]);
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
@@ -127,7 +135,7 @@ export const TabContainer = memo(function TabContainer({
             key={tab.id}
             className={fill ? "flex-1 sm:flex-auto sm:shrink sm:text-center" : undefined}
             active={activeTab === tab.id}
-            onClick={() => onTabChange(tab.id)}
+            onClick={selectTab.get(tab.id)!}
             size={tabSize}
             tabIndex={activeTab === tab.id ? 0 : -1}
             aria-controls={`panel-${tab.id}`}

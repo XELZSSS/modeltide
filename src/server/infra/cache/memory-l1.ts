@@ -1,14 +1,13 @@
 import { L1_MAX_TTL_MS, L1_TTL_CAP_MS, MEMORY_CACHE_MAX_BYTES, MEMORY_CACHE_MAX_KEYS } from "@/server/config";
+import { L1_RESIDENT_BYTES_FACTOR } from "@/server/config/cache";
 import { HIGH_CARDINALITY_KEY_MARKER } from "@/server/config/keys";
 
 interface MemoryEntry<T> {
   d: T;
   e: number;
-  /** The effective origin TTL, which may be shorter than the requested TTL. */
   t: number;
 }
 
-// Caller-controlled keys are unbounded: the family gets a quarter of the map and only displaces itself.
 const CAPPED_FAMILY_MAX_KEYS = Math.floor(MEMORY_CACHE_MAX_KEYS / 4);
 const CAPPED_FAMILY_MAX_BYTES = MEMORY_CACHE_MAX_BYTES / 4;
 
@@ -31,8 +30,9 @@ export class MemoryL1 {
     this.map.delete(vk);
   }
 
-  set(vk: string, data: unknown, ttl: number, bytes: number, effectiveTtl = ttl): void {
+  set(vk: string, data: unknown, ttl: number, serializedBytes: number, effectiveTtl = ttl): void {
     this.delete(vk);
+    const bytes = serializedBytes * L1_RESIDENT_BYTES_FACTOR;
     if (bytes > MEMORY_CACHE_MAX_BYTES) return;
     if (vk.includes(HIGH_CARDINALITY_KEY_MARKER)) this.evictFromCappedFamily(bytes);
     if (this.map.size >= MEMORY_CACHE_MAX_KEYS) {
@@ -60,7 +60,6 @@ export class MemoryL1 {
     this.bytes = 0;
   }
 
-  /** Frees the family's own oldest entries so a capped key never needs a shared one's slot. */
   private evictFromCappedFamily(bytes: number): void {
     let keys = 0;
     let familyBytes = 0;

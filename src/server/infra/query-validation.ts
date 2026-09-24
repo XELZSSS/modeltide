@@ -46,8 +46,6 @@ function parseSingle(name: string, v: string, spec: QuerySpec): string | number 
     return v;
   }
   if (spec.type === "number") {
-    // Single shape gate per kind: integers reject decimals/scientific/hex up
-    // front ("1.0", "1e3", "0x10"), decimals accept plain fractions only.
     const re = spec.integer ? /^[+-]?\d+$/ : /^[+-]?(\d+(\.\d+)?)$/;
     if (!re.test(v)) {
       throw new ValidationError(

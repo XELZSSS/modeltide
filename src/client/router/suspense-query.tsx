@@ -5,6 +5,7 @@ import { ContractSkewNotice, EmptyState, Spinner } from "@/client/components/fee
 import { useTranslation } from "@/client/providers";
 import { Component, Fragment, Suspense, type ErrorInfo, type ReactNode } from "react";
 import { QueryErrorResetBoundary, useQueryClient } from "@tanstack/react-query";
+import { resetLoadableViews } from "@/client/router/lazy-view";
 
 interface ErrorBoundaryProps {
   errorTitle?: string;
@@ -41,6 +42,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
   private handleRetry = () => {
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    resetLoadableViews();
     this.props.onReset?.();
     this.setState((s) => ({ hasError: false, error: null, resetKey: s.resetKey + 1 }));
   };
@@ -67,8 +69,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 }
 
-/** Shell-level recovery for failures outside a view's own SuspenseQuery: a 200 can still cache a
- *  malformed payload, so the active queries must be reset, not just the error state. */
 export function QueryResetErrorBoundary(props: Omit<ErrorBoundaryProps, "onReset">) {
   const queryClient = useQueryClient();
   return (
@@ -78,7 +78,7 @@ export function QueryResetErrorBoundary(props: Omit<ErrorBoundaryProps, "onReset
           {...props}
           onReset={() => {
             reset();
-            void queryClient.resetQueries();
+            void queryClient.resetQueries({ type: "active" });
           }}
         >
           {props.children}
@@ -91,8 +91,6 @@ export function QueryResetErrorBoundary(props: Omit<ErrorBoundaryProps, "onReset
 export function SuspenseQuery({ children, resetKey: extraKey }: { children: ReactNode; resetKey?: string }) {
   const { t } = useTranslation();
   const pathname = usePathname();
-  // Route (+ the caller's view key) resets the subtree; query params must stay out, since every
-  // param is `tab`/`view` state owned by a component inside the boundary.
   const resetKey = `${pathname}${extraKey ? `:${extraKey}` : ""}`;
   return (
     <QueryErrorResetBoundary>

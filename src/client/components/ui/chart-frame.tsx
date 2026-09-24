@@ -2,8 +2,6 @@ import { memo, type ReactNode } from "react";
 import { cn } from "@/client/utils/cn";
 import { Card, CardContent, CardHeader } from "@/client/components/ui/card";
 
-/** Fixed-height box for every chart: the canvas is forced to `display: block` so Chart.js never
- *  picks up the inline baseline gap. */
 export const ChartFrame = memo(function ChartFrame({
   height = "h-[200px] sm:h-[240px]",
   children,

@@ -23,7 +23,6 @@ function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
 
 export function jitteredTtl(vk: string, ttl: number): number {
   const base = Number.isFinite(ttl) && ttl > 0 ? ttl : 60_000;
-  // Deterministic jitter (no Math.random) so the :00/:30 herd is still broken.
   const h1 = (parseInt(fnv1aHash(vk), 36) % 50) / 1000;
   const factor = 0.95 + h1;
   if (base < 60_000) return Math.max(1000, Math.round(base * factor));

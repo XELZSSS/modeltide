@@ -16,7 +16,6 @@ export const numCoerce = (v: unknown): number | null => {
 
 export const numOr = (v: unknown, fallback = 0): number => numCoerce(v) ?? fallback;
 
-/** Zero-or-more, accepting numeric strings (upstream rates are quoted as text). */
 export const numCoerceNonNegative = (v: unknown): number | null => {
   const n = numCoerce(v);
   return n != null && n >= 0 ? n : null;
@@ -51,7 +50,6 @@ export const numIntCoerceNonNegative = (v: unknown): number | null => {
 
 export const titleCase = (s: string): string => (s ? s[0]!.toUpperCase() + s.slice(1).toLowerCase() : s);
 
-/** Length cap that never cuts between the halves of a surrogate pair. */
 export function truncateSafe(s: string, max: number): string {
   if (s.length <= max) return s;
   const cut = max - 1;
@@ -59,7 +57,6 @@ export function truncateSafe(s: string, max: number): string {
   return c >= 0xd800 && c <= 0xdbff ? s.slice(0, cut) : s.slice(0, max);
 }
 
-/** Date.parse with a -Infinity fallback so unparseable dates always sort last. */
 export function parseTs(v: unknown, positiveOnly = false): number {
   if (typeof v !== "string") return Number.NEGATIVE_INFINITY;
   const t = Date.parse(v);
@@ -67,11 +64,18 @@ export function parseTs(v: unknown, positiveOnly = false): number {
   return t;
 }
 
-/** Two unparseable dates compare equal instead of producing a NaN comparator (`-Infinity - -Infinity`). */
 export function byDateDesc<T>(getDate: (item: T) => unknown): (a: T, b: T) => number {
+  const parsed = new Map<T, number>();
+  const tsOf = (item: T): number => {
+    const cached = parsed.get(item);
+    if (cached !== undefined) return cached;
+    const ts = parseTs(getDate(item));
+    parsed.set(item, ts);
+    return ts;
+  };
   return (a, b) => {
-    const ta = parseTs(getDate(a));
-    const tb = parseTs(getDate(b));
+    const ta = tsOf(a);
+    const tb = tsOf(b);
     return ta === tb ? 0 : tb - ta;
   };
 }
@@ -179,7 +183,6 @@ export function isValidOpenRouterDirectoryRow(m: unknown): boolean {
   return true;
 }
 
-// The gate admits 500 chars; titles are truncated to 300 downstream.
 const MAX_NEWS_TITLE_CHARS = 300;
 const MAX_NEWS_TITLE_INPUT_CHARS = MAX_NEWS_TITLE_CHARS + 200;
 

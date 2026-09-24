@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { handleApi } from "./api-router";
-import type { Env } from "@/server/context";
+import { resolveRoute } from "./api-router";
+import { apiPaths } from "@/shared/config";
 
-const env: Env = {};
+describe("resolveRoute", () => {
+  it("returns undefined for an unknown pathname so the entrypoint renders 404", () => {
+    expect(resolveRoute("/api/does-not-exist")).toBeUndefined();
+  });
 
-describe("handleApi", () => {
-  it("returns undefined for unknown routes so the entrypoint renders 404", async () => {
-    const url = new URL("https://example.com/api/does-not-exist");
-    await expect(handleApi(new Request(url), env, url)).toBeUndefined();
+  it("resolves a registered pathname to its route entry", () => {
+    expect(resolveRoute(apiPaths.news)?.path).toBe(apiPaths.news);
   });
 });

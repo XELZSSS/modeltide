@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { WARM_TASK_TIMEOUT_MS, warmBatchTimeoutMs } from "@/server/config";
-import { cronHealthy, failTarget, pingCronMonitor, warmTiersFor } from "./index";
+import { TaskNotRunError } from "@/server/infra/task-pool";
+import { cronHealthy, failTarget, pingCronMonitor, warmRoundOutcome, warmTiersFor } from "./index";
 
 describe("cronHealthy", () => {
   const cases: [string, boolean | null, number, number, boolean][] = [
@@ -11,6 +12,7 @@ describe("cronHealthy", () => {
     ["every warmup call failed is unhealthy", true, 8, 8, false],
     ["every warmup call failed behind a lock-held skip is unhealthy", null, 8, 8, false],
     ["partial warmup failure is unhealthy", true, 1, 8, false],
+    ["a round the deadline cut off before 7 of its 10 tasks ran is unhealthy", true, 7, 10, false],
     ["a batch that ran nothing is unhealthy", true, 0, 0, false],
     ["a lock-held skip with no warm task at all is unhealthy", null, 0, 0, false],
   ];
@@ -20,14 +22,49 @@ describe("cronHealthy", () => {
   });
 });
 
+describe("warmRoundOutcome", () => {
+  const ok = (): PromiseSettledResult<unknown> => ({ status: "fulfilled", value: undefined });
+  const errored = (): PromiseSettledResult<unknown> => ({ status: "rejected", reason: new Error("upstream down") });
+  const cutOff = (): PromiseSettledResult<unknown> => ({ status: "rejected", reason: new TaskNotRunError() });
+  const times = (n: number, make: () => PromiseSettledResult<unknown>): PromiseSettledResult<unknown>[] =>
+    Array.from({ length: n }, make);
+
+  it("counts a round the batch deadline cut off as failures, not as a smaller round", () => {
+    const outcome = warmRoundOutcome([...times(7, cutOff), ...times(3, ok)]);
+    expect(outcome).toEqual({ notRun: 7, failed: 0, degraded: 0, total: 10 });
+    expect(cronHealthy(true, outcome.failed + outcome.notRun, outcome.total)).toBe(false);
+  });
+
+  it("keeps never-ran tasks distinct from calls that ran and failed", () => {
+    expect(warmRoundOutcome([ok(), errored(), cutOff(), errored()])).toEqual({
+      notRun: 1,
+      failed: 2,
+      degraded: 0,
+      total: 4,
+    });
+  });
+
+  it("counts a resolved call that cached a partial payload as degraded, not as a failure", () => {
+    const partial = (): PromiseSettledResult<unknown> => ({ status: "fulfilled", value: { partial: true } });
+    const outcome = warmRoundOutcome([ok(), partial(), partial()]);
+    expect(outcome).toEqual({ notRun: 0, failed: 0, degraded: 2, total: 3 });
+    expect(cronHealthy(true, outcome.failed + outcome.notRun, outcome.total)).toBe(true);
+  });
+
+  it("leaves an empty batch to the cronHealthy total guard", () => {
+    const outcome = warmRoundOutcome([]);
+    expect(outcome).toEqual({ notRun: 0, failed: 0, degraded: 0, total: 0 });
+    expect(cronHealthy(true, outcome.failed + outcome.notRun, outcome.total)).toBe(false);
+  });
+});
+
 describe("warmBatchTimeoutMs", () => {
-  // A round may burn the full per-task timeout; the extra round is slack between rounds.
   it.each([
     ["an empty batch", 0, 2],
     ["one round", 2, 2],
     ["a partial second round", 3, 3],
     ["the off-peak fire (10 tasks)", 10, 6],
-    ["the 6-hourly fire (12 tasks)", 12, 7],
+    ["the 6-hourly fire (11 tasks)", 11, 7],
   ])("%s budgets %i rounds", (_label, tasks, rounds) => {
     expect(warmBatchTimeoutMs(tasks)).toBe(WARM_TASK_TIMEOUT_MS * rounds);
   });
@@ -56,7 +93,6 @@ describe("pingCronMonitor", () => {
       await pingCronMonitor({ STATUS_PING_URL: "https://hc-ping.com/abc" }, false);
       expect(calls).toHaveLength(1);
       expect(calls[0]?.url).toBe("https://hc-ping.com/abc/fail");
-      // A cached ping would keep the monitor green through an outage.
       expect(calls[0]?.init?.cache).toBe("no-store");
     } finally {
       vi.unstubAllGlobals();

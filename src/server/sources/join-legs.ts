@@ -6,7 +6,7 @@ interface Leg<T> {
   run: () => Promise<T>;
 }
 
-export interface LegFailure {
+interface LegFailure {
   label: string;
   reason: unknown;
 }
@@ -14,7 +14,6 @@ export interface LegFailure {
 interface RunLegsOptions {
   concurrency?: number;
   signal?: AbortSignal;
-  /** Runs per failed leg, in leg order, before an all-aborted round is rethrown. */
   onFailure?: (failure: LegFailure) => void;
 }
 
@@ -22,7 +21,6 @@ type LegValue<L> = L extends Leg<infer T> ? T : never;
 
 type LegValues<L extends readonly Leg<unknown>[]> = { [K in keyof L]: LegValue<L[K]> | undefined };
 
-/** Every-leg-aborted rounds rethrow the caller's abort, not an upstream failure. */
 export async function runLegs<L extends readonly Leg<unknown>[]>(
   legs: readonly [...L],
   opts: RunLegsOptions = {},

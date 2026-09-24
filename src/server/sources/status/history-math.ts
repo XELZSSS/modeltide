@@ -7,21 +7,11 @@ import type {
   StatusEvent,
   UptimeSample,
 } from "@/shared/types";
+import { emptyEntry, type HistorySourceEntry } from "./schema";
 
 const SAMPLE_UPSERT_WINDOW_MS = 4 * ONE_MINUTE;
-export const RECENT_WINDOW_MS = ONE_DAY;
+const RECENT_WINDOW_MS = ONE_DAY;
 const RETAINED_DAYS = 30;
-
-interface HistorySourceEntry {
-  recent: UptimeSample[];
-  daily: DayBucket[];
-}
-
-export interface HistoryStore {
-  sources: Partial<Record<SourceId, HistorySourceEntry>>;
-}
-
-export const emptyEntry = (): HistorySourceEntry => ({ recent: [], daily: [] });
 
 const utcDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
 
@@ -29,13 +19,13 @@ function samplesInWindow(samples: UptimeSample[], windowStartMs: number): Uptime
   return samples.filter((s) => s.t >= windowStartMs);
 }
 
-export function uptimeRatio(samples: UptimeSample[], windowStartMs: number): number | null {
+function uptimeRatio(samples: UptimeSample[], windowStartMs: number): number | null {
   const inWindow = samplesInWindow(samples, windowStartMs);
   if (inWindow.length === 0) return null;
   return inWindow.filter((s) => s.ok).length / inWindow.length;
 }
 
-export function avgLatency(samples: UptimeSample[], windowStartMs: number): number | null {
+function avgLatency(samples: UptimeSample[], windowStartMs: number): number | null {
   const values = samplesInWindow(samples, windowStartMs)
     .filter((s) => s.ok && s.latencyMs != null)
     .map((s) => s.latencyMs!);
@@ -43,10 +33,17 @@ export function avgLatency(samples: UptimeSample[], windowStartMs: number): numb
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
+type IncidentType = "down" | "degraded";
+
 interface OpenIncident {
-  type: "down" | "degraded";
+  type: IncidentType;
   at: number;
   index: number;
+}
+
+function incidentType(sample: UptimeSample): IncidentType | null {
+  if (!sample.ok) return "down";
+  return sample.warn === true ? "degraded" : null;
 }
 
 function sampleReason(sample: UptimeSample): string | null {
@@ -55,7 +52,7 @@ function sampleReason(sample: UptimeSample): string | null {
   return null;
 }
 
-export function deriveEvents(id: SourceId, samples: UptimeSample[]): StatusEvent[] {
+export function deriveEvents(id: SourceId, samples: UptimeSample[], openSince: number | null = null): StatusEvent[] {
   const events: StatusEvent[] = [];
   let open: OpenIncident | null = null;
   const close = (at: number, pushUp: boolean): void => {
@@ -66,22 +63,22 @@ export function deriveEvents(id: SourceId, samples: UptimeSample[]): StatusEvent
     if (pushUp) events.push({ id, type: "up", at: new Date(at).toISOString(), durationMin: null, detail: null });
     open = null;
   };
-  for (const sample of samples) {
-    const want: OpenIncident["type"] | null = !sample.ok ? "down" : sample.warn === true ? "degraded" : null;
-    // Leaving an incident emits "up" except when sliding straight into "down".
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i]!;
+    const want = incidentType(sample);
     if (open && open.type !== want) close(sample.t, want === null || (open.type === "down" && want === "degraded"));
     if (want && !open) {
-      open = { type: want, at: sample.t, index: events.length };
+      const startedAt = i === 0 && openSince != null && openSince < sample.t ? openSince : sample.t;
+      open = { type: want, at: startedAt, index: events.length };
       events.push({
         id,
         type: want,
-        at: new Date(sample.t).toISOString(),
+        at: new Date(startedAt).toISOString(),
         durationMin: null,
         detail: sampleReason(sample),
       });
       continue;
     }
-    // A running incident takes the newest reason: providers rewrite warning text mid-incident.
     const detail = sampleReason(sample);
     const ev = open ? events[open.index] : undefined;
     if (ev && detail != null) ev.detail = detail;
@@ -94,23 +91,35 @@ function applySampleDelta(bucket: DayBucket, sample: UptimeSample, dir: 1 | -1):
   if (sample.ok) {
     bucket.ok = Math.max(0, bucket.ok + dir);
   }
-  // A degraded sample is also `ok`: the day needs its own counter.
   if (sample.warn === true) {
     bucket.warn = Math.max(0, (bucket.warn ?? 0) + dir);
   }
 }
 
-function pruneWindows(recent: UptimeSample[], daily: DayBucket[], now: number): HistorySourceEntry {
+function pruneWindows(entry: HistorySourceEntry, now: number): HistorySourceEntry {
   const cutoffDay = utcDay(now - RETAINED_DAYS * ONE_DAY);
   return {
-    recent: recent.filter((s) => s.t > now - RECENT_WINDOW_MS),
-    daily: daily.filter((b) => b.day >= cutoffDay).slice(-RETAINED_DAYS),
+    recent: entry.recent.filter((s) => s.t > now - RECENT_WINDOW_MS),
+    daily: entry.daily.filter((b) => b.day >= cutoffDay).slice(-RETAINED_DAYS),
+    openSince: entry.openSince,
   };
 }
 
 function rollbackLastSample(daily: DayBucket[], last: UptimeSample): void {
   const lastBucket = daily.find((b) => b.day === utcDay(last.t));
   if (lastBucket) applySampleDelta(lastBucket, last, -1);
+}
+
+function nextOpenSince(
+  prev: HistorySourceEntry,
+  prevLast: UptimeSample | undefined,
+  sample: UptimeSample,
+  now: number,
+): number | null {
+  const want = incidentType(sample);
+  if (want == null) return null;
+  const continues = prevLast != null && prevLast.t > now - RECENT_WINDOW_MS && incidentType(prevLast) === want;
+  return continues ? prev.openSince : sample.t;
 }
 
 export function mergeSample(
@@ -139,7 +148,7 @@ export function mergeSample(
   }
   applySampleDelta(bucket, sample, 1);
 
-  return pruneWindows(recent, daily, now);
+  return pruneWindows({ recent, daily, openSince: nextOpenSince(prevEntry, last, sample, now) }, now);
 }
 
 export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now: number): SourceHistorySummary {
@@ -148,11 +157,9 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
   const sumOk = buckets.reduce((a, b) => a + b.ok, 0);
   const sumTotal = buckets.reduce((a, b) => a + b.total, 0);
   const uptime24h = uptimeRatio(entry.recent, now - RECENT_WINDOW_MS);
-  // Reported next to the uptime, never folded in: a degraded-but-up sample was not down.
   const inWindow = samplesInWindow(entry.recent, now - RECENT_WINDOW_MS);
   const degradedInWindow = inWindow.filter((s) => s.warn === true).length;
   let level: SourceHealthLevel;
-  // Same bands as the 30-day strip: most of the last 24h down is not "warn".
   if (!last) level = "unknown";
   else if (!last.ok || (uptime24h != null && uptime24h < UPTIME_ERROR_RATIO)) level = "error";
   else if (last.warn === true || (uptime24h != null && uptime24h < UPTIME_WARN_RATIO)) level = "warn";

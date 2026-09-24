@@ -23,7 +23,8 @@ export function monthlyCostFor(pricing: ModelPricing | undefined, scenario: Cost
   const hasWriteTier = isFiniteNumber(cacheWrite);
   const writeRate = hasWriteTier ? clamp01(Math.min(scenario.cacheWriteRate, 1 - hitRate)) : 0;
   const cached = isFiniteNumber(cacheHit) ? cacheHit : pricing.input;
-  const inputRate = hitRate * cached + (hasWriteTier ? writeRate * cacheWrite : 0) + (1 - hitRate - writeRate) * pricing.input;
+  const inputRate =
+    hitRate * cached + (hasWriteTier ? writeRate * cacheWrite : 0) + (1 - hitRate - writeRate) * pricing.input;
   const daily =
     nonNeg(scenario.dailyInputM) * inputRate +
     (nonNeg(scenario.dailyOutputM) + nonNeg(scenario.dailyReasoningM)) * pricing.output;
@@ -33,7 +34,6 @@ export function monthlyCostFor(pricing: ModelPricing | undefined, scenario: Cost
 
 export function computeBlendPrice(pricing: ModelPricing | undefined): number | null {
   if (!pricing || !isFiniteNumber(pricing.input) || !isFiniteNumber(pricing.output)) return null;
-  // AA methodology: cache reads bill at the input rate when no cache tier exists.
   const cache = isFiniteNumber(pricing.cacheHit) ? pricing.cacheHit : pricing.input;
   return (7 * cache + 2 * pricing.input + pricing.output) / 10;
 }

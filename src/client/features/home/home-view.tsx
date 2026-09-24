@@ -1,4 +1,4 @@
-import { Fragment, Suspense, lazy } from "react";
+import { Fragment, Suspense, useMemo } from "react";
 import { SafeLink as Link } from "@/client/router";
 import { useTranslation } from "@/client/providers";
 import {
@@ -6,7 +6,6 @@ import {
   useSuspenseClosedReleasesState,
   useSuspenseHomeDashboard,
   useSuspenseHallucinationRankings,
-  useSuspenseOpenSourceReleases,
   useSuspenseStatusHistory,
 } from "@/client/api/api-queries";
 import { PartialNotice } from "@/client/components/feedback";
@@ -23,10 +22,13 @@ import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { useHomeStats } from "./use-home-stats";
 import { KpiStrip, ProviderSpeedCard, TextToImageSection } from "./home-cards";
+import { loadableView } from "@/client/router/lazy-view";
 
-const IndexAreaChart = lazy(() => import("./home-charts").then((m) => ({ default: m.IndexAreaChart })));
-const UsageDonut = lazy(() => import("./usage-donut").then((m) => ({ default: m.UsageDonut })));
-const StatisticsSection = lazy(() => import("./statistics-section").then((m) => ({ default: m.StatisticsSection })));
+const IndexAreaChart = loadableView(() => import("./home-charts").then((m) => ({ default: m.IndexAreaChart })));
+const UsageDonut = loadableView(() => import("./usage-donut").then((m) => ({ default: m.UsageDonut })));
+const StatisticsSection = loadableView(() =>
+  import("./statistics-section").then((m) => ({ default: m.StatisticsSection })),
+);
 
 const EVENT_LINK_CLASS =
   "flex h-9 items-center gap-2 min-w-0 w-full ui-card px-3.5 transition-colors duration-fast hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
@@ -34,50 +36,59 @@ const EVENT_LINK_CLASS =
 function useLatestEventSummary() {
   const { data } = useSuspenseStatusHistory();
   const history = unwrapObject<StatusHistoryPayload>(data, "statusHistory");
-  const latest = (history.events ?? [])[0] ?? null;
-  if (!latest) return { latest: null as null, summary: undefined, lastSample: undefined, level: "unknown" as const };
-  const summary = history.sources.find((s) => s.id === latest.id);
-  const samples = history.recent?.[latest.id] ?? [];
-  const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
-  return { latest, summary, lastSample, level: resolveLevel(summary) };
+  return useMemo(() => {
+    const latest = (history.events ?? [])[0] ?? null;
+    if (!latest) return { latest: null as null, summary: undefined, lastSample: undefined, level: "unknown" as const };
+    const summary = history.sources.find((s) => s.id === latest.id);
+    const samples = history.recent?.[latest.id] ?? [];
+    const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
+    return { latest, summary, lastSample, level: resolveLevel(summary) };
+  }, [history]);
 }
 
 function HomeLatestEvents() {
   const { t, lang } = useTranslation();
   const { latest, summary, lastSample, level } = useLatestEventSummary();
-  const eventStyle = latest ? resolveEventStyle(latest.type) : null;
-  const labelKey = latest ? sourceLabelKey(latest.id) : undefined;
-  if (!latest || !eventStyle) {
+
+  const view = useMemo(() => {
+    if (!latest) return null;
+    const eventStyle = resolveEventStyle(latest.type);
+    const labelKey = sourceLabelKey(latest.id);
+    const latencyMs = summary?.avgLatency24h ?? summary?.latencyMs ?? lastSample?.latencyMs ?? null;
+    const errorText = lastSample?.error ?? null;
+    const statusCode = lastSample?.status ?? null;
+    const detailText = errorText ?? (statusCode != null && level === "error" ? `HTTP ${statusCode}` : null);
+    const meta: { key: string; className: string; text: string; title?: string }[] = [
+      { key: "event", className: `font-medium ${eventStyle.text}`, text: t(eventStyle.labelKey) },
+      { key: "source", className: "text-text-secondary", text: labelKey ? t(labelKey) : latest.id },
+      { key: "level", className: `font-medium ${LEVEL_STYLES[level].text}`, text: t(LEVEL_STYLES[level].labelKey) },
+      {
+        key: "uptime",
+        className: "text-text-secondary font-mono",
+        title: t("uptime24h"),
+        text: formatUptimePct(summary?.uptime24h ?? null, t),
+      },
+      {
+        key: "latency",
+        className: "text-text-secondary font-mono",
+        title: `${t("latencyAvg24h")}${summary?.checkedAt ? ` · ${t("lastUpdated")} ${formatRelativeTime(summary.checkedAt, t, lang)}` : ""}`,
+        text: latencyMs != null ? `${(latencyMs / 1000).toFixed(2)}s` : t("uptimeNoData"),
+      },
+      ...(detailText
+        ? [{ key: "detail", className: "text-text-tertiary font-mono", title: detailText, text: detailText }]
+        : []),
+    ];
+    return { eventStyle, meta };
+  }, [t, lang, latest, summary, lastSample, level]);
+
+  if (!latest || !view) {
     return (
       <Link href="/status" className={EVENT_LINK_CLASS}>
         <span className="ui-body-secondary truncate">{t("noRecentEvents")}</span>
       </Link>
     );
   }
-  const latencyMs = summary?.avgLatency24h ?? summary?.latencyMs ?? lastSample?.latencyMs ?? null;
-  const errorText = lastSample?.error ?? null;
-  const statusCode = lastSample?.status ?? null;
-  const detailText = errorText ?? (statusCode != null && level === "error" ? `HTTP ${statusCode}` : null);
-  const meta: { key: string; className: string; text: string; title?: string }[] = [
-    { key: "event", className: `font-medium ${eventStyle.text}`, text: t(eventStyle.labelKey) },
-    { key: "source", className: "text-text-secondary", text: labelKey ? t(labelKey) : latest.id },
-    { key: "level", className: `font-medium ${LEVEL_STYLES[level].text}`, text: t(LEVEL_STYLES[level].labelKey) },
-    {
-      key: "uptime",
-      className: "text-text-secondary font-mono",
-      title: t("uptime24h"),
-      text: formatUptimePct(summary?.uptime24h ?? null, t),
-    },
-    {
-      key: "latency",
-      className: "text-text-secondary font-mono",
-      title: `${t("latencyAvg24h")}${summary?.checkedAt ? ` · ${t("lastUpdated")} ${formatRelativeTime(summary.checkedAt, t, lang)}` : ""}`,
-      text: latencyMs != null ? `${(latencyMs / 1000).toFixed(2)}s` : t("uptimeNoData"),
-    },
-    ...(detailText
-      ? [{ key: "detail", className: "text-text-tertiary font-mono", title: detailText, text: detailText }]
-      : []),
-  ];
+  const { eventStyle, meta } = view;
   return (
     <Link href="/status" className={`${EVENT_LINK_CLASS} overflow-hidden`}>
       <Dot size="sm" color={eventStyle.color} />
@@ -107,14 +118,12 @@ function HomeContent() {
   const hallucinationRankings = useSuspenseHallucinationRankings();
   const dashboardData = useSuspenseHomeDashboard();
   const { items: closedReleases, partial: closedReleasesPartial } = useSuspenseClosedReleasesState();
-  const openSourceReleases = useSuspenseOpenSourceReleases();
   const { trendingStats, hallucinationStats, kpiStrip, providerStats, t2iModels } = useHomeStats(
     artificialData,
     hallucinationRankings,
     dashboardData,
     t,
     closedReleases,
-    openSourceReleases,
   );
 
   return (

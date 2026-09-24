@@ -15,7 +15,6 @@ export function BackButton({ labelKey, to }: { labelKey: TranslationKey; to: str
   const label = from == null || from === to ? t(labelKey) : t("back");
   const goBack = () => {
     if (canGoBack()) router.back();
-    // replace, not push: no extra history entry for a direct landing.
     else router.replace(to);
   };
   return (

@@ -73,7 +73,6 @@ describe("compact", () => {
       terminalbench_v4_0: 90,
       omniscience: 90,
     });
-    // Omniscience runs below zero: both representations must keep the sign, not clamp to 0.
     expect(compact(rawModel({ omniscience: -5.3 })).benchmarks?.omniscience).toBe(-5.3);
     expect(compact(rawModel({ omniscience: -5.3 })).omniscience_breakdown?.total?.omniscience).toBe(-5.3);
   });
@@ -101,7 +100,6 @@ describe("compact", () => {
       input_modality_speech: false,
     });
 
-    // An explicit upstream flag wins; a record describing nothing stays empty, not text-only.
     expect(compact(rawModel({ outputModalityText: false })).output_modality_text).toBe(false);
     expect(compact({ id: "x", slug: "x", name: "X" }).input_modality_text).toBeUndefined();
   });
@@ -176,7 +174,6 @@ describe("backfillFromMeta", () => {
     expect(models[1]).toMatchObject({ agentic_index: 40 });
     expect(models[2]).toMatchObject({ agentic_index: null });
     expect(models[3]!.intelligence_index).toBe(61.2);
-    // OpenRouter mirrors the same 0-100 scale, so sub-1 values stay verbatim.
     expect(models[4]).toMatchObject({ agentic_index: 0.9 });
   });
 });
@@ -230,7 +227,6 @@ describe("parseAgentBoards (agent overall composite)", () => {
     ciUpper: 1,
     rank: 1,
   });
-  // C wins on consistency (0.20 avg) although A tops two signals.
   const scores: Record<string, number[]> = {
     "contenders/a": [0.3, 0.3, 0.0, 0.0, 0.0],
     "contenders/b": [0.1, 0.1, 0.1, 0.1, 0.1],
@@ -396,7 +392,7 @@ describe("toClosedReleases", () => {
     });
   });
 
-  it("keeps every release, newest first, without a row cap", () => {
+  it("keeps every release below the row cap, newest first", () => {
     const changelog = Array.from({ length: 250 }, (_, i) =>
       clModel({
         slug: `model-${i}`,

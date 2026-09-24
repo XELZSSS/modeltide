@@ -19,7 +19,6 @@ export class ApiClientError extends Error {
 }
 
 export function isAbortError(err: unknown): boolean {
-  // A fetch abort rejects with a DOMException, which does not inherit from Error in browsers.
   const name = (err as { name?: unknown } | null | undefined)?.name;
   return name === "AbortError" || name === "TimeoutError";
 }
@@ -27,7 +26,6 @@ export function isAbortError(err: unknown): boolean {
 let contractSkew = false;
 const skewListeners = new Set<() => void>();
 
-/** `/assets/*` is immutable and the service worker answers cache-first, so an open tab keeps its bundle. */
 export function hasContractSkew(): boolean {
   return contractSkew;
 }
@@ -55,10 +53,39 @@ function buildApiUrl(path: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}${API_VERSION_PARAM}=${CACHE_VERSION}`;
 }
 
-function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
-  const timeout = AbortSignal.timeout(ms);
-  if (!signal) return timeout;
-  return AbortSignal.any([signal, timeout]);
+const HAS_NATIVE_TIMEOUT = typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function";
+const HAS_NATIVE_ANY = typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function";
+
+interface TimeoutSignal {
+  signal: AbortSignal;
+  cleanup: () => void;
+}
+
+function manualWithTimeout(signal: AbortSignal | undefined, ms: number): TimeoutSignal {
+  const controller = new AbortController();
+  const onCallerAbort = () => controller.abort(signal?.reason);
+  if (signal) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else signal.addEventListener("abort", onCallerAbort, { once: true });
+  }
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException("The operation timed out.", "TimeoutError"));
+  }, ms);
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onCallerAbort);
+    },
+  };
+}
+
+function withTimeout(signal: AbortSignal | undefined, ms: number): TimeoutSignal {
+  if (HAS_NATIVE_TIMEOUT && (!signal || HAS_NATIVE_ANY)) {
+    const timeout = AbortSignal.timeout(ms);
+    return { signal: signal ? AbortSignal.any([signal, timeout]) : timeout, cleanup: () => {} };
+  }
+  return manualWithTimeout(signal, ms);
 }
 
 async function parseErrorMessage(res: Response): Promise<string> {
@@ -78,20 +105,24 @@ async function parseErrorMessage(res: Response): Promise<string> {
   return message;
 }
 
-/** The response body IS the payload (`{data, fetchedAt, partial?}`), handed on untouched. */
 async function apiFetch<T>(path: string, signal?: AbortSignal): Promise<SourcePayload<T>> {
   const url = buildApiUrl(path);
-  const res = await fetch(url, {
-    headers: { accept: "application/json" },
-    signal: withTimeout(signal, CLIENT_FETCH_TIMEOUT_MS),
-  });
-  noteContractVersion(res);
-  if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
-  const ct = res.headers.get("content-type") ?? "";
-  if (!ct.includes("application/json")) {
-    throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
+  const { signal: timeoutSignal, cleanup } = withTimeout(signal, CLIENT_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { accept: "application/json" },
+      signal: timeoutSignal,
+    });
+    noteContractVersion(res);
+    if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
+    const ct = res.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
+    }
+    return (await res.json()) as SourcePayload<T>;
+  } finally {
+    cleanup();
   }
-  return (await res.json()) as SourcePayload<T>;
 }
 
 export const fetcher =

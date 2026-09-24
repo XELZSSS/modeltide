@@ -16,7 +16,6 @@ export function SearchInput({ className }: { className?: string }) {
 
   const { term: searchTerm, setTerm: setSearchTerm } = useRouteSearchTerm();
 
-  // The corpus queries warm while the box is focused; an untouched, unfocused box stays silent.
   const { results, isPending, isError } = useSearchAllRankings(searchTerm, { suspended: !isOpen, warm: isFocused });
 
   const combobox = useCombobox({
@@ -36,7 +35,6 @@ export function SearchInput({ className }: { className?: string }) {
     if (combobox.debounced !== searchTerm) setSearchTerm(combobox.debounced);
   }, [combobox.debounced, searchTerm, setSearchTerm]);
 
-  // The query sees only the debounced term, so input ahead of it means "nothing has run yet".
   const pending = isPending || combobox.inputValue !== searchTerm;
 
   return (
@@ -111,8 +109,6 @@ function SearchDropdown({
             activeIndex === index ? "bg-hover" : "hoverable:hover:bg-hover",
           )}
           onMouseEnter={() => onHover(index)}
-          // Keep focus on the input: a mousedown default moves focus to the body, whose focusin
-          // closes the list and unmounts this row before its click is delivered.
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onSelect(index)}
         >

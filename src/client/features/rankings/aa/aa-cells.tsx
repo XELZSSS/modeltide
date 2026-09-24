@@ -1,8 +1,10 @@
+import { memo } from "react";
 import { Check, Plus } from "lucide-react";
 import { useTranslation } from "@/client/providers";
 import { cn } from "@/client/utils/cn";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelId } from "@/client/utils/model-utils";
+import { useCompareStore } from "@/client/stores";
 import { RankingNameCell } from "@/client/components/data/table/table-columns";
 import { Button } from "@/client/components/ui/button";
 import { ModelDetailContent } from "@/client/features/models/model-details/aa-detail";
@@ -42,19 +44,14 @@ export function ModelExpandedDetail({ model }: { model: ArtificialAnalysisModel 
   );
 }
 
-export function CompareModelCell({
-  model,
-  compareSet,
-  onToggleCompare,
-}: {
-  model: ArtificialAnalysisModel;
-  compareSet: Set<string>;
-  onToggleCompare: (m: ArtificialAnalysisModel) => void;
-}) {
+export const CompareModelCell = memo(function CompareModelCell({ model }: { model: ArtificialAnalysisModel }) {
+  const id = modelId(model);
+  const isCompared = useCompareStore((s) => s.compareIds.includes(id));
+  const onToggleCompare = useCompareStore((s) => s.toggleCompareModel);
   return (
     <RankingNameCell
       name={model.name || model.slug}
-      suffix={<CompareButton model={model} isCompared={compareSet.has(modelId(model))} onToggle={onToggleCompare} />}
+      suffix={<CompareButton model={model} isCompared={isCompared} onToggle={onToggleCompare} />}
     />
   );
-}
+});

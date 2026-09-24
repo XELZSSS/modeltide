@@ -1,12 +1,9 @@
-/** The subset of the Workers `KVNamespace` shape `KvStore` accepts. */
 interface KvBinding {
   get(key: string): Promise<string | null>;
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
   delete(key: string): Promise<void>;
 }
 
-// The one place KV is touched: every operation throws, so each caller decides whether a failed
-// read degrades, a failed write is swallowed, or a failed lock fails the round.
 export class KvStore {
   constructor(private readonly binding: KvBinding | undefined) {}
 

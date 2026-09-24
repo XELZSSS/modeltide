@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { cn } from "@/client/utils/cn";
 import { X } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -11,6 +11,30 @@ const FOCUSABLE_SELECTOR =
 let sheetLockCount = 0;
 let sheetPrevOverflow = "";
 let sheetPrevPaddingRight = "";
+let inertedAppChildren: HTMLElement[] = [];
+
+let lastPointerTarget: HTMLElement | null = null;
+if (typeof document !== "undefined") {
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      lastPointerTarget = event.target instanceof HTMLElement ? event.target : null;
+    },
+    true,
+  );
+}
+
+function inertAppChildren() {
+  const root = document.getElementById("root");
+  if (!root) return;
+  inertedAppChildren = Array.from(root.children).filter((el): el is HTMLElement => el instanceof HTMLElement);
+  for (const el of inertedAppChildren) el.setAttribute("inert", "");
+}
+
+function restoreAppChildren() {
+  for (const el of inertedAppChildren) el.removeAttribute("inert");
+  inertedAppChildren = [];
+}
 
 function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.RefObject<HTMLDivElement | null>) {
   const onCloseRef = useRef(onClose);
@@ -18,14 +42,30 @@ function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.Ref
     onCloseRef.current = onClose;
   });
 
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const active = document.activeElement;
+    const focused = active instanceof HTMLElement && active !== document.body ? active : lastPointerTarget;
+    if (focused && !panel.contains(focused)) triggerRef.current = focused;
+    const first = panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+    if (first) first.focus();
+    else {
+      panel.setAttribute("tabindex", "-1");
+      panel.focus();
+    }
+  }, [open, panelRef]);
+
   useEffect(() => {
     if (!open) return;
-    const trigger = document.activeElement;
-    const main = document.getElementById("main-content");
+    const trigger = triggerRef.current;
     if (sheetLockCount === 0) {
       sheetPrevOverflow = document.body.style.overflow;
       sheetPrevPaddingRight = document.body.style.paddingRight;
-      main?.setAttribute("inert", "");
+      inertAppChildren();
     }
     sheetLockCount += 1;
     const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
@@ -49,19 +89,8 @@ function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.Ref
       }
     };
     document.addEventListener("keydown", handler);
-    const timer = setTimeout(() => {
-      const panel = panelRef.current;
-      if (!panel) return;
-      const first = panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-      if (first) first.focus();
-      else {
-        panel.setAttribute("tabindex", "-1");
-        panel.focus();
-      }
-    }, 50);
     return () => {
       document.removeEventListener("keydown", handler);
-      clearTimeout(timer);
       sheetLockCount = Math.max(0, sheetLockCount - 1);
       if (sheetLockCount !== 0) {
         if (trigger instanceof HTMLElement) trigger.focus();
@@ -69,7 +98,7 @@ function useSheetEffects(open: boolean, onClose: () => void, panelRef: React.Ref
       }
       document.body.style.overflow = sheetPrevOverflow;
       document.body.style.paddingRight = sheetPrevPaddingRight;
-      document.getElementById("main-content")?.removeAttribute("inert");
+      restoreAppChildren();
       if (trigger instanceof HTMLElement) trigger.focus();
     };
   }, [open, panelRef]);

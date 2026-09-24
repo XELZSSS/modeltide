@@ -1,4 +1,4 @@
-function foldSearchStr(raw: string): string {
+export function foldSearchStr(raw: string): string {
   return raw.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
@@ -6,8 +6,7 @@ export function usableFields(fields: (string | null | undefined)[]): string[] {
   return fields.filter((f): f is string => typeof f === "string" && f.length > 0);
 }
 
-export function matchTerm(fields: string[], term: string): { matched: boolean; score: number } {
-  const needle = foldSearchStr(term);
+export function matchTerm(fields: string[], needle: string): { matched: boolean; score: number } {
   if (!needle) return { matched: false, score: 0 };
   const normalized = fields.map(foldSearchStr);
   for (const f of normalized) if (f === needle) return { matched: true, score: 4 };
@@ -20,8 +19,9 @@ export function matchTerm(fields: string[], term: string): { matched: boolean; s
 }
 
 export function filterByTerm<T>(items: T[], term: string, getFields: (item: T) => (string | null | undefined)[]): T[] {
-  if (!foldSearchStr(term)) return items;
-  return items.filter((item) => matchTerm(usableFields(getFields(item)), term).matched);
+  const needle = foldSearchStr(term);
+  if (!needle) return items;
+  return items.filter((item) => matchTerm(usableFields(getFields(item)), needle).matched);
 }
 
 const FUZZY_MIN_TERM = 3;
@@ -54,24 +54,36 @@ function levenshteinWithin(a: string, b: string, max: number): number {
   return prev[lb]!;
 }
 
+const WORD_SPLIT = /[^\p{L}\p{N}]+/u;
+const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+function tokenize(text: string): string[] {
+  const tokens: string[] = [];
+  for (const word of text.split(WORD_SPLIT)) {
+    if (!word) continue;
+    tokens.push(word);
+    if (!CJK_CHAR.test(word)) continue;
+    const chars = [...word];
+    for (let i = 0; i + 1 < chars.length; i++) tokens.push(chars[i]! + chars[i + 1]!);
+  }
+  return tokens;
+}
+
 function fuzzyHit(hay: string, needle: string): boolean {
   const text = hay.toLowerCase();
   if (text.includes(needle)) return true;
-  const tokens = text.split(/[^a-z0-9]+/).filter(Boolean);
-  for (const token of tokens) {
+  for (const token of tokenize(text)) {
     if (levenshteinWithin(token, needle, FUZZY_MAX_DISTANCE) <= FUZZY_MAX_DISTANCE) return true;
   }
   return false;
 }
 
-/** Typo-tolerant fallback for items matchTerm's tiers miss (score 1); zero-dependency, so the
- *  search input stays out of the main bundle. */
-export function fuzzyMatch<T>(items: T[], term: string, getFields: (item: T) => (string | null | undefined)[]): T[] {
-  const needle = term.toLowerCase().trim();
-  if (needle.length < FUZZY_MIN_TERM || items.length === 0) return [];
+export function fuzzyMatch<T>(candidates: { item: T; fields: string[] }[], term: string): T[] {
+  const needle = foldSearchStr(term);
+  if (needle.length < FUZZY_MIN_TERM || candidates.length === 0) return [];
   const out: T[] = [];
-  for (const item of items) {
-    for (const f of usableFields(getFields(item))) {
+  for (const { item, fields } of candidates) {
+    for (const f of fields) {
       if (fuzzyHit(f, needle)) {
         out.push(item);
         break;

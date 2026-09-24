@@ -15,7 +15,6 @@ const PRICING_TTL_MS = SLOW_TTL_MS;
 
 type DirectoryCacheEntryWithPartial = DirectoryCacheEntry & { partial?: boolean };
 
-/** `"-1"` prompt/completion is OpenRouter's documented "dynamic pricing" sentinel, not a degraded response. */
 const DYNAMIC_PRICING = -1;
 
 function hasUsablePricing(row: unknown): boolean {

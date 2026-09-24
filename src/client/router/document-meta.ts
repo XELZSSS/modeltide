@@ -4,8 +4,6 @@ import { useTranslation } from "@/client/providers";
 
 const ROBOTS_SELECTOR = 'meta[name="robots"]';
 
-/** The app answers every pathname with a 200, so title + noindex are the only crawler signals;
- *  index.html ships neither, so this adds the tag on an unmatched path and drops it when one matches. */
 export function useDocumentMeta(pathname: string): void {
   const { t } = useTranslation();
   useEffect(() => {

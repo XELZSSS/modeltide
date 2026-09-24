@@ -68,8 +68,6 @@ function subscribe(onChange: () => void): () => void {
   };
 }
 
-/** True when the last route change came from browser back/forward rather than `navigate`; the
- *  pathname alone cannot tell the two apart. */
 export function isPopstateNavigation(): boolean {
   return popstateNavigation;
 }

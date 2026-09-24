@@ -1,6 +1,6 @@
-import { Fragment, memo } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 import type { DataTableColumn, RowListProps } from "@/client/components/data/table/table-columns";
-import { ExpandToggle, getRowExpandState } from "./row-expand";
+import { ExpandToggle } from "./row-expand";
 import { cn } from "@/client/utils/cn";
 
 function cellClasses<T>(col: DataTableColumn<T>): string {
@@ -28,6 +28,67 @@ export function TableHeader<T>({ columns, isExpandable }: { columns: DataTableCo
   );
 }
 
+interface TableRowProps<T> {
+  row: T;
+  columns: DataTableColumn<T>[];
+  rowId: string;
+  rowName: string;
+  isExpandable: boolean;
+  isExpanded: boolean;
+  onToggleExpand?: (rowId: string | null) => void;
+  renderExpandedRow?: (row: T) => ReactNode;
+}
+
+function TableRowInner<T>({
+  row,
+  columns,
+  rowId,
+  rowName,
+  isExpandable,
+  isExpanded,
+  onToggleExpand,
+  renderExpandedRow,
+}: TableRowProps<T>) {
+  return (
+    <Fragment>
+      <tr
+        className={cn(
+          "border-b border-border last:border-b-0 transition-colors duration-fast bg-bg-card",
+          "hoverable:hover:bg-hover",
+          isExpanded && "bg-bg-secondary/60",
+        )}
+      >
+        {columns.map((col, colIdx) => (
+          <td key={col.id} className={cellClasses(col)} style={{ width: col.width }}>
+            <div className={cellInnerClasses(col)}>
+              {isExpandable && colIdx === 0 ? (
+                <ExpandToggle
+                  isExpanded={isExpanded}
+                  onToggle={() => onToggleExpand?.(isExpanded ? null : rowId)}
+                  rowName={rowName}
+                  controlsId={`${rowId}-panel`}
+                />
+              ) : null}
+              {col.cell(row)}
+            </div>
+          </td>
+        ))}
+      </tr>
+      {isExpanded && renderExpandedRow && (
+        <tr className="border-b border-border last:border-b-0 bg-bg-secondary/60">
+          <td colSpan={columns.length}>
+            <div id={`${rowId}-panel`} role="region" aria-label={rowName} className="animate-fade-in px-4 py-3">
+              {renderExpandedRow(row)}
+            </div>
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  );
+}
+
+const TableRow = memo(TableRowInner) as typeof TableRowInner;
+
 function TableBodyInner<T>({
   pagedData,
   columns,
@@ -41,42 +102,19 @@ function TableBodyInner<T>({
   return (
     <tbody>
       {pagedData.map((row) => {
-        const { rowId, isExpanded, toggle } = getRowExpandState(row, getRowId, expandedRowId, onToggleExpand);
+        const rowId = getRowId(row);
         return (
-          <Fragment key={rowId}>
-            <tr
-              className={cn(
-                "border-b border-border last:border-b-0 transition-colors duration-fast bg-bg-card",
-                "hoverable:hover:bg-hover",
-                isExpanded && "bg-bg-secondary/60",
-              )}
-            >
-              {columns.map((col, colIdx) => (
-                <td key={col.id} className={cellClasses(col)} style={{ width: col.width }}>
-                  <div className={cellInnerClasses(col)}>
-                    {isExpandable && colIdx === 0 ? (
-                      <ExpandToggle
-                        isExpanded={isExpanded}
-                        onToggle={toggle}
-                        rowName={getRowName?.(row) ?? rowId}
-                        controlsId={`${rowId}-panel`}
-                      />
-                    ) : null}
-                    {col.cell(row)}
-                  </div>
-                </td>
-              ))}
-            </tr>
-            {isExpanded && renderExpandedRow && (
-              <tr className="border-b border-border last:border-b-0 bg-bg-secondary/60">
-                <td colSpan={columns.length}>
-                  <div id={`${rowId}-panel`} role="region" className="animate-fade-in px-4 py-3">
-                    {renderExpandedRow(row)}
-                  </div>
-                </td>
-              </tr>
-            )}
-          </Fragment>
+          <TableRow
+            key={rowId}
+            row={row}
+            columns={columns}
+            rowId={rowId}
+            rowName={getRowName?.(row) ?? rowId}
+            isExpandable={isExpandable}
+            isExpanded={expandedRowId === rowId}
+            onToggleExpand={onToggleExpand}
+            renderExpandedRow={renderExpandedRow}
+          />
         );
       })}
     </tbody>

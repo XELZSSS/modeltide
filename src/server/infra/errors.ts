@@ -1,4 +1,3 @@
-// Errors are classified by class and field, never by name; this is the only place that sniffs names.
 export function isTimeoutLike(err: unknown): boolean {
   if (err instanceof UpstreamError) return err.causedByTimeout;
   if (err instanceof Error) return err.name === "TimeoutError" || err.name === "AbortError";
@@ -28,8 +27,6 @@ export class ClientAbortError extends ApiError {
   }
 }
 
-// Re-throw the caller's abort when every leg was aborted: reporting a client abandon as an
-// upstream failure would cool the whole key down for FAILURE_COOLDOWN_MS.
 export function rethrowIfAllAborted(legs: readonly PromiseSettledResult<unknown>[]): void {
   if (legs.length === 0) return;
   if (!legs.every((leg) => leg.status === "rejected" && leg.reason instanceof ClientAbortError)) return;
@@ -39,13 +36,20 @@ export function rethrowIfAllAborted(legs: readonly PromiseSettledResult<unknown>
 export class UpstreamError extends ApiError {
   readonly causedByTimeout: boolean;
   readonly retryable: boolean;
+  readonly watchdog: boolean;
+  readonly retryAfterMs?: number;
   readonly statusCode?: number;
-  constructor(msg: string, opts?: { timeout?: boolean; status?: number; retryable?: boolean }) {
+  constructor(
+    msg: string,
+    opts?: { timeout?: boolean; status?: number; retryable?: boolean; watchdog?: boolean; retryAfterMs?: number },
+  ) {
     super(msg, opts?.timeout ? 504 : 502);
     this.name = "UpstreamError";
     this.causedByTimeout = opts?.timeout === true;
     this.retryable = opts?.retryable === true;
+    this.watchdog = opts?.watchdog === true;
     if (opts?.status != null) this.statusCode = opts.status;
+    if (opts?.retryAfterMs != null) this.retryAfterMs = opts.retryAfterMs;
   }
 }
 
@@ -59,9 +63,12 @@ export function zeroUpstream(label: string, unit: string, detail?: string): Upst
 
 export function wrapUpstream(prefix: string, err: unknown): UpstreamError {
   const msg = err instanceof Error ? err.message : String(err);
-  const status = err instanceof UpstreamError ? err.statusCode : undefined;
+  const cause = err instanceof UpstreamError ? err : undefined;
   return new UpstreamError(`${prefix}: ${msg}`, {
     ...(isTimeoutLike(err) ? { timeout: true } : {}),
-    ...(status != null ? { status } : {}),
+    ...(cause?.statusCode != null ? { status: cause.statusCode } : {}),
+    ...(cause?.retryable ? { retryable: true } : {}),
+    ...(cause?.retryAfterMs != null ? { retryAfterMs: cause.retryAfterMs } : {}),
+    ...(cause?.watchdog ? { watchdog: true } : {}),
   });
 }

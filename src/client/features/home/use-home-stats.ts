@@ -1,16 +1,10 @@
 import { useMemo } from "react";
 import type { TranslationKey } from "@/shared/i18n";
 import { BarChart3, Brain, Image, Rocket, type LucideIcon } from "lucide-react";
-import type {
-  ArtificialAnalysisModel,
-  ClosedReleaseEntry,
-  HallucinationRankingEntry,
-  OpenSourceModelEntry,
-} from "@/shared/types";
+import type { ArtificialAnalysisModel, ClosedReleaseEntry, HallucinationRankingEntry } from "@/shared/types";
 import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
 import { computeProviderStats, modelDisplayName, shortModelId } from "@/client/utils/model-utils";
 import { formatShortNumber } from "@/client/utils/format";
-import { buildReleaseRows } from "@/client/utils/release-feed";
 import type { HomeBarStat } from "./statistics-section";
 
 export interface HomeKpi {
@@ -28,12 +22,16 @@ export interface HomeProviderStat {
 
 const top7 = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, 7).map(map);
 
-/** A model's own `release_date` lags the changelog and must not be used here. */
-function pickLatestReleaseName(
-  openSourceReleases: OpenSourceModelEntry[],
-  closedReleases: ClosedReleaseEntry[],
-): string | null {
-  return buildReleaseRows(openSourceReleases, closedReleases)[0]?.name ?? null;
+function pickLatestReleaseName(closedReleases: ClosedReleaseEntry[]): string | null {
+  let latestName: string | null = null;
+  let latestDate: string | null = null;
+  for (const entry of closedReleases) {
+    if (latestDate === null || entry.releaseDate > latestDate) {
+      latestDate = entry.releaseDate;
+      latestName = entry.model;
+    }
+  }
+  return latestName;
 }
 
 export function useHomeStats(
@@ -42,9 +40,7 @@ export function useHomeStats(
   dashboardData: NormalizedHomeDashboard,
   t: (key: TranslationKey, params?: Record<string, string | number>) => string,
   closedReleases?: ClosedReleaseEntry[],
-  openSourceReleases?: OpenSourceModelEntry[],
 ) {
-  // Trending order mirrors the official models page; downloads are reference only.
   const openSourceRankings = dashboardData.opensource;
   const t2iModels = useMemo(() => dashboardData.textToImage ?? [], [dashboardData.textToImage]);
   const latestOpenRouterModel = dashboardData.orRankings?.[0] ?? null;
@@ -75,7 +71,7 @@ export function useHomeStats(
   );
 
   const { latestReleaseName, bestReasoningModel } = useMemo(() => {
-    const latestName = pickLatestReleaseName(openSourceReleases ?? [], closedReleases ?? []);
+    const latestName = pickLatestReleaseName(closedReleases ?? []);
     let bestReasoning: ArtificialAnalysisModel | null = null;
     for (const m of artificialData) {
       if (
@@ -85,7 +81,7 @@ export function useHomeStats(
         bestReasoning = m;
     }
     return { latestReleaseName: latestName, bestReasoningModel: bestReasoning };
-  }, [artificialData, closedReleases, openSourceReleases]);
+  }, [artificialData, closedReleases]);
 
   const kpiStrip = useMemo<HomeKpi[]>(
     () => [

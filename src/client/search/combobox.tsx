@@ -31,6 +31,8 @@ interface ComboboxController {
   onFocus: () => void;
   onBlur: () => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+  onCompositionStart: () => void;
+  onCompositionEnd: () => void;
   onHover: (index: number) => void;
   onSelectIndex: (index: number) => void;
   onClear: () => void;
@@ -59,8 +61,11 @@ export function useCombobox({
   const inputId = useId();
   const listboxId = useId();
   const statusId = useId();
-  const { inputValue, setInputValue, debounced, setDebouncedDirect } = useDebouncedTerm(initialValue, 200);
-  const canSearch = inputValue.trim().length >= minQuery;
+  const { inputValue, setInputValue, debounced, setDebouncedDirect, composing, setComposing } = useDebouncedTerm(
+    initialValue,
+    200,
+  );
+  const canSearch = !composing && inputValue.trim().length >= minQuery;
 
   const select = (index: number) => {
     if (index < 0 || index >= itemCount) return;
@@ -84,6 +89,7 @@ export function useCombobox({
   }, [clampedIndex, isOpen, listboxId]);
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.nativeEvent.isComposing || composing) return;
     if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
       if (canSearch) setIsOpen(true);
@@ -95,8 +101,21 @@ export function useCombobox({
 
   function onChange(e: ChangeEvent<HTMLInputElement>) {
     setInputValue(e.target.value);
+    if (composing) {
+      setIsOpen(false);
+      return;
+    }
     setIsOpen(e.target.value.trim().length >= minQuery);
     setActiveIndex(-1);
+  }
+
+  function onCompositionEnd() {
+    setComposing(false);
+    const value = inputRef.current?.value ?? "";
+    if (value.trim().length >= minQuery) {
+      setIsOpen(true);
+      setActiveIndex(-1);
+    }
   }
 
   function onFocus() {
@@ -111,6 +130,7 @@ export function useCombobox({
     setDebouncedDirect("");
     setIsOpen(false);
     setActiveIndex(-1);
+    setComposing(false);
     inputRef.current?.focus();
   }
 
@@ -130,6 +150,8 @@ export function useCombobox({
     onFocus,
     onBlur: () => setIsFocused(false),
     onKeyDown,
+    onCompositionStart: () => setComposing(true),
+    onCompositionEnd,
     onHover: setActiveIndex,
     onSelectIndex: select,
     onClear,
@@ -175,6 +197,8 @@ export function Combobox({
           onFocus={controller.onFocus}
           onBlur={controller.onBlur}
           onKeyDown={controller.onKeyDown}
+          onCompositionStart={controller.onCompositionStart}
+          onCompositionEnd={controller.onCompositionEnd}
           placeholder={t("searchPlaceholder")}
           className="flex-1 border-0 bg-transparent px-0 h-full focus:border-transparent focus:ring-0"
         />
@@ -218,11 +242,21 @@ function useDebouncedTerm(
   setInputValue: (v: string) => void;
   debounced: string;
   setDebouncedDirect: (v: string) => void;
+  composing: boolean;
+  setComposing: (v: boolean) => void;
 } {
   const [inputValue, setInputValue] = useState(initial);
   const [debounced, setDebounced] = useState(initial);
+  const [composing, setComposing] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (composing) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       setDebounced(inputValue);
@@ -233,7 +267,7 @@ function useDebouncedTerm(
         timerRef.current = null;
       }
     };
-  }, [inputValue, delayMs]);
+  }, [inputValue, delayMs, composing]);
   const setDebouncedDirect = useCallback((v: string) => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -242,7 +276,7 @@ function useDebouncedTerm(
     setDebounced(v);
     setInputValue(v);
   }, []);
-  return { inputValue, setInputValue, debounced, setDebouncedDirect };
+  return { inputValue, setInputValue, debounced, setDebouncedDirect, composing, setComposing };
 }
 
 function useClickOutside(ref: RefObject<HTMLElement | null>, onOutside: () => void) {

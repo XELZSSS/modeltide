@@ -28,7 +28,6 @@ export function compactOmniscienceEnrich(m: unknown): Record<string, unknown> {
   };
 }
 
-/** Picks `initialModels`/`models`, preferring whichever carries `intelligenceIndex` rows. */
 export function findModelArray(tree: unknown): Record<string, unknown>[] | null {
   let initialModels: Record<string, unknown>[] | null = null;
   let models: Record<string, unknown>[] | null = null;
@@ -42,7 +41,7 @@ export function findModelArray(tree: unknown): Record<string, unknown>[] | null 
   }
   let fallback: Record<string, unknown>[] | null = null;
   for (const arr of [initialModels, models]) {
-    if (arr?.some((m) => isRecord(m) && "intelligenceIndex" in m)) return arr;
+    if (arr?.some((m) => isRecord(m) && numCoerce(m.intelligenceIndex) != null)) return arr;
     if (!fallback && isModelArray(arr)) fallback = arr;
   }
   return fallback;
@@ -94,7 +93,6 @@ export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<stri
 export interface IntelligenceIndexResult {
   models: ArtificialAnalysisModel[];
   enrichFailed: boolean;
-  /** Stamped once per upstream fetch so cache hits keep reporting the real refresh time. */
   fetchedAt: string;
 }
 
@@ -140,7 +138,6 @@ export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record
         filled++;
       }
       if (m.agentic_index == null && entry.agenticIndex != null) {
-        // OpenRouter mirrors AA's indices on the same 0-100 scale, so this is a copy, not a conversion.
         m.agentic_index = entry.agenticIndex;
         filled++;
       }

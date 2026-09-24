@@ -11,11 +11,10 @@ import { getModelDirectory } from "@/server/sources/openrouter-directory";
 import { runLegs } from "@/server/sources/join-legs";
 import { cachedPayload } from "@/server/sources/pipeline";
 
-// One placeholder row with an empty `model_permaslug` is normal upstream noise.
 const RANKINGS_DRIFT_RATIO = 0.1;
 
 export const getOpenRouterRankings = (ctx: AppContext): Promise<SourcePayload<OpenRouterRankEntry[]>> =>
-  cachedPayload(ctx, cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async () => {
+  cachedPayload(ctx, cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async (ctx) => {
     const { values, failures } = await runLegs([
       {
         label: "rankings",

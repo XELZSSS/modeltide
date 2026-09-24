@@ -6,7 +6,6 @@ const ORIGIN = "https://example.test";
 const SW_PATH = fileURLToPath(new URL("../public/sw.js", import.meta.url));
 const SW_SOURCE = fs.readFileSync(SW_PATH, "utf8");
 
-// public/sw.js is a classic script: evaluate it as a function body with an epilogue returning its declarations.
 const EPILOGUE = "\nreturn { CACHE_NAME, isCacheable, isImmutableAsset, handleNavigation };\n";
 
 interface SwRequest {
@@ -19,7 +18,12 @@ interface SwApi {
   CACHE_NAME: string;
   isCacheable: (request: SwRequest) => boolean;
   isImmutableAsset: (pathname: string) => boolean;
-  handleNavigation: (request: SwRequest) => Promise<Response>;
+  handleNavigation: (event: SwEvent) => Promise<Response>;
+}
+
+interface SwEvent {
+  request: SwRequest;
+  waitUntil: (work: unknown) => void;
 }
 
 type Handler = (event: { data?: unknown }) => void;
@@ -28,7 +32,11 @@ function request(path: string, over: Partial<SwRequest> = {}): SwRequest {
   return { url: `${ORIGIN}${path}`, method: "GET", ...over };
 }
 
-function loadServiceWorker(source = SW_SOURCE) {
+function navigation(path: string): SwEvent {
+  return { request: request(path, { mode: "navigate" }), waitUntil: () => {} };
+}
+
+function loadServiceWorker(source = SW_SOURCE, fetchImpl?: () => Promise<Response>) {
   const handlers = new Map<string, Handler>();
   const put = vi.fn(async (_key: string, _response: Response) => {});
   const skipWaiting = vi.fn(async () => {});
@@ -54,11 +62,7 @@ function loadServiceWorker(source = SW_SOURCE) {
     caches: unknown,
     fetch: unknown,
   ) => SwApi;
-  const api = evaluate(
-    self,
-    caches,
-    vi.fn(async () => new Response("shell", { status: 200 })),
-  );
+  const api = evaluate(self, caches, fetchImpl ?? vi.fn(async () => new Response("shell", { status: 200 })));
   return { ...api, handlers, put, skipWaiting };
 }
 
@@ -110,18 +114,22 @@ describe("message", () => {
 });
 
 describe("handleNavigation", () => {
-  it("caches a navigation response under its path key, one entry per path", async () => {
+  it("passes the network response through without caching it", async () => {
     const sw = loadServiceWorker();
     const responses = await Promise.all([
-      sw.handleNavigation(request("/models?tab=bench", { mode: "navigate" })),
-      sw.handleNavigation(request("/models?tab=cost", { mode: "navigate" })),
-      sw.handleNavigation(request("/releases", { mode: "navigate" })),
+      sw.handleNavigation(navigation("/models?tab=bench")),
+      sw.handleNavigation(navigation("/models?tab=cost")),
+      sw.handleNavigation(navigation("/releases")),
     ]);
     expect(responses.map((res) => res.status)).toEqual([200, 200, 200]);
-    expect(sw.put.mock.calls.map(([key]) => key)).toEqual([
-      `${ORIGIN}/models`,
-      `${ORIGIN}/models`,
-      `${ORIGIN}/releases`,
-    ]);
+    expect(sw.put).not.toHaveBeenCalled();
+  });
+
+  it("answers 503 when the network fails and no shell is cached", async () => {
+    const sw = loadServiceWorker(SW_SOURCE, async () => {
+      throw new Error("offline");
+    });
+    const res = await sw.handleNavigation(navigation("/models"));
+    expect(res.status).toBe(503);
   });
 });

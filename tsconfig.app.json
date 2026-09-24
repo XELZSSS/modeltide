@@ -3,7 +3,6 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    // Client + shared only: src/server is compiled by tsconfig.worker.json (KVNamespace, Fetcher).
     "types": ["vite/client", "node"]
   },
   "include": [

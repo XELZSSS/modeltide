@@ -1,22 +1,15 @@
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { approxEq, normalizePercent } from "@/shared/utils";
+import { approxEq, unclampedPercent } from "@/shared/utils";
 import { priceDisplayPrecision } from "@/client/utils/format";
 import { modelId } from "@/client/utils/model-utils";
-import {
-  resolveEffectivePricing,
-  PRICE_LEGS,
-  type PriceLegId,
-  type PriceLegPick,
-} from "@/client/utils/pricing";
+import { resolveEffectivePricing, PRICE_LEGS, type PriceLegId, type PriceLegPick } from "@/client/utils/pricing";
 import { ceilToStep } from "@/client/theme/chart-theme";
 export interface CompareRow<T> {
   id?: string;
   label: string;
   getValue?: (m: T) => string;
   getNumeric?: (m: T) => number | null | undefined;
-  /** Winners are decided on values quantized to these decimals, so two cells printing
-   *  the same text can never be marked against each other. */
   displayDecimals?: number | ((v: number) => number);
   bestIs?: "max" | "min";
   worstIs?: "max" | "min";
@@ -82,27 +75,30 @@ function nonNegative(v: number | null | undefined): number | null {
   return Math.max(0, v);
 }
 
-/** `intelligence_index` is the one AA metric the server stores raw; the rest are already percent-normalized. */
-function rawIndexScore(v: number | null | undefined): number | null {
-  const scaled = v != null && v > 0 && v <= 1 ? v * 100 : v;
-  return nonNegative(scaled);
-}
-
 interface RadarRow {
   metric: string;
-  /** Keyed by modelId() so a filtered or reordered model list can't shift values onto the wrong model. */
   values: Record<string, number | null>;
 }
 
+let lastRadar: { t: TFunction; models: readonly ArtificialAnalysisModel[]; rows: RadarRow[] } | null = null;
+
+function sameModels(a: readonly ArtificialAnalysisModel[], b: readonly ArtificialAnalysisModel[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
-  return [
-    { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => rawIndexScore(m.intelligence_index) },
+  if (lastRadar && lastRadar.t === t && sameModels(lastRadar.models, models)) return lastRadar.rows;
+  const rows = [
+    { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.intelligence_index) },
     { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.coding_index) },
     { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.agentic_index) },
-    { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.gpqa) },
-    { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.hle) },
-    { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.scicode) },
-    { metric: t("ifbench"), getValue: (m: ArtificialAnalysisModel) => normalizePercent(m.benchmarks?.ifbench) },
+    { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.gpqa) },
+    { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.hle) },
+    { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.scicode) },
+    { metric: t("ifbench"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.ifbench) },
   ].map(({ metric, getValue }) => {
     const values: Record<string, number | null> = {};
     for (const model of models) {
@@ -113,6 +109,8 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]):
     }
     return { metric, values };
   });
+  lastRadar = { t, models, rows };
+  return rows;
 }
 
 export function radarMaxFor(rows: RadarRow[], fallback = 100): number {
@@ -128,7 +126,6 @@ export function radarMaxFor(rows: RadarRow[], fallback = 100): number {
 
 interface CompareValueRow {
   metric: string;
-  /** One score per compared model, in model order; null where that model has none. */
   values: (number | null)[];
 }
 

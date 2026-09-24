@@ -76,9 +76,11 @@ export function formatSpeed(v: number | null | undefined, t: TFunction): string 
   return isFiniteNumber(v) ? formatIndex(v) : t("notAvailable");
 }
 
+const INDEX_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+
 export function formatIndex(v: number): string {
   if (!isFiniteNumber(v)) return "—";
-  return v.toLocaleString("en-US", { maximumFractionDigits: 1 });
+  return INDEX_FORMATTER.format(v);
 }
 
 export function formatTrend(change?: number | null, t?: TFunction): string {
@@ -97,7 +99,6 @@ export function orNA(value: string | null | undefined, t: TFunction): string {
   return value || t("notAvailable");
 }
 
-/** Sub-cent prices need the extra digits or they render as $0.00; the compare view ranks on this precision. */
 export function priceDisplayPrecision(v: number): number {
   const abs = Math.abs(v);
   if (abs === 0 || abs.toFixed(2) !== "0.00") return 2;
@@ -172,16 +173,26 @@ function localeOf(lang: string): string {
   return lang === "zh" ? "zh-CN" : "en-US";
 }
 
+const DATE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+const UTC_DATE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormatter(cache: Map<string, Intl.DateTimeFormat>, lang: string, timeZone?: "UTC"): Intl.DateTimeFormat {
+  let formatter = cache.get(lang);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(localeOf(lang), timeZone ? { timeZone } : undefined);
+    cache.set(lang, formatter);
+  }
+  return formatter;
+}
+
 export function formatDate(isoString: string | number | Date, lang: string): string {
-  // Must parse what the branch below tests: a padded date-only string falls back to the lenient
-  // parser, which reads it as LOCAL midnight, so UTC rendering shows the previous day.
   const input = typeof isoString === "string" ? isoString.trim() : isoString;
   const date = new Date(input);
   if (Number.isNaN(date.getTime())) return String(isoString);
   if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
-    return date.toLocaleDateString(localeOf(lang), { timeZone: "UTC" });
+    return dateFormatter(UTC_DATE_FORMATTERS, lang, "UTC").format(date);
   }
-  return date.toLocaleDateString(localeOf(lang));
+  return dateFormatter(DATE_FORMATTERS, lang).format(date);
 }
 
 export function benchmarkLabel(key: string, t: TFunction): string {
@@ -199,4 +210,15 @@ export function formatUptime(ms: number, t: TFunction): string {
   if (days > 0) return t("uptimeDays", { days, hours });
   if (hours > 0) return t("uptimeHours", { hours, mins });
   return t("uptimeMins", { mins });
+}
+
+const MINUTES_PER_HOUR = 60;
+const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
+
+export function formatDurationMin(minutes: number, t: TFunction): string {
+  const days = Math.floor(minutes / MINUTES_PER_DAY);
+  const hours = Math.floor((minutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR);
+  if (days > 0) return t("eventDurationDays", { days, hours });
+  if (hours > 0) return t("eventDurationHours", { hours, mins: Math.floor(minutes % MINUTES_PER_HOUR) });
+  return t("eventDurationMin", { value: minutes });
 }

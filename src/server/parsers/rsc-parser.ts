@@ -14,7 +14,6 @@ import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-res
 
 const MAX_RSC_NODES = 50_000;
 
-/** `traverse` ceilings arrive as thrown errors; anything else a step throws is a bug and propagates. */
 function scanStep<T>(step: () => T): ParseResult<T> {
   try {
     return parseOk(step());
@@ -52,28 +51,48 @@ export function* traverse(root: unknown): Generator<unknown> {
   }
 }
 
-/** `longest` keeps the first candidate on a tie; only that mode treats an empty array as no match. */
-function findArrayInTree<T>(root: unknown, key: string, longest: boolean): T[] | null {
-  if (typeof key !== "string" || !key) return null;
+interface KeyArrays<T> {
+  first?: T[] | null;
+  longest?: T[] | null;
+}
+
+const ARRAYS_BY_TREE = new WeakMap<object, Map<string, KeyArrays<unknown>>>();
+
+function scanKeyArrays<T>(root: object, key: string, longest: boolean): KeyArrays<T> {
+  let byKey = ARRAYS_BY_TREE.get(root);
+  if (!byKey) {
+    byKey = new Map();
+    ARRAYS_BY_TREE.set(root, byKey);
+  }
+  let found = byKey.get(key) as KeyArrays<T> | undefined;
+  if (!found) {
+    found = {};
+    byKey.set(key, found);
+  }
+  if (found.first !== undefined && (!longest || found.longest !== undefined)) return found;
   let best: T[] | null = null;
   for (const node of traverse(root)) {
-    if (node === null || typeof node !== "object") continue;
     const raw = (node as Record<string, unknown>)[key];
     if (!Array.isArray(raw)) continue;
-    const arr = raw as T[];
-    if (!longest) return arr;
-    if (!best || arr.length > best.length) best = arr;
+    if (found.first === undefined) {
+      found.first = raw as T[];
+      if (!longest) return found;
+    }
+    if (!best || raw.length > best.length) best = raw as T[];
   }
-  if (!longest) return null;
-  return best && best.length > 0 ? best : null;
+  if (found.first === undefined) found.first = null;
+  if (longest) found.longest = best && best.length > 0 ? best : null;
+  return found;
 }
 
 export function findNextData<T>(root: unknown, key: string): T[] | null {
-  return findArrayInTree<T>(root, key, false);
+  if (typeof key !== "string" || !key || root === null || typeof root !== "object") return null;
+  return scanKeyArrays<T>(root, key, false).first ?? null;
 }
 
 export function findLongestData<T>(root: unknown, key: string): T[] | null {
-  return findArrayInTree<T>(root, key, true);
+  if (typeof key !== "string" || !key || root === null || typeof root !== "object") return null;
+  return scanKeyArrays<T>(root, key, true).longest ?? null;
 }
 
 export function parseRscPayloads<T>(

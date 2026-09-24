@@ -48,7 +48,6 @@ export function col<T>(id: string, header: string, cell: (row: T) => ReactNode, 
   return { id, header, cell, align: opts?.align ?? "left", ...opts };
 }
 
-/** Trend color for the ranking tables; `zeroAsSuccess` is the arena board's ≥0-is-green convention. */
 export function trendClass(change: number | null | undefined, zeroAsSuccess = false): string {
   if (change == null || change === 0) return zeroAsSuccess ? "text-success" : "text-text-tertiary";
   return change > 0 ? "text-success" : "text-destructive";

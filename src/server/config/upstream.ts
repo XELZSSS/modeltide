@@ -35,7 +35,6 @@ export const MAX_FEED_BYTES = 2 * 1024 * 1024;
 
 export const USER_AGENT = "ModelTide/1.0 (+https://github.com/XELZSSS/modeltide)";
 
-/** Endpoints are absolute, so they resolve against the origin: a base carrying a path prefix would drop it. */
 export function upstreamUrl(base: string, endpoint: string): string {
   return new URL(endpoint, base).href;
 }

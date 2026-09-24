@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { SOURCE_LIMITS } from "@/server/config/limits";
+import { toClosedReleases, toClosedReleasesFromIndex } from "@/server/parsers/closed-releases-parser";
+import type { ChangelogModel } from "@/server/parsers/aa/changelog-parser";
 import { decodeEntities } from "@/server/parsers/html-entities";
 import { stripHtml } from "@/server/parsers/html-to-text";
 import { parseFeed as parseFeedResult } from "@/server/parsers/rss-feed-parser";
 import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc-parser";
+import { isMarkerBoundary } from "@/server/parsers/rsc-scanner";
+import { parseDailyPapers } from "@/server/parsers/hf-parser";
 import { getOpenLicense } from "@/server/parsers/licenses";
 import { byDateDesc, isoDate, num, numCoerce, numOr } from "@/server/parsers/parser-primitives";
 
@@ -23,7 +28,6 @@ const rssItem = (inner: string) => `<item>${inner}</item>`;
 const atom = (entries: string) =>
   `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>T</title>${entries}</feed>`;
 const atomEntry = (inner: string) => `<entry>${inner}</entry>`;
-/** Line just over MAX_RSC_LINE_CHARS (2MiB) to exercise the oversized fallback. */
 const oversizedLine = (inner: string) => `1:{"pad":"${"x".repeat(2 * 1024 * 1024 + 16)}",${inner}}\n`;
 
 describe("decodeEntities", () => {
@@ -77,6 +81,50 @@ describe("findNextData / findLongestData", () => {
   it("returns the longest array found under the key", () => {
     const tree = { a: { initialModels: [1] }, b: { initialModels: [1, 2, 3] } };
     expect(findLongestData(tree, "initialModels")).toEqual([1, 2, 3]);
+  });
+
+  it("keeps the first array on a longest-length tie", () => {
+    const tree = { a: { k: [1, 2] }, b: { k: [3, 4] } };
+    expect(findLongestData<number>(tree, "k")).toEqual([1, 2]);
+  });
+
+  it("answers both modes from one walk, in either call order", () => {
+    const tree = { a: { k: [] }, b: { k: [1, 2] } };
+    expect(findLongestData<number>(tree, "k")).toEqual([1, 2]);
+    expect(findNextData<number>(tree, "k")).toEqual([]);
+
+    const fresh = { a: { k: [] }, b: { k: [1, 2] } };
+    expect(findNextData<number>(fresh, "k")).toEqual([]);
+    expect(findLongestData<number>(fresh, "k")).toEqual([1, 2]);
+  });
+});
+
+describe("isMarkerBoundary", () => {
+  it("treats every character trimStart skips as whitespace", () => {
+    for (const ws of [
+      " ",
+      "\t",
+      "\u00a0",
+      "\u1680",
+      "\u2000",
+      "\u200a",
+      "\u2028",
+      "\u2029",
+      "\u202f",
+      "\u205f",
+      "\u3000",
+      "\ufeff",
+    ]) {
+      expect(isMarkerBoundary(`{"m"${ws}:[]}`, "m")).toBe(true);
+    }
+    expect(isMarkerBoundary('{"m"\u00b7:[]}', "m")).toBe(false);
+  });
+
+  it("scans past occurrences that are not followed by a boundary", () => {
+    expect(isMarkerBoundary('{"a":"m"x","m":[]}', "m")).toBe(true);
+    expect(isMarkerBoundary('{"a":"m"x"}', "m")).toBe(false);
+    expect(isMarkerBoundary('{"m"', "m")).toBe(false);
+    expect(isMarkerBoundary('{"m"   ', "m")).toBe(false);
   });
 });
 
@@ -149,6 +197,23 @@ describe("parseRscPayloads", () => {
   });
 });
 
+describe("parseDailyPapers", () => {
+  const paper = (id: string, title: string, upvotes: number) => ({
+    paper: { id, title, upvotes, publishedAt: "2026-09-05T00:00:00Z" },
+  });
+
+  it("fills the cap from the ranked head, skipping duplicate ids and unusable rows", () => {
+    const raw = [
+      paper("dup", "Dup", 100),
+      paper("dup", "Dup again", 99),
+      paper("bad", "test", 98),
+      ...Array.from({ length: 24 }, (_, i) => paper(`p${i}`, `Paper ${i}`, 90 - i)),
+    ];
+    const ids = unwrap(parseDailyPapers(raw)).map((i) => i.id);
+    expect(ids).toEqual(["hf-paper-dup", ...Array.from({ length: 19 }, (_, i) => `hf-paper-p${i}`)]);
+  });
+});
+
 describe("parseFeed", () => {
   it("extracts the alternate link when an Atom entry has multiple links", () => {
     const items = readFeed(
@@ -203,7 +268,6 @@ describe("parseFeed", () => {
 
   it("decodes XML entities in links once (processEntities is off)", () => {
     const items = readFeed(rss(rssItem(`<title>A</title><link>https://y.example/a?b=1&amp;c=2&amp;amp;d=3</link>`)));
-    // &amp; → & ; &amp;amp; → literal &amp; (single XML decode pass)
     expect(items[0]?.link).toBe("https://y.example/a?b=1&c=2&amp;d=3");
   });
 
@@ -297,5 +361,36 @@ describe("feed guard", () => {
     );
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ title: "A", link: "https://x.example/a" });
+  });
+});
+
+describe("closed releases cap", () => {
+  const overflow = 10;
+  const releaseDate = (i: number) => `2026-01-${String((i % 28) + 1).padStart(2, "0")}`;
+
+  it("caps the changelog rows, keeping the newest", () => {
+    const changelog: ChangelogModel[] = Array.from({ length: SOURCE_LIMITS.closedReleases + overflow }, (_, i) => ({
+      slug: `model-${i}`,
+      name: `Model ${i}`,
+      releaseSlug: `model-${i}`,
+      releaseName: `Model ${i}`,
+      releaseDate: releaseDate(i),
+      creatorName: "Anthropic",
+    }));
+    const entries = toClosedReleases(changelog);
+    expect(entries).toHaveLength(SOURCE_LIMITS.closedReleases);
+    expect(entries[0]!.releaseDate).toBe("2026-01-28");
+  });
+
+  it("caps the index fallback the same way", () => {
+    const models = Array.from({ length: SOURCE_LIMITS.closedReleases + overflow }, (_, i) => ({
+      slug: `model-${i}`,
+      name: `Model ${i}`,
+      model_creators: { name: "Anthropic" },
+      release_date: releaseDate(i),
+    }));
+    const entries = toClosedReleasesFromIndex(models);
+    expect(entries).toHaveLength(SOURCE_LIMITS.closedReleases);
+    expect(entries[0]!.releaseDate).toBe("2026-01-28");
   });
 });

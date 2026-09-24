@@ -5,6 +5,7 @@ import {
   useHallucinationRankings,
   useOpenRouterRankings,
 } from "@/client/api/api-queries";
+import { unwrapListPartial } from "@/client/api/payload-normalize";
 import { modelDetailPath } from "@/client/utils/model-utils";
 import type { SearchResult, SearchResultSource } from "@/client/search/types";
 import type {
@@ -15,7 +16,7 @@ import type {
 } from "@/shared/types";
 import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
-import { matchTerm, fuzzyMatch, usableFields } from "@/client/search/match";
+import { matchTerm, fuzzyMatch, usableFields, foldSearchStr } from "@/client/search/match";
 import { normalizeModelKey } from "@/shared/utils";
 
 type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
@@ -35,15 +36,17 @@ function defineSource<T extends SearchItem>(
 }
 
 function collect(config: SourceConfig, term: string): { result: SearchResult; match: number }[] {
+  const needle = foldSearchStr(term);
   const out: { result: SearchResult; match: number }[] = [];
-  const missed: SearchItem[] = [];
+  const missed: { item: SearchItem; fields: string[] }[] = [];
   for (const item of config.items) {
     const fields = usableFields(config.getFields(item));
-    const { matched, score } = matchTerm(fields, term);
+    const { matched, score } = matchTerm(fields, needle);
     if (matched) out.push({ result: config.map(item), match: score });
-    else missed.push(item);
+    else missed.push({ item, fields });
   }
-  for (const item of fuzzyMatch(missed, term, config.getFields)) {
+  if (out.length >= MAX_RESULTS) return out;
+  for (const item of fuzzyMatch(missed, term)) {
     out.push({ result: config.map(item), match: 1 });
   }
   return out;
@@ -66,8 +69,6 @@ const EMPTY_ARRAY: never[] = [];
 
 export const MIN_QUERY = 2;
 
-/** Corpus priority for equally relevant hits; it also picks which entry survives dedupe below:
- *  one model lives in several corpora and their `score`s are different metrics. */
 const SOURCE_PRIORITY: Record<SearchResultSource, number> = {
   modelRankings: 0,
   openRouterRankings: 1,
@@ -96,8 +97,6 @@ function rankSearchHits(hits: { result: SearchResult; match: number }[]): Search
 
 export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: boolean; warm?: boolean }): SearchState {
   const baseEnabled = searchTerm.trim().length >= MIN_QUERY;
-  // `warm` is "the search box is focused": focus alone must not fan the four corpora out, but one
-  // typed character is; it overrides `suspended`, which only gates the term-driven search.
   const warmEnabled = opts?.warm === true && searchTerm.trim().length > 0;
   const enabled = warmEnabled || (baseEnabled && opts?.suspended !== true);
   const artificialQ = useArtificialRankings(enabled);
@@ -106,10 +105,20 @@ export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: bo
 
   const artificialData = artificialQ.data ?? EMPTY_ARRAY;
   const openSourceRankings = openSourceQ.data ?? EMPTY_ARRAY;
-  const openRouterData = orQ.data?.data ?? EMPTY_ARRAY;
+  const openRouterUnwrapped = useMemo(
+    () => unwrapListPartial<OpenRouterRankEntry>(orQ.data, "openRouterRankings"),
+    [orQ.data],
+  );
+  const openRouterData = openRouterUnwrapped.data;
   const hallucinationRankings = useHallucinationRankings(artificialData, enabled);
 
-  const error = [artificialQ.error, openSourceQ.error, orQ.error].find((e): e is Error | null => e != null) ?? null;
+  const orMalformedError =
+    openRouterUnwrapped.malformed && openRouterData.length === 0
+      ? new Error("Malformed openRouterRankings payload")
+      : null;
+  const error =
+    [artificialQ.error, openSourceQ.error, orQ.error ?? orMalformedError].find((e): e is Error | null => e != null) ??
+    null;
 
   const sources = useMemo<SourceConfig[]>(
     () => [
@@ -151,7 +160,6 @@ export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: bo
 
   const results = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
-    // Warming alone must not surface matches: the dropdown still needs a long enough term.
     if (!enabled || !baseEnabled || !term) return [];
     return rankSearchHits(sources.flatMap((source) => collect(source, term)));
   }, [enabled, baseEnabled, searchTerm, sources]);
@@ -159,7 +167,7 @@ export function useSearchAllRankings(searchTerm: string, opts?: { suspended?: bo
   return {
     results,
     isPending: enabled && (artificialQ.isPending || openSourceQ.isPending || orQ.isPending),
-    isError: enabled && (artificialQ.isError || openSourceQ.isError || orQ.isError),
+    isError: enabled && (artificialQ.isError || openSourceQ.isError || orQ.isError || orMalformedError != null),
     error,
   };
 }

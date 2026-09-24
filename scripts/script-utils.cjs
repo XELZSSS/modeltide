@@ -1,4 +1,3 @@
-// A `/` opens a regex only where a value is expected; erring toward "allowed" is safe, the span is copied verbatim.
 const REGEX_PRECEDING = new Set([
   "(",
   ",",
@@ -43,7 +42,6 @@ function scanRegex(src, start) {
   let inClass = false;
   for (let j = start + 1; j < src.length; j++) {
     const ch = src[j];
-    // A regex literal cannot span an unescaped newline, so a misread division gives up here.
     if (ch === "\n") return -1;
     if (ch === "\\") {
       j += 1;
@@ -69,7 +67,6 @@ function regexAllowed(out) {
   return m != null && REGEX_KEYWORDS.has(m[1]);
 }
 
-// String, template and `${}`-interpolation content comes through verbatim; only code is reshaped.
 function scanSource(src) {
   let out = "";
   let i = 0;
@@ -114,17 +111,20 @@ function scanSource(src) {
     }
     if (c === "/" && next === "*") {
       const end = src.indexOf("*/", i + 2);
-      i = end === -1 ? n : end + 2;
+      if (end === -1) {
+        out += c;
+        i += 1;
+        continue;
+      }
+      i = end + 2;
       out += " ";
       continue;
     }
-    // A trailing backslash is only legal in a regex literal, so a `//` after one is part of the pattern.
     if (c === "/" && next === "/" && out[out.length - 1] !== "\\") {
       const end = src.indexOf("\n", i + 2);
       i = end === -1 ? n : end;
       continue;
     }
-    // Copy a regex literal whole, so a `//` or `/*` inside it is never taken for a comment.
     if (c === "/" && regexAllowed(out)) {
       const end = scanRegex(src, i);
       if (end > 0) {
@@ -139,8 +139,6 @@ function scanSource(src) {
   return out;
 }
 
-// Comment-free source view compared by cache-version hashing, code whitespace left alone.
-// Formatting-only edits are intentionally allowed to change the version; over-invalidating is safe.
 function stripComments(src) {
   return scanSource(src);
 }

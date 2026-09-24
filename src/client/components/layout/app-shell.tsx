@@ -1,13 +1,15 @@
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { isPopstateNavigation, historyIndex, usePathname, useSearchParams } from "@/client/router";
 import { useSettingsStore } from "@/client/stores";
 import { useTranslation } from "@/client/providers";
-import { DesktopNav, MobileNav, MobileMoreSheet } from "./navigation";
+import { DesktopNav, MobileNav } from "./navigation";
 import { ErrorBoundary } from "@/client/router/suspense-query";
+import { loadableView } from "@/client/router/lazy-view";
 
-const SettingsSheet = lazy(() => import("./settings-sheet").then((m) => ({ default: m.SettingsSheet })));
+const SettingsSheet = loadableView(() => import("./settings-sheet").then((m) => ({ default: m.SettingsSheet })));
+const MobileMoreSheet = loadableView(() => import("./mobile-more-sheet").then((m) => ({ default: m.MobileMoreSheet })));
 
-function SettingsErrorBoundary({ open, onClose }: { open: boolean; onClose: () => void }) {
+function SheetErrorBoundary({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   return (
     <ErrorBoundary
@@ -15,14 +17,11 @@ function SettingsErrorBoundary({ open, onClose }: { open: boolean; onClose: () =
       retryLabel={t("errorBoundaryRetry")}
       offlineMessage={t("offlineRetry")}
     >
-      <Suspense fallback={null}>
-        <SettingsSheet open={open} onClose={onClose} />
-      </Suspense>
+      <Suspense fallback={null}>{children}</Suspense>
     </ErrorBoundary>
   );
 }
 
-/** Scroll offset per history entry; module scope because `<main>` is remounted on every route change. */
 const scrollOffsets = new Map<number, number>();
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -45,6 +44,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     setMobileMoreOpen(true);
   }, []);
 
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
+    setMobileMoreOpen(false);
+    setSettingsOpen(false);
+  }
+
   useLayoutEffect(() => {
     const dark = themeMode === "dark";
     document.documentElement.classList.toggle("dark", dark);
@@ -56,13 +62,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     const main = mainRef.current;
     if (!main) return;
-    // Kept per entry rather than read on leave: the element is gone once the next route renders.
     const record = () => scrollOffsets.set(historyIndex(), main.scrollTop);
     main.addEventListener("scroll", record, { passive: true });
     return () => main.removeEventListener("scroll", record);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const main = mainRef.current;
     if (!main) return;
     const idx = historyIndex();
@@ -70,7 +75,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       main.scrollTo({ top: scrollOffsets.get(idx) ?? 0 });
       return;
     }
-    // This entry is new from here on, and the entries ahead are gone with the push: drop their offsets.
     for (const key of scrollOffsets.keys()) if (key >= idx) scrollOffsets.delete(key);
     main.scrollTo({ top: 0 });
   }, [pathname, searchParams]);
@@ -94,8 +98,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
       <MobileNav onMoreOpen={openMore} onSettingsOpen={openSettings} />
-      {settingsOpen && <SettingsErrorBoundary open onClose={closeSettings} />}
-      <MobileMoreSheet open={mobileMoreOpen} onClose={closeMore} />
+      {settingsOpen && (
+        <SheetErrorBoundary>
+          <SettingsSheet open onClose={closeSettings} />
+        </SheetErrorBoundary>
+      )}
+      {mobileMoreOpen && (
+        <SheetErrorBoundary>
+          <MobileMoreSheet open onClose={closeMore} />
+        </SheetErrorBoundary>
+      )}
     </div>
   );
 }

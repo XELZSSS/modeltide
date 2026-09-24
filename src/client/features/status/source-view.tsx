@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo } from "react";
+import { Suspense, memo } from "react";
 import { useParams } from "@/client/router";
 import { useTranslation } from "@/client/providers";
 import { useSuspenseStatusHistory } from "@/client/api/api-queries";
@@ -16,8 +16,9 @@ import type { DayBucket, SourceId, StatusHistoryPayload } from "@/shared/types";
 import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
 import { UptimeStrip } from "./status-parts";
 import { StatusEventList } from "./status-events";
+import { loadableView } from "@/client/router/lazy-view";
 
-const LatencyChart = lazy(() => import("./latency-chart").then((m) => ({ default: m.LatencyChart })));
+const LatencyChart = loadableView(() => import("./latency-chart").then((m) => ({ default: m.LatencyChart })));
 
 function isSourceId(value: string | undefined): value is SourceId {
   return value != null && (SOURCE_IDS as readonly string[]).includes(value);
@@ -33,7 +34,6 @@ const CONTENT = memo(function Content({ id }: { id: SourceId }) {
   const summary = history.sources.find((s) => s.id === id);
   const recent = history.recent[id] ?? EMPTY_SAMPLES;
   const buckets = history.daily[id] ?? EMPTY_BUCKETS;
-  const events = history.events.filter((e) => e.id === id).slice(0, 10);
   const level = resolveLevel(summary);
   const detail = summary?.detail ?? null;
 
@@ -55,8 +55,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceId }) {
           />
         </StatGrid>
 
-        {/* Reported on its own: folding degraded time into uptime would make the
-            availability figure stop meaning "was it up". */}
+        {}
         {(summary?.degraded24h ?? 0) > 0 && (
           <p className="ui-caption text-warning">
             {t("degraded24h")}
@@ -85,7 +84,7 @@ const CONTENT = memo(function Content({ id }: { id: SourceId }) {
         </SectionCard>
 
         <PageSection title={t("recentEvents")}>
-          <StatusEventList events={events} emptyMessage={t("noRecentEvents")} />
+          <StatusEventList events={history.events} sourceId={id} limit={10} emptyMessage={t("noRecentEvents")} />
         </PageSection>
       </DetailPageLayout>
     </PageContainer>

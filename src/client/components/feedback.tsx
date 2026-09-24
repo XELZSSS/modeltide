@@ -29,7 +29,6 @@ export function EmptyState({
           : "flex flex-col items-center justify-center gap-3 p-10 text-center min-h-[240px]"
       }
       role={variant === "error" ? "alert" : "status"}
-      aria-live="polite"
     >
       {Icon && <Icon size={compact ? 24 : 32} className="opacity-50 text-text-tertiary" aria-hidden="true" />}
       {title ? <p className="ui-card-title text-center text-text-primary">{title}</p> : null}
@@ -86,8 +85,6 @@ export function PartialNotice({ message }: { message?: string }) {
 
 const neverSkewed = () => false;
 
-/** `/assets/*` is immutable and the service worker answers cache-first, so an open tab can
- *  outlive the Worker build whose payload shapes it was written against. */
 export function ContractSkewNotice() {
   const { t } = useTranslation();
   const stale = useSyncExternalStore(subscribeContractSkew, hasContractSkew, neverSkewed);

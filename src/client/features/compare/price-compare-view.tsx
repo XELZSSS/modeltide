@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo, useCallback, useMemo, type ReactNode } from "react";
+import { Suspense, memo, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "@/client/providers";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatDollar } from "@/client/utils/format";
@@ -8,8 +8,9 @@ import { CompareTable, WinnerValue } from "@/client/features/compare/compare-tab
 import { CostEstimator } from "@/client/features/compare/price-compare/estimator";
 import { MODEL_SOURCES } from "@/client/config/nav-config";
 import { ComparePageLayout } from "./compare-layout";
+import { loadableView } from "@/client/router/lazy-view";
 
-const PriceChart = lazy(() =>
+const PriceChart = loadableView(() =>
   import("@/client/features/compare/price-compare/price-chart").then((m) => ({ default: m.PriceChart })),
 );
 

@@ -5,7 +5,6 @@ export const STORAGE_KEYS = {
 
 export const MAX_MODEL_LIMIT = 500;
 
-/** Uptime bands shared by the 30-day strip and per-source health: >= warn green/ok, >= error yellow/warn, below red. */
 export const UPTIME_WARN_RATIO = 0.995;
 export const UPTIME_ERROR_RATIO = 0.95;
 

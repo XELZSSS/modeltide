@@ -10,7 +10,6 @@ import { registerServiceWorker, unregisterStaleServiceWorker } from "@/client/pw
 import { findRoute } from "@/client/config/routes";
 import "@/styles/globals.css";
 
-// ErrorBoundary is a class component, so translated copy must be read here, below the i18n provider.
 function ShellErrorBoundary({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   return (
@@ -24,10 +23,10 @@ function ShellErrorBoundary({ children }: { children: ReactNode }) {
   );
 }
 
-function Shell({ children }: { children: ReactNode }) {
+function Shell({ resetKey, children }: { resetKey?: string; children: ReactNode }) {
   return (
     <AppShell>
-      <ShellErrorBoundary>
+      <ShellErrorBoundary key={resetKey}>
         <Suspense fallback={<Spinner />}>{children}</Suspense>
       </ShellErrorBoundary>
     </AppShell>
@@ -46,7 +45,7 @@ function Routes() {
     );
   const View = route.View;
   return (
-    <Shell key={route.key}>
+    <Shell resetKey={route.key}>
       <View />
     </Shell>
   );

@@ -1,4 +1,3 @@
-/** Hugging Face `/api/models` row. */
 export interface HFModel {
   id?: string;
   author?: string;
@@ -10,7 +9,6 @@ export interface HFModel {
   tags?: string[];
 }
 
-/** OpenRouter `/api/frontend/v1/rankings/models` row. */
 export interface ModelRow {
   date: string;
   model_permaslug: string;
@@ -23,18 +21,14 @@ export interface ModelRow {
   count: number;
   total_tool_calls: number;
   change: number | null;
+  rankingMetricValue?: number;
 }
 
-/**
- * Benchmark metadata OpenRouter mirrors from Artificial Analysis, keyed onto an
- * AA model by `normalizeModelKey`.
- */
 export interface ModelMetaEntry {
   intelligenceIndex?: number;
   agenticIndex?: number;
 }
 
-/** OpenRouter `/api/v1/models` row (pricing + AA benchmark metadata). */
 export interface PricingRow {
   id: string;
   canonical_slug?: string;
@@ -48,7 +42,6 @@ export interface PricingRow {
   };
 }
 
-/** Artificial Analysis text-to-image raw row. */
 export interface RawEntry {
   id?: unknown;
   slug?: unknown;
@@ -60,7 +53,6 @@ export interface RawEntry {
   creator?: unknown;
 }
 
-/** Hugging Face `/api/daily_papers` entry. */
 export interface DailyPaperEntry {
   paper?: {
     id?: unknown;
@@ -70,7 +62,6 @@ export interface DailyPaperEntry {
   };
 }
 
-/** Arena agent-board signal entry (one contender row within a signal board). */
 export interface AgentSignalEntry {
   contenderName?: unknown;
   model?: unknown;
@@ -81,7 +72,6 @@ export interface AgentSignalEntry {
   ciUpper?: unknown;
 }
 
-/** Artificial Analysis changelog embedded model row. */
 export interface ChangelogRawEntry {
   slug?: unknown;
   name?: unknown;
@@ -91,14 +81,12 @@ export interface ChangelogRawEntry {
   deprecated?: unknown;
 }
 
-/** Statuspage `summary.json`. */
 export interface StatuspageSummaryRaw {
   status?: { indicator?: unknown; description?: unknown };
   components?: unknown;
   incidents?: unknown;
 }
 
-/** Google Cloud `incidents.json` entry. */
 export interface GcpIncidentRaw {
   external_desc?: unknown;
   end?: unknown;
