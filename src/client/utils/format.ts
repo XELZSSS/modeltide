@@ -72,6 +72,10 @@ export function formatUptimePct(v: number | null | undefined, t: TFunction): str
   return isFiniteNumber(v) ? `${(v * 100).toFixed(2)}%` : t("uptimeNoData");
 }
 
+export function formatLatencySec(ms: number | null | undefined, t: TFunction): string {
+  return isFiniteNumber(ms) ? `${(ms / 1000).toFixed(2)}s` : t("uptimeNoData");
+}
+
 export function formatSpeed(v: number | null | undefined, t: TFunction): string {
   return isFiniteNumber(v) ? formatIndex(v) : t("notAvailable");
 }
@@ -99,7 +103,7 @@ export function orNA(value: string | null | undefined, t: TFunction): string {
   return value || t("notAvailable");
 }
 
-export function priceDisplayPrecision(v: number): number {
+function priceDisplayPrecision(v: number): number {
   const abs = Math.abs(v);
   if (abs === 0 || abs.toFixed(2) !== "0.00") return 2;
   return abs.toFixed(3) === "0.000" ? 4 : 3;

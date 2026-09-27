@@ -46,16 +46,26 @@ export function toClosedReleasesFromIndex(models: unknown): ClosedReleaseEntry[]
     .map(toClosedReleaseFromIndex)
     .filter((e): e is ClosedReleaseEntry => e !== null);
   const deduped = dedupeBy(entries, (e) => e.id);
-  deduped.sort((a, b) => b.releaseDate.localeCompare(a.releaseDate));
+  deduped.sort((a, b) => (a.releaseDate === b.releaseDate ? 0 : a.releaseDate < b.releaseDate ? 1 : -1));
   return deduped.slice(0, SOURCE_LIMITS.closedReleases);
 }
 
 export function toClosedReleases(changelog: unknown): ClosedReleaseEntry[] {
   if (!Array.isArray(changelog)) return [];
   const records = changelog.filter((e): e is ChangelogModel => isRecord(e) && typeof e.slug === "string");
-  const sorted = [...records].sort(byDateDesc((e) => e.releaseDate));
-  const entries = dedupeBy(sorted, (e) => e.releaseSlug)
-    .map(toClosedRelease)
-    .filter((e): e is ClosedReleaseEntry => e !== null);
-  return entries.slice(0, SOURCE_LIMITS.closedReleases);
+  records.sort(byDateDesc((e) => e.releaseDate));
+  const entries: ClosedReleaseEntry[] = [];
+  const seen = new Set<string>();
+  for (const record of records) {
+    const key = record.releaseSlug;
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    const entry = toClosedRelease(record);
+    if (!entry) continue;
+    entries.push(entry);
+    if (entries.length >= SOURCE_LIMITS.closedReleases) break;
+  }
+  return entries;
 }

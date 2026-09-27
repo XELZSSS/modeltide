@@ -62,14 +62,15 @@ function linkHref(link: unknown): string | null {
 
 function itemLink(item: Record<string, unknown>): string | null {
   const rawLink = item.link;
-  if (Array.isArray(rawLink)) {
-    const rel = (l: unknown) => (isRecord(l) ? l["@_rel"] : undefined);
-    const withHref = (l: unknown): boolean => linkHref(l) !== null;
-    const alternate = rawLink.find((l) => rel(l) === "alternate");
-    const chosen = alternate != null && withHref(alternate) ? alternate : rawLink.find(withHref);
-    return chosen == null ? null : linkHref(chosen);
+  if (!Array.isArray(rawLink)) return linkHref(rawLink);
+  const alternate = rawLink.find((l) => isRecord(l) && l["@_rel"] === "alternate");
+  const alternateHref = alternate === undefined ? null : linkHref(alternate);
+  if (alternateHref) return alternateHref;
+  for (const l of rawLink) {
+    const href = linkHref(l);
+    if (href) return href;
   }
-  return linkHref(rawLink);
+  return null;
 }
 
 function itemId(item: Record<string, unknown>, link: string | null, title: string): string {
@@ -124,7 +125,7 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
       textOf(item.pubDate)?.trim().slice(0, MAX_DATE_CHARS) ??
       textOf(item.published)?.trim().slice(0, MAX_DATE_CHARS) ??
       textOf(item.updated)?.trim().slice(0, MAX_DATE_CHARS) ??
-      "1970-01-01T00:00:00Z",
+      "",
     source,
   };
 }

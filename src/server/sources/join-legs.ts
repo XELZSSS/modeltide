@@ -26,10 +26,11 @@ export async function runLegs<L extends readonly Leg<unknown>[]>(
   opts: RunLegsOptions = {},
 ): Promise<{ values: LegValues<L>; failures: LegFailure[] }> {
   const tasks = legs.map((leg) => leg.run);
-  const settled: PromiseSettledResult<unknown>[] =
-    opts.concurrency != null || opts.signal != null
-      ? await runCapped(tasks, opts.concurrency ?? tasks.length, opts.signal ? { signal: opts.signal } : undefined)
-      : await Promise.allSettled(tasks.map((task) => task()));
+  const settled = await runCapped(
+    tasks,
+    opts.concurrency ?? tasks.length,
+    opts.signal ? { signal: opts.signal } : undefined,
+  );
 
   const failures: LegFailure[] = [];
   settled.forEach((result, i) => {

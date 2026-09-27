@@ -1,10 +1,5 @@
-import {
-  isRecord,
-  isValidTextToImageEntry,
-  numCoerce,
-  numCoerceNonNegative,
-  strOrNull,
-} from "@/server/parsers/parser-primitives";
+import { isRecord, isValidTextToImageEntry, numCoerce, numCoerceNonNegative } from "@/server/parsers/parser-primitives";
+import { toStringOrNull } from "@/shared/utils";
 import type { TextToImageModel } from "@/shared/types";
 import type { RawEntry } from "@/server/parsers/upstream-types";
 import { findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc-parser";
@@ -23,9 +18,9 @@ export function parseTextToImageRows(body: unknown): ParseResult<Record<string, 
 export function mapEntry(raw: unknown): Omit<TextToImageModel, "rank"> | null {
   if (!isRecord(raw)) return null;
   const entry = raw as RawEntry;
-  const id = strOrNull(entry.id);
-  const slug = strOrNull(entry.slug);
-  const name = strOrNull(entry.name);
+  const id = toStringOrNull(entry.id);
+  const slug = toStringOrNull(entry.slug);
+  const name = toStringOrNull(entry.name);
   const elo = numCoerce(entry.elo);
   if (!isValidTextToImageEntry({ id, slug, name, elo })) return null;
 
@@ -37,6 +32,6 @@ export function mapEntry(raw: unknown): Omit<TextToImageModel, "rank"> | null {
     eloLower: numCoerce(entry.lower95ci),
     eloUpper: numCoerce(entry.upper95ci),
     pricePer1kImages: numCoerceNonNegative(entry.price),
-    creatorName: isRecord(entry.creator) ? strOrNull(entry.creator.name) : null,
+    creatorName: isRecord(entry.creator) ? toStringOrNull(entry.creator.name) : null,
   };
 }

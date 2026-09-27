@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo } from "react";
+import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type { TranslationKey } from "@/shared/i18n";
 import { monthlyCostFor, type CostScenario } from "@/shared/utils";
 import { modelId } from "@/client/utils/model-utils";
@@ -24,58 +24,55 @@ export type CostFieldId =
   | "daysPerMonth";
 
 export interface CostInputState {
-  values: Record<CostFieldId, string>;
+  values: ComputedRef<Record<CostFieldId, string>>;
   setField: (id: CostFieldId, v: string) => void;
 }
 
-interface CostEstimatorState extends CostInputState {
-  calc: CostScenario;
-}
+function useCostEstimator() {
+  const store = useCostStore();
+  const values = computed(() => store.values);
+  const setField = (id: CostFieldId, v: string): void => store.setField(id, v);
 
-function useCostEstimator(): CostEstimatorState {
-  const values = useCostStore((s) => s.values);
-  const setField = useCostStore((s) => s.setField);
-  const deferred = useDeferredValue(values);
+  const calc = computed<CostScenario>(() => {
+    const current = values.value;
+    return {
+      dailyInputM: Math.max(0, Number(current.dailyInput) || 0),
+      dailyOutputM: Math.max(0, Number(current.dailyOutput) || 0),
+      dailyReasoningM: Math.max(0, Number(current.dailyReasoning) || 0),
+      cacheHitRate: Math.max(0, Math.min(100, Number(current.cacheHitRate) || 0)) / 100,
+      cacheWriteRate: Math.max(0, Math.min(100, Number(current.cacheWriteRate) || 0)) / 100,
+      daysPerMonth: Math.max(1, Number(current.daysPerMonth) || 0),
+    };
+  });
 
-  const calc = useMemo<CostScenario>(
-    () => ({
-      dailyInputM: Math.max(0, Number(deferred.dailyInput) || 0),
-      dailyOutputM: Math.max(0, Number(deferred.dailyOutput) || 0),
-      dailyReasoningM: Math.max(0, Number(deferred.dailyReasoning) || 0),
-      cacheHitRate: Math.max(0, Math.min(100, Number(deferred.cacheHitRate) || 0)) / 100,
-      cacheWriteRate: Math.max(0, Math.min(100, Number(deferred.cacheWriteRate) || 0)) / 100,
-      daysPerMonth: Math.max(1, Number(deferred.daysPerMonth) || 0),
-    }),
-    [deferred],
-  );
-
-  return useMemo(() => ({ values, setField, calc }), [values, setField, calc]);
+  return { values, setField, calc };
 }
 
 type MonthlyCostMap = Map<string, number | null>;
 
-export function useMonthlyCosts(models: ArtificialAnalysisModel[]) {
+export function useMonthlyCosts(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>) {
   const estimator = useCostEstimator();
-  const { calc } = estimator;
-  const monthlyCosts = useMemo<MonthlyCostMap>(() => {
+
+  const monthlyCosts = computed<MonthlyCostMap>(() => {
     const map: MonthlyCostMap = new Map();
-    for (const model of models) {
+    for (const model of toValue(models)) {
       const key = modelId(model);
       if (!key || map.has(key)) continue;
-      map.set(key, monthlyCostFor(model.pricing, calc));
+      map.set(key, monthlyCostFor(model.pricing, estimator.calc.value));
     }
     return map;
-  }, [models, calc]);
-  return useMemo(() => ({ ...estimator, monthlyCosts }), [estimator, monthlyCosts]);
+  });
+
+  return { ...estimator, monthlyCosts };
 }
 
-export function useEffectivePricingMap(models: ArtificialAnalysisModel[]) {
-  return useMemo(() => {
+export function useEffectivePricingMap(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>) {
+  return computed(() => {
     const map = new Map<string, ReturnType<typeof resolveEffectivePricing>>();
-    for (const m of models) {
-      const key = modelId(m);
-      if (key) map.set(key, resolveEffectivePricing(m.pricing));
+    for (const model of toValue(models)) {
+      const key = modelId(model);
+      if (key) map.set(key, resolveEffectivePricing(model.pricing));
     }
     return map;
-  }, [models]);
+  });
 }

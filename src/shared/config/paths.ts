@@ -17,32 +17,39 @@ export const API_PREFIX = "/api";
 export const API_VERSION_PARAM = "v";
 
 type Domain = keyof typeof API_DOMAINS;
-const DOMAINS = Object.keys(API_DOMAINS) as Domain[];
 
-function apiPath(domain: Domain): string {
-  return `${API_PREFIX}/${API_DOMAINS[domain]}`;
-}
+const QUERY_KEY_PREFIX = ["api", "v2"] as const;
 
 export function cacheKey(domain: Domain, ...parts: (string | number)[]): string {
   return [API_DOMAINS[domain], ...parts].join(":");
 }
 
-function queryKey(domain: Domain, ...parts: (string | number)[]): readonly string[] {
-  return ["api", "v2", API_DOMAINS[domain], ...parts.map(String)] as const;
-}
-
-const plainQueryKeys = Object.fromEntries(DOMAINS.map((d) => [d, queryKey(d)])) as Record<Domain, readonly string[]>;
-
 export const queryKeys = {
-  ...plainQueryKeys,
-  openSourceModels: queryKey(
-    "openSourceModels",
+  artificialIndex: [...QUERY_KEY_PREFIX, API_DOMAINS.artificialIndex],
+  openSourceModels: [
+    ...QUERY_KEY_PREFIX,
+    API_DOMAINS.openSourceModels,
     OPEN_SOURCE_MODELS_DEFAULTS.sort,
     OPEN_SOURCE_MODELS_DEFAULTS.direction,
-    OPEN_SOURCE_MODELS_DEFAULTS.limit,
-  ),
-  openSourceModel: (id: string) => queryKey("openSourceModel", id),
-  news: (category: string) => queryKey("news", category),
+    String(OPEN_SOURCE_MODELS_DEFAULTS.limit),
+  ],
+  openSourceModel: (id: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.openSourceModel, id],
+  news: (category: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.news, category],
+  openRouterRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.openRouterRankings],
+  closedReleases: [...QUERY_KEY_PREFIX, API_DOMAINS.closedReleases],
+  agentRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.agentRankings],
+  statusHistory: [...QUERY_KEY_PREFIX, API_DOMAINS.statusHistory],
+  homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],
 } as const;
 
-export const apiPaths = Object.fromEntries(DOMAINS.map((d) => [d, apiPath(d)])) as Record<Domain, string>;
+export const apiPaths = {
+  artificialIndex: `${API_PREFIX}/${API_DOMAINS.artificialIndex}`,
+  openSourceModels: `${API_PREFIX}/${API_DOMAINS.openSourceModels}`,
+  openSourceModel: `${API_PREFIX}/${API_DOMAINS.openSourceModel}`,
+  news: `${API_PREFIX}/${API_DOMAINS.news}`,
+  openRouterRankings: `${API_PREFIX}/${API_DOMAINS.openRouterRankings}`,
+  closedReleases: `${API_PREFIX}/${API_DOMAINS.closedReleases}`,
+  agentRankings: `${API_PREFIX}/${API_DOMAINS.agentRankings}`,
+  statusHistory: `${API_PREFIX}/${API_DOMAINS.statusHistory}`,
+  homeDashboard: `${API_PREFIX}/${API_DOMAINS.homeDashboard}`,
+} as const satisfies Record<Domain, string>;

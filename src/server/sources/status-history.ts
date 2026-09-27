@@ -12,7 +12,7 @@ export function getStatusHistory(ctx: AppContext): Promise<SourcePayload<StatusH
     STATUS_TTL_MS,
     async (ctx) => {
       const [fresh, uptime] = await Promise.all([ensureFreshSamplesWithHealth(ctx), getUptime(ctx)]);
-      return { rows: buildHistoryPayload(fresh.store, uptime, Date.now(), fresh.persisted, ctx.kv ? "kv" : "memory") };
+      return { rows: buildHistoryPayload(fresh.store, uptime, Date.now(), ctx.kv ? "kv" : "memory") };
     },
     { memoryOnly: true },
   );

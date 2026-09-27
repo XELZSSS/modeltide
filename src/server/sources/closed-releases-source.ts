@@ -47,5 +47,4 @@ export const getClosedReleases = (ctx: AppContext): Promise<SourcePayload<Closed
       const { entries: finalEntries, partial } = await fetchClosedReleases(ctx);
       return { rows: finalEntries, partial };
     },
-    { memoryOnly: true },
   );

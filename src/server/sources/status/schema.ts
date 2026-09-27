@@ -64,20 +64,19 @@ function isValidOpenSince(value: unknown): value is number | null | undefined {
 
 export function salvageStore(parsed: unknown): HistoryStore | null {
   if (!isRecord(parsed)) return null;
-  const { v } = parsed;
-  if (v !== undefined && v !== HISTORY_SCHEMA_VERSION) return null;
+  if (parsed.v !== undefined && parsed.v !== HISTORY_SCHEMA_VERSION) return null;
   const { sources } = parsed;
   if (!isRecord(sources)) return null;
   const out: HistoryStore["sources"] = {};
-  for (const [id, entry] of Object.entries(sources)) {
-    if (!isRecord(entry) || !(SOURCE_IDS as readonly string[]).includes(id)) continue;
-    const { recent, daily, openSince } = entry;
-    if (!Array.isArray(recent) || !Array.isArray(daily)) continue;
-    if (!recent.every(isValidSample) || !daily.every(isValidBucket)) continue;
-    if (!isValidOpenSince(openSince)) continue;
-    if (recent.some((sample, i) => i > 0 && sample.t <= recent[i - 1]!.t)) continue;
-    if (daily.some((bucket, i) => i > 0 && bucket.day <= daily[i - 1]!.day)) continue;
-    out[id as SourceId] = { recent, daily, openSince: openSince ?? null };
+  for (const id of SOURCE_IDS) {
+    const entry = sources[id];
+    if (!isRecord(entry)) continue;
+    const recent = (Array.isArray(entry.recent) ? entry.recent.filter(isValidSample) : []).sort((a, b) => a.t - b.t);
+    const daily = (Array.isArray(entry.daily) ? entry.daily.filter(isValidBucket) : []).sort((a, b) =>
+      a.day.localeCompare(b.day),
+    );
+    if (recent.length === 0 && daily.length === 0) continue;
+    out[id] = { recent, daily, openSince: isValidOpenSince(entry.openSince) ? (entry.openSince ?? null) : null };
   }
   return Object.keys(out).length > 0 ? { sources: out } : null;
 }

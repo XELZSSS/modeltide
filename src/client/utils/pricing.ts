@@ -26,6 +26,13 @@ export const PRICE_LEGS = {
   cacheWritePrice: (p) => p.cacheWrite,
 } as const satisfies Record<PriceLegId, PriceLegPick>;
 
+export const PRICE_LEG_IDS: readonly PriceLegId[] = [
+  "promptPrice",
+  "completionPrice",
+  "cacheHitPrice",
+  "cacheWritePrice",
+];
+
 const finiteOrNull = (v: unknown): number | null => (isFiniteNumber(v) ? v : null);
 
 export function resolveEffectivePricing(pricing: ModelPricing | undefined): EffectivePricing {

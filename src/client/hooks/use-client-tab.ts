@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { computed, type ComputedRef } from "vue";
 import { navigate, useSearchParams } from "@/client/router";
 
 function resolveInitialTab<T extends string>(validTabs: readonly T[], raw: string | null, fallback: T): T {
@@ -9,30 +9,15 @@ export function useClientTab<T extends string>(
   paramKey: string,
   validTabs: readonly T[],
   fallback: T,
-): [T, (tabId: string) => void] {
+): [ComputedRef<T>, (tabId: string) => void] {
   const searchParams = useSearchParams();
-  const paramValue = searchParams.get(paramKey);
-  const [tab, setTab] = useState<T>(() => resolveInitialTab(validTabs, paramValue, fallback));
-  const [prevParamValue, setPrevParamValue] = useState(paramValue);
-  if (prevParamValue !== paramValue) {
-    setPrevParamValue(paramValue);
-    setTab(resolveInitialTab(validTabs, paramValue, fallback));
+  const activeTab = computed(() => resolveInitialTab(validTabs, searchParams.value.get(paramKey), fallback));
+  function setTab(tabId: string): void {
+    if (!(validTabs as readonly string[]).includes(tabId)) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(paramKey) === tabId) return;
+    url.searchParams.set(paramKey, tabId);
+    navigate(url.pathname + url.search + url.hash, true);
   }
-  const setTabTransition = useCallback(
-    (tabId: string) => {
-      if (!(validTabs as readonly string[]).includes(tabId)) return;
-      try {
-        const url = new URL(window.location.href);
-        if (url.searchParams.get(paramKey) !== tabId) {
-          url.searchParams.set(paramKey, tabId);
-          navigate(url.pathname + url.search + url.hash, true);
-        }
-      } catch (err) {
-        console.warn(`[tab] failed to sync URL param "${paramKey}":`, err);
-      }
-      setTab(tabId as T);
-    },
-    [paramKey, validTabs],
-  );
-  return [tab, setTabTransition];
+  return [activeTab, setTab];
 }

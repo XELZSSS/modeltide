@@ -96,13 +96,8 @@ export const PROVIDER_STATUS_TARGET_COUNT = PROVIDER_STATUS_TARGETS.length;
 export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<SourceId, ProviderStatusResult>> {
   const settled = await runCapped(
     PROVIDER_STATUS_TARGETS.map((target) => async (): Promise<readonly [SourceId, ProviderStatusResult] | null> => {
-      try {
-        const result = await fetchProviderHealth(ctx, target.url, target.label, target.parse);
-        return result ? ([target.id, result] as const) : null;
-      } catch {
-        ctx.log("warn", `[provider-status] ${target.label} sampling threw, skipping round`);
-        return null;
-      }
+      const result = await fetchProviderHealth(ctx, target.url, target.label, target.parse);
+      return result ? ([target.id, result] as const) : null;
     }),
     PROVIDER_CONCURRENCY,
   );

@@ -29,7 +29,7 @@ function sourcePayload<T>(rows: T, opts?: { partial?: boolean }): SourcePayload<
   return { data: rows, fetchedAt: new Date().toISOString(), ...(opts?.partial ? { partial: true } : {}) };
 }
 
-export function cached<T>(
+function cached<T>(
   ctx: AppContext,
   key: string,
   ttl: number,
@@ -57,17 +57,19 @@ export function cachedPayload<T>(
   build: (ctx: AppContext) => Promise<PayloadBuild<T>>,
   scope?: CacheScope,
 ): Promise<SourcePayload<T>> {
-  return cached<SourcePayload<T>>(
-    ctx,
-    key,
-    ttl,
-    async (refreshCtx) => {
-      const result = await build(refreshCtx);
-      return {
-        data: sourcePayload(result.rows, { partial: result.partial }),
-        ttl: result.ttl ?? ttlFor(Boolean(result.partial), ttl),
-      };
-    },
-    scope,
-  );
+  const refreshCtx = ctx.refreshContext ?? ctx;
+  return ctx.cache
+    .withTtlResult<SourcePayload<T>>(
+      key,
+      ttl,
+      async () => {
+        const result = await build(refreshCtx);
+        return {
+          data: sourcePayload(result.rows, { partial: result.partial }),
+          ttl: result.ttl ?? ttlFor(Boolean(result.partial), ttl),
+        };
+      },
+      scope,
+    )
+    .then(({ value, degraded }) => (degraded ? { ...value, partial: true } : value));
 }

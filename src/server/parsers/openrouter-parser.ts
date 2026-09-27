@@ -7,14 +7,13 @@ import {
   obj,
   parseTs,
   str,
-  strOrNull,
   titleCase,
   isValidOpenRouterDirectoryRow,
 } from "@/server/parsers/parser-primitives";
-import { PER_MILLION, SOURCE_LIMITS, perMillionOrNull } from "@/server/config/limits";
+import { MAX_DIRECTORY_ROWS, PER_MILLION, SOURCE_LIMITS, perMillionOrNull } from "@/server/config/limits";
 import type { OpenRouterRankEntry } from "@/shared/types";
 
-import { normalizeModelKey } from "@/shared/utils";
+import { normalizeModelKey, toStringOrNull } from "@/shared/utils";
 
 import type { ModelMetaEntry, ModelRow, PricingRow } from "@/server/parsers/upstream-types";
 
@@ -58,8 +57,9 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
   const pricingRecord: PricingRecord = Object.create(null);
   const metaRecord: Record<string, ModelMetaEntry> = Object.create(null);
   if (!Array.isArray(rows)) return { pricing: pricingRecord, meta: metaRecord };
-  const capped = rows.slice(0, 20_000);
-  for (const raw of capped) {
+  const count = Math.min(rows.length, MAX_DIRECTORY_ROWS);
+  for (let i = 0; i < count; i++) {
+    const raw: unknown = rows[i];
     if (!isValidOpenRouterDirectoryRow(raw)) continue;
     const m = raw as unknown as PricingRow;
     const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
@@ -70,17 +70,20 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
       numCoerceNonNegative(pricing.input_cache_write),
     );
     if (pricingEntry) {
-      const idKey = strOrNull(m.id);
-      const slugKey = strOrNull(m.canonical_slug);
+      const idKey = toStringOrNull(m.id);
+      const slugKey = toStringOrNull(m.canonical_slug);
       let variantSlugKey: string | null = null;
       if (idKey && slugKey) {
         const variantAt = idKey.lastIndexOf(":");
         if (variantAt > 0) variantSlugKey = `${slugKey}${idKey.slice(variantAt)}`;
       }
+      const seen = new Set<string>();
       for (const key of [idKey, slugKey, variantSlugKey]) {
         if (!key) continue;
         const norm = key.toLowerCase();
-        if (!Object.hasOwn(pricingRecord, norm)) pricingRecord[norm] = pricingEntry;
+        if (seen.has(norm)) continue;
+        seen.add(norm);
+        if (pricingRecord[norm] === undefined) pricingRecord[norm] = pricingEntry;
       }
     }
     const benchmarks = obj(m.benchmarks);
@@ -91,11 +94,15 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
     const metaEntry: ModelMetaEntry = {};
     if (intelligenceIndex != null) metaEntry.intelligenceIndex = intelligenceIndex;
     if (agenticIndex != null) metaEntry.agenticIndex = agenticIndex;
-    const keys = new Set(
-      [m.name, m.id, m.canonical_slug].map((v) => (typeof v === "string" ? normalizeModelKey(v) : "")).filter(Boolean),
-    );
+    const keys = new Set<string>();
+    for (const value of [m.name, m.id, m.canonical_slug]) {
+      if (typeof value === "string") {
+        const key = normalizeModelKey(value);
+        if (key) keys.add(key);
+      }
+    }
     for (const key of keys) {
-      const cur = Object.hasOwn(metaRecord, key) ? metaRecord[key] : undefined;
+      const cur = metaRecord[key];
       metaRecord[key] = cur ? mergeMetaRecord(cur, metaEntry) : metaEntry;
     }
   }
@@ -184,22 +191,38 @@ function changePercent(value: unknown): number | null {
   return n == null ? null : n * 100;
 }
 
+type PricingLookup = Map<string, PricingEntry> | PricingRecord;
+
+function lookupPricing(pricing: PricingLookup, key: string): PricingEntry | undefined {
+  if (pricing instanceof Map) return pricing.get(key);
+  return Object.hasOwn(pricing, key) ? pricing[key] : undefined;
+}
+
 function resolvePricing(
-  pricingMap: Map<string, PricingEntry>,
+  pricing: PricingLookup,
   id: string,
   variantKey: string | undefined,
 ): PricingEntry | undefined {
-  return (variantKey ? pricingMap.get(variantKey.toLowerCase()) : undefined) ?? pricingMap.get(id.toLowerCase());
+  const byVariant = variantKey ? lookupPricing(pricing, variantKey.toLowerCase()) : undefined;
+  return byVariant ?? lookupPricing(pricing, id.toLowerCase());
 }
 
-function groupRows(rows: unknown): Map<string, Group> {
+export interface RankingScanStats {
+  scannedRows: number;
+  validRows: number;
+}
+
+function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> {
   const grouped = new Map<string, Group>();
   if (!Array.isArray(rows)) return grouped;
-  const capped = rows.slice(0, 20_000);
-  for (const raw of capped) {
+  const count = Math.min(rows.length, MAX_DIRECTORY_ROWS);
+  let valid = 0;
+  for (let i = 0; i < count; i++) {
+    const raw: unknown = rows[i];
     if (!isRecord(raw)) continue;
     const idRaw = (raw as unknown as ModelRow).model_permaslug;
     if (!isValidRowId(idRaw)) continue;
+    valid += 1;
     const row = raw as unknown as ModelRow;
     const id = (idRaw as string).trim();
     const tokens = usageTotal(row);
@@ -235,6 +258,10 @@ function groupRows(rows: unknown): Map<string, Group> {
     }
     if (metric != null && (group.metric == null || metric > group.metric)) group.metric = metric;
   }
+  if (stats) {
+    stats.scannedRows = count;
+    stats.validRows = valid;
+  }
   return grouped;
 }
 
@@ -257,8 +284,12 @@ function compareRanked(a: RankedGroup, b: RankedGroup): number {
   return aid === bid ? 0 : aid < bid ? -1 : 1;
 }
 
-export function mapModels(rows: unknown, pricingMap: Map<string, PricingEntry>): OpenRouterRankEntry[] {
-  const ranked: RankedGroup[] = Array.from(groupRows(rows).values()).map((group) => ({
+export function mapModels(
+  rows: unknown,
+  pricing: PricingLookup,
+  stats?: RankingScanStats,
+): OpenRouterRankEntry[] {
+  const ranked: RankedGroup[] = Array.from(groupRows(rows, stats).values()).map((group) => ({
     group,
     derivedTokens: usageTotal(group.agg),
   }));
@@ -270,9 +301,9 @@ export function mapModels(rows: unknown, pricingMap: Map<string, PricingEntry>):
     const id = row.model_permaslug;
     const name = titleFromSlug(id) || id;
     const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
-    const pricing = resolvePricing(pricingMap, id, variantKey);
-    const isFree = pricing
-      ? pricing.input === 0 && pricing.output === 0 && !pricing.cacheHit && !pricing.cacheWrite
+    const resolved = resolvePricing(pricing, id, variantKey);
+    const isFree = resolved
+      ? resolved.input === 0 && resolved.output === 0 && !resolved.cacheHit && !resolved.cacheWrite
       : undefined;
     out.push({
       rank: i + 1,
@@ -289,7 +320,7 @@ export function mapModels(rows: unknown, pricingMap: Map<string, PricingEntry>):
       toolCalls: numOr(row.total_tool_calls, 0),
       requestCount: numOr(row.count, 0),
       change: changePercent(latest.change),
-      pricing,
+      pricing: resolved,
       isFree,
     });
   }

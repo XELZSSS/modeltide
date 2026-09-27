@@ -1,5 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
-import react from "@vitejs/plugin-react";
+import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { createHash } from "crypto";
@@ -14,14 +14,22 @@ const SW_VERSION_DECL = /const SW_VERSION = "[^"]*";/;
 const SW_SHELL_DECL = /const PRECACHE_SHELL = \[[\s\S]*?\];/;
 const SHELL_ASSET = /<(?:script|link)\b[^>]*\s(?:src|href)="(\/assets\/[^"]+)"/g;
 
+const VERSION_DIRS = ["assets", "icons", "fonts"];
+const VERSION_FILES = ["index.html", "manifest.webmanifest"];
+
 function clientBundleVersion(): string {
   const hash = createHash("sha256");
-  const assetsDir = path.join(clientOutDir, "assets");
-  for (const name of fs.readdirSync(assetsDir).sort()) {
-    hash.update(name).update("\0");
-    hash.update(fs.readFileSync(path.join(assetsDir, name))).update("\0");
+  for (const relative of VERSION_FILES) {
+    hash.update(relative).update("\0");
+    hash.update(fs.readFileSync(path.join(clientOutDir, relative))).update("\0");
   }
-  hash.update(fs.readFileSync(path.join(clientOutDir, "index.html"))).update("\0");
+  for (const dir of VERSION_DIRS) {
+    const full = path.join(clientOutDir, dir);
+    for (const name of fs.readdirSync(full).sort()) {
+      hash.update(`${dir}/${name}`).update("\0");
+      hash.update(fs.readFileSync(path.join(full, name))).update("\0");
+    }
+  }
   return `sha-${hash.digest("hex").slice(0, 12)}`;
 }
 
@@ -88,7 +96,7 @@ function cspHashGuard(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cloudflare(), serviceWorkerVersion(), cspHashGuard()],
+  plugins: [vue(), tailwindcss(), cloudflare(), serviceWorkerVersion(), cspHashGuard()],
   resolve: {
     alias: srcAlias,
   },

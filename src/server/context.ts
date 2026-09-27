@@ -1,9 +1,9 @@
 import { CacheService } from "@/server/infra/cache/service";
 import { KvStore } from "@/server/infra/cache/kv";
 import { HttpClient } from "@/server/infra/http-client";
-import { createLogger, type Logger } from "@/server/infra/logger";
+import { logger, type Logger } from "@/server/infra/logger";
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen";
-import { SHARED_REFRESH_TIMEOUT_MS } from "@/shared/config/time";
+import { SHARED_REFRESH_TIMEOUT_MS } from "@/server/config";
 
 export interface Env {
   CACHE?: KVNamespace;
@@ -30,22 +30,24 @@ export function buildContext(
     onDetach?: (work: Promise<unknown>) => void;
   },
 ): AppContext {
-  const log = createLogger();
+  const background = init?.workSignal != null;
   if (!env.CACHE && !warnedMissingKv) {
     warnedMissingKv = true;
-    log("warn", "[context] CACHE KV not configured: status history is per-isolate memory only");
+    logger("warn", "[context] CACHE KV not configured: status history is per-isolate memory only");
   }
   const kv = env.CACHE ? new KvStore(env.CACHE) : undefined;
   const cache = new CacheService(kv, CACHE_VERSION, {
     callerSignal: init?.callerSignal,
     onDetach: init?.onDetach,
-    log,
+    log: logger,
   });
   const base: AppContext = {
     cache,
-    http: new HttpClient(init?.workSignal ? { signal: init.workSignal } : undefined),
+    http: new HttpClient(
+      init?.workSignal ? { signal: init.workSignal, background } : { background },
+    ),
     kv,
-    log,
+    log: logger,
     onDetach: init?.onDetach,
   };
   if (!init?.callerSignal) return base;
@@ -55,7 +57,7 @@ export function buildContext(
     get refreshContext(): AppContext {
       refresh ??= {
         ...base,
-        cache: new CacheService(kv, CACHE_VERSION, { onDetach: init?.onDetach, log }),
+        cache: new CacheService(kv, CACHE_VERSION, { onDetach: init?.onDetach, log: logger }),
         http: new HttpClient({ signal: AbortSignal.timeout(SHARED_REFRESH_TIMEOUT_MS) }),
       };
       return refresh;

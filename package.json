@@ -10,8 +10,8 @@
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy",
     "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
-    "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json",
-    "lint": "oxlint --react-plugin --deny-warnings",
+    "type-check": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json",
+    "lint": "oxlint --vue-plugin --deny-warnings",
     "format": "oxfmt --write .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -21,34 +21,32 @@
   "engines": {
     "node": ">=22.22.2"
   },
-  "packageManager": "npm@10.9.3",
+  "packageManager": "npm@11.19.0",
   "dependencies": {
-    "@tanstack/react-query": "^5.102.8",
+    "@lucide/vue": "^1.48.0",
+    "@tanstack/vue-query": "^5.104.0",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fast-xml-parser": "^5.11.1",
-    "lucide-react": "^1.39.0",
-    "react": "^19.2.8",
-    "react-chartjs-2": "^5.3.1",
-    "react-dom": "^19.2.8",
+    "pinia": "^4.0.3",
     "tailwind-merge": "^3.6.0",
-    "zustand": "^5.0.15"
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.54.6",
     "@cloudflare/workers-types": "^5.20260908.1",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "^22",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
-    "@vitejs/plugin-react": "^6.1.1",
-    "oxfmt": "^0.68.0",
+    "@types/node": "^24.19.0",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "oxfmt": "^0.70.0",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.2.2",
     "vitest": "~5.0.1",
+    "vue-tsc": "^3.3.11",
     "wrangler": "^4.128.0"
   }
 }

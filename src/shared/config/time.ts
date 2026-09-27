@@ -20,21 +20,3 @@ export function ttlFor(partial: boolean, normalTtl: number = DEFAULT_TTL_MS): nu
 export function ttlForRatio(failed: number, total: number, normalTtl: number = DEFAULT_TTL_MS): number {
   return ttlFor(total > 0 && failed * 10 >= total * 3, normalTtl);
 }
-
-const UPSTREAM_TIMEOUT_MS = 10_000;
-const RSS_TIMEOUT_MS = 7_000;
-
-export const BACKOFF_MAX_MS = 2_000;
-
-export const UPSTREAM_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
-
-export const FAST_FETCH_OPTS = { timeoutMs: RSS_TIMEOUT_MS, retries: 0 } as const;
-
-const FETCH_OPTS = [UPSTREAM_FETCH_OPTS, FAST_FETCH_OPTS] as const;
-
-export const WORST_CASE_UPSTREAM_CALL_MS =
-  Math.max(...FETCH_OPTS.map((o) => o.timeoutMs * (o.retries + 1))) + BACKOFF_MAX_MS;
-
-export const CLIENT_FETCH_TIMEOUT_MS = 15_000;
-
-export const SHARED_REFRESH_TIMEOUT_MS = 25_000;

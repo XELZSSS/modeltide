@@ -2,6 +2,7 @@ import { byNumberDesc } from "@/server/parsers/parser-primitives";
 import type { AppContext } from "@/server/context";
 import { DEFAULT_TTL_MS } from "@/shared/config";
 import { cacheKeys, upstreamEndpoints } from "@/server/config";
+import { MAX_LEADERBOARD_ROWS } from "@/server/config/limits";
 import type { TextToImageModel } from "@/shared/types";
 import type { SourcePayload } from "@/shared/types";
 import { dedupeBy } from "@/shared/utils";
@@ -19,12 +20,16 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<SourcePayloa
       "raw rows",
       `raw=0, kept=0, body=${body.length}B`,
     );
-    if (rawModels.length > 5000) {
+    const truncated = rawModels.length > MAX_LEADERBOARD_ROWS;
+    if (truncated) {
       ctx.log("warn", `[text-to-image] oversized payload (${rawModels.length}), truncating`);
-      rawModels = rawModels.slice(0, 5000);
+      rawModels = rawModels.slice(0, MAX_LEADERBOARD_ROWS);
     }
     const mapped = rawModels.map((m) => mapEntry(m)).filter((m): m is Omit<TextToImageModel, "rank"> => m !== null);
     const ranked = dedupeBy(mapped.sort(byNumberDesc((m) => m.elo)), (m) => m.slug);
     const models: TextToImageModel[] = ranked.map((m, i) => ({ ...m, rank: i + 1 }));
-    return { rows: requireRows(models, "Text-to-image", "models", `raw=${rawModels.length}, kept=0`) };
+    return {
+      rows: requireRows(models, "Text-to-image", "models", `raw=${rawModels.length}, kept=0`),
+      partial: truncated,
+    };
   });

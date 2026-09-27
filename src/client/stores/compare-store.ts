@@ -1,99 +1,94 @@
-import { persist } from "zustand/middleware";
-import { create } from "zustand";
-import { useEffect, useMemo } from "react";
+import { computed, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from "vue";
+import { defineStore } from "pinia";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { STORAGE_KEYS } from "@/shared/config";
 import { modelId } from "@/client/utils/model-utils";
-import { sessionJsonStorage } from "@/client/stores/persist";
+import { readPersisted, safeStorage, writePersisted } from "@/client/stores/persist";
 
 const MAX_COMPARE = 2;
+const VERSION = 0;
 
 function cleanIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  return [...new Set(raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0))].slice(
-    0,
-    MAX_COMPARE,
-  );
+  return [...new Set(raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0))].slice(0, MAX_COMPARE);
 }
 
-interface CompareState {
-  compareIds: string[];
-  lastExceedAt: number | null;
-  toggleCompareModel: (model: ArtificialAnalysisModel) => boolean;
-  removeCompareModel: (model: { id?: string; slug?: string }) => void;
-  pruneCompare: (validIds: ReadonlySet<string>) => void;
-  clearCompare: () => void;
-  clearExceed: () => void;
+function readCompareIds(): string[] {
+  const stored = readPersisted<{ compareIds?: unknown }>(safeStorage("session"), STORAGE_KEYS.compare, VERSION);
+  return cleanIds(stored.compareIds);
 }
 
-export const useCompareStore = create<CompareState>()(
-  persist(
-    (set, get) => ({
-      compareIds: [],
-      lastExceedAt: null,
-      toggleCompareModel: (model) => {
-        const key = modelId(model);
-        if (!key) return false;
-        const state = get();
-        if (state.compareIds.includes(key)) {
-          set({ compareIds: state.compareIds.filter((id) => id !== key), lastExceedAt: null });
-          return true;
-        }
-        if (state.compareIds.length >= MAX_COMPARE) {
-          set({ lastExceedAt: Date.now() });
-          return false;
-        }
-        set({ compareIds: [...state.compareIds, key], lastExceedAt: null });
+export const useCompareStore = defineStore("compare", {
+  state: () => ({
+    compareIds: readCompareIds(),
+    exceedAt: null as number | null,
+  }),
+  actions: {
+    toggleCompareModel(model: ArtificialAnalysisModel): boolean {
+      const key = modelId(model);
+      if (!key) return false;
+      if (this.compareIds.includes(key)) {
+        this.compareIds = this.compareIds.filter((id) => id !== key);
         return true;
-      },
-      removeCompareModel: (model) =>
-        set((state) => {
-          const key = modelId(model);
-          if (!key) return state;
-          return { compareIds: state.compareIds.filter((id) => id !== key), lastExceedAt: null };
-        }),
-      pruneCompare: (validIds) =>
-        set((state) => {
-          const kept = state.compareIds.filter((id) => validIds.has(id));
-          return kept.length === state.compareIds.length ? state : { compareIds: kept, lastExceedAt: null };
-        }),
-      clearCompare: () => set({ compareIds: [], lastExceedAt: null }),
-      clearExceed: () => set({ lastExceedAt: null }),
-    }),
-    {
-      name: STORAGE_KEYS.compare,
-      storage: sessionJsonStorage,
-      partialize: (state) => ({ compareIds: state.compareIds }),
-      merge: (persisted, current) => {
-        const p = (persisted ?? {}) as { compareIds?: unknown };
-        return { ...current, compareIds: cleanIds(p.compareIds) };
-      },
+      }
+      if (this.compareIds.length >= MAX_COMPARE) {
+        this.exceedAt = Date.now();
+        return false;
+      }
+      this.compareIds = [...this.compareIds, key];
+      return true;
     },
-  ),
-);
+    removeCompareModel(model: { id?: string; slug?: string }): void {
+      const key = modelId(model);
+      if (!key) return;
+      this.compareIds = this.compareIds.filter((id) => id !== key);
+    },
+    pruneCompare(validIds: ReadonlySet<string>): void {
+      const kept = this.compareIds.filter((id) => validIds.has(id));
+      if (kept.length !== this.compareIds.length) this.compareIds = kept;
+    },
+    clearCompare() {
+      this.compareIds = [];
+    },
+    clearExceed() {
+      this.exceedAt = null;
+    },
+  },
+});
 
-export function useCompareModels(rankings: ArtificialAnalysisModel[]): ArtificialAnalysisModel[] {
-  const compareIds = useCompareStore((s) => s.compareIds);
-  const rankingMap = useMemo(() => {
+let syncing = false;
+
+export function initCompareStorageSync(): void {
+  if (syncing) return;
+  syncing = true;
+  const storage = safeStorage("session");
+  useCompareStore().$subscribe((_mutation, state) => writePersisted(storage, STORAGE_KEYS.compare, VERSION, { compareIds: state.compareIds }), {
+    detached: true,
+  });
+}
+
+export function useCompareModels(
+  rankings: MaybeRefOrGetter<ArtificialAnalysisModel[]>,
+): ComputedRef<ArtificialAnalysisModel[]> {
+  const store = useCompareStore();
+  const rankingMap = computed(() => {
     const map = new Map<string, ArtificialAnalysisModel>();
-    for (const m of rankings) {
-      const id = modelId(m);
-      if (id) map.set(id, m);
+    for (const model of toValue(rankings)) {
+      const id = modelId(model);
+      if (id) map.set(id, model);
     }
     return map;
-  }, [rankings]);
-  return useMemo(
-    () => compareIds.map((id) => rankingMap.get(id)).filter((m): m is ArtificialAnalysisModel => m != null),
-    [compareIds, rankingMap],
+  });
+  return computed(() =>
+    store.compareIds.map((id) => rankingMap.value.get(id)).filter((model): model is ArtificialAnalysisModel => model != null),
   );
 }
 
-export function usePruneCompareIds(models: ArtificialAnalysisModel[], opts?: { ready?: boolean }): void {
-  const pruneCompare = useCompareStore((s) => s.pruneCompare);
-  const validIds = useMemo(() => new Set(models.map(modelId).filter(Boolean)), [models]);
-  const ready = opts?.ready ?? true;
-  useEffect(() => {
-    if (!ready || validIds.size === 0) return;
-    pruneCompare(validIds);
-  }, [validIds, ready, pruneCompare]);
+export function usePruneCompareIds(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>): void {
+  const store = useCompareStore();
+  const validIds = computed(() => new Set(toValue(models).map(modelId).filter(Boolean)));
+  watch(validIds, (ids) => {
+    if (ids.size === 0) return;
+    store.pruneCompare(ids);
+  });
 }

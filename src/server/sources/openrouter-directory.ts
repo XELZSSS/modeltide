@@ -9,11 +9,12 @@ import {
   numCoerceNonNegative,
 } from "@/server/parsers/parser-primitives";
 import { parseDirectoryRows, type DirectoryCacheEntry } from "@/server/parsers/openrouter-parser";
+import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 import { cachedRaw } from "@/server/sources/pipeline";
 
 const PRICING_TTL_MS = SLOW_TTL_MS;
 
-type DirectoryCacheEntryWithPartial = DirectoryCacheEntry & { partial?: boolean };
+export type DirectoryCacheEntryWithPartial = DirectoryCacheEntry & { partial?: boolean };
 
 const DYNAMIC_PRICING = -1;
 
@@ -48,4 +49,11 @@ export async function getModelDirectory(ctx: AppContext): Promise<DirectoryCache
     PRICING_TTL_MS,
     fetchModelDirectory,
   );
+}
+
+export function getModelDirectoryMeta(ctx: AppContext): Promise<Record<string, ModelMetaEntry>> {
+  return cachedRaw<Record<string, ModelMetaEntry>>(ctx, cacheKeys.openRouterMeta, PRICING_TTL_MS, async (ctx) => {
+    const { meta } = await getModelDirectory(ctx);
+    return meta;
+  });
 }

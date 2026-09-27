@@ -1,6 +1,7 @@
 import type { AppContext } from "@/server/context";
 import { buildContext, type Env } from "@/server/context";
 import { qEnum, qNum, qStr, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
+import { SHORT_CACHE_HEADERS } from "@/server/http/headers";
 import type { ApiDomain, DomainPayload } from "@/contract/api-contract";
 import { apiPaths, MAX_MODEL_LIMIT, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
 import { getAgentRankings } from "@/server/sources/agent-arena-source";
@@ -80,10 +81,7 @@ const ENTRIES = {
   }),
   openSourceModel: defineSource("openSourceModel", {
     query: { id: qStr({ maxLength: 200 }) },
-    cache: {
-      browser: "public, max-age=15",
-      cdn: "public, max-age=30, stale-while-revalidate=30",
-    },
+    cache: SHORT_CACHE_HEADERS,
     handler: (ctx, params) => getModelById(ctx, params.id),
   }),
   openRouterRankings: defineSource("openRouterRankings", {
@@ -91,10 +89,7 @@ const ENTRIES = {
     warm: "core",
   }),
   statusHistory: defineSource("statusHistory", {
-    cache: {
-      browser: "public, max-age=15",
-      cdn: "public, max-age=30, stale-while-revalidate=30",
-    },
+    cache: SHORT_CACHE_HEADERS,
     handler: (ctx) => getStatusHistory(ctx),
   }),
 } satisfies Record<ApiDomain, unknown>;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { onScopeDispose, ref, type Ref } from "vue";
 import type { LegendOptions, ScaleOptions, TooltipCallbacks, TooltipItem, TooltipModel } from "chart.js";
 import { axisDashedBorderStyle, axisGridStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 
@@ -36,7 +36,6 @@ const FALLBACK_THEME: ChartTheme = {
 };
 
 function resolveChartTheme(): ChartTheme {
-  if (typeof document === "undefined") return FALLBACK_THEME;
   const styles = getComputedStyle(document.documentElement);
   const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
   return {
@@ -56,6 +55,13 @@ let sharedTheme: ChartTheme | null = null;
 let sharedSignature = "";
 const listeners = new Set<(theme: ChartTheme) => void>();
 let observing = false;
+
+function currentTheme(): ChartTheme {
+  if (sharedTheme) return sharedTheme;
+  sharedTheme = resolveChartTheme();
+  sharedSignature = themeSignature(sharedTheme);
+  return sharedTheme;
+}
 
 function themeSignature(theme: ChartTheme): string {
   return [
@@ -78,10 +84,9 @@ function publish(next: ChartTheme): void {
 }
 
 function ensureObserver(): void {
-  if (observing || typeof document === "undefined") return;
+  currentTheme();
+  if (observing) return;
   observing = true;
-  sharedTheme = resolveChartTheme();
-  sharedSignature = themeSignature(sharedTheme);
   const notify = () => publish(resolveChartTheme());
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
   const observer = new MutationObserver(notify);
@@ -89,20 +94,23 @@ function ensureObserver(): void {
   media?.addEventListener?.("change", notify);
 }
 
-export function useChartTheme(): ChartTheme {
-  const [theme, setTheme] = useState<ChartTheme>(() => sharedTheme ?? resolveChartTheme());
-  useEffect(() => {
-    ensureObserver();
-    const listener = (next: ChartTheme) => setTheme(next);
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  }, []);
+export function useChartTheme(): Ref<ChartTheme> {
+  const theme = ref(currentTheme());
+  ensureObserver();
+  const listener = (next: ChartTheme) => {
+    theme.value = next;
+  };
+  listeners.add(listener);
+  onScopeDispose(() => {
+    listeners.delete(listener);
+  });
   return theme;
 }
 
-export function ceilToStep(peak: number, step = 20): number {
+export const AXIS_MAX = 100;
+export const AXIS_STEP = 20;
+
+export function ceilToStep(peak: number, step = AXIS_STEP): number {
   return Math.ceil(peak / step) * step;
 }
 

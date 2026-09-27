@@ -11,10 +11,9 @@ interface ProbeTarget {
 }
 
 function buildTargets(): ProbeTarget[] {
-  const newsTargets = (Object.keys(rssConfig) as (keyof typeof rssConfig)[]).flatMap((category) => {
-    const feed = rssConfig[category][0];
-    return feed ? [{ id: "news" as const, url: feed }] : [];
-  });
+  const newsTargets = (Object.keys(rssConfig) as (keyof typeof rssConfig)[]).flatMap((category) =>
+    rssConfig[category].map((url) => ({ id: "news" as const, url })),
+  );
   return [
     {
       id: "artificialAnalysis",
@@ -53,42 +52,17 @@ export interface SourceAggregate {
   warnReason?: string | null;
 }
 
-type MutableAggregate = SourceAggregate & {
+interface MutableAggregate extends Omit<SourceAggregate, "warn" | "warnReason" | "error"> {
   total: number;
   failures: number;
   unknown: number;
-  failureNotes: string[];
-};
-
-const MAX_FAILURE_NOTES = 3;
-
-function failureNote(target: ProbeTarget, error: string | null): string {
-  return `${error ?? "probe failed"} (${new URL(target.url).host})`;
-}
-
-function failureDetail(g: MutableAggregate): string {
-  if (g.total === 1 && g.failureNotes.length > 0) return g.failureNotes[0]!;
-  const shown = g.failureNotes.slice(0, MAX_FAILURE_NOTES).join("; ");
-  const suffix = g.failureNotes.length > MAX_FAILURE_NOTES ? "; …" : "";
-  const head =
-    g.failures > 0 ? `${g.failures}/${g.total} endpoints failed` : `${g.unknown}/${g.total} endpoints unreachable`;
-  const unreachable = g.unknown > 0 && g.failures > 0 ? `; ${g.unknown} unreachable` : "";
-  return `${head}: ${shown}${suffix}${unreachable}`;
+  firstError: string | null;
 }
 
 function insertProbe(grouped: Map<SourceId, MutableAggregate>, target: ProbeTarget, probe: ProbeResult): void {
   let g = grouped.get(target.id);
   if (!g) {
-    g = {
-      ok: false,
-      status: null,
-      latencyMs: null,
-      error: null,
-      total: 0,
-      failures: 0,
-      unknown: 0,
-      failureNotes: [],
-    };
+    g = { ok: false, status: null, latencyMs: null, total: 0, failures: 0, unknown: 0, firstError: null };
     grouped.set(target.id, g);
   }
   g.total += 1;
@@ -102,14 +76,14 @@ function insertProbe(grouped: Map<SourceId, MutableAggregate>, target: ProbeTarg
   }
   if (probe.status == null) g.unknown += 1;
   else g.failures += 1;
-  const note = failureNote(target, probe.error);
-  if (!g.failureNotes.includes(note)) g.failureNotes.push(note);
+  g.firstError ??= probe.error ?? "probe failed";
 }
 
-function summarizeGroup(g: MutableAggregate): SourceAggregate | null {
-  if (!g.ok && g.failures === 0) return null;
+function summarizeGroup(g: MutableAggregate): SourceAggregate {
   const degraded = g.failures > 0 || g.unknown > 0;
-  const detail = degraded ? failureDetail(g) : null;
+  const head =
+    g.failures > 0 ? `${g.failures}/${g.total} endpoints failed` : `${g.unknown}/${g.total} endpoints unreachable`;
+  const detail = degraded ? `${head}${g.firstError ? `: ${g.firstError}` : ""}` : null;
   return {
     ok: g.ok,
     ...(degraded && g.ok ? { warn: true, warnReason: detail } : {}),
@@ -123,9 +97,6 @@ export function aggregateProbes(probed: { target: ProbeTarget; probe: ProbeResul
   const grouped = new Map<SourceId, MutableAggregate>();
   for (const { target, probe } of probed) insertProbe(grouped, target, probe);
   const aggregated = new Map<SourceId, SourceAggregate>();
-  for (const [id, g] of grouped) {
-    const summary = summarizeGroup(g);
-    if (summary) aggregated.set(id, summary);
-  }
+  for (const [id, g] of grouped) aggregated.set(id, summarizeGroup(g));
   return aggregated;
 }

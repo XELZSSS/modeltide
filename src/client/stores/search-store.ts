@@ -1,21 +1,22 @@
-import { useCallback, useMemo } from "react";
-import { create } from "zustand";
-import { usePathname } from "@/client/router";
+import { computed, type ComputedRef } from "vue";
+import { defineStore } from "pinia";
+import { useRoute } from "vue-router";
 
-interface SearchState {
-  terms: Record<string, string>;
-  setTerm: (route: string, term: string) => void;
-}
+export const useSearchStore = defineStore("search", {
+  state: () => ({ terms: {} as Record<string, string> }),
+  actions: {
+    setTerm(route: string, term: string) {
+      this.terms = { ...this.terms, [route]: term };
+    },
+  },
+});
 
-const useSearchStore = create<SearchState>((set) => ({
-  terms: {},
-  setTerm: (route, term) => set((state) => ({ terms: { ...state.terms, [route]: term } })),
-}));
-
-export function useRouteSearchTerm(): { term: string; setTerm: (term: string) => void } {
-  const pathname = usePathname();
-  const term = useSearchStore((s) => s.terms[pathname] ?? "");
-  const set = useSearchStore((s) => s.setTerm);
-  const setTerm = useCallback((value: string) => set(pathname, value), [pathname, set]);
-  return useMemo(() => ({ term, setTerm }), [term, setTerm]);
+export function useRouteSearchTerm(): { term: ComputedRef<string>; setTerm: (term: string) => void } {
+  const route = useRoute();
+  const store = useSearchStore();
+  const pathname = computed(() => route.path);
+  return {
+    term: computed(() => store.terms[pathname.value] ?? ""),
+    setTerm: (term) => store.setTerm(pathname.value, term),
+  };
 }

@@ -237,6 +237,8 @@ export const zh = {
   navSecondary: "次导航",
   themeLight: "浅色",
   themeDark: "深色",
+  langZh: "中文",
+  langEn: "EN",
   navStatus: "状态",
   navReleases: "发布",
   serviceUptime: "服务运行时间",

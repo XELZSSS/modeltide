@@ -1,8 +1,8 @@
-import { CLIENT_FETCH_TIMEOUT_MS } from "@/shared/config/time";
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen";
 import { API_VERSION_PARAM } from "@/shared/config/paths";
 import type { SourcePayload } from "@/shared/types";
 
+const CLIENT_FETCH_TIMEOUT_MS = 15_000;
 const CONTRACT_VERSION_HEADER = "x-contract-version";
 
 interface QueryCtx {
@@ -53,39 +53,9 @@ function buildApiUrl(path: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}${API_VERSION_PARAM}=${CACHE_VERSION}`;
 }
 
-const HAS_NATIVE_TIMEOUT = typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function";
-const HAS_NATIVE_ANY = typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function";
-
-interface TimeoutSignal {
-  signal: AbortSignal;
-  cleanup: () => void;
-}
-
-function manualWithTimeout(signal: AbortSignal | undefined, ms: number): TimeoutSignal {
-  const controller = new AbortController();
-  const onCallerAbort = () => controller.abort(signal?.reason);
-  if (signal) {
-    if (signal.aborted) controller.abort(signal.reason);
-    else signal.addEventListener("abort", onCallerAbort, { once: true });
-  }
-  const timer = setTimeout(() => {
-    controller.abort(new DOMException("The operation timed out.", "TimeoutError"));
-  }, ms);
-  return {
-    signal: controller.signal,
-    cleanup: () => {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", onCallerAbort);
-    },
-  };
-}
-
-function withTimeout(signal: AbortSignal | undefined, ms: number): TimeoutSignal {
-  if (HAS_NATIVE_TIMEOUT && (!signal || HAS_NATIVE_ANY)) {
-    const timeout = AbortSignal.timeout(ms);
-    return { signal: signal ? AbortSignal.any([signal, timeout]) : timeout, cleanup: () => {} };
-  }
-  return manualWithTimeout(signal, ms);
+function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const timeout = AbortSignal.timeout(ms);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
 async function parseErrorMessage(res: Response): Promise<string> {
@@ -107,22 +77,17 @@ async function parseErrorMessage(res: Response): Promise<string> {
 
 async function apiFetch<T>(path: string, signal?: AbortSignal): Promise<SourcePayload<T>> {
   const url = buildApiUrl(path);
-  const { signal: timeoutSignal, cleanup } = withTimeout(signal, CLIENT_FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      headers: { accept: "application/json" },
-      signal: timeoutSignal,
-    });
-    noteContractVersion(res);
-    if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
-    const ct = res.headers.get("content-type") ?? "";
-    if (!ct.includes("application/json")) {
-      throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
-    }
-    return (await res.json()) as SourcePayload<T>;
-  } finally {
-    cleanup();
+  const res = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: withTimeout(signal, CLIENT_FETCH_TIMEOUT_MS),
+  });
+  noteContractVersion(res);
+  if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
   }
+  return (await res.json()) as SourcePayload<T>;
 }
 
 export const fetcher =

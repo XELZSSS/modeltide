@@ -3,10 +3,10 @@ import {
   isoDate,
   numCoerce,
   numIntCoerceNonNegative,
-  strOrNull,
   isSuitableNewsItem,
   isValidRowId,
 } from "@/server/parsers/parser-primitives";
+import { toStringOrNull } from "@/shared/utils";
 import type { NewsItem, OpenSourceModelEntry } from "@/shared/types";
 import { SOURCE_LIMITS } from "@/server/config/limits";
 import { upstreamConfig } from "@/server/config";
@@ -18,13 +18,14 @@ import { stripHtml } from "@/server/parsers/html-to-text";
 import { decodeEntities } from "@/server/parsers/html-entities";
 
 function resolveAuthor(m: HFModel, id: string): string | null {
-  return strOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
+  return toStringOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
 }
 
 interface LicenseDrops {
   withoutTag: number;
   declaredNonOpen: number;
   unknownTags: string[];
+  noDownloads: number;
 }
 
 const MAX_UNKNOWN_LICENSE_TAGS = 5;
@@ -32,6 +33,7 @@ const MAX_UNKNOWN_LICENSE_TAGS = 5;
 export class LicenseDropTally {
   private withoutTag = 0;
   private declaredNonOpen = 0;
+  private noDownloads = 0;
   private readonly unknownTags = new Set<string>();
 
   record(ids: readonly string[], license: string | null): void {
@@ -49,7 +51,16 @@ export class LicenseDropTally {
   }
 
   drops(): LicenseDrops {
-    return { withoutTag: this.withoutTag, declaredNonOpen: this.declaredNonOpen, unknownTags: [...this.unknownTags] };
+    return {
+      withoutTag: this.withoutTag,
+      declaredNonOpen: this.declaredNonOpen,
+      unknownTags: [...this.unknownTags],
+      noDownloads: this.noDownloads,
+    };
+  }
+
+  recordNoDownloads(): void {
+    this.noDownloads += 1;
   }
 }
 
@@ -61,8 +72,10 @@ export function mapListModel(m: unknown, tally?: LicenseDropTally): OpenSourceMo
   return toEntry(m, false, tally);
 }
 
-export function keepOpenSourceRanking(m: { downloads: number }): boolean {
-  return Number.isFinite(m.downloads) && m.downloads > 0;
+export function keepOpenSourceRanking(m: { downloads: number }, tally?: LicenseDropTally): boolean {
+  if (Number.isFinite(m.downloads) && m.downloads > 0) return true;
+  tally?.recordNoDownloads();
+  return false;
 }
 
 function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): OpenSourceModelEntry | null {
@@ -73,7 +86,11 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
   const downloads = numIntCoerceNonNegative(model.downloads) ?? 0;
   const likes = numIntCoerceNonNegative(model.likes) ?? 0;
   const tags = Array.isArray(model.tags) ? model.tags.filter((t): t is string => typeof t === "string") : [];
-  const licenseIds = tags.map(licenseTagId).filter((licenseId): licenseId is string => licenseId != null);
+  const licenseIds: string[] = [];
+  for (const tag of tags) {
+    const licenseId = licenseTagId(tag);
+    if (licenseId) licenseIds.push(licenseId);
+  }
   const license = getOpenLicenseId(licenseIds);
   tally?.record(licenseIds, license);
   const entry: OpenSourceModelEntry = {
@@ -82,7 +99,7 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
     downloads,
     likes,
     license,
-    task: strOrNull(model.pipeline_tag),
+    task: toStringOrNull(model.pipeline_tag),
     createdAt: isoDate(model.createdAt),
     lastModified: isoDate(model.lastModified),
   };
@@ -93,7 +110,7 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
 function toNewsItem(entry: unknown): NewsItem | null {
   if (!isRecord(entry)) return null;
   const paper = isRecord((entry as DailyPaperEntry).paper) ? (entry as DailyPaperEntry).paper! : undefined;
-  const rawId = strOrNull(paper?.id);
+  const rawId = toStringOrNull(paper?.id);
   const rawTitle = typeof paper?.title === "string" ? paper.title : "";
   const title = stripHtml(decodeEntities(rawTitle));
   const publishedAt = typeof paper?.publishedAt === "string" ? paper.publishedAt.trim() : "";

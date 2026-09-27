@@ -1,22 +1,15 @@
-import { useEffect } from "react";
-import { persist } from "zustand/middleware";
-import { create } from "zustand";
+import { defineStore } from "pinia";
 import type { ThemeMode } from "@/shared/types";
 import type { Lang } from "@/shared/i18n";
 import { STORAGE_KEYS } from "@/shared/config";
-import { localJsonStorage } from "@/client/stores/persist";
+import { readPersisted, safeStorage, writePersisted } from "@/client/stores/persist";
 
-function readStoredSettings(): Partial<SettingsState> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.settings);
-    return raw ? ((JSON.parse(raw) as { state?: Partial<SettingsState> }).state ?? {}) : {};
-  } catch {
-    return {};
-  }
+const VERSION = 1;
+
+interface PersistedSettings {
+  themeMode?: unknown;
+  lang?: unknown;
 }
-
-const storedSettings = readStoredSettings();
 
 function isThemeMode(value: unknown): value is ThemeMode {
   return value === "dark" || value === "light";
@@ -27,70 +20,54 @@ function isLang(value: unknown): value is Lang {
 }
 
 function initialThemeMode(): ThemeMode {
-  if (isThemeMode(storedSettings.themeMode)) return storedSettings.themeMode;
-  if (typeof window === "undefined") return "light";
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function initialLang(): Lang {
-  if (typeof window === "undefined") return "zh";
-  if (isLang(storedSettings.lang)) return storedSettings.lang;
-  const nav = navigator.language ?? "";
-  if (nav.toLowerCase().startsWith("en")) return "en";
-  return "zh";
+  return (navigator.language ?? "").toLowerCase().startsWith("en") ? "en" : "zh";
 }
 
-interface SettingsState {
-  themeMode: ThemeMode;
-  lang: Lang;
-  setLang: (lang: Lang) => void;
-  setThemeMode: (mode: ThemeMode) => void;
+function readSettings(): { themeMode: ThemeMode; lang: Lang } {
+  const stored = readPersisted<PersistedSettings>(safeStorage("local"), STORAGE_KEYS.settings, VERSION);
+  return {
+    themeMode: isThemeMode(stored.themeMode) ? stored.themeMode : initialThemeMode(),
+    lang: isLang(stored.lang) ? stored.lang : initialLang(),
+  };
 }
 
-export const useSettingsStore = create<SettingsState>()(
-  persist(
-    (set) => ({
-      themeMode: initialThemeMode(),
-      lang: initialLang(),
-      setLang: (lang) => set(() => ({ lang })),
-      setThemeMode: (themeMode) => set(() => ({ themeMode })),
-    }),
-    {
-      name: STORAGE_KEYS.settings,
-      version: 1,
-      migrate: (persisted) => persisted as SettingsState,
-      storage: localJsonStorage,
-      merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<SettingsState>;
-        return {
-          ...current,
-          themeMode: isThemeMode(p.themeMode) ? p.themeMode : current.themeMode,
-          lang: isLang(p.lang) ? p.lang : current.lang,
-        };
-      },
+export const useSettingsStore = defineStore("settings", {
+  state: readSettings,
+  actions: {
+    setLang(lang: Lang) {
+      this.lang = lang;
     },
-  ),
-);
+    setThemeMode(mode: ThemeMode) {
+      this.themeMode = mode;
+    },
+  },
+});
 
-function syncSettingsFromStorageEvent(e: StorageEvent): void {
-  if (e.key !== STORAGE_KEYS.settings || e.newValue == null) return;
-  try {
-    const parsed = JSON.parse(e.newValue) as { state?: Partial<SettingsState> };
-    const current = useSettingsStore.getState();
-    const themeMode = parsed.state?.themeMode;
-    const lang = parsed.state?.lang;
-    const updates: Partial<Pick<SettingsState, "themeMode" | "lang">> = {};
-    if (isThemeMode(themeMode) && themeMode !== current.themeMode) updates.themeMode = themeMode;
-    if (isLang(lang) && lang !== current.lang) updates.lang = lang;
-    if (Object.keys(updates).length > 0) useSettingsStore.setState(updates);
-  } catch (err) {
-    console.warn(`[settings] ignoring malformed storage event: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
+let syncing = false;
 
-export function useSettingsStorageSync(): void {
-  useEffect(() => {
-    window.addEventListener("storage", syncSettingsFromStorageEvent);
-    return () => window.removeEventListener("storage", syncSettingsFromStorageEvent);
-  }, []);
+export function initSettingsStorageSync(): void {
+  if (syncing) return;
+  syncing = true;
+  const storage = safeStorage("local");
+  const store = useSettingsStore();
+  store.$subscribe(
+    (_mutation, state) => writePersisted(storage, STORAGE_KEYS.settings, VERSION, { themeMode: state.themeMode, lang: state.lang }),
+    { detached: true },
+  );
+  window.addEventListener("storage", (event) => {
+    if (event.key !== STORAGE_KEYS.settings || event.newValue == null) return;
+    try {
+      const parsed = JSON.parse(event.newValue) as { state?: PersistedSettings };
+      const themeMode = parsed.state?.themeMode;
+      const lang = parsed.state?.lang;
+      if (isThemeMode(themeMode) && themeMode !== store.themeMode) store.themeMode = themeMode;
+      if (isLang(lang) && lang !== store.lang) store.lang = lang;
+    } catch (err) {
+      console.warn(`[settings] ignoring malformed storage event: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
 }

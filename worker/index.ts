@@ -95,8 +95,7 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
       return { failed: Number.MAX_SAFE_INTEGER, total: Number.MAX_SAFE_INTEGER };
     }
   };
-  const sampled = await runSampling();
-  const warm = await runWarmup();
+  const [sampled, warm] = await Promise.all([runSampling(), runWarmup()]);
   return {
     sampled,
     warmFailed: warm.failed,

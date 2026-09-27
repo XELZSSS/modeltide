@@ -1,4 +1,5 @@
-import { numCoerce, isRecord, strOrNull, byNumberDesc, isUnsuitableContent } from "@/server/parsers/parser-primitives";
+import { numCoerce, isRecord, byNumberDesc, isUnsuitableContent } from "@/server/parsers/parser-primitives";
+import { toStringOrNull } from "@/shared/utils";
 import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { AgentRankEntry } from "@/shared/types";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
@@ -28,8 +29,8 @@ interface AgentSignalRow {
 
 function toAgentSignalRow(e: unknown): AgentSignalRow | null {
   if (!isRecord(e)) return null;
-  const id = strOrNull(e.contenderName);
-  const name = strOrNull(e.model);
+  const id = toStringOrNull(e.contenderName);
+  const name = toStringOrNull(e.model);
   if (id == null || name == null) return null;
   if (isUnsuitableContent(id) || isUnsuitableContent(name)) return null;
   const score = numCoerce(e.score);
@@ -37,11 +38,11 @@ function toAgentSignalRow(e: unknown): AgentSignalRow | null {
   return {
     id,
     name,
-    creator: strOrNull(e.modelOrganization) ?? "Unknown",
+    creator: toStringOrNull(e.modelOrganization) ?? "Unknown",
     score,
     ciLower: numCoerce(e.ciLower),
     ciUpper: numCoerce(e.ciUpper),
-    license: strOrNull(e.license),
+    license: toStringOrNull(e.license),
   };
 }
 
@@ -71,7 +72,12 @@ function extractSignalEntries(tree: unknown, signal: string): AgentSignalEntry[]
   return boards.get(signal) ?? null;
 }
 
-function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[]): AgentRankEntry[] {
+interface AgentOverall {
+  rows: AgentRankEntry[];
+  dropped: number;
+}
+
+function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[]): AgentOverall {
   const required = boards.length;
   const acc = new Map<
     string,
@@ -100,19 +106,21 @@ function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[])
       if (row.ciUpper != null) cur.ciUpper.push(row.ciUpper);
     }
   }
-  const ranked = [...acc.entries()]
-    .filter(([, v]) => v.scores.length === required)
-    .map(([id, v]) => ({
-      id,
-      name: v.name,
-      creator: v.creator,
-      license: v.license,
-      score: mean(v.scores),
-      ciLower: mean(v.ciLower),
-      ciUpper: mean(v.ciUpper),
-    }));
+  const complete = [...acc.entries()].filter(([, v]) => v.scores.length === required);
+  const ranked = complete.map(([id, v]) => ({
+    id,
+    name: v.name,
+    creator: v.creator,
+    license: v.license,
+    score: mean(v.scores),
+    ciLower: mean(v.ciLower),
+    ciUpper: mean(v.ciUpper),
+  }));
   ranked.sort(byNumberDesc((r) => r.score));
-  return ranked.map((r, i) => ({ rank: i + 1, ...r })).slice(0, SOURCE_LIMITS.agentRankings);
+  return {
+    rows: ranked.map((r, i) => ({ rank: i + 1, ...r })).slice(0, SOURCE_LIMITS.agentRankings),
+    dropped: acc.size - complete.length,
+  };
 }
 
 export function parseAgentBoards(body: unknown): ParseResult<AgentRankEntry[]> {
@@ -132,5 +140,15 @@ export function parseAgentBoards(body: unknown): ParseResult<AgentRankEntry[]> {
   if (empty) {
     return parseFail(zeroUpstreamMessage(`Agent board "${empty.signal}"`, "usable rows", "markup changed?"));
   }
-  return parseOk(buildAgentOverall(boards));
+  const overall = buildAgentOverall(boards);
+  if (overall.rows.length === 0) {
+    return parseFail(
+      zeroUpstreamMessage(
+        "Agent board",
+        "rows from the five-signal composite",
+        `${overall.dropped} contenders dropped for missing a signal board`,
+      ),
+    );
+  }
+  return parseOk(overall.rows);
 }

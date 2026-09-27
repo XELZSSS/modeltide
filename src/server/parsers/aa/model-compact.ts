@@ -72,16 +72,20 @@ function compactOmniscience(
 }
 
 function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unknown>): void {
+  let describesModalities = false;
   for (const mo of MODALITY_KEYS) {
     const suffix = mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase();
     const inputMo = bool(m[`inputModality${suffix}`]);
-    if (inputMo !== undefined) model[`input_modality_${mo}`] = inputMo;
+    if (inputMo !== undefined) {
+      model[`input_modality_${mo}`] = inputMo;
+      describesModalities = true;
+    }
     const outputMo = bool(m[`outputModality${suffix}`]);
-    if (outputMo !== undefined) model[`output_modality_${mo}`] = outputMo;
+    if (outputMo !== undefined) {
+      model[`output_modality_${mo}`] = outputMo;
+      describesModalities = true;
+    }
   }
-  const describesModalities = MODALITY_KEYS.some(
-    (mo) => model[`input_modality_${mo}`] !== undefined || model[`output_modality_${mo}`] !== undefined,
-  );
   if (!describesModalities) return;
   if (model.input_modality_text === undefined) model.input_modality_text = true;
   if (model.output_modality_text === undefined) model.output_modality_text = true;

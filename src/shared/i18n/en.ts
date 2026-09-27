@@ -236,6 +236,8 @@ export const en = {
   navSecondary: "Secondary",
   themeLight: "Light",
   themeDark: "Dark",
+  langZh: "中文",
+  langEn: "EN",
   navStatus: "Status",
   navReleases: "Releases",
   serviceUptime: "Service uptime",

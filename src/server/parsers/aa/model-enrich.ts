@@ -7,6 +7,7 @@ import {
   str,
 } from "@/server/parsers/parser-primitives";
 import type { ArtificialAnalysisModel } from "@/shared/types";
+import { MAX_DIRECTORY_ROWS } from "@/server/config/limits";
 import { normalizeModelKey } from "@/shared/utils";
 import { traverse } from "@/server/parsers/rsc-parser";
 import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
@@ -28,6 +29,14 @@ export function compactOmniscienceEnrich(m: unknown): Record<string, unknown> {
   };
 }
 
+function isValued(rows: Record<string, unknown>[]): boolean {
+  return rows.some((m) => isRecord(m) && numCoerce(m.intelligenceIndex) != null);
+}
+
+function isUsable(rows: Record<string, unknown>[]): boolean {
+  return rows.some((m) => isRecord(m) && isNonEmptyString(m.slug));
+}
+
 export function findModelArray(tree: unknown): Record<string, unknown>[] | null {
   let initialModels: Record<string, unknown>[] | null = null;
   let models: Record<string, unknown>[] | null = null;
@@ -39,40 +48,29 @@ export function findModelArray(tree: unknown): Record<string, unknown>[] | null 
     if (!models && Array.isArray(rec.models)) models = rec.models as Record<string, unknown>[];
     if (initialModels && models) break;
   }
-  let fallback: Record<string, unknown>[] | null = null;
-  for (const arr of [initialModels, models]) {
-    if (arr?.some((m) => isRecord(m) && numCoerce(m.intelligenceIndex) != null)) return arr;
-    if (!fallback && isModelArray(arr)) fallback = arr;
-  }
-  return fallback;
-}
-
-function isModelArray(arr: unknown): arr is Record<string, unknown>[] {
-  return Array.isArray(arr) && arr.length >= 1 && arr.some((m) => isRecord(m) && isNonEmptyString(m.slug));
+  const candidates = [initialModels, models].filter((arr): arr is Record<string, unknown>[] => arr != null);
+  return candidates.find(isValued) ?? candidates.find(isUsable) ?? null;
 }
 
 const PROTO_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-function mergeEntry(cur: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
-  const mergedEntry: Record<string, unknown> = { ...cur };
+function mergeEntry(cur: Record<string, unknown>, patch: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(patch)) {
     if (PROTO_KEYS.has(key)) continue;
-    if (value !== null && value !== undefined && value !== "") mergedEntry[key] = value;
+    if (value !== null && value !== undefined && value !== "") cur[key] = value;
   }
   if (cur.omniscienceBreakdown && patch.omniscienceBreakdown) {
-    const patchBreakdown = Object.fromEntries(
-      Object.entries(obj(patch.omniscienceBreakdown) ?? {}).filter(
-        ([, v]) => v !== null && v !== undefined && v !== "",
-      ),
-    );
-    mergedEntry.omniscienceBreakdown = { ...obj(cur.omniscienceBreakdown), ...patchBreakdown };
+    const next: Record<string, unknown> = { ...obj(cur.omniscienceBreakdown) };
+    for (const [key, value] of Object.entries(obj(patch.omniscienceBreakdown) ?? {})) {
+      if (value !== null && value !== undefined && value !== "") next[key] = value;
+    }
+    cur.omniscienceBreakdown = next;
   }
-  return mergedEntry;
 }
 
 export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<string, unknown>[] {
   const merged = new Map<string, Record<string, unknown>>();
-  const catalogArr = Array.isArray(catalog) ? catalog.slice(0, 20_000) : [];
+  const catalogArr = Array.isArray(catalog) ? catalog.slice(0, MAX_DIRECTORY_ROWS) : [];
   for (const raw of catalogArr) {
     if (!isRecord(raw) || !hasCatalogIdentity(raw)) continue;
     const slug = str(raw.slug);
@@ -80,11 +78,12 @@ export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<stri
   }
   for (const group of enrich) {
     if (!Array.isArray(group)) continue;
-    for (const raw of (group as unknown[]).slice(0, 20_000)) {
+    for (const raw of (group as unknown[]).slice(0, MAX_DIRECTORY_ROWS)) {
       if (!isRecord(raw)) continue;
       const slug = str(raw.slug);
       if (!slug || !merged.has(slug)) continue;
-      merged.set(slug, mergeEntry(merged.get(slug)!, raw));
+      const current = merged.get(slug)!;
+      mergeEntry(current, raw);
     }
   }
   return [...merged.values()];

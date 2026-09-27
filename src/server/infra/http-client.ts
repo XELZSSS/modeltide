@@ -3,6 +3,7 @@ import {
   MAX_JSON_BYTES,
   PROBE_TIMEOUT_MS,
   RETRY_AFTER_MAX_MS,
+  UPSTREAM_BACKGROUND_SLOTS,
   UPSTREAM_MAX_CONNECTIONS,
   USER_AGENT,
 } from "@/server/config";
@@ -86,38 +87,54 @@ interface SlotWaiter {
   detach: () => void;
 }
 
-let activeSlots = 0;
-const slotWaiters: SlotWaiter[] = [];
+interface SlotPool {
+  active: number;
+  waiters: SlotWaiter[];
+  max: number;
+}
 
-function acquireSlot(signal?: AbortSignal): Promise<void> {
+const interactivePool: SlotPool = { active: 0, waiters: [], max: UPSTREAM_MAX_CONNECTIONS };
+const backgroundPool: SlotPool = { active: 0, waiters: [], max: UPSTREAM_BACKGROUND_SLOTS };
+
+function poolLimit(pool: SlotPool): number {
+  const other = pool === backgroundPool ? interactivePool : backgroundPool;
+  return Math.max(0, Math.min(pool.max, UPSTREAM_MAX_CONNECTIONS - other.active));
+}
+
+function wakeWaiters(pool: SlotPool): void {
+  while (pool.waiters.length > 0 && pool.active < poolLimit(pool)) {
+    const next = pool.waiters.shift()!;
+    next.detach();
+    pool.active += 1;
+    next.resolve();
+  }
+}
+
+function acquireSlot(signal: AbortSignal | undefined, pool: SlotPool): Promise<void> {
   if (signal?.aborted) return Promise.reject(signal.reason);
-  if (activeSlots < UPSTREAM_MAX_CONNECTIONS) {
-    activeSlots += 1;
+  if (pool.active < poolLimit(pool)) {
+    pool.active += 1;
     return Promise.resolve();
   }
   return new Promise<void>((resolve, reject) => {
     const waiter: SlotWaiter = { resolve, detach: () => {} };
     if (signal) {
       const onAbort = (): void => {
-        const i = slotWaiters.indexOf(waiter);
-        if (i !== -1) slotWaiters.splice(i, 1);
+        const i = pool.waiters.indexOf(waiter);
+        if (i !== -1) pool.waiters.splice(i, 1);
         reject(signal.reason);
       };
       waiter.detach = () => signal.removeEventListener("abort", onAbort);
       signal.addEventListener("abort", onAbort, { once: true });
     }
-    slotWaiters.push(waiter);
+    pool.waiters.push(waiter);
   });
 }
 
-function releaseSlot(): void {
-  const next = slotWaiters.shift();
-  if (!next) {
-    activeSlots -= 1;
-    return;
-  }
-  next.detach();
-  next.resolve();
+function releaseSlot(pool: SlotPool): void {
+  pool.active -= 1;
+  wakeWaiters(pool);
+  wakeWaiters(pool === backgroundPool ? interactivePool : backgroundPool);
 }
 
 async function readBodyText(
@@ -175,8 +192,10 @@ async function readBodyText(
 
 export class HttpClient {
   private defaultSignal?: AbortSignal;
-  constructor(opts?: { signal?: AbortSignal }) {
+  private background: boolean;
+  constructor(opts?: { signal?: AbortSignal; background?: boolean }) {
     this.defaultSignal = opts?.signal;
+    this.background = opts?.background === true;
   }
 
   private async doFetch<T>(
@@ -188,20 +207,14 @@ export class HttpClient {
     const { timeoutMs = 10_000, retries = 0, headers: initHeaders, signal: initSignalOpt, ...rest } = init;
     const initSignal = initSignalOpt ?? this.defaultSignal;
     const headers = buildHeaders(USER_AGENT, accept, initHeaders);
+    const pool = this.background ? backgroundPool : interactivePool;
     for (let attempt = 0; attempt <= retries; attempt++) {
+      const deadline = AbortSignal.timeout(timeoutMs);
+      const signal = initSignal ? AbortSignal.any([initSignal, deadline]) : deadline;
       try {
-        await acquireSlot(initSignal);
+        await acquireSlot(signal, pool);
       } catch {
         throw new UpstreamError(`Upstream deadline exceeded for ${url}`, { timeout: true });
-      }
-      let signal: AbortSignal;
-      try {
-        signal = initSignal
-          ? AbortSignal.any([initSignal, AbortSignal.timeout(timeoutMs)])
-          : AbortSignal.timeout(timeoutMs);
-      } catch (err) {
-        releaseSlot();
-        throw err;
       }
       let res: Response | null = null;
       let failMsg: string | null = null;
@@ -242,7 +255,7 @@ export class HttpClient {
           }
         }
       } finally {
-        releaseSlot();
+        releaseSlot(pool);
       }
       if (attempt === retries)
         throw new UpstreamError(
@@ -276,14 +289,15 @@ export class HttpClient {
 
   async probe(url: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<ProbeResult> {
     const queuedAt = Date.now();
+    const pool = this.background ? backgroundPool : interactivePool;
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const signal = this.defaultSignal ? AbortSignal.any([this.defaultSignal, timeout]) : timeout;
     try {
-      await acquireSlot(this.defaultSignal);
+      await acquireSlot(signal, pool);
     } catch {
       return { ok: false, status: null, latencyMs: Date.now() - queuedAt, error: "aborted" };
     }
     try {
-      const timeout = AbortSignal.timeout(timeoutMs);
-      const signal = this.defaultSignal ? AbortSignal.any([this.defaultSignal, timeout]) : timeout;
       let attemptStart = Date.now();
       try {
         let res = await fetch(url, {
@@ -306,7 +320,7 @@ export class HttpClient {
         return { ok: false, status: null, latencyMs, error: timeout.aborted ? "timeout" : "network error" };
       }
     } finally {
-      releaseSlot();
+      releaseSlot(pool);
     }
   }
 }

@@ -1,7 +1,7 @@
 import { ONE_MINUTE } from "@/shared/config";
 import {
   HISTORY_KV_RETENTION_TTL_S,
-  KV_READ_WARN_THROTTLE_MS,
+  kvReadWarnGate,
   SAMPLE_LOCK_TTL_S,
   SAMPLE_SELF_HEAL_MS,
   STALE_SAMPLE_WARN_MS,
@@ -53,9 +53,8 @@ let memoryStore: HistoryStore = { sources: {} };
 
 const memoryOrEmpty = (): HistoryStore => (Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} });
 
-const kvReadWarnGate = throttleGate(KV_READ_WARN_THROTTLE_MS);
-
 const staleWarnGate = throttleGate(STALE_WARN_THROTTLE_MS);
+const selfHealGate = throttleGate(SAMPLE_LOCK_TTL_S * 1000);
 
 function warnKvReadFailure(ctx: AppContext, err: unknown): void {
   if (!kvReadWarnGate.open()) return;
@@ -120,41 +119,21 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
         `[status-history] provider status incomplete (${providerResults.size}/${PROVIDER_STATUS_TARGET_COUNT})`,
       );
     }
-    const persisted = await mergeSamplesIntoStore(ctx, aggregates, now);
+    const persisted = await mergeSamplesIntoStore(ctx, aggregates, now, token);
     ctx.log("info", `[status-history] round recorded for ${aggregates.size} sources`);
-    return persisted && providerResults.size > 0;
+    return persisted && probed.length > 0 && providerResults.size > 0;
   } finally {
     await releaseSampleLock(ctx, token);
   }
-}
-
-function entrySampleAt(entry: HistoryStore["sources"][SourceId] | undefined): number {
-  return entry?.recent.at(-1)?.t ?? 0;
-}
-
-function mergeStoreSnapshots(current: HistoryStore, candidate: HistoryStore): HistoryStore {
-  const sources: HistoryStore["sources"] = {};
-  for (const id of new Set([...Object.keys(current.sources), ...Object.keys(candidate.sources)] as SourceId[])) {
-    const currentEntry = current.sources[id];
-    const candidateEntry = candidate.sources[id];
-    if (!currentEntry) {
-      if (candidateEntry) sources[id] = candidateEntry;
-    } else if (!candidateEntry || entrySampleAt(currentEntry) >= entrySampleAt(candidateEntry)) {
-      sources[id] = currentEntry;
-    } else {
-      sources[id] = candidateEntry;
-    }
-  }
-  return { sources };
 }
 
 async function mergeSamplesIntoStore(
   ctx: AppContext,
   aggregates: Map<SourceId, SourceAggregate>,
   now: number,
+  token: string,
 ): Promise<boolean> {
-  const firstRead = await readStoreResult(ctx);
-  const store = firstRead.store;
+  const { store, canWriteToKv } = await readStoreResult(ctx);
   for (const [id, agg] of aggregates) {
     store.sources[id] = mergeSample(
       store.sources[id],
@@ -170,24 +149,16 @@ async function mergeSamplesIntoStore(
       now,
     );
   }
-  if (!ctx.kv) {
-    memoryStore = store;
-    return true;
-  }
-  if (!firstRead.canWriteToKv) {
-    memoryStore = store;
+  memoryStore = store;
+  if (!ctx.kv) return true;
+  if (!canWriteToKv) return false;
+  const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
+  if (!held || !held.startsWith(`${token}:`)) {
+    ctx.log("warn", "[status-history] sample lock lost before persist, discarding round");
     return false;
   }
-
-  const latest = await readStoreResult(ctx);
-  if (!latest.canWriteToKv) {
-    memoryStore = store;
-    return false;
-  }
-  const merged = mergeStoreSnapshots(latest.store, store);
-  memoryStore = merged;
   try {
-    await ctx.kv.put(HISTORY_KEY, JSON.stringify({ v: HISTORY_SCHEMA_VERSION, ...merged }), {
+    await ctx.kv.put(HISTORY_KEY, JSON.stringify({ v: HISTORY_SCHEMA_VERSION, ...store }), {
       expirationTtl: HISTORY_KV_RETENTION_TTL_S,
     });
     return true;
@@ -199,7 +170,6 @@ async function mergeSamplesIntoStore(
 
 interface FreshSamples {
   store: HistoryStore;
-  persisted: boolean;
 }
 
 export async function ensureFreshSamplesWithHealth(ctx: AppContext): Promise<FreshSamples> {
@@ -208,29 +178,27 @@ export async function ensureFreshSamplesWithHealth(ctx: AppContext): Promise<Fre
   const latest = latestSampleAt(store);
   if (ctx.kv) warnStaleSamples(ctx, latest);
   const now = Date.now();
-  if (latest > 0 && now - latest > SAMPLE_SELF_HEAL_MS) {
-    ctx.log(
-      "info",
-      `[status-history] ${Math.round((now - latest) / ONE_MINUTE)} min without samples, running self-heal round`,
+  const ageMs = latest > 0 ? now - latest : null;
+  if (ageMs !== null && ageMs <= SAMPLE_SELF_HEAL_MS) return { store };
+  if (!selfHealGate.open()) return { store };
+  const reason = ageMs === null ? "no samples recorded yet" : `${Math.round(ageMs / ONE_MINUTE)} min without samples`;
+  ctx.log("info", `[status-history] ${reason}, running self-heal round`);
+  if (ctx.onDetach) {
+    ctx.onDetach(
+      recordStatusSamples(ctx, now).then(undefined, (err: unknown) => {
+        ctx.log("warn", `[status-history] detached self-heal round failed: ${errMsg(err)}`);
+      }),
     );
-    if (ctx.onDetach) {
-      ctx.onDetach(
-        recordStatusSamples(ctx, now).then(undefined, (err: unknown) => {
-          ctx.log("warn", `[status-history] detached self-heal round failed: ${errMsg(err)}`);
-        }),
-      );
-      return { store, persisted: false };
-    }
-    try {
-      await recordStatusSamples(ctx, now);
-      const after = await readStoreResult(ctx);
-      return { store: after.store, persisted: after.canWriteToKv };
-    } catch (err) {
-      ctx.log("warn", `[status-history] self-heal round failed, serving existing history: ${errMsg(err)}`);
-      return { store, persisted: firstRead.canWriteToKv };
-    }
+    return { store };
   }
-  return { store, persisted: firstRead.canWriteToKv };
+  try {
+    await recordStatusSamples(ctx, now);
+    const after = await readStoreResult(ctx);
+    return { store: after.store };
+  } catch (err) {
+    ctx.log("warn", `[status-history] self-heal round failed, serving existing history: ${errMsg(err)}`);
+    return { store };
+  }
 }
 
 function latestSampleAt(store: HistoryStore): number {

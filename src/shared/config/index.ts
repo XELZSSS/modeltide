@@ -23,7 +23,7 @@ export {
   ttlForRatio,
 } from "@/shared/config/time";
 export { DEFAULT_COST_SCENARIO } from "@/shared/config/cost";
-export { NEWS_CATEGORIES, SOURCE_LABELS, SOURCE_IDS, sourceLabelKey } from "@/shared/config/sources";
+export { NEWS_CATEGORIES, SOURCE_LABELS, SOURCE_IDS, sourceLabel, sourceLabelKey } from "@/shared/config/sources";
 export {
   BENCHMARK_KEYS,
   type BenchmarkKey,

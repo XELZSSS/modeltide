@@ -1,16 +1,14 @@
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq, unclampedPercent } from "@/shared/utils";
-import { priceDisplayPrecision } from "@/client/utils/format";
 import { modelId } from "@/client/utils/model-utils";
-import { resolveEffectivePricing, PRICE_LEGS, type PriceLegId, type PriceLegPick } from "@/client/utils/pricing";
+import { resolveEffectivePricing, PRICE_LEG_IDS, PRICE_LEGS, type PriceLegPick } from "@/client/utils/pricing";
 import { ceilToStep } from "@/client/theme/chart-theme";
 export interface CompareRow<T> {
   id?: string;
   label: string;
   getValue?: (m: T) => string;
   getNumeric?: (m: T) => number | null | undefined;
-  displayDecimals?: number | ((v: number) => number);
   bestIs?: "max" | "min";
   worstIs?: "max" | "min";
 }
@@ -18,6 +16,8 @@ export interface CompareRow<T> {
 export type Winner = "win" | "loss";
 
 export const rowKey = <T>(row: CompareRow<T>): string => row.id ?? row.label;
+
+export const modelKeyOf = (m: ArtificialAnalysisModel, index: number) => modelId(m) || `idx-${index}`;
 
 export function computeWinners<T>(
   rows: CompareRow<T>[],
@@ -38,12 +38,9 @@ function collectNumeric<T>(
   getKey: (m: T, index: number) => string,
 ): { key: string; val: number }[] | null {
   if (!row.getNumeric || !row.bestIs) return null;
-  const decimals = row.displayDecimals ?? priceDisplayPrecision;
-  const atDisplayPrecision = (v: number) => Number(v.toFixed(typeof decimals === "function" ? decimals(v) : decimals));
   const values = models
     .map((model, index) => ({ key: getKey(model, index), val: row.getNumeric!(model) }))
-    .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val))
-    .map((v) => ({ ...v, val: atDisplayPrecision(v.val) }));
+    .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val));
   return values.length >= 2 ? values : null;
 }
 
@@ -80,17 +77,7 @@ interface RadarRow {
   values: Record<string, number | null>;
 }
 
-let lastRadar: { t: TFunction; models: readonly ArtificialAnalysisModel[]; rows: RadarRow[] } | null = null;
-
-function sameModels(a: readonly ArtificialAnalysisModel[], b: readonly ArtificialAnalysisModel[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
 export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
-  if (lastRadar && lastRadar.t === t && sameModels(lastRadar.models, models)) return lastRadar.rows;
   const rows = [
     { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.intelligence_index) },
     { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.coding_index) },
@@ -109,7 +96,6 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]):
     }
     return { metric, values };
   });
-  lastRadar = { t, models, rows };
   return rows;
 }
 
@@ -121,7 +107,7 @@ export function radarMaxFor(rows: RadarRow[], fallback = 100): number {
       if (value > peak) peak = value;
     }
   }
-  return ceilToStep(peak, 20);
+  return ceilToStep(peak);
 }
 
 interface CompareValueRow {
@@ -137,11 +123,9 @@ export function buildValueRows(t: TFunction, models: ArtificialAnalysisModel[]):
   }));
 }
 
-const PRICE_LEG_ORDER: PriceLegId[] = ["promptPrice", "completionPrice", "cacheHitPrice", "cacheWritePrice"];
-
 export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
   const leg = (pick: PriceLegPick) => (m: ArtificialAnalysisModel) => pick(resolveEffectivePricing(m.pricing));
-  return PRICE_LEG_ORDER.map((id): CompareRow<ArtificialAnalysisModel> => ({
+  return PRICE_LEG_IDS.map((id): CompareRow<ArtificialAnalysisModel> => ({
     id,
     label: t(id),
     getNumeric: leg(PRICE_LEGS[id]),

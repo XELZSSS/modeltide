@@ -2,13 +2,13 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "jsx": "react-jsx",
     "types": ["vite/client", "node"]
   },
   "include": [
     "src/client/**/*.ts",
-    "src/client/**/*.tsx",
+    "src/client/**/*.vue",
     "src/shared/**/*.ts",
+    "src/contract/**/*.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "vite.shared.ts"

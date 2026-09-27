@@ -10,12 +10,16 @@ export function modelId(m: { id?: string; slug?: string }): string {
   return m.id || m.slug || "";
 }
 
-export function modelDetailPath(source: ModelSource, id: string): string {
-  const encoded = id
+export function encodeModelIdPath(id: string): string {
+  return id
+    .replace(/^\/+/, "")
     .split("/")
     .map((seg) => encodeURIComponent(seg))
     .join("/");
-  return `/model/${source}/${encoded}`;
+}
+
+export function modelDetailPath(source: ModelSource, id: string): string {
+  return `/model/${source}/${encodeModelIdPath(id)}`;
 }
 
 export function shortModelId(id: string | null | undefined): string {

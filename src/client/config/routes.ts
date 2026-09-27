@@ -1,6 +1,5 @@
-import { createElement, type ComponentType, type ReactNode } from "react";
-import type { QueryClient } from "@tanstack/react-query";
-import { Home, Award, Megaphone, Newspaper, Activity } from "lucide-react";
+import type { RouteRecordRaw } from "vue-router";
+import { Activity, Award, Home, Megaphone, Newspaper } from "@lucide/vue";
 import {
   qAgent,
   qArtificialRaw,
@@ -11,55 +10,32 @@ import {
   qOpenSourceModelsRaw,
   qStatusHistory,
 } from "@/client/api/api-queries";
-import { HomeView } from "@/client/features/home/home-view";
+import NotFoundView from "@/client/components/feedback/not-found.vue";
 import { DEFAULT_RANKING_TAB, type RankingTabId } from "@/client/config/nav-config";
 import { NEWS_CATEGORIES } from "@/shared/config";
-import type { TranslationKey } from "@/shared/i18n";
-
 import { loadableView } from "@/client/router/lazy-view";
-interface Prefetchable {
-  prefetch: (qc: QueryClient) => Promise<void>;
-}
+import HomeView from "@/client/features/home/home-view.vue";
+import type { Prefetchable } from "@/client/config/route-meta";
 
-export type NavGroup = "primary" | "secondary";
+const loadRankingsHubView = () => import("@/client/features/rankings/rankings-hub-view.vue");
+const loadModelView = () => import("@/client/features/models/model-view.vue");
+const loadCompareView = () => import("@/client/features/compare/compare-view.vue");
+const loadPriceCompareView = () => import("@/client/features/compare/price-compare-view.vue");
+const loadReleasesView = () => import("@/client/features/releases/releases-view.vue");
+const loadNewsView = () => import("@/client/features/news/news-view.vue");
+const loadStatusView = () => import("@/client/features/status/status-view.vue");
+const loadSourceView = () => import("@/client/features/status/source-view.vue");
 
-interface RouteNav {
-  path: string;
-  group: NavGroup;
-  labelKey: TranslationKey;
-  icon: ReactNode;
-  activePrefixes?: readonly string[];
-}
+const RankingsHubView = loadableView(loadRankingsHubView);
+const ModelDetailView = loadableView(loadModelView);
+const CompareView = loadableView(loadCompareView);
+const PriceCompareView = loadableView(loadPriceCompareView);
+const ReleasesView = loadableView(loadReleasesView);
+const NewsView = loadableView(loadNewsView);
+const StatusView = loadableView(loadStatusView);
+const SourceDetailView = loadableView(loadSourceView);
 
-interface RouteEntry {
-  key: string;
-  match: (pathname: string) => boolean;
-  View: ComponentType;
-  titleKey: TranslationKey;
-  prefetch: readonly Prefetchable[];
-  load?: () => Promise<unknown>;
-  nav?: RouteNav;
-}
-
-const loadRankingsHubView = () => import("@/client/features/rankings/rankings-hub-view");
-const loadModelView = () => import("@/client/features/models/model-view");
-const loadCompareView = () => import("@/client/features/compare/compare-view");
-const loadPriceCompareView = () => import("@/client/features/compare/price-compare-view");
-const loadReleasesView = () => import("@/client/features/releases/releases-view");
-const loadNewsView = () => import("@/client/features/news/news-view");
-const loadStatusView = () => import("@/client/features/status/status-view");
-const loadSourceView = () => import("@/client/features/status/source-view");
-
-const RankingsHubView = loadableView(() => loadRankingsHubView().then((m) => ({ default: m.RankingsHubView })));
-const ModelDetailView = loadableView(() => loadModelView().then((m) => ({ default: m.ModelDetailView })));
-const CompareView = loadableView(() => loadCompareView().then((m) => ({ default: m.CompareView })));
-const PriceCompareView = loadableView(() => loadPriceCompareView().then((m) => ({ default: m.PriceCompareView })));
-const ReleasesView = loadableView(() => loadReleasesView().then((m) => ({ default: m.ReleasesView })));
-const NewsView = loadableView(() => loadNewsView().then((m) => ({ default: m.NewsView })));
-const StatusView = loadableView(() => loadStatusView().then((m) => ({ default: m.StatusView })));
-const SourceDetailView = loadableView(() => loadSourceView().then((m) => ({ default: m.SourceDetailView })));
-
-const newsPrefetch = [qNewsRaw(NEWS_CATEGORIES[0])];
+const newsPrefetch: readonly Prefetchable[] = [qNewsRaw(NEWS_CATEGORIES[0])];
 
 const RANKING_TAB_QUERIES: Record<RankingTabId, readonly Prefetchable[]> = {
   modelRankings: [qArtificialRaw],
@@ -70,110 +46,95 @@ const RANKING_TAB_QUERIES: Record<RankingTabId, readonly Prefetchable[]> = {
   providerCompare: [qArtificialRaw],
 };
 
-export const ROUTES: readonly RouteEntry[] = [
+export const ROUTES: RouteRecordRaw[] = [
   {
-    key: "home",
-    match: (p) => p === "/",
-    View: HomeView,
-    titleKey: "home",
-    prefetch: [qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw, qStatusHistory],
-    nav: { path: "/", group: "primary", labelKey: "home", icon: createElement(Home, { size: 18 }) },
-  },
-  {
-    key: "models",
-    match: (p) => p === "/models",
-    View: RankingsHubView,
-    load: loadRankingsHubView,
-    titleKey: "rankings",
-    prefetch: RANKING_TAB_QUERIES[DEFAULT_RANKING_TAB],
-    nav: {
-      path: "/models",
-      group: "primary",
-      labelKey: "rankings",
-      icon: createElement(Award, { size: 18 }),
-      activePrefixes: ["/model/", "/compare", "/price-compare"],
+    path: "/",
+    name: "home",
+    component: HomeView,
+    meta: {
+      titleKey: "home",
+      prefetch: [qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw, qStatusHistory],
+      nav: { path: "/", group: "primary", labelKey: "home", icon: Home },
     },
   },
   {
-    key: "compare",
-    match: (p) => p === "/compare",
-    View: CompareView,
-    load: loadCompareView,
-    titleKey: "modelComparison",
-    prefetch: [qArtificialRaw],
-  },
-  {
-    key: "price",
-    match: (p) => p === "/price-compare",
-    View: PriceCompareView,
-    load: loadPriceCompareView,
-    titleKey: "priceComparison",
-    prefetch: [qArtificialRaw],
-  },
-  {
-    key: "releases",
-    match: (p) => p === "/releases",
-    View: ReleasesView,
-    load: loadReleasesView,
-    titleKey: "releases",
-    prefetch: [qClosedReleasesRaw],
-    nav: {
-      path: "/releases",
-      group: "secondary",
-      labelKey: "navReleases",
-      icon: createElement(Megaphone, { size: 18 }),
+    path: "/models",
+    name: "models",
+    component: RankingsHubView,
+    meta: {
+      titleKey: "rankings",
+      load: loadRankingsHubView,
+      prefetch: RANKING_TAB_QUERIES[DEFAULT_RANKING_TAB],
+      nav: {
+        path: "/models",
+        group: "primary",
+        labelKey: "rankings",
+        icon: Award,
+        activePrefixes: ["/model/", "/compare", "/price-compare"],
+      },
     },
   },
   {
-    key: "news",
-    match: (p) => p === "/news",
-    View: NewsView,
-    load: loadNewsView,
-    titleKey: "aiNews",
-    prefetch: newsPrefetch,
-    nav: { path: "/news", group: "secondary", labelKey: "aiNews", icon: createElement(Newspaper, { size: 18 }) },
+    path: "/compare",
+    name: "compare",
+    component: CompareView,
+    meta: { titleKey: "modelComparison", load: loadCompareView, prefetch: [qArtificialRaw] },
   },
   {
-    key: "status",
-    match: (p) => p === "/status",
-    View: StatusView,
-    load: loadStatusView,
-    titleKey: "statusPageTitle",
-    prefetch: [qStatusHistory],
-    nav: {
-      path: "/status",
-      group: "secondary",
-      labelKey: "navStatus",
-      icon: createElement(Activity, { size: 18 }),
-      activePrefixes: ["/status"],
+    path: "/price-compare",
+    name: "price",
+    component: PriceCompareView,
+    meta: { titleKey: "priceComparison", load: loadPriceCompareView, prefetch: [qArtificialRaw] },
+  },
+  {
+    path: "/releases",
+    name: "releases",
+    component: ReleasesView,
+    meta: {
+      titleKey: "releases",
+      load: loadReleasesView,
+      prefetch: [qClosedReleasesRaw],
+      nav: { path: "/releases", group: "secondary", labelKey: "navReleases", icon: Megaphone },
     },
   },
   {
-    key: "model",
-    match: (p) => p.startsWith("/model/"),
-    View: ModelDetailView,
-    load: loadModelView,
-    titleKey: "modelDetail",
-    prefetch: [qArtificialRaw, qOpenRouter],
+    path: "/news",
+    name: "news",
+    component: NewsView,
+    meta: {
+      titleKey: "aiNews",
+      load: loadNewsView,
+      prefetch: newsPrefetch,
+      nav: { path: "/news", group: "secondary", labelKey: "aiNews", icon: Newspaper },
+    },
   },
   {
-    key: "source",
-    match: (p) => p.startsWith("/status/"),
-    View: SourceDetailView,
-    load: loadSourceView,
-    titleKey: "sourceStatus",
-    prefetch: [qStatusHistory],
+    path: "/status",
+    name: "status",
+    component: StatusView,
+    meta: {
+      titleKey: "statusPageTitle",
+      load: loadStatusView,
+      prefetch: [qStatusHistory],
+      nav: { path: "/status", group: "secondary", labelKey: "navStatus", icon: Activity, activePrefixes: ["/status"] },
+    },
+  },
+  {
+    path: "/status/:source",
+    name: "source",
+    component: SourceDetailView,
+    meta: { titleKey: "sourceStatus", load: loadSourceView, prefetch: [qStatusHistory] },
+  },
+  {
+    path: "/model/:id(.*)",
+    name: "model",
+    component: ModelDetailView,
+    meta: { titleKey: "modelDetail", load: loadModelView, prefetch: [qArtificialRaw, qOpenRouter] },
+  },
+  {
+    path: "/:pathMatch(.*)*",
+    name: "notFound",
+    component: NotFoundView,
+    meta: { titleKey: "notFound" },
   },
 ];
-
-function prefetchAll(qc: QueryClient, queries: readonly Prefetchable[]): void {
-  for (const q of queries) void q.prefetch(qc);
-}
-
-export const findRoute = (pathname: string): RouteEntry | undefined => ROUTES.find((r) => r.match(pathname));
-
-export const prefetchQueriesForRoute = (qc: QueryClient, pathname: string): void => {
-  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-  const route = findRoute(path);
-  if (route) prefetchAll(qc, route.prefetch);
-};

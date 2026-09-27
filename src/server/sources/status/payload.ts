@@ -10,7 +10,6 @@ export function buildHistoryPayload(
   store: HistoryStore,
   uptime: UptimePayload,
   now = Date.now(),
-  persisted = true,
   storeMode?: StatusStoreMode,
 ): StatusHistoryPayload {
   const recent: StatusHistoryPayload["recent"] = {};
@@ -34,7 +33,6 @@ export function buildHistoryPayload(
     recent,
     daily,
     events: events.slice(0, MAX_EVENTS),
-    persisted,
     ...(storeMode ? { storeMode } : {}),
   };
 }

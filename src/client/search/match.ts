@@ -6,16 +6,19 @@ export function usableFields(fields: (string | null | undefined)[]): string[] {
   return fields.filter((f): f is string => typeof f === "string" && f.length > 0);
 }
 
-export function matchTerm(fields: string[], needle: string): { matched: boolean; score: number } {
+export function matchFolded(folded: string[], needle: string): { matched: boolean; score: number } {
   if (!needle) return { matched: false, score: 0 };
-  const normalized = fields.map(foldSearchStr);
-  for (const f of normalized) if (f === needle) return { matched: true, score: 4 };
+  for (const f of folded) if (f === needle) return { matched: true, score: 4 };
   let best = 0;
-  for (const f of normalized) {
+  for (const f of folded) {
     if (f.startsWith(needle)) best = Math.max(best, 3);
     else if (f.includes(needle)) best = Math.max(best, 2);
   }
   return { matched: best > 0, score: best };
+}
+
+export function matchTerm(fields: string[], needle: string): { matched: boolean; score: number } {
+  return matchFolded(fields.map(foldSearchStr), needle);
 }
 
 export function filterByTerm<T>(items: T[], term: string, getFields: (item: T) => (string | null | undefined)[]): T[] {
@@ -69,26 +72,28 @@ function tokenize(text: string): string[] {
   return tokens;
 }
 
-function fuzzyHit(hay: string, needle: string): boolean {
-  const text = hay.toLowerCase();
-  if (text.includes(needle)) return true;
-  for (const token of tokenize(text)) {
-    if (levenshteinWithin(token, needle, FUZZY_MAX_DISTANCE) <= FUZZY_MAX_DISTANCE) return true;
-  }
-  return false;
+export interface PreparedFields {
+  folded: string[];
+  lower: string[];
+  tokens: string[][];
 }
 
-export function fuzzyMatch<T>(candidates: { item: T; fields: string[] }[], term: string): T[] {
-  const needle = foldSearchStr(term);
-  if (needle.length < FUZZY_MIN_TERM || candidates.length === 0) return [];
-  const out: T[] = [];
-  for (const { item, fields } of candidates) {
-    for (const f of fields) {
-      if (fuzzyHit(f, needle)) {
-        out.push(item);
-        break;
-      }
+export function prepareFields(fields: (string | null | undefined)[]): PreparedFields {
+  const usable = usableFields(fields);
+  const lower = usable.map((f) => f.toLowerCase());
+  return { folded: usable.map(foldSearchStr), lower, tokens: lower.map(tokenize) };
+}
+
+export function fuzzyHit(prepared: PreparedFields, needle: string): boolean {
+  if (needle.length < FUZZY_MIN_TERM) return false;
+  const minLength = needle.length - FUZZY_MAX_DISTANCE;
+  const maxLength = needle.length + FUZZY_MAX_DISTANCE;
+  for (let i = 0; i < prepared.lower.length; i++) {
+    if (prepared.lower[i]!.includes(needle)) return true;
+    for (const token of prepared.tokens[i]!) {
+      if (token.length < minLength || token.length > maxLength) continue;
+      if (levenshteinWithin(token, needle, FUZZY_MAX_DISTANCE) <= FUZZY_MAX_DISTANCE) return true;
     }
   }
-  return out;
+  return false;
 }

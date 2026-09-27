@@ -1,23 +1,31 @@
-import { useEffect } from "react";
-import { findRoute } from "@/client/config/routes";
-import { useTranslation } from "@/client/providers";
+import { watch } from "vue";
+import { useRoute } from "vue-router";
+import type { TranslationKey } from "@/shared/i18n";
+import { useTranslation } from "@/client/i18n";
 
 const ROBOTS_SELECTOR = 'meta[name="robots"]';
 
-export function useDocumentMeta(pathname: string): void {
+export function useDocumentMeta(): void {
+  const route = useRoute();
   const { t } = useTranslation();
-  useEffect(() => {
-    const route = findRoute(pathname);
-    document.title = `${t(route ? route.titleKey : "notFound")} · ${t("appName")}`;
-    const robots = document.querySelector(ROBOTS_SELECTOR);
-    if (route) {
-      robots?.remove();
-      return;
-    }
-    if (robots) return;
-    const noindex = document.createElement("meta");
-    noindex.name = "robots";
-    noindex.content = "noindex";
-    document.head.appendChild(noindex);
-  }, [pathname, t]);
+  watch(
+    () => [route.name, route.fullPath],
+    () => {
+      if (route.name == null) return;
+      const known = route.name !== "notFound";
+      const titleKey = (route.meta.titleKey ?? "notFound") as TranslationKey;
+      document.title = `${t(known ? titleKey : "notFound")} · ${t("appName")}`;
+      const robots = document.querySelector(ROBOTS_SELECTOR);
+      if (known) {
+        robots?.remove();
+        return;
+      }
+      if (robots) return;
+      const noindex = document.createElement("meta");
+      noindex.name = "robots";
+      noindex.content = "noindex";
+      document.head.appendChild(noindex);
+    },
+    { immediate: true },
+  );
 }

@@ -22,7 +22,7 @@ const HF_API = upstreamConfig.huggingface;
 const HF_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,96}(?:\/[A-Za-z0-9][A-Za-z0-9._-]{0,96})?$/;
 
 function isValidHFModelId(value: string): boolean {
-  return value.length <= 200 && HF_MODEL_ID_RE.test(value);
+  return value.length <= 200 && isValidRowId(value) && HF_MODEL_ID_RE.test(value);
 }
 
 const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", "createdAt", "lastModified"];
@@ -40,13 +40,16 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
 }
 
 function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTally): void {
-  const { withoutTag, declaredNonOpen, unknownTags } = tally.drops();
+  const { withoutTag, declaredNonOpen, unknownTags, noDownloads } = tally.drops();
   if (unknownTags.length > 0) ctx.log("info", `[huggingface] unrecognized license tags: ${unknownTags.join(", ")}`);
   if (withoutTag > 0 || declaredNonOpen > 0) {
     ctx.log(
       "info",
       `[huggingface] license gate: ${declaredNonOpen}/${rowCount} rows declared non-open, ${withoutTag} declared no license`,
     );
+  }
+  if (noDownloads > 0) {
+    ctx.log("info", `[huggingface] ranking gate: ${noDownloads}/${rowCount} rows dropped for zero downloads`);
   }
 }
 
@@ -64,7 +67,7 @@ export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourceP
       const tally = new LicenseDropTally();
       const kept = items
         .map((m) => mapListModel(m, tally))
-        .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m));
+        .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m, tally));
       logLicenseDrops(ctx, items.length, tally);
       const bucket = dedupeBy(kept, (m) => m.id);
       requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
@@ -73,14 +76,12 @@ export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourceP
       return { rows: bucket, partial: items.length < bucketLimit };
     },
   );
-  return { ...payload, data: sliceToLimit(payload.data, p.limit) };
+  const rows = sliceToLimit(payload.data, p.limit);
+  return { ...payload, data: rows };
 };
 
 async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
   const trimmed = id.trim();
-  if (!isValidRowId(trimmed) || !isValidHFModelId(trimmed)) {
-    throw new ValidationError(`Invalid Hugging Face model id "${id}"`);
-  }
   const encoded = trimmed
     .split("/")
     .map((seg) => encodeURIComponent(seg))
@@ -99,7 +100,7 @@ const NEGATIVE_STALE_CAP_MS = 5 * ONE_MINUTE;
 
 export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload<OpenSourceModelEntry | null>> => {
   const trimmed = id.trim();
-  if (!isValidRowId(trimmed) || !isValidHFModelId(trimmed)) {
+  if (!isValidHFModelId(trimmed)) {
     return Promise.reject(new ValidationError(`Invalid Hugging Face model id "${id}"`));
   }
   return cachedPayload<OpenSourceModelEntry | null>(

@@ -15,24 +15,6 @@ const RETAINED_DAYS = 30;
 
 const utcDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
 
-function samplesInWindow(samples: UptimeSample[], windowStartMs: number): UptimeSample[] {
-  return samples.filter((s) => s.t >= windowStartMs);
-}
-
-function uptimeRatio(samples: UptimeSample[], windowStartMs: number): number | null {
-  const inWindow = samplesInWindow(samples, windowStartMs);
-  if (inWindow.length === 0) return null;
-  return inWindow.filter((s) => s.ok).length / inWindow.length;
-}
-
-function avgLatency(samples: UptimeSample[], windowStartMs: number): number | null {
-  const values = samplesInWindow(samples, windowStartMs)
-    .filter((s) => s.ok && s.latencyMs != null)
-    .map((s) => s.latencyMs!);
-  if (values.length === 0) return null;
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
-
 type IncidentType = "down" | "degraded";
 
 interface OpenIncident {
@@ -66,7 +48,7 @@ export function deriveEvents(id: SourceId, samples: UptimeSample[], openSince: n
   for (let i = 0; i < samples.length; i++) {
     const sample = samples[i]!;
     const want = incidentType(sample);
-    if (open && open.type !== want) close(sample.t, want === null || (open.type === "down" && want === "degraded"));
+    if (open && open.type !== want) close(sample.t, want === null);
     if (want && !open) {
       const startedAt = i === 0 && openSince != null && openSince < sample.t ? openSince : sample.t;
       open = { type: want, at: startedAt, index: events.length };
@@ -153,12 +135,32 @@ export function mergeSample(
 
 export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now: number): SourceHistorySummary {
   const last = entry.recent[entry.recent.length - 1];
+  const windowStartMs = now - RECENT_WINDOW_MS;
+  let windowTotal = 0;
+  let windowOk = 0;
+  let windowDegraded = 0;
+  let latencySum = 0;
+  let latencyCount = 0;
+  for (const sample of entry.recent) {
+    if (sample.t < windowStartMs) continue;
+    windowTotal += 1;
+    if (sample.ok) {
+      windowOk += 1;
+      if (sample.latencyMs != null) {
+        latencySum += sample.latencyMs;
+        latencyCount += 1;
+      }
+    }
+    if (sample.warn === true) windowDegraded += 1;
+  }
   const buckets = entry.daily.slice(-7);
-  const sumOk = buckets.reduce((a, b) => a + b.ok, 0);
-  const sumTotal = buckets.reduce((a, b) => a + b.total, 0);
-  const uptime24h = uptimeRatio(entry.recent, now - RECENT_WINDOW_MS);
-  const inWindow = samplesInWindow(entry.recent, now - RECENT_WINDOW_MS);
-  const degradedInWindow = inWindow.filter((s) => s.warn === true).length;
+  let sumOk = 0;
+  let sumTotal = 0;
+  for (const bucket of buckets) {
+    sumOk += bucket.ok;
+    sumTotal += bucket.total;
+  }
+  const uptime24h = windowTotal > 0 ? windowOk / windowTotal : null;
   let level: SourceHealthLevel;
   if (!last) level = "unknown";
   else if (!last.ok || (uptime24h != null && uptime24h < UPTIME_ERROR_RATIO)) level = "error";
@@ -172,8 +174,8 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
     checkedAt: last ? new Date(last.t).toISOString() : null,
     uptime24h,
     uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
-    degraded24h: inWindow.length > 0 ? degradedInWindow / inWindow.length : null,
-    avgLatency24h: avgLatency(entry.recent, now - RECENT_WINDOW_MS),
+    degraded24h: windowTotal > 0 ? windowDegraded / windowTotal : null,
+    avgLatency24h: latencyCount > 0 ? latencySum / latencyCount : null,
     detail: last ? sampleReason(last) : null,
   };
 }

@@ -49,7 +49,6 @@ function balancedJsonSlice(text: string, openAt: number, budgetChars: number, sp
 export const MAX_RSC_BYTES = 5 * 1024 * 1024;
 export const MAX_RSC_LINE_CHARS = 2 * 1024 * 1024;
 export const MAX_SCAN_CHARS = 8_000_000;
-const MAX_OVERSIZED_WORK_CHARS = MAX_SCAN_CHARS;
 const MAX_OVERSIZED_WINDOWS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
 export const STREAM_LINE_RE = /^[0-9a-fA-F]+:(.*)$/;
 
@@ -69,11 +68,10 @@ function isTrimWhitespace(c: number): boolean {
   );
 }
 
-export function isMarkerBoundary(line: string, marker: string): boolean {
-  const q = `"${marker}"`;
-  let idx = line.indexOf(q);
+export function isMarkerBoundaryAt(line: string, needle: string): boolean {
+  let idx = line.indexOf(needle);
   while (idx !== -1) {
-    let at = idx + q.length;
+    let at = idx + needle.length;
     while (at < line.length && isTrimWhitespace(line.charCodeAt(at))) at++;
     if (at < line.length) {
       const c = line.charCodeAt(at);
@@ -81,7 +79,7 @@ export function isMarkerBoundary(line: string, marker: string): boolean {
         return true;
       }
     }
-    idx = line.indexOf(q, idx + 1);
+    idx = line.indexOf(needle, idx + 1);
   }
   return false;
 }
@@ -119,12 +117,13 @@ function collectNeedlePositions(
     if (results[mi]) continue;
     const needle = `"${markers[mi]}"`;
     let from = 0;
-    while (from <= line.length) {
+    let taken = 0;
+    while (taken < MAX_NEEDLE_CANDIDATES) {
       const idx = line.indexOf(needle, from);
       if (idx === -1) break;
       positions.push({ idx, mi });
+      taken += 1;
       from = idx + 1;
-      if (from > MAX_RSC_BYTES) break;
     }
   }
   return positions;
@@ -136,7 +135,7 @@ function parseBalancedMarkerValue(line: string, idx: number, marker: string, bud
   const colonAt = line.indexOf(":", idx + needle.length);
   if (colonAt === -1 || colonAt > idx + needle.length + 64) return null;
   let v = colonAt + 1;
-  while (v < line.length && " \t\r\n".includes(line.charAt(v))) v++;
+  while (v < line.length && isTrimWhitespace(line.charCodeAt(v))) v++;
   const open = line.charAt(v);
   if (open !== "[" && open !== "{") return null;
   return balancedJsonSlice(line, v, Math.min(MAX_SCAN_CHARS, budgetChars));
@@ -202,7 +201,7 @@ export function scanOversizedMarkers<T>(
   const positions = collectNeedlePositions(line, markers, results);
   positions.sort((a, b) => a.idx - b.idx);
   const before = results.filter(Boolean).length;
-  let workLeft = MAX_OVERSIZED_WORK_CHARS;
+  let workLeft = MAX_SCAN_CHARS;
   for (const { idx, mi } of positions) {
     if (workLeft <= 0) break;
     const marker = markers[mi];
@@ -234,7 +233,7 @@ function unescapeEmbedded(window: string): string {
 }
 
 function skipWs(text: string, pos: number): number {
-  while (pos < text.length && /\s/.test(text[pos]!)) pos++;
+  while (pos < text.length && isTrimWhitespace(text.charCodeAt(pos))) pos++;
   return pos;
 }
 
@@ -259,39 +258,48 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
   return candidates.sort((a, b) => a.start - b.start);
 }
 
-function parseJsonArrayAt(window: string, openAt: number, found: unknown[], spend: ScanSpend): boolean {
-  const slice = balancedJsonSlice(window, openAt, MAX_SCAN_CHARS, spend);
-  if (slice == null) return false;
-  try {
-    found.push(JSON.parse(slice));
-    return true;
-  } catch {
-    return false;
+function scanNeedleRange(
+  src: string,
+  from: number,
+  to: number,
+  needle: string,
+  found: unknown[],
+  spend: ScanSpend,
+): boolean {
+  let parsed = false;
+  let at = src.indexOf(needle, from);
+  while (at !== -1 && at + needle.length <= to) {
+    if (spend.chars >= MAX_NEEDLE_WORK_CHARS) return parsed;
+    const valueAt = valuePosAfterColon(src, at + needle.length);
+    if (valueAt !== null && valueAt < to && src[valueAt] === "[") {
+      const slice = balancedJsonSlice(src, valueAt, Math.min(MAX_SCAN_CHARS, to - valueAt), spend);
+      if (slice != null) {
+        try {
+          found.push(JSON.parse(slice));
+          parsed = true;
+        } catch {}
+      }
+    }
+    at = src.indexOf(needle, at + needle.length);
   }
+  return parsed;
 }
 
 function scanNeedleWindow(
-  window: string,
+  text: string,
+  from: number,
+  to: number,
   needle: string,
   unescape: boolean,
   found: unknown[],
   spend: ScanSpend,
 ): boolean {
-  const scan = (haystack: string): boolean => {
-    let parsed = false;
-    let at = haystack.indexOf(needle);
-    while (at !== -1) {
-      if (spend.chars >= MAX_NEEDLE_WORK_CHARS) return parsed;
-      const valueAt = valuePosAfterColon(haystack, at + needle.length);
-      if (valueAt !== null && haystack[valueAt] === "[") {
-        if (parseJsonArrayAt(haystack, valueAt, found, spend)) parsed = true;
-      }
-      at = haystack.indexOf(needle, at + needle.length);
-    }
-    return parsed;
-  };
-  if (scan(window)) return true;
-  return unescape ? scan(unescapeEmbedded(window)) : false;
+  if (scanNeedleRange(text, from, to, needle, found, spend)) return true;
+  if (!unescape) return false;
+  const escapeAt = text.indexOf("\\", from);
+  if (escapeAt === -1 || escapeAt >= to) return false;
+  const segment = unescapeEmbedded(text.slice(from, to));
+  return scanNeedleRange(segment, 0, segment.length, needle, found, spend);
 }
 
 export function extractNeedleJsonArrays(text: string, needle: string, opts: NeedleScanOptions): unknown[] {
@@ -307,10 +315,10 @@ export function extractNeedleJsonArrays(text: string, needle: string, opts: Need
     const windowStart = Math.max(0, start - opts.prefixChars);
     const smallEnd = Math.min(text.length, start + opts.smallSuffixChars);
     spend.chars += smallEnd - windowStart;
-    if (!scanNeedleWindow(text.slice(windowStart, smallEnd), needle, opts.unescape === true, found, spend)) {
+    if (!scanNeedleWindow(text, windowStart, smallEnd, needle, opts.unescape === true, found, spend)) {
       const maxEnd = Math.min(text.length, start + opts.maxSuffixChars);
       spend.chars += maxEnd - windowStart;
-      scanNeedleWindow(text.slice(windowStart, maxEnd), needle, opts.unescape === true, found, spend);
+      scanNeedleWindow(text, windowStart, maxEnd, needle, opts.unescape === true, found, spend);
     }
   }
   return found;

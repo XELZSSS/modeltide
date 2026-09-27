@@ -17,5 +17,5 @@ export function handleApi(
   route: RouteEntry,
   onDetach?: (work: Promise<unknown>) => void,
 ): Promise<Response> {
-  return handleApiRoute(req, env, url.pathname, route, onDetach ? { onDetach } : undefined);
+  return handleApiRoute(req, env, url, route, onDetach ? { onDetach } : undefined);
 }

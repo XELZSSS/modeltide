@@ -50,6 +50,5 @@ export async function getHomeDashboard(ctx: AppContext): Promise<SourcePayload<H
       const { data, partial } = await fetchHomeDashboard(ctx);
       return { rows: data, partial };
     },
-    { memoryOnly: true },
   );
 }

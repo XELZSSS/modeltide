@@ -3,11 +3,15 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  BarController,
   ArcElement,
+  DoughnutController,
   PointElement,
   LineElement,
+  LineController,
   Filler,
   RadialLinearScale,
+  RadarController,
   Tooltip,
   Legend,
 } from "chart.js";
@@ -19,14 +23,14 @@ function registerChart(...elements: Parameters<(typeof ChartJS)["register"]>[num
 }
 
 export function registerBar(): void {
-  registerChart(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+  registerChart(BarController, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 }
 export function registerLine(): void {
-  registerChart(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
+  registerChart(LineController, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 }
 export function registerDoughnut(): void {
-  registerChart(ArcElement, Tooltip, Legend);
+  registerChart(DoughnutController, ArcElement, Tooltip, Legend);
 }
 export function registerRadar(): void {
-  registerChart(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
+  registerChart(RadarController, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 }

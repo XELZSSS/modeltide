@@ -1,11 +1,17 @@
-import { useMemo } from "react";
-import type { TranslationKey } from "@/shared/i18n";
-import { BarChart3, Brain, Image, Rocket, type LucideIcon } from "lucide-react";
-import type { ArtificialAnalysisModel, ClosedReleaseEntry, HallucinationRankingEntry } from "@/shared/types";
+import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue";
+import type { TFunction } from "@/shared/i18n";
+import { BarChart3, Brain, Image, Rocket, type LucideIcon } from "@lucide/vue";
+import type {
+  ArtificialAnalysisModel,
+  ClosedReleaseEntry,
+  HallucinationRankingEntry,
+  TextToImageModel,
+} from "@/shared/types";
 import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
 import { computeProviderStats, modelDisplayName, shortModelId } from "@/client/utils/model-utils";
-import { formatShortNumber } from "@/client/utils/format";
-import type { HomeBarStat } from "./statistics-section";
+import { formatShortNumber, orNA } from "@/client/utils/format";
+import type { HomeBarStat } from "./statistics-section.vue";
+import { EMPTY_ARRAY } from "@/client/utils/empty";
 
 export interface HomeKpi {
   id: string;
@@ -34,87 +40,84 @@ function pickLatestReleaseName(closedReleases: ClosedReleaseEntry[]): string | n
   return latestName;
 }
 
+export interface HomeStats {
+  trendingStats: ComputedRef<HomeBarStat[]>;
+  hallucinationStats: ComputedRef<HomeBarStat[]>;
+  kpiStrip: ComputedRef<HomeKpi[]>;
+  providerStats: ComputedRef<HomeProviderStat[]>;
+  t2iModels: ComputedRef<TextToImageModel[]>;
+}
+
 export function useHomeStats(
-  artificialData: ArtificialAnalysisModel[],
-  hallucinationRankings: HallucinationRankingEntry[],
-  dashboardData: NormalizedHomeDashboard,
-  t: (key: TranslationKey, params?: Record<string, string | number>) => string,
-  closedReleases?: ClosedReleaseEntry[],
-) {
-  const openSourceRankings = dashboardData.opensource;
-  const t2iModels = useMemo(() => dashboardData.textToImage ?? [], [dashboardData.textToImage]);
-  const latestOpenRouterModel = dashboardData.orRankings?.[0] ?? null;
+  artificialData: MaybeRefOrGetter<ArtificialAnalysisModel[]>,
+  hallucinationRankings: MaybeRefOrGetter<HallucinationRankingEntry[]>,
+  dashboardData: MaybeRefOrGetter<NormalizedHomeDashboard>,
+  t: TFunction,
+  closedReleases: MaybeRefOrGetter<ClosedReleaseEntry[]> = [],
+): HomeStats {
+  const t2iModels = computed(() => toValue(dashboardData).textToImage ?? EMPTY_ARRAY);
 
-  const trendingStats = useMemo<HomeBarStat[]>(
-    () =>
-      top7(openSourceRankings, (model) => ({
-        label: shortModelId(model.id),
-        value: model.downloads,
-        valueLabel: formatShortNumber(model.downloads),
-      })),
-    [openSourceRankings],
+  const trendingStats = computed<HomeBarStat[]>(() =>
+    top7(toValue(dashboardData).opensource, (model) => ({
+      label: shortModelId(model.id),
+      value: model.downloads,
+      valueLabel: formatShortNumber(model.downloads),
+    })),
   );
 
-  const hallucinationStats = useMemo<HomeBarStat[]>(
-    () =>
-      top7(
-        hallucinationRankings.filter(
-          (entry): entry is HallucinationRankingEntry & { accuracy: number } => entry.accuracy != null,
-        ),
-        (entry) => ({
-          label: entry.model,
-          value: entry.accuracy,
-          valueLabel: `${entry.accuracy.toFixed(1)}%`,
-        }),
+  const hallucinationStats = computed<HomeBarStat[]>(() =>
+    top7(
+      toValue(hallucinationRankings).filter(
+        (entry): entry is HallucinationRankingEntry & { accuracy: number } => entry.accuracy != null,
       ),
-    [hallucinationRankings],
+      (entry) => ({
+        label: entry.model,
+        value: entry.accuracy,
+        valueLabel: `${entry.accuracy.toFixed(1)}%`,
+      }),
+    ),
   );
 
-  const { latestReleaseName, bestReasoningModel } = useMemo(() => {
-    const latestName = pickLatestReleaseName(closedReleases ?? []);
-    let bestReasoning: ArtificialAnalysisModel | null = null;
-    for (const m of artificialData) {
+  const kpiStrip = computed<HomeKpi[]>(() => {
+    const dashboard = toValue(dashboardData);
+    const latestOpenRouterModel = dashboard.orRankings?.[0] ?? null;
+    let bestReasoningModel: ArtificialAnalysisModel | null = null;
+    for (const m of toValue(artificialData)) {
       if (
         m.is_reasoning === true &&
-        (!bestReasoning || (m.intelligence_index ?? -Infinity) > (bestReasoning.intelligence_index ?? -Infinity))
-      )
-        bestReasoning = m;
+        (!bestReasoningModel || (m.intelligence_index ?? -Infinity) > (bestReasoningModel.intelligence_index ?? -Infinity))
+      ) {
+        bestReasoningModel = m;
+      }
     }
-    return { latestReleaseName: latestName, bestReasoningModel: bestReasoning };
-  }, [artificialData, closedReleases]);
-
-  const kpiStrip = useMemo<HomeKpi[]>(
-    () => [
+    return [
       {
         id: "or-top",
         label: t("openRouterRankings"),
-        value: latestOpenRouterModel?.name || t("notAvailable"),
+        value: orNA(latestOpenRouterModel?.name, t),
         Icon: BarChart3,
       },
-      { id: "t2i-top", label: t("bestT2IModel"), value: t2iModels[0]?.name || t("notAvailable"), Icon: Image },
+      { id: "t2i-top", label: t("bestT2IModel"), value: orNA(dashboard.textToImage?.[0]?.name, t), Icon: Image },
       {
         id: "latest",
         label: t("latestRelease"),
-        value: latestReleaseName || t("notAvailable"),
+        value: orNA(pickLatestReleaseName(toValue(closedReleases)), t),
         Icon: Rocket,
       },
       {
         id: "reasoning",
         label: t("bestReasoningModel"),
-        value: modelDisplayName(bestReasoningModel) || t("notAvailable"),
+        value: orNA(modelDisplayName(bestReasoningModel), t),
         Icon: Brain,
       },
-    ],
-    [t, latestOpenRouterModel?.name, t2iModels, latestReleaseName, bestReasoningModel],
-  );
+    ];
+  });
 
-  const providerStats = useMemo<HomeProviderStat[]>(
-    () =>
-      computeProviderStats(artificialData, t("unknown"))
-        .filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
-        .map(({ name, color, avgSpeed }) => ({ name, color, avgSpeed }))
-        .sort((a, b) => b.avgSpeed - a.avgSpeed),
-    [artificialData, t],
+  const providerStats = computed<HomeProviderStat[]>(() =>
+    computeProviderStats(toValue(artificialData), t("unknown"))
+      .filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
+      .map(({ name, color, avgSpeed }) => ({ name, color, avgSpeed }))
+      .sort((a, b) => b.avgSpeed - a.avgSpeed),
   );
 
   return { trendingStats, hallucinationStats, kpiStrip, providerStats, t2iModels };

@@ -1,3 +1,4 @@
+import { raceAbort } from "@/server/infra/abort";
 import { ClientAbortError } from "@/server/infra/errors";
 import type { Logger } from "@/server/infra/logger";
 import { refreshFailureCooldown, FAILURE_COOLDOWN_MS } from "./cooldown";
@@ -21,6 +22,11 @@ interface CacheStores {
   callerSignal?: AbortSignal;
   onDetach?: (work: Promise<unknown>) => void;
   log?: Logger;
+}
+
+export interface CacheResult<T> {
+  value: T;
+  degraded: boolean;
 }
 
 export class CacheService {
@@ -72,7 +78,7 @@ export class CacheService {
     kvHit: { env: StaleEnvelope<T> } | undefined,
     kv: KvStore | undefined,
     opts?: { staleCapMs?: number },
-  ): Promise<T> {
+  ): Promise<CacheResult<T>> {
     if (this.onDetach) {
       const stale = this.usableStale(ttl, mem, kvHit, opts?.staleCapMs);
       if (stale) {
@@ -80,15 +86,15 @@ export class CacheService {
         try {
           this.onDetach(refresh.then(undefined, () => {}));
         } catch {}
-        return stale.value;
+        return { value: stale.value, degraded: false };
       }
     }
     try {
-      return await this.refreshRunner.run(vk, ttl, fn, kv);
+      return { value: await this.refreshRunner.run(vk, ttl, fn, kv), degraded: false };
     } catch (err) {
       const stale = this.usableStale(ttl, mem, kvHit, opts?.staleCapMs);
       if (!stale) throw err;
-      return stale.value;
+      return { value: stale.value, degraded: true };
     }
   }
 
@@ -98,38 +104,25 @@ export class CacheService {
     fn: () => Promise<{ data: T; ttl?: number }>,
     opts?: { memoryOnly?: boolean; staleCapMs?: number },
   ): Promise<T> {
+    return (await this.withTtlResult(k, ttl, fn, opts)).value;
+  }
+
+  async withTtlResult<T>(
+    k: string,
+    ttl: number,
+    fn: () => Promise<{ data: T; ttl?: number }>,
+    opts?: { memoryOnly?: boolean; staleCapMs?: number },
+  ): Promise<CacheResult<T>> {
     const signal = this.callerSignal;
     if (!signal) return this.withTtlInner(k, ttl, fn, opts);
     if (signal.aborted) throw new ClientAbortError(`Client aborted request for ${k}`);
     const work = this.withTtlInner(k, ttl, fn, opts);
-    return new Promise<T>((resolve, reject) => {
-      let settled = false;
-      const onAbort = (): void => {
-        if (settled) return;
-        settled = true;
-        signal.removeEventListener("abort", onAbort);
-        reject(new ClientAbortError(`Client aborted request for ${k}`));
-        try {
-          this.onDetach?.(work.then(undefined, () => {}));
-        } catch {}
-      };
-      signal.addEventListener("abort", onAbort, { once: true });
-      if (signal.aborted) onAbort();
-      work.then(
-        (value) => {
-          if (settled) return;
-          settled = true;
-          signal.removeEventListener("abort", onAbort);
-          resolve(value);
-        },
-        (err: unknown) => {
-          if (settled) return;
-          settled = true;
-          signal.removeEventListener("abort", onAbort);
-          reject(err);
-        },
-      );
-    });
+    return raceAbort(
+      work,
+      signal,
+      () => new ClientAbortError(`Client aborted request for ${k}`),
+      () => this.onDetach?.(work.then(undefined, () => {})),
+    );
   }
 
   private async withTtlInner<T>(
@@ -137,25 +130,25 @@ export class CacheService {
     ttl: number,
     fn: () => Promise<{ data: T; ttl?: number }>,
     opts?: { memoryOnly?: boolean; staleCapMs?: number },
-  ): Promise<T> {
+  ): Promise<CacheResult<T>> {
     const kv = opts?.memoryOnly === true || !this.kv?.available ? undefined : this.kv;
     const vk = this.tier.vk(k);
     const mem = this.l1.get<T>(vk);
     if (mem && mem.e > Date.now()) {
-      return mem.d;
+      return { value: mem.d, degraded: false };
     }
     if (!kv) {
-      if (!mem) return this.refreshRunner.run(vk, ttl, fn, kv);
+      if (!mem) return { value: await this.refreshRunner.run(vk, ttl, fn, kv), degraded: false };
       return this.loadStaleOrRefresh(vk, ttl, fn, mem, undefined, kv, opts);
     }
     const hit = await this.tier.getVersioned<T>(kv, k);
     if (!hit) {
-      if (!mem) return this.refreshRunner.run(vk, ttl, fn, kv);
+      if (!mem) return { value: await this.refreshRunner.run(vk, ttl, fn, kv), degraded: false };
       return this.loadStaleOrRefresh(vk, ttl, fn, mem, undefined, kv, opts);
     }
     if (hit.env.e > Date.now()) {
       this.l1.set(vk, hit.env.d, l1TtlFor(hit.env.e - Date.now()), hit.bytes, hit.env.t ?? ttl);
-      return hit.env.d;
+      return { value: hit.env.d, degraded: false };
     }
     return this.loadStaleOrRefresh(vk, ttl, fn, mem, hit, kv, opts);
   }

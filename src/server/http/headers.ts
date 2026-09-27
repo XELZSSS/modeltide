@@ -10,6 +10,10 @@ export const PARTIAL_CACHE_HEADERS = {
   browser: "public, max-age=30",
   cdn: "public, max-age=60, stale-while-revalidate=60",
 };
+export const SHORT_CACHE_HEADERS = {
+  browser: "public, max-age=15",
+  cdn: "public, max-age=30, stale-while-revalidate=30",
+};
 
 const CONTRACT_VERSION_HEADER = "X-Contract-Version";
 
@@ -32,8 +36,9 @@ const API_SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
 };
 
-export function payloadEtag(fetchedAt: string): string {
-  return `W/"${CACHE_VERSION}-${fetchedAt}"`;
+export function payloadEtag(fetchedAt: string, variant?: number): string {
+  const suffix = variant === undefined ? "" : `-${variant}`;
+  return `W/"${CACHE_VERSION}-${fetchedAt}${suffix}"`;
 }
 
 export function ifNoneMatchSatisfied(ifNoneMatch: string | null, etag: string): boolean {

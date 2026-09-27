@@ -10,6 +10,11 @@ const PRECACHE_SHELL = [];
 const PRECACHE_URLS = [
   "/",
   "/manifest.webmanifest",
+  "/fonts/plex-sans-latin.woff2",
+  "/fonts/plex-sans-latin-ext.woff2",
+  "/fonts/plex-mono-400-latin.woff2",
+  "/fonts/plex-mono-500-latin.woff2",
+  "/fonts/plex-mono-600-latin.woff2",
   "/icons/app-icon.svg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",

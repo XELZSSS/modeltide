@@ -1,38 +1,4 @@
-function abortError(): Error {
-  return new Error("Aborted");
-}
-
-async function runTask<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return task();
-  if (signal.aborted) throw abortError();
-
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const onAbort = (): void => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener("abort", onAbort);
-      reject(abortError());
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    Promise.resolve()
-      .then(() => (settled ? undefined : task()))
-      .then(
-        (value) => {
-          if (settled) return;
-          settled = true;
-          signal.removeEventListener("abort", onAbort);
-          resolve(value as T);
-        },
-        (reason: unknown) => {
-          if (settled) return;
-          settled = true;
-          signal.removeEventListener("abort", onAbort);
-          reject(reason);
-        },
-      );
-  });
-}
+import { runAbortable } from "@/server/infra/abort";
 
 export class TaskNotRunError extends Error {
   constructor() {
@@ -69,7 +35,7 @@ export async function runCapped<T>(
         continue;
       }
       try {
-        results[i] = { status: "fulfilled", value: await runTask(task, opts?.signal) };
+        results[i] = { status: "fulfilled", value: await runAbortable(task, opts?.signal) };
       } catch (reason) {
         results[i] = { status: "rejected", reason };
       }

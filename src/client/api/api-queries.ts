@@ -1,5 +1,6 @@
-import { useQuery, useSuspenseQuery, type QueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue";
+import { useQuery, type QueryClient, type UseQueryReturnType } from "@tanstack/vue-query";
+import type { Query } from "@tanstack/query-core";
 import {
   FIVE_MINUTES,
   NEWS_CATEGORIES,
@@ -12,11 +13,11 @@ import {
   STATUS_TTL_MS,
   THIRTY_MINUTES,
   apiPaths,
+  queryKeys,
 } from "@/shared/config";
 import type { ApiDomain, PayloadOf } from "@/contract/api-contract";
 import { fetcher } from "@/client/api/api-client";
 import { buildHallucinationRankings } from "@/client/utils/hallucination";
-import { queryKeys } from "@/shared/config";
 import type {
   AgentRankEntry,
   ArtificialAnalysisModel,
@@ -28,13 +29,49 @@ import type {
   SourcePayload,
 } from "@/shared/types";
 import { dedupeBy, isPartialDashboard } from "@/shared/utils";
+import { EMPTY_ARRAY } from "@/client/utils/empty";
 import {
   isPartialPayload,
   normalizeHomeDashboard,
   unwrapList,
   unwrapListPartial,
   unwrapObject,
+  type NormalizedHomeDashboard,
 } from "@/client/api/payload-normalize";
+
+type RawPayload<D extends ApiDomain> = SourcePayload<PayloadOf<D>>;
+type QueryResult<D extends ApiDomain> = UseQueryReturnType<RawPayload<D>, Error>;
+type PollFn<D extends ApiDomain> = (
+  query: Query<RawPayload<D>, Error, RawPayload<D>, readonly unknown[]>,
+) => number | false;
+
+interface ListState<T> {
+  items: T[];
+  partial: boolean;
+  malformed: boolean;
+}
+
+interface SuspenseQueryLike {
+  suspense: () => Promise<unknown>;
+  data: { value: unknown };
+}
+
+const MAX_PARTIAL_POLLS = 5;
+
+const partialPollBases = new WeakMap<object, number>();
+
+function partialPollInterval(query: unknown, isPartialData: (data: unknown) => boolean, partialRefetchMs: number): number | false {
+  if (query == null || typeof query !== "object") return false;
+  const state = (query as { state?: { data?: unknown; dataUpdateCount?: number; errorUpdateCount?: number } }).state;
+  if (!isPartialData(state?.data)) {
+    partialPollBases.delete(query);
+    return false;
+  }
+  const settled = (state?.dataUpdateCount ?? 0) + (state?.errorUpdateCount ?? 0);
+  const base = partialPollBases.get(query) ?? settled;
+  partialPollBases.set(query, base);
+  return settled - base >= MAX_PARTIAL_POLLS ? false : partialRefetchMs;
+}
 
 interface ApiQueryOptions<T> {
   ttl?: number;
@@ -42,90 +79,60 @@ interface ApiQueryOptions<T> {
   partialRefetchMs?: number;
   refetchMs?: number;
   isPartialData?: (data: SourcePayload<T> | undefined) => boolean;
+  query?: Record<string, string>;
 }
 
-const MAX_PARTIAL_POLLS = 5;
-
-const partialPollBases = new WeakMap<object, number>();
-
-function partialPollInterval<T>(
-  query: unknown,
-  isPartialData: (data: T | undefined) => boolean,
-  partialRefetchMs: number,
-  bases: WeakMap<object, number> = partialPollBases,
-): number | false {
-  if (query == null || typeof query !== "object") return false;
-  const state = (query as { state?: { data?: T; dataUpdateCount?: number; errorUpdateCount?: number } }).state;
-  if (!isPartialData(state?.data)) {
-    bases.delete(query);
-    return false;
-  }
-  const settled = (state?.dataUpdateCount ?? 0) + (state?.errorUpdateCount ?? 0);
-  const base = bases.get(query) ?? settled;
-  bases.set(query, base);
-  return settled - base >= MAX_PARTIAL_POLLS ? false : partialRefetchMs;
-}
-
-function createApiQuery<D extends ApiDomain>(
-  domain: D,
-  key: readonly (string | number)[],
-  opts?: ApiQueryOptions<PayloadOf<D>> & { query?: Record<string, string> },
-) {
+function createApiQuery<D extends ApiDomain>(domain: D, key: readonly (string | number)[], opts?: ApiQueryOptions<PayloadOf<D>>) {
   const { ttl, gcTime, partialRefetchMs, refetchMs, isPartialData, query } = opts ?? {};
-  const queryFn = fetcher<PayloadOf<D>>(query ? `${apiPaths[domain]}?${new URLSearchParams(query)}` : apiPaths[domain]);
+  const path = query ? `${apiPaths[domain]}?${new URLSearchParams(query)}` : apiPaths[domain];
+  const queryFn = fetcher<PayloadOf<D>>(path);
   const ttlMs = ttl ?? THIRTY_MINUTES;
-  const partialPoll: false | ((query: unknown) => number | false) =
-    partialRefetchMs != null && isPartialData != null
-      ? (query: unknown) => partialPollInterval<SourcePayload<PayloadOf<D>>>(query, isPartialData, partialRefetchMs)
-      : false;
-  const refetchInterval: number | false | ((query: unknown) => number | false) =
-    partialPoll === false ? (refetchMs ?? false) : partialPoll;
+  const refetchInterval: number | false | PollFn<D> =
+    isPartialData != null && partialRefetchMs != null
+      ? (query) => partialPollInterval(query, isPartialData as (data: unknown) => boolean, partialRefetchMs)
+      : (refetchMs ?? false);
   const timing = {
     gcTime: gcTime ?? Math.min(Math.max(ttlMs, THIRTY_MINUTES), STATIC_TTL_MS),
     refetchInterval,
     staleTime: ttlMs,
   };
+  const use = (enabled?: MaybeRefOrGetter<boolean>): UseQueryReturnType<RawPayload<D>, Error> =>
+    useQuery<RawPayload<D>, Error>({ queryKey: key, queryFn, ...timing, enabled });
   return {
     domain,
-    use: (enabled = true) => useQuery<SourcePayload<PayloadOf<D>>>({ queryKey: key, queryFn, ...timing, enabled }),
-    useSuspense: () => useSuspenseQuery<SourcePayload<PayloadOf<D>>>({ queryKey: key, queryFn, ...timing }),
-    prefetch: (qc: QueryClient) =>
-      qc.prefetchQuery({ queryKey: key, queryFn, staleTime: timing.staleTime, gcTime: timing.gcTime }),
+    key,
+    queryFn,
+    use,
+    prefetch: (client: QueryClient) =>
+      client.prefetchQuery({ queryKey: key, queryFn, staleTime: timing.staleTime, gcTime: timing.gcTime }),
   };
 }
 
-interface SuspenseQueryLike {
-  useSuspense: () => { data: unknown };
-}
-
-function suspenseList<T>(q: SuspenseQueryLike, label: string): () => T[] {
-  return () => unwrapList<T>(q.useSuspense().data, label);
-}
-
-function suspenseListState<T>(
-  q: SuspenseQueryLike,
-  label: string,
-): () => { items: T[]; partial: boolean; malformed: boolean } {
-  return () => {
-    const { data, partial, malformed } = unwrapListPartial<T>(q.useSuspense().data, label);
+async function suspenseState<T>(query: SuspenseQueryLike, label: string): Promise<ComputedRef<ListState<T>>> {
+  await query.suspense();
+  return computed(() => {
+    const { data, partial, malformed } = unwrapListPartial<T>(query.data.value, label);
     return { items: data, partial, malformed };
-  };
+  });
 }
 
 export const qArtificialRaw = createApiQuery("artificialIndex", queryKeys.artificialIndex, {
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
 });
+
 export const qOpenRouter = createApiQuery("openRouterRankings", queryKeys.openRouterRankings, {
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
 });
+
 export const qHomeDashboardRaw = createApiQuery("homeDashboard", queryKeys.homeDashboard, {
   ttl: FIVE_MINUTES,
   gcTime: 15 * 60_000,
   partialRefetchMs: ONE_MINUTE,
-  isPartialData: (d) => d != null && isPartialDashboard(d.data),
+  isPartialData: (data) => data != null && isPartialDashboard(data.data),
 });
+
 export const qOpenSourceModelsRaw = createApiQuery("openSourceModels", queryKeys.openSourceModels, {
   ttl: SLOW_TTL_MS,
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
@@ -137,13 +144,13 @@ export const qOpenSourceModelsRaw = createApiQuery("openSourceModels", queryKeys
   },
 });
 
-export function qNewsRaw(c: NewsCategory) {
-  const category = (NEWS_CATEGORIES.includes(c) ? c : NEWS_CATEGORIES[0]) as NewsCategory;
-  return createApiQuery("news", queryKeys.news(category), {
+export function qNewsRaw(category: NewsCategory) {
+  const resolved = (NEWS_CATEGORIES.includes(category) ? category : NEWS_CATEGORIES[0]) as NewsCategory;
+  return createApiQuery("news", queryKeys.news(resolved), {
     ttl: NEWS_TTL_MS,
     partialRefetchMs: PARTIAL_FAIL_TTL_MS,
     isPartialData: isPartialPayload,
-    query: { category },
+    query: { category: resolved },
   });
 }
 
@@ -151,43 +158,55 @@ export const qStatusHistory = createApiQuery("statusHistory", queryKeys.statusHi
   ttl: STATUS_TTL_MS,
   refetchMs: ONE_MINUTE,
 });
+
 export const qAgent = createApiQuery("agentRankings", queryKeys.agentRankings, {
   ttl: SLOW_TTL_MS,
 });
+
 export const qClosedReleasesRaw = createApiQuery("closedReleases", queryKeys.closedReleases, {
   ttl: STATIC_TTL_MS,
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
 });
 
-export function useArtificialRankings(enabled = true) {
-  const q = qArtificialRaw.use(enabled);
-  const unwrapped = useUnwrappedPartial<ArtificialAnalysisModel>(q.data, "artificialIndex");
-  const hasData = unwrapped.data.length > 0;
-  const isError = enabled && !hasData && !q.isPending && (q.isError || unwrapped.malformed);
-  const error = isError ? (q.error ?? new Error("Malformed artificialIndex payload")) : null;
-  return { ...q, data: unwrapped.data, isError, error };
+export function useArtificialRankings(enabled: MaybeRefOrGetter<boolean> = true) {
+  const query = qArtificialRaw.use(enabled);
+  const unwrapped = computed(() => unwrapListPartial<ArtificialAnalysisModel>(query.data.value, "artificialIndex"));
+  const data = computed(() => unwrapped.value.data);
+  const isError = computed(
+    () => toValue(enabled) && data.value.length === 0 && !query.isPending.value && (query.isError.value || unwrapped.value.malformed),
+  );
+  const error = computed(() =>
+    isError.value ? (query.error.value ?? new Error("Malformed artificialIndex payload")) : null,
+  );
+  return { ...query, data, isError, error };
 }
 
-export const useSuspenseArtificialRankings = suspenseList<ArtificialAnalysisModel>(qArtificialRaw, "artificialIndex");
+export async function useSuspenseArtificialRankings(): Promise<ComputedRef<ArtificialAnalysisModel[]>> {
+  const query = qArtificialRaw.use();
+  await query.suspense();
+  return computed(() => unwrapList<ArtificialAnalysisModel>(query.data.value, "artificialIndex"));
+}
 
-export const useSuspenseArtificialRankingsState = suspenseListState<ArtificialAnalysisModel>(
-  qArtificialRaw,
-  "artificialIndex",
-);
+export const useSuspenseArtificialRankingsState = () =>
+  suspenseState<ArtificialAnalysisModel>(qArtificialRaw.use(), "artificialIndex");
 
-export function useSuspenseHomeDashboard() {
-  const { data } = qHomeDashboardRaw.useSuspense();
-  return useMemo(() => normalizeHomeDashboard(data), [data]);
+export async function useSuspenseHomeDashboard(): Promise<ComputedRef<NormalizedHomeDashboard>> {
+  const query = qHomeDashboardRaw.use();
+  await query.suspense();
+  return computed(() => normalizeHomeDashboard(query.data.value));
 }
 
 export const useOpenRouterRankings = qOpenRouter.use;
-export const useSuspenseOpenRouterRankings = qOpenRouter.useSuspense;
 
-export const useSuspenseOpenSourceModelsState = suspenseListState<OpenSourceModelEntry>(
-  qOpenSourceModelsRaw,
-  "openSourceModels",
-);
+export async function useSuspenseOpenRouterRankings(): Promise<QueryResult<"openRouterRankings">> {
+  const query = qOpenRouter.use();
+  await query.suspense();
+  return query;
+}
+
+export const useSuspenseOpenSourceModelsState = () =>
+  suspenseState<OpenSourceModelEntry>(qOpenSourceModelsRaw.use(), "openSourceModels");
 
 function qOpenSourceModel(id: string) {
   return createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
@@ -196,75 +215,65 @@ function qOpenSourceModel(id: string) {
   });
 }
 
-export function useSuspenseOpenSourceModel(id: string): OpenSourceModelEntry | null {
-  const { data } = qOpenSourceModel(id).useSuspense();
-  return unwrapObject<OpenSourceModelEntry | null>(data, "openSourceModel") ?? null;
+export async function useSuspenseOpenSourceModel(id: string): Promise<ComputedRef<OpenSourceModelEntry | null>> {
+  const query = qOpenSourceModel(id).use();
+  await query.suspense();
+  return computed(() => unwrapObject<OpenSourceModelEntry | null>(query.data.value, "openSourceModel") ?? null);
 }
 
-export const useSuspenseClosedReleasesState = suspenseListState<ClosedReleaseEntry>(
-  qClosedReleasesRaw,
-  "closedReleases",
-);
+export const useSuspenseClosedReleasesState = () =>
+  suspenseState<ClosedReleaseEntry>(qClosedReleasesRaw.use(), "closedReleases");
 
-export const useSuspenseNewsState = (
-  category: NewsCategory,
-): { items: NewsItem[]; partial: boolean; malformed: boolean } =>
-  suspenseListState<NewsItem>(qNewsRaw(category), `news:${category}`)();
+export const useSuspenseNewsState = (category: NewsCategory) =>
+  suspenseState<NewsItem>(qNewsRaw(category).use(), `news:${category}`);
 
-export const useSuspenseStatusHistory = qStatusHistory.useSuspense;
-export const useSuspenseAgentRankingsState = suspenseListState<AgentRankEntry>(qAgent, "agentRankings");
-
-interface OpenSourceModelsQuery {
-  data: OpenSourceModelEntry[];
-  isPending: boolean;
-  isError: boolean;
-  error: Error | null;
+export async function useSuspenseStatusHistory(): Promise<QueryResult<"statusHistory">> {
+  const query = qStatusHistory.use();
+  await query.suspense();
+  return query;
 }
 
-interface UnwrappedListState<T> {
-  data: T[];
-  partial: boolean;
-  malformed: boolean;
-}
+export const useSuspenseAgentRankingsState = () =>
+  suspenseState<AgentRankEntry>(qAgent.use(), "agentRankings");
 
-function useUnwrappedPartial<T>(raw: unknown, label: string): UnwrappedListState<T> {
-  return useMemo(() => unwrapListPartial<T>(raw, label), [raw, label]);
-}
-
-export function useAllOpenSourceModels(enabled = true): OpenSourceModelsQuery {
+export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true): {
+  data: ComputedRef<OpenSourceModelEntry[]>;
+  isPending: ComputedRef<boolean>;
+  isError: ComputedRef<boolean>;
+  error: ComputedRef<Error | null>;
+} {
   const trending = qOpenSourceModelsRaw.use(enabled);
-
-  const trendingUnwrapped = useUnwrappedPartial<OpenSourceModelEntry>(trending.data, "openSourceModels");
-  const trendingList = trendingUnwrapped.data;
-
-  const data = useMemo(
-    () =>
-      dedupeBy(
-        trendingList.filter((m) => m.id),
-        (m) => m.id,
-      ),
-    [trendingList],
+  const unwrapped = computed(() => unwrapListPartial<OpenSourceModelEntry>(trending.data.value, "openSourceModels"));
+  const data = computed(() =>
+    dedupeBy(
+      unwrapped.value.data.filter((model) => model.id),
+      (model) => model.id,
+    ),
   );
-
-  const hasData = data.length > 0;
-  const malformed = trendingUnwrapped.malformed;
-  const isPending = enabled && !hasData && !malformed && trending.isPending;
-  const isError = enabled && !hasData && (trending.isError || (malformed && !trending.isPending));
-  const error = isError ? (trending.error ?? new Error("Malformed open-source payload")) : null;
-
-  return {
-    data,
-    isPending,
-    isError,
-    error,
-  };
+  const isPending = computed(
+    () => toValue(enabled) && data.value.length === 0 && !unwrapped.value.malformed && trending.isPending.value,
+  );
+  const isError = computed(
+    () =>
+      toValue(enabled) &&
+      data.value.length === 0 &&
+      (trending.isError.value || (unwrapped.value.malformed && !trending.isPending.value)),
+  );
+  const error = computed(() => (isError.value ? (trending.error.value ?? new Error("Malformed open-source payload")) : null));
+  return { data, isPending, isError, error };
 }
 
-export function useHallucinationRankings(data: ArtificialAnalysisModel[], enabled = true): HallucinationRankingEntry[] {
-  return useMemo(() => (enabled && data.length > 0 ? buildHallucinationRankings(data) : []), [data, enabled]);
+export function useHallucinationRankings(
+  data: MaybeRefOrGetter<ArtificialAnalysisModel[]>,
+  enabled: MaybeRefOrGetter<boolean> = true,
+): ComputedRef<HallucinationRankingEntry[]> {
+  return computed(() => {
+    const models = toValue(data);
+    return toValue(enabled) && models.length > 0 ? buildHallucinationRankings(models) : (EMPTY_ARRAY as HallucinationRankingEntry[]);
+  });
 }
 
-export function useSuspenseHallucinationRankings(): HallucinationRankingEntry[] {
-  const models = useSuspenseArtificialRankings();
+export async function useSuspenseHallucinationRankings(): Promise<ComputedRef<HallucinationRankingEntry[]>> {
+  const models = await useSuspenseArtificialRankings();
   return useHallucinationRankings(models);
 }

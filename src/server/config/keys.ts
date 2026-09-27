@@ -3,8 +3,6 @@ import { fnv1aHash } from "@/server/infra/hash";
 import { cacheKey } from "@/shared/config/paths";
 import type { NewsCategory } from "@/shared/types/news";
 
-export const HIGH_CARDINALITY_KEY_MARKER = ":by-id:";
-
 const SECOND_HASH_BASIS = 2166136261 ^ 0x9e3779b9;
 const SECOND_HASH_PRIME = 2246822519;
 
@@ -27,6 +25,7 @@ export const cacheKeys = {
   news: (category: NewsCategory) => cacheKey("news", category),
   openRouterRankings: cacheKey("openRouterRankings"),
   openRouterPricing: cacheKey("openRouterRankings", "pricing-map", "per-million"),
+  openRouterMeta: cacheKey("openRouterRankings", "meta-map"),
   closedReleases: cacheKey("closedReleases"),
   agentRankings: cacheKey("agentRankings"),
   statusHistoryPayload: cacheKey("statusHistory", "payload"),

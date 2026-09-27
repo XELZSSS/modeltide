@@ -77,8 +77,10 @@ export function stripHtml(s: unknown): string {
     const inner = s.slice(i + 1, end);
     const name = tagNameOf(inner);
     if (!name) {
-      parts.push(s[i]!);
-      i += 1;
+      const next = s.indexOf("<", i + 1);
+      const textEnd = next === -1 ? s.length : next;
+      parts.push(s.slice(i, textEnd));
+      i = textEnd;
       continue;
     }
     if (name === "script" || name === "style") {
@@ -89,7 +91,7 @@ export function stripHtml(s: unknown): string {
       i = m ? m.index + m[0].length : s.length;
       continue;
     }
-    parts.push(BLOCK_TAGS.has(name) ? " " : "");
+    if (BLOCK_TAGS.has(name)) parts.push(" ");
     i = end + 1;
   }
   return parts.join("").replace(/\s+/g, " ").trim();

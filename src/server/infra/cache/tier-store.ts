@@ -1,14 +1,10 @@
-import { MAX_KV_RETENTION_TTL_S, MEMORY_CACHE_MAX_BYTES, MEMORY_CACHE_MAX_KEYS } from "@/server/config";
-import { KV_READ_WARN_THROTTLE_MS, throttleGate } from "@/server/config/status";
+import { MAX_KV_RETENTION_TTL_S } from "@/server/config";
+import { kvReadWarnGate } from "@/server/config/status";
 import { logger, type Logger } from "@/server/infra/logger";
 import { utf8ByteLength } from "@/server/infra/hash";
 import type { KvStore } from "./kv";
 import { decodeEnvelope, encodeEnvelope, jitteredTtl, maxStaleMs, type StaleEnvelope } from "./envelope";
 import { l1TtlFor, type MemoryL1 } from "./memory-l1";
-
-const UNMEASURABLE_BYTES = Math.floor(MEMORY_CACHE_MAX_BYTES / MEMORY_CACHE_MAX_KEYS);
-
-const kvReadWarnGate = throttleGate(KV_READ_WARN_THROTTLE_MS);
 
 function warnKvReadFailure(log: Logger, err: unknown): void {
   if (!kvReadWarnGate.open()) return;
@@ -54,9 +50,10 @@ export class TierStore {
     } catch (err) {
       this.log("warn", `[cache] serialize failed for ${vk}: ${err instanceof Error ? err.message : String(err)}`);
     }
-    const bytes = serialized === undefined ? UNMEASURABLE_BYTES : utf8ByteLength(serialized);
-    this.l1.set(vk, data, kv ? l1TtlFor(effective) : effective, bytes, effective);
-    if (!kv || serialized === undefined) return;
+    if (serialized === undefined) return;
+    const cached = this.l1.set(vk, data, kv ? l1TtlFor(effective) : effective, utf8ByteLength(serialized), effective);
+    if (!cached) this.log("warn", `[cache] L1 skipped oversized entry for ${vk}`);
+    if (!kv) return;
     const put = this.setSerialized(kv, vk, serialized, effective).catch((err: unknown) => {
       this.log("warn", `[cache] KV write failed for ${vk}: ${err instanceof Error ? err.message : String(err)}`);
     });

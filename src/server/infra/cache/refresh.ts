@@ -29,29 +29,30 @@ export class RefreshRunner {
       const timeout = refreshFailureCooldown.wasTimeout(vk);
       throw new UpstreamError(`Upstream refresh skipped (failure cooldown) for ${vk}`, { timeout });
     }
-    const seq = this.inflight.begin();
+
     let p!: Promise<T>;
-    const task = (async () => {
+    const work = (async (): Promise<T> => {
       const { data, ttl: t } = await fn();
       const current = this.inflight.get(vk);
       if (current !== undefined && current !== p) return data;
-      if (!this.inflight.canStore(vk, seq)) return data;
-      this.inflight.recordStore(vk, seq);
       await this.tier.storeCurrent(kv, vk, data, t ?? ttl);
       return data;
     })();
-    let rejectGuard: (err: unknown) => void = () => {};
-    const guardRejection = new Promise<never>((_, reject) => {
-      rejectGuard = reject;
+
+    let hangGuardReject: (err: unknown) => void = () => {};
+    const hangGuard = new Promise<never>((_, reject) => {
+      hangGuardReject = reject;
     });
-    p = this.inflight.run(vk, Promise.race([task, guardRejection]));
+    p = this.inflight.run(vk, Promise.race([work, hangGuard]));
     p.then(undefined, () => {});
+
     const hangTimer = setTimeout(() => {
       this.inflight.release(vk, p);
-      rejectGuard(
+      hangGuardReject(
         new UpstreamError(`Upstream refresh timed out (inflight guard) for ${vk}`, { timeout: true, watchdog: true }),
       );
     }, INFLIGHT_HANG_GUARD_MS);
+
     try {
       return await p;
     } catch (err) {

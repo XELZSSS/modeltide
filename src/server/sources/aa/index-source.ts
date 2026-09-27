@@ -6,7 +6,7 @@ import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { parseRscPayload, findNextData } from "@/server/parsers/rsc-parser";
 
-import { getModelDirectory } from "@/server/sources/openrouter-directory";
+import { getModelDirectoryMeta } from "@/server/sources/openrouter-directory";
 import { compact } from "@/server/parsers/aa/model-compact";
 import {
   backfillFromMeta,
@@ -93,9 +93,7 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<Omit<Intelligenc
           arr.map(compactOmniscienceEnrich).filter((m) => m.omniscience != null || m.omniscienceBreakdown != null),
       }),
     ]),
-    getModelDirectory(ctx)
-      .then((d) => d.meta)
-      .catch((): Record<string, ModelMetaEntry> | null => null),
+    getModelDirectoryMeta(ctx).catch((): Record<string, ModelMetaEntry> | null => null),
   ]);
 
   const indexModels = requireParsed(parseRscPayload(indexBody, "intelligenceIndex", findModelArray));

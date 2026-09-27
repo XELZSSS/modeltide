@@ -1,5 +1,5 @@
 import type { SourceId } from "@/shared/types";
-import type { TranslationKey } from "@/shared/i18n";
+import type { TFunction, TranslationKey } from "@/shared/i18n";
 import type { NewsCategory } from "@/shared/types/news";
 
 export const NEWS_CATEGORIES = [
@@ -31,4 +31,9 @@ export const SOURCE_IDS: readonly SourceId[] = Object.keys(SOURCE_LABELS) as Sou
 
 export function sourceLabelKey(id: string): TranslationKey | undefined {
   return Object.hasOwn(SOURCE_LABELS, id) ? SOURCE_LABELS[id as SourceId] : undefined;
+}
+
+export function sourceLabel(id: string, t: TFunction): string {
+  const key = sourceLabelKey(id);
+  return key ? t(key) : id;
 }

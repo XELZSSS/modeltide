@@ -6,10 +6,10 @@ import { decodeEntities } from "@/server/parsers/html-entities";
 import { stripHtml } from "@/server/parsers/html-to-text";
 import { parseFeed as parseFeedResult } from "@/server/parsers/rss-feed-parser";
 import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc-parser";
-import { isMarkerBoundary } from "@/server/parsers/rsc-scanner";
+import { isMarkerBoundaryAt } from "@/server/parsers/rsc-scanner";
 import { parseDailyPapers } from "@/server/parsers/hf-parser";
-import { getOpenLicense } from "@/server/parsers/licenses";
-import { byDateDesc, isoDate, num, numCoerce, numOr } from "@/server/parsers/parser-primitives";
+import { getOpenLicenseId, licenseTagId } from "@/server/parsers/licenses";
+import { byDateDesc, isoDate, numCoerce, numOr } from "@/server/parsers/parser-primitives";
 
 function readFeed(xml: string, url = "https://x.example/feed") {
   const res = parseFeedResult(xml, url);
@@ -99,7 +99,9 @@ describe("findNextData / findLongestData", () => {
   });
 });
 
-describe("isMarkerBoundary", () => {
+describe("isMarkerBoundaryAt", () => {
+  const boundary = (line: string, marker: string): boolean => isMarkerBoundaryAt(line, `"${marker}"`);
+
   it("treats every character trimStart skips as whitespace", () => {
     for (const ws of [
       " ",
@@ -115,16 +117,16 @@ describe("isMarkerBoundary", () => {
       "\u3000",
       "\ufeff",
     ]) {
-      expect(isMarkerBoundary(`{"m"${ws}:[]}`, "m")).toBe(true);
+      expect(boundary(`{"m"${ws}:[]}`, "m")).toBe(true);
     }
-    expect(isMarkerBoundary('{"m"\u00b7:[]}', "m")).toBe(false);
+    expect(boundary('{"m"\u00b7:[]}', "m")).toBe(false);
   });
 
   it("scans past occurrences that are not followed by a boundary", () => {
-    expect(isMarkerBoundary('{"a":"m"x","m":[]}', "m")).toBe(true);
-    expect(isMarkerBoundary('{"a":"m"x"}', "m")).toBe(false);
-    expect(isMarkerBoundary('{"m"', "m")).toBe(false);
-    expect(isMarkerBoundary('{"m"   ', "m")).toBe(false);
+    expect(boundary('{"a":"m"x","m":[]}', "m")).toBe(true);
+    expect(boundary('{"a":"m"x"}', "m")).toBe(false);
+    expect(boundary('{"m"', "m")).toBe(false);
+    expect(boundary('{"m"   ', "m")).toBe(false);
   });
 });
 
@@ -295,11 +297,12 @@ describe("primitives", () => {
     expect(numOr(input, fallback)).toBe(expected);
   });
 
-  it("num stays strict while numCoerce accepts numeric strings", () => {
-    expect(num("85.5")).toBeNull();
+  it("numCoerce accepts numeric strings and rejects non-numeric input", () => {
     expect(numCoerce("85.5")).toBe(85.5);
+    expect(numCoerce(85.5)).toBe(85.5);
     expect(numCoerce("")).toBeNull();
     expect(numCoerce(true)).toBeNull();
+    expect(numCoerce(Number.NaN)).toBeNull();
   });
 
   it.each([
@@ -322,14 +325,17 @@ describe("primitives", () => {
   });
 });
 
-describe("getOpenLicense", () => {
+describe("getOpenLicenseId", () => {
+  const licenseOf = (tags: string[]): string | null =>
+    getOpenLicenseId(tags.map(licenseTagId).filter((id): id is string => id != null));
+
   it.each([
     [["license:mit"], "mit"],
     [["license:qwen2.5"], "qwen2.5"],
     [["license:apache_2.0"], "apache-2.0"],
     [["LICENSE:MIT"], "mit"],
-  ])("getOpenLicense(%j) -> %s", (tags, expected) => {
-    expect(getOpenLicense(tags)).toBe(expected);
+  ])("licenseOf(%j) -> %s", (tags, expected) => {
+    expect(licenseOf(tags)).toBe(expected);
   });
 
   it.each([
@@ -339,13 +345,13 @@ describe("getOpenLicense", () => {
     [["license:cc-by-nc4.0"]],
     [["license:mitre"]],
     [[]],
-  ])("getOpenLicense(%j) rejects ND/NC/lookalikes/non-licenses", (tags) => {
-    expect(getOpenLicense(tags)).toBeNull();
+  ])("licenseOf(%j) rejects ND/NC/lookalikes/non-licenses", (tags) => {
+    expect(licenseOf(tags)).toBeNull();
   });
 
   it("still accepts the permissive CC variants", () => {
-    expect(getOpenLicense(["license:cc-by-4.0"])).toBe("cc-by-4.0");
-    expect(getOpenLicense(["license:cc-by-sa-4.0"])).toBe("cc-by-sa-4.0");
+    expect(licenseOf(["license:cc-by-4.0"])).toBe("cc-by-4.0");
+    expect(licenseOf(["license:cc-by-sa-4.0"])).toBe("cc-by-sa-4.0");
   });
 });
 

@@ -1,6 +1,10 @@
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
-import { UNKNOWN_QUERY_WARN_THROTTLE_MS, throttleGate } from "@/server/config/status";
+import {
+  UNKNOWN_QUERY_WARN_MAX_PATHS,
+  UNKNOWN_QUERY_WARN_THROTTLE_MS,
+  keyedThrottleGate,
+} from "@/server/config/status";
 import { ApiError, ClientAbortError, UpstreamError, isTimeoutLike } from "@/server/infra/errors";
 import { logger, type Logger } from "@/server/infra/logger";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
@@ -26,7 +30,7 @@ function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string
 }
 
 function clampStatus(status: number): number {
-  return status >= 200 && status < 600 && status !== 204 && status !== 205 && status !== 304 ? status : 500;
+  return status >= 400 && status <= 599 ? status : 500;
 }
 
 function errorHeaders(): Headers {
@@ -39,24 +43,15 @@ function errorHeaders(): Headers {
   return headers;
 }
 
-const MAX_LOGGED_UNKNOWN_PARAMS = 5;
-
-function loggableParamName(key: string): string {
-  return key.replace(/\p{C}/gu, "").slice(0, 64);
-}
-
-const unknownParamWarnGates = new Map<string, ReturnType<typeof throttleGate>>();
+const unknownParamWarnGate = keyedThrottleGate(UNKNOWN_QUERY_WARN_THROTTLE_MS, UNKNOWN_QUERY_WARN_MAX_PATHS);
 
 function warnUnknownParams(log: Logger, path: string, unknownKeys: string[]): void {
-  let gate = unknownParamWarnGates.get(path);
-  if (!gate) {
-    gate = throttleGate(UNKNOWN_QUERY_WARN_THROTTLE_MS);
-    unknownParamWarnGates.set(path, gate);
-  }
-  if (!gate.open()) return;
-  const shown = unknownKeys.slice(0, MAX_LOGGED_UNKNOWN_PARAMS).map(loggableParamName).join(", ");
-  const truncated = unknownKeys.length > MAX_LOGGED_UNKNOWN_PARAMS ? " …" : "";
-  log("warn", `[query] ${path} ignoring unknown params: ${shown}${truncated}`);
+  if (!unknownParamWarnGate(path)) return;
+  const shown = unknownKeys
+    .slice(0, 5)
+    .map((key) => key.replace(/\p{C}/gu, ""))
+    .join(", ");
+  log("warn", `[query] ${path} ignoring unknown params: ${shown}`);
 }
 
 function collectQueryParams(url: URL): Record<string, string | string[]> {
@@ -125,13 +120,12 @@ interface ApiRouteDef<S extends QuerySchema = QuerySchema> {
 export async function handleApiRoute<S extends QuerySchema>(
   req: Request,
   env: Env,
-  path: string,
+  url: URL,
   def: ApiRouteDef<S>,
   hooks?: { onDetach?: (work: Promise<unknown>) => void },
 ): Promise<Response> {
+  const path = url.pathname;
   try {
-    const url = new URL(req.url);
-
     const context = buildContext(env, { callerSignal: req.signal, onDetach: hooks?.onDetach });
     const rawParams = collectQueryParams(url);
     const schemaKeys = new Set(Object.keys(def.query ?? {}));
@@ -146,7 +140,7 @@ export async function handleApiRoute<S extends QuerySchema>(
     );
     applyApiHeaders(headers);
     if (!browserCache.includes("no-store")) {
-      const etag = payloadEtag(payload.fetchedAt);
+      const etag = payloadEtag(payload.fetchedAt, Array.isArray(payload.data) ? payload.data.length : undefined);
       headers.set("ETag", etag);
       if (ifNoneMatchSatisfied(req.headers.get("if-none-match"), etag)) {
         headers.delete("content-type");

@@ -1,6 +1,6 @@
-import { createElement, type ComponentType, type ReactNode } from "react";
+import { defineComponent, h, type Component } from "vue";
 
-type LazyModule<P> = { default: ComponentType<P> };
+type LazyModule = { default: Component };
 
 const resettable = new Set<() => void>();
 
@@ -8,32 +8,21 @@ export function resetLoadableViews(): void {
   for (const reset of resettable) reset();
 }
 
-export function loadableView<P extends object = Record<string, never>>(
-  load: () => Promise<LazyModule<P>>,
-): ComponentType<P> {
-  let resolved: LazyModule<P> | null = null;
-  let pending: Promise<LazyModule<P>> | null = null;
+export function loadableView(load: () => Promise<LazyModule>): Component {
+  let resolved: Component | null = null;
+  let pending: Promise<void> | null = null;
   let failure: unknown = null;
 
-  const loadOnce = (): Promise<LazyModule<P>> => {
-    if (!pending) {
-      pending = load()
-        .then((module) => {
-          resolved = module;
-          return module;
-        })
-        .catch((err: unknown) => {
-          failure = err;
-          throw err;
-        });
-    }
+  const loadOnce = (): Promise<void> => {
+    pending ??= load()
+      .then((module) => {
+        resolved = module.default;
+      })
+      .catch((err: unknown) => {
+        failure = err;
+        throw err;
+      });
     return pending;
-  };
-
-  const view = function LoadableView(props: P): ReactNode {
-    if (resolved) return createElement(resolved.default, props);
-    if (failure !== null) throw failure;
-    throw loadOnce();
   };
 
   resettable.add(() => {
@@ -42,5 +31,14 @@ export function loadableView<P extends object = Record<string, never>>(
     failure = null;
   });
 
-  return view;
+  return defineComponent({
+    name: "LoadableView",
+    inheritAttrs: false,
+    async setup(_props, { attrs, slots }) {
+      if (failure !== null) throw failure;
+      if (!resolved) await loadOnce();
+      const view = resolved as Component;
+      return () => h(view, attrs, slots);
+    },
+  });
 }

@@ -55,7 +55,7 @@ function toChangelogModel(e: ChangelogRawEntry): ChangelogModel | null {
 
 export function parseChangelogModels(html: unknown): ParseResult<ChangelogModel[]> {
   if (typeof html !== "string" || !html) return parseFail("Changelog page is not a string");
-  if (html.length > 8_000_000) return parseFail(`Changelog page too large (${html.length} chars)`);
+  if (html.length > MAX_SCAN_CHARS) return parseFail(`Changelog page too large (${html.length} chars)`);
   let best: ChangelogModel[] = [];
   for (const v of extractModelsArrays(html)) {
     if (!Array.isArray(v)) continue;
@@ -65,5 +65,6 @@ export function parseChangelogModels(html: unknown): ParseResult<ChangelogModel[
       .filter((m): m is ChangelogModel => m !== null);
     if (mapped.length > best.length) best = mapped;
   }
+  if (best.length === 0) return parseFail("Changelog page yielded no model rows");
   return parseOk(best);
 }

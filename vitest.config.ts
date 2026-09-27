@@ -12,19 +12,19 @@ export default defineConfig({
       {
         test: {
           name: "server",
-          include: ["src/server/**/*.{test,spec}.{ts,tsx}"],
+          include: ["src/server/**/*.{test,spec}.ts"],
         },
       },
       {
         test: {
           name: "shared",
-          include: ["src/shared/**/*.{test,spec}.{ts,tsx}"],
+          include: ["src/shared/**/*.{test,spec}.ts"],
         },
       },
       {
         test: {
           name: "worker",
-          include: ["worker/**/*.{test,spec}.{ts,tsx}"],
+          include: ["worker/**/*.{test,spec}.ts"],
         },
       },
     ],

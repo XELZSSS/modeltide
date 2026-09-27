@@ -1,7 +1,7 @@
 import { UpstreamError } from "@/server/infra/errors";
 import { utf8ByteLength } from "@/server/infra/hash";
 import {
-  isMarkerBoundary,
+  isMarkerBoundaryAt,
   iterateLines,
   rscNotFoundMessage,
   scanOversizedMarkers,
@@ -24,16 +24,12 @@ function scanStep<T>(step: () => T): ParseResult<T> {
 }
 
 export function* traverse(root: unknown): Generator<unknown> {
-  const seen = new Set<object>();
   const queue: unknown[] = [root];
   let visited = 0;
   let head = 0;
-  const maxQueued = MAX_RSC_NODES * 4;
   while (head < queue.length) {
     const cur = queue[head++]!;
     if (!cur || typeof cur !== "object") continue;
-    if (seen.has(cur as object)) continue;
-    seen.add(cur as object);
     visited++;
     if (visited > MAX_RSC_NODES) {
       throw new UpstreamError(`RSC payload too complex (>${MAX_RSC_NODES} nodes)`);
@@ -41,58 +37,29 @@ export function* traverse(root: unknown): Generator<unknown> {
     yield cur;
     const children = Array.isArray(cur) ? cur : Object.values(cur as Record<string, unknown>);
     for (const v of children) {
-      if (v !== null && typeof v === "object") {
-        if (queue.length >= maxQueued) {
-          throw new UpstreamError(`RSC payload too wide (>${maxQueued} queued nodes)`);
-        }
-        queue.push(v);
-      }
+      if (v !== null && typeof v === "object") queue.push(v);
     }
   }
-}
-
-interface KeyArrays<T> {
-  first?: T[] | null;
-  longest?: T[] | null;
-}
-
-const ARRAYS_BY_TREE = new WeakMap<object, Map<string, KeyArrays<unknown>>>();
-
-function scanKeyArrays<T>(root: object, key: string, longest: boolean): KeyArrays<T> {
-  let byKey = ARRAYS_BY_TREE.get(root);
-  if (!byKey) {
-    byKey = new Map();
-    ARRAYS_BY_TREE.set(root, byKey);
-  }
-  let found = byKey.get(key) as KeyArrays<T> | undefined;
-  if (!found) {
-    found = {};
-    byKey.set(key, found);
-  }
-  if (found.first !== undefined && (!longest || found.longest !== undefined)) return found;
-  let best: T[] | null = null;
-  for (const node of traverse(root)) {
-    const raw = (node as Record<string, unknown>)[key];
-    if (!Array.isArray(raw)) continue;
-    if (found.first === undefined) {
-      found.first = raw as T[];
-      if (!longest) return found;
-    }
-    if (!best || raw.length > best.length) best = raw as T[];
-  }
-  if (found.first === undefined) found.first = null;
-  if (longest) found.longest = best && best.length > 0 ? best : null;
-  return found;
 }
 
 export function findNextData<T>(root: unknown, key: string): T[] | null {
   if (typeof key !== "string" || !key || root === null || typeof root !== "object") return null;
-  return scanKeyArrays<T>(root, key, false).first ?? null;
+  for (const node of traverse(root)) {
+    const raw = (node as Record<string, unknown>)[key];
+    if (Array.isArray(raw)) return raw as T[];
+  }
+  return null;
 }
 
 export function findLongestData<T>(root: unknown, key: string): T[] | null {
   if (typeof key !== "string" || !key || root === null || typeof root !== "object") return null;
-  return scanKeyArrays<T>(root, key, true).longest ?? null;
+  let best: T[] | null = null;
+  for (const node of traverse(root)) {
+    const raw = (node as Record<string, unknown>)[key];
+    if (!Array.isArray(raw)) continue;
+    if (!best || raw.length > best.length) best = raw as T[];
+  }
+  return best;
 }
 
 export function parseRscPayloads<T>(
@@ -110,6 +77,7 @@ export function parseRscPayloads<T>(
     return parseFail(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);
   }
   const results: (T[] | null)[] = markers.map(() => null);
+  const needles = markers.map((m) => `"${m}"`);
   let unresolved = markers.length;
   let maxLineLen = 0;
   for (const line of iterateLines(body)) {
@@ -121,8 +89,14 @@ export function parseRscPayloads<T>(
       unresolved -= oversize.data;
       continue;
     }
-    const boundaries = markers.map((m) => isMarkerBoundary(line, m));
-    if (!boundaries.some((hit, mi) => hit && !results[mi])) continue;
+    const boundaries: boolean[] = [];
+    let unresolvedHit = false;
+    for (let mi = 0; mi < markers.length; mi++) {
+      const hit = !results[mi] && isMarkerBoundaryAt(line, needles[mi]!);
+      boundaries.push(hit);
+      if (hit) unresolvedHit = true;
+    }
+    if (!unresolvedHit) continue;
     const raws: string[] = [];
     const prefixed = STREAM_LINE_RE.exec(line)?.[1];
     if (prefixed && prefixed.length <= MAX_RSC_BYTES) raws.push(prefixed);

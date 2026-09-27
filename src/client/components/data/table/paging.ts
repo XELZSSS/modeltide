@@ -1,33 +1,39 @@
-import { useCallback, useMemo, useState } from "react";
+import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
 import { dedupeBy } from "@/shared/utils";
-import { useResetOnChange } from "@/client/hooks/use-reset-on-change";
 
 export const DEFAULT_PAGE_SIZE = 20;
 export const MOBILE_PAGE_SIZE = 10;
 
 export function usePagedData<T>(
-  data: T[],
+  data: MaybeRefOrGetter<T[]>,
   getRowId: (row: T) => string,
-  pageSize = DEFAULT_PAGE_SIZE,
-  resetKey?: string | number,
+  pageSize: MaybeRefOrGetter<number> = DEFAULT_PAGE_SIZE,
+  resetKey?: MaybeRefOrGetter<string | number | undefined>,
 ) {
-  const dedupedData = useMemo(() => dedupeBy(data, getRowId), [data, getRowId]);
-  const safeSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : DEFAULT_PAGE_SIZE;
-  const [page, setPage] = useState(1);
-  const totalPages = Math.ceil(dedupedData.length / safeSize);
-  const safeTotal = Math.max(1, totalPages);
-  const resetToken = `${resetKey ?? ""}|${safeSize}`;
-  const didReset = useResetOnChange(resetToken);
-  if (didReset) {
-    setPage(1);
-  } else if (page > safeTotal) {
-    setPage(safeTotal);
+  const dedupedData = computed(() => dedupeBy(toValue(data), getRowId));
+  const page = ref(1);
+  const totalPages = computed(() => Math.ceil(dedupedData.value.length / toValue(pageSize)));
+  const safeTotal = computed(() => Math.max(1, totalPages.value));
+
+  watch([() => toValue(resetKey), () => toValue(pageSize)], () => {
+    page.value = 1;
+  });
+
+  watch(safeTotal, (total) => {
+    if (page.value > total) page.value = total;
+  });
+
+  const currentPage = computed(() => (totalPages.value === 0 ? 1 : Math.min(page.value, totalPages.value)));
+
+  const pagedData = computed(() => {
+    const size = toValue(pageSize);
+    const rows = dedupedData.value;
+    return rows.length > size ? rows.slice((currentPage.value - 1) * size, currentPage.value * size) : rows;
+  });
+
+  function goToPage(p: number): void {
+    page.value = Math.max(1, Math.min(p, safeTotal.value));
   }
-  const cur = totalPages === 0 ? 1 : Math.min(page, totalPages);
-  const paged = useMemo(
-    () => (dedupedData.length > safeSize ? dedupedData.slice((cur - 1) * safeSize, cur * safeSize) : dedupedData),
-    [dedupedData, cur, safeSize],
-  );
-  const goToPage = useCallback((p: number) => setPage(Math.max(1, Math.min(p, safeTotal))), [safeTotal]);
-  return { dedupedData, page: cur, totalPages, pagedData: paged, goToPage } as const;
+
+  return { dedupedData, page: currentPage, totalPages, pagedData, goToPage } as const;
 }

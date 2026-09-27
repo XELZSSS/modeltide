@@ -64,6 +64,5 @@ export interface StatusHistoryPayload {
   recent: Partial<Record<SourceId, UptimeSample[]>>;
   daily: Partial<Record<SourceId, DayBucket[]>>;
   events: StatusEvent[];
-  persisted: boolean;
   storeMode?: StatusStoreMode;
 }

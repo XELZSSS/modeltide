@@ -1,7 +1,4 @@
-import { isFiniteNumber, toStringOrNull } from "@/shared/utils";
 import { isHttpUrl } from "@/shared/utils/url";
-
-export const num = (v: unknown): number | null => (isFiniteNumber(v) ? v : null);
 
 export const numCoerce = (v: unknown): number | null => {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -37,7 +34,6 @@ export const isoDate = (v: unknown): string | null => {
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 export const strOr = (v: unknown): string | null | undefined => (v == null ? v : typeof v === "string" ? v : undefined);
-export const strOrNull = toStringOrNull;
 export const bool = (v: unknown): boolean | undefined => (typeof v === "boolean" ? v : undefined);
 export const obj = (v: unknown): Record<string, unknown> | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;

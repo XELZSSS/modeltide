@@ -3,6 +3,7 @@ const SW_URL = "/sw.js";
 const SKIP_WAITING = { type: "SKIP_WAITING" };
 
 let reloading = false;
+let waitingWorker: ServiceWorker | null = null;
 
 function reloadOnce(): void {
   if (reloading) return;
@@ -10,15 +11,29 @@ function reloadOnce(): void {
   window.location.reload();
 }
 
+function adoptWhenIdle(worker: ServiceWorker): void {
+  waitingWorker = worker;
+  if (document.visibilityState === "hidden") {
+    waitingWorker = null;
+    worker.postMessage(SKIP_WAITING);
+  }
+}
+
+function onVisibilityChange(): void {
+  if (document.visibilityState !== "hidden" || !waitingWorker) return;
+  const worker = waitingWorker;
+  waitingWorker = null;
+  worker.postMessage(SKIP_WAITING);
+}
+
 function adoptUpdates(registration: ServiceWorkerRegistration): void {
-  registration.waiting?.postMessage(SKIP_WAITING);
+  const waiting = registration.waiting;
+  if (waiting && navigator.serviceWorker.controller) adoptWhenIdle(waiting);
   registration.addEventListener("updatefound", () => {
     const installing = registration.installing;
     if (!installing) return;
     installing.addEventListener("statechange", () => {
-      if (installing.state === "installed" && navigator.serviceWorker.controller) {
-        installing.postMessage(SKIP_WAITING);
-      }
+      if (installing.state === "installed" && navigator.serviceWorker.controller) adoptWhenIdle(installing);
     });
   });
 }
@@ -33,11 +48,11 @@ function register(): void {
 }
 
 export function registerServiceWorker(): void {
-  if (typeof window === "undefined" || typeof navigator === "undefined") return;
   if (!("serviceWorker" in navigator)) return;
   if (!window.isSecureContext) return;
   if (!import.meta.env.PROD) return;
   if (navigator.serviceWorker.controller) {
+    document.addEventListener("visibilitychange", onVisibilityChange);
     navigator.serviceWorker.addEventListener("controllerchange", reloadOnce);
   }
   if (document.readyState === "complete") register();
@@ -45,7 +60,6 @@ export function registerServiceWorker(): void {
 }
 
 export function unregisterStaleServiceWorker(): void {
-  if (typeof window === "undefined" || typeof navigator === "undefined") return;
   if (!("serviceWorker" in navigator)) return;
   if (import.meta.env.PROD) return;
   void navigator.serviceWorker

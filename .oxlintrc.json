@@ -1,23 +1,11 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "rules": {
-    "rules-of-hooks": "error",
-    "exhaustive-deps": "error",
-    "only-export-components": "off",
-    "jsx-key": "error",
-    "no-children-prop": "error",
-    "no-direct-mutation-state": "error",
-    "no-string-refs": "error",
-    "no-this-in-sfc": "error",
-    "no-render-return-value": "error",
-    "jsx-no-duplicate-props": "error",
-    "jsx-no-undef": "error",
-    "void-dom-elements-no-children": "error",
     "no-unused-vars": "error"
   },
   "overrides": [
     {
-      "files": ["src/client/**/*.ts", "src/client/**/*.tsx"],
+      "files": ["src/client/**/*.ts", "src/client/**/*.vue"],
       "rules": {
         "no-restricted-imports": [
           "error",
