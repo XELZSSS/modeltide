@@ -30,6 +30,8 @@ app.mount(root);
 const boot = (): void => {
   registerServiceWorker();
   unregisterStaleServiceWorker();
+  void import("@/client/components/layout/settings-sheet.vue");
+  void import("@/client/components/layout/mobile-more-sheet.vue");
   if (router.resolve(window.location.pathname).name === "home") void import("@/client/utils/charts-register");
   if ("fonts" in document) {
     void document.fonts.load('400 1em "IBM Plex Sans"');
