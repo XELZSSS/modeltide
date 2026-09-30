@@ -32,12 +32,13 @@ export function buildPricingColumns(
     rightCol("provider", t("provider"), (row) =>
       h(RightAlignedText, null, () => orNA(row.model.model_creators?.name, t)),
     ),
+    pricingLegCol("promptPrice", t("promptPrice"), PRICE_LEGS.promptPrice),
+    pricingLegCol("completionPrice", t("completionPrice"), PRICE_LEGS.completionPrice),
     pricingLegCol("cacheHitPrice", t("cacheHitPrice"), PRICE_LEGS.cacheHitPrice),
+    pricingLegCol("cacheWritePrice", t("cacheWritePrice"), PRICE_LEGS.cacheWritePrice),
     rightCol("blendedPrice", t("blendedPrice"), (row: PricingRow) =>
       formatDollar(computeBlendPrice(getEff(row.model)), t),
     ),
-    pricingLegCol("promptPrice", t("promptPrice"), PRICE_LEGS.promptPrice),
-    pricingLegCol("completionPrice", t("completionPrice"), PRICE_LEGS.completionPrice),
     mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.monthlyCost, t), { hiddenMd: true }),
   ];
 }

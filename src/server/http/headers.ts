@@ -8,11 +8,11 @@ export const CDN_NO_STORE_HEADER = "no-store";
 
 export const PARTIAL_CACHE_HEADERS = {
   browser: "public, max-age=30",
-  cdn: "public, max-age=60, stale-while-revalidate=60",
+  cdn: "public, max-age=60, stale-while-revalidate=60, stale-if-error=86400",
 };
 export const SHORT_CACHE_HEADERS = {
   browser: "public, max-age=15",
-  cdn: "public, max-age=30, stale-while-revalidate=30",
+  cdn: "public, max-age=30, stale-while-revalidate=30, stale-if-error=86400",
 };
 
 const CONTRACT_VERSION_HEADER = "X-Contract-Version";

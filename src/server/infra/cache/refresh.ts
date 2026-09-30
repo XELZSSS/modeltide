@@ -34,7 +34,7 @@ export class RefreshRunner {
     const work = (async (): Promise<T> => {
       const { data, ttl: t } = await fn();
       const current = this.inflight.get(vk);
-      if (current !== undefined && current !== p) return data;
+      if (current !== p) return data;
       await this.tier.storeCurrent(kv, vk, data, t ?? ttl);
       return data;
     })();

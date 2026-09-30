@@ -47,7 +47,18 @@ export function initCostStorageSync(): void {
   if (syncing) return;
   syncing = true;
   const storage = safeStorage("local");
-  useCostStore().$subscribe((_mutation, state) => writePersisted(storage, STORAGE_KEYS.cost, VERSION, { values: state.values }), {
+  const store = useCostStore();
+  store.$subscribe((_mutation, state) => writePersisted(storage, STORAGE_KEYS.cost, VERSION, { values: state.values }), {
     detached: true,
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== STORAGE_KEYS.cost || event.newValue == null) return;
+    try {
+      const parsed = JSON.parse(event.newValue) as { state?: { values?: unknown } };
+      const values = cleanValues(parsed.state?.values);
+      if (JSON.stringify(values) !== JSON.stringify(store.values)) store.values = values;
+    } catch (err) {
+      console.warn(`[cost] ignoring malformed storage event: ${err instanceof Error ? err.message : String(err)}`);
+    }
   });
 }

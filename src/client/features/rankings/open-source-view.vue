@@ -15,8 +15,8 @@ function buildOpenSourceColumns(t: TFunction): DataTableColumn<OpenSourceModelEn
       (item) => item.id,
       (item) => shortModelId(item.id),
     ),
-    monoCol("downloads", t("downloads"), (item) => formatShortNumber(item.downloads), { emphasis: "strong" }),
-    monoCol("likes", t("likes"), (item) => formatShortNumber(item.likes), { hiddenMd: true }),
+    monoCol("downloads", t("downloads"), (item) => formatShortNumber(item.downloads, t("notAvailable")), { emphasis: "strong" }),
+    monoCol("likes", t("likes"), (item) => formatShortNumber(item.likes, t("notAvailable")), { hiddenMd: true }),
     rightCol("license", t("license"), (item) => h("span", { class: "text-sm" }, orNA(item.license, t)), {
       hiddenMd: true,
     }),

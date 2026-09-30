@@ -3,15 +3,17 @@ import { h, type FunctionalComponent } from "vue";
 import { cn } from "@/client/utils/cn";
 import type { DataTableColumn } from "./table-columns.vue";
 
-function cellClasses<T>(col: DataTableColumn<T>): string {
+type HeaderColumn = Pick<DataTableColumn<never>, "id" | "header" | "width" | "hiddenMd" | "align">;
+
+function cellClasses(col: HeaderColumn): string {
   return cn("px-4 py-3.5", col.hiddenMd && "hidden md:table-cell");
 }
 
-function cellInnerClasses<T>(col: DataTableColumn<T>): string {
+function cellInnerClasses(col: HeaderColumn): string {
   return cn("flex items-center gap-2 min-w-0 [&>*]:min-w-0", col.align === "right" && "justify-end text-right");
 }
 
-export const TableHeader: FunctionalComponent<{ columns: DataTableColumn<any>[]; isExpandable: boolean }> = (props) =>
+export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpandable: boolean }> = (props) =>
   h(
     "thead",
     h(
@@ -28,7 +30,7 @@ export const TableHeader: FunctionalComponent<{ columns: DataTableColumn<any>[];
           },
           h("div", { class: cellInnerClasses(col) }, [
             props.isExpandable && colIdx === 0 ? h("span", { class: "w-3.5 shrink-0", "aria-hidden": "true" }) : null,
-            h("span", { class: "truncate uppercase tracking-caps" }, col.header),
+            col.header ? h("span", { class: "truncate uppercase tracking-caps" }, col.header) : null,
           ]),
         ),
       ),

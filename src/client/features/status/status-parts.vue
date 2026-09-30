@@ -5,10 +5,11 @@ import { cn } from "@/client/utils/cn";
 import { ONE_DAY } from "@/shared/config";
 import { useTranslation } from "@/client/i18n";
 import { DAY_BAR_CLASSES, dayBarLevel } from "@/client/utils/status-level";
+import { formatDate } from "@/client/utils/format";
 
 const props = defineProps<{ buckets: DayBucket[] }>();
 
-const { t } = useTranslation();
+const { t, lang } = useTranslation();
 
 function getLast30Days(now = Date.now()): string[] {
   const out: string[] = [];
@@ -43,9 +44,9 @@ function titleFor(day: string): string {
   const bucket = byDay.value.get(day);
   const ratio = bucket && bucket.total > 0 ? bucket.ok / bucket.total : null;
   const pct = ratio == null ? null : Math.round(ratio * 1000) / 10;
-  if (!bucket || pct == null) return `${day} · ${t("uptimeNoData")}`;
+  if (!bucket || pct == null) return `${formatDate(day, lang.value)} · ${t("uptimeNoData")}`;
   const degraded = bucket.warn ?? 0;
-  return [bucket.day, `${pct}% (${bucket.total})`, degraded > 0 ? t("dayDegraded", { count: degraded }) : null]
+  return [formatDate(bucket.day, lang.value), `${pct}% (${bucket.total})`, degraded > 0 ? t("dayDegraded", { count: degraded }) : null]
     .filter(Boolean)
     .join(" · ");
 }

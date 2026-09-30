@@ -28,7 +28,7 @@ import type {
   OpenSourceModelEntry,
   SourcePayload,
 } from "@/shared/types";
-import { dedupeBy, isPartialDashboard } from "@/shared/utils";
+import { dedupeBy } from "@/shared/utils";
 import { EMPTY_ARRAY } from "@/client/utils/empty";
 import {
   isPartialPayload,
@@ -58,18 +58,29 @@ interface SuspenseQueryLike {
 
 const MAX_PARTIAL_POLLS = 5;
 
-const partialPollBases = new WeakMap<object, number>();
+const partialPollCounts = new Map<string, number>();
 
-function partialPollInterval(query: unknown, isPartialData: (data: unknown) => boolean, partialRefetchMs: number): number | false {
+interface PollQuery {
+  queryKey?: readonly unknown[];
+  state?: { data?: unknown; dataUpdateCount?: number; errorUpdateCount?: number };
+}
+
+function partialPollInterval(
+  query: unknown,
+  isPartialData: (data: unknown) => boolean,
+  partialRefetchMs: number,
+): number | false {
   if (query == null || typeof query !== "object") return false;
-  const state = (query as { state?: { data?: unknown; dataUpdateCount?: number; errorUpdateCount?: number } }).state;
+  const pollQuery = query as PollQuery;
+  const pollKey = JSON.stringify(pollQuery.queryKey ?? null);
+  const state = pollQuery.state;
   if (!isPartialData(state?.data)) {
-    partialPollBases.delete(query);
+    partialPollCounts.delete(pollKey);
     return false;
   }
   const settled = (state?.dataUpdateCount ?? 0) + (state?.errorUpdateCount ?? 0);
-  const base = partialPollBases.get(query) ?? settled;
-  partialPollBases.set(query, base);
+  const base = partialPollCounts.get(pollKey) ?? settled;
+  partialPollCounts.set(pollKey, base);
   return settled - base >= MAX_PARTIAL_POLLS ? false : partialRefetchMs;
 }
 
@@ -130,7 +141,7 @@ export const qHomeDashboardRaw = createApiQuery("homeDashboard", queryKeys.homeD
   ttl: FIVE_MINUTES,
   gcTime: 15 * 60_000,
   partialRefetchMs: ONE_MINUTE,
-  isPartialData: (data) => data != null && isPartialDashboard(data.data),
+  isPartialData: isPartialPayload,
 });
 
 export const qOpenSourceModelsRaw = createApiQuery("openSourceModels", queryKeys.openSourceModels, {
@@ -208,11 +219,19 @@ export async function useSuspenseOpenRouterRankings(): Promise<QueryResult<"open
 export const useSuspenseOpenSourceModelsState = () =>
   suspenseState<OpenSourceModelEntry>(qOpenSourceModelsRaw.use(), "openSourceModels");
 
-function qOpenSourceModel(id: string) {
-  return createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
+type OpenSourceModelQuery = ReturnType<typeof createApiQuery<"openSourceModel">>;
+
+const openSourceModelQueries = new Map<string, OpenSourceModelQuery>();
+
+function qOpenSourceModel(id: string): OpenSourceModelQuery {
+  const existing = openSourceModelQueries.get(id);
+  if (existing) return existing;
+  const created = createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
     ttl: ONE_MINUTE,
     query: { id },
   });
+  openSourceModelQueries.set(id, created);
+  return created;
 }
 
 export async function useSuspenseOpenSourceModel(id: string): Promise<ComputedRef<OpenSourceModelEntry | null>> {

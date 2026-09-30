@@ -1,5 +1,4 @@
 import type { HomeDashboardData, HomeOpenSourceEntry } from "@/shared/types";
-import { isPartialDashboard } from "@/shared/utils";
 
 function payloadData(payload: unknown, label: string): unknown {
   if (payload == null) throw new Error(`${label}: payload is null`);
@@ -28,10 +27,10 @@ export function normalizeHomeDashboard(payload: unknown, label = "homeDashboard"
   const raw = unwrapObject<HomeDashboardData>(payload, label);
   if (!raw || typeof raw !== "object") throw new Error(`${label}: invalid dashboard`);
   return {
-    orRankings: raw.orRankings ?? null,
-    textToImage: raw.textToImage ?? null,
-    opensource: raw.opensource ?? [],
-    partial: isPartialDashboard(raw),
+    orRankings: raw.orRankings,
+    textToImage: raw.textToImage,
+    opensource: raw.opensource,
+    partial: isPartialPayload(payload),
   };
 }
 

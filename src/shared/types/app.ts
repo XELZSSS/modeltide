@@ -6,7 +6,7 @@ export type ThemeMode = "light" | "dark";
 export type HomeOpenSourceEntry = Pick<OpenSourceModelEntry, "id" | "downloads" | "task">;
 
 export interface HomeDashboardData {
-  orRankings: OpenRouterRankEntry[] | null;
-  opensource: HomeOpenSourceEntry[] | null;
-  textToImage: TextToImageModel[] | null;
+  orRankings: OpenRouterRankEntry[];
+  opensource: HomeOpenSourceEntry[];
+  textToImage: TextToImageModel[];
 }

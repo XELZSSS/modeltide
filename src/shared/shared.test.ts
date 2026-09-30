@@ -9,7 +9,7 @@ import {
   STATIC_TTL_MS,
   ONE_MINUTE,
 } from "@/shared/config";
-import { dedupeBy, normalizePercent, normalizeModelKey, computeBlendPrice } from "@/shared/utils";
+import { dedupeBy, clampedPercent, normalizeModelKey, computeBlendPrice } from "@/shared/utils";
 import { createT, interpolate } from "@/shared/i18n";
 import { en } from "@/shared/i18n/en";
 import { zh } from "@/shared/i18n/zh";
@@ -49,7 +49,7 @@ describe("shared/utils", () => {
     [-1, 0],
     [NaN, null],
   ])("normalizePercent(%s) -> %s", (input, expected) => {
-    expect(normalizePercent(input)).toBe(expected);
+    expect(clampedPercent(input)).toBe(expected);
   });
 
   it.each([
@@ -67,9 +67,9 @@ describe("shared/utils", () => {
   });
 
   it("computeBlendPrice blends 7:2:1, falls back, and nulls on missing legs", () => {
-    expect(computeBlendPrice({ input: 5, output: 25, cacheHit: 0.5 })).toBeCloseTo(3.85, 5);
-    expect(computeBlendPrice({ input: 2, output: 6 })).toBe(2.4);
-    expect(computeBlendPrice({})).toBeNull();
+    expect(computeBlendPrice({ input: 5, output: 25, cacheHit: 0.5, cacheWrite: null })).toBeCloseTo(3.85, 5);
+    expect(computeBlendPrice({ input: 2, output: 6, cacheHit: null, cacheWrite: null })).toBe(2.4);
+    expect(computeBlendPrice({ input: null, output: null, cacheHit: null, cacheWrite: null })).toBeNull();
     expect(computeBlendPrice(undefined)).toBeNull();
   });
 });

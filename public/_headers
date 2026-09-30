@@ -7,6 +7,9 @@
 /icons/*
   Cache-Control: public, max-age=86400
 
+/styles/*
+  Cache-Control: public, max-age=86400
+
 /manifest.webmanifest
   Cache-Control: public, max-age=3600
 
@@ -19,4 +22,4 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Referrer-Policy: no-referrer
   X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-zeZTe1CH5cJtYV269PPZjuCVF9uETOjMd3sEbOd5zpU='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-zeZTe1CH5cJtYV269PPZjuCVF9uETOjMd3sEbOd5zpU='; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests

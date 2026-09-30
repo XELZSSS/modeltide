@@ -3,7 +3,7 @@ import { toStringOrNull } from "@/shared/utils";
 import type { TextToImageModel } from "@/shared/types";
 import type { RawEntry } from "@/server/parsers/upstream-types";
 import { findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc-parser";
-import { parseFail, type ParseResult } from "@/server/parsers/parse-result";
+import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
 
 export function parseTextToImageRows(body: unknown): ParseResult<Record<string, unknown>[]> {
   if (typeof body !== "string" || !body) return parseFail("Text-to-image returned an empty body");
@@ -12,7 +12,9 @@ export function parseTextToImageRows(body: unknown): ParseResult<Record<string, 
     "textToImage",
     (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
   );
-  return scanned.ok ? scanned : parseFail(`Text-to-image parse failed: ${scanned.error}`);
+  if (!scanned.ok) return parseFail(`Text-to-image parse failed: ${scanned.error}`);
+  const dropped = scanned.data.filter((row) => mapEntry(row) === null).length;
+  return parseOk(scanned.data, dropped > 0 ? [`Dropped ${dropped} text-to-image rows without a usable identity or elo`] : []);
 }
 
 export function mapEntry(raw: unknown): Omit<TextToImageModel, "rank"> | null {

@@ -29,19 +29,19 @@ function buildOpenRouterBodyColumns(t: TFunction): DataTableColumn<OpenRouterRan
       (item) => item.name,
       "45%",
     ),
-    monoCol("totalTokens", t("totalTokens"), (item) => formatShortNumber(item.totalTokens), {
+    monoCol("totalTokens", t("totalTokens"), (item) => formatShortNumber(item.totalTokens, t("notAvailable")), {
       mobilePrimary: true,
       emphasis: "strong",
     }),
-    monoCol("inputTokens", t("inputTokens"), (item) => formatShortNumber(item.promptTokens), {
+    monoCol("inputTokens", t("inputTokens"), (item) => formatShortNumber(item.promptTokens, t("notAvailable")), {
       hiddenMd: true,
       emphasis: "strong",
     }),
-    monoCol("outputTokens", t("outputTokens"), (item) => formatShortNumber(item.completionTokens), {
+    monoCol("outputTokens", t("outputTokens"), (item) => formatShortNumber(item.completionTokens, t("notAvailable")), {
       hiddenMd: true,
       emphasis: "strong",
     }),
-    monoCol("requests", t("requests"), (item) => formatShortNumber(item.requestCount), { emphasis: "muted" }),
+    monoCol("requests", t("requests"), (item) => formatShortNumber(item.requestCount, t("notAvailable")), { emphasis: "muted" }),
     rightCol("creator", t("creator"), (item) =>
       h(RightAlignedText, { class: "ui-caption" }, () => item.creator || t("unknown")),
     ),
@@ -62,12 +62,8 @@ const props = defineProps<{ data?: SourcePayload<OpenRouterRankEntry[]> }>();
 
 const { t } = useTranslation();
 
-const state = computed(() => {
-  if (!props.data) return null;
-  const { data: rows, partial, malformed } = unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings");
-  assertPayloadShape(malformed, "openRouterRankings");
-  return { rows, partial };
-});
+const state = computed(() => (props.data ? unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings") : null));
+assertPayloadShape(state.value?.malformed ?? false, "openRouterRankings");
 </script>
 
 <template>
@@ -75,7 +71,7 @@ const state = computed(() => {
   <template v-else>
     <PartialNotice v-if="state.partial" />
     <RankedTableView
-      :rows="state.rows"
+      :rows="state.data"
       :get-row-id="getModelRowId"
       :get-row-name="getModelRowName"
       :get-search-fields="SEARCH_FIELDS.or"

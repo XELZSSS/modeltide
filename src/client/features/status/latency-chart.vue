@@ -7,13 +7,9 @@ import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import { registerLine } from "@/client/utils/charts-register";
 import { cartesianChartOptions, seriesColor, useChartTheme } from "@/client/theme/chart-theme";
 import { axisGridStyle, axisTickStyle, lineSeriesStyle } from "@/client/utils/charts";
-import { ONE_HOUR } from "@/shared/config";
+import { formatTime } from "@/client/utils/format";
 
 registerLine();
-
-const BEIJING_OFFSET_MS = 8 * ONE_HOUR;
-
-const formatBeijingHHMM = (ts: number): string => new Date(ts + BEIJING_OFFSET_MS).toISOString().slice(11, 16);
 
 function decimateSamples<T extends { t: number; latencyMs?: number | null }>(samples: T[], max = 300): T[] {
   if (samples.length <= max) return samples;
@@ -28,7 +24,7 @@ function decimateSamples<T extends { t: number; latencyMs?: number | null }>(sam
 
 const props = defineProps<{ samples: { t: number; latencyMs: number | null }[] }>();
 
-const { t } = useTranslation();
+const { t, lang } = useTranslation();
 const theme = useChartTheme();
 
 const decimated = computed(() => decimateSamples(props.samples));
@@ -36,10 +32,10 @@ const decimated = computed(() => decimateSamples(props.samples));
 const data = computed(() => {
   const color = seriesColor(theme.value, 6);
   return {
-    labels: decimated.value.map((sample) => formatBeijingHHMM(sample.t)),
+    labels: decimated.value.map((sample) => formatTime(sample.t, lang.value)),
     datasets: [
       {
-        label: `${t("latencyHistory")} (GMT+8)`,
+        label: t("latencyHistory"),
         data: decimated.value.map((sample) => (sample.latencyMs != null ? sample.latencyMs / 1000 : null)),
         borderColor: color,
         backgroundColor: color,

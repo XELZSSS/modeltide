@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { defineComponent, h, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useSettingsStore } from "@/client/stores";
 import { useTranslation } from "@/client/i18n";
@@ -14,6 +14,21 @@ const loadMobileMoreSheet = () => import("@/client/components/layout/mobile-more
 
 const SettingsSheet = loadableView(loadSettingsSheet);
 const MobileMoreSheet = loadableView(loadMobileMoreSheet);
+
+const SheetSkeleton = defineComponent({
+  setup: () => () =>
+    h("div", { class: "fixed inset-0 z-50 flex items-end justify-center sm:items-center", "aria-hidden": "true" }, [
+      h("div", { class: "fixed inset-0 bg-black/50" }),
+      h("div", { class: "relative z-50 w-full max-w-md ui-overlay p-5" }, [
+        h("div", { class: "h-4 w-24 ui-skeleton" }),
+        h("div", { class: "mt-5 flex flex-col gap-3" }, [
+          h("div", { class: "h-9 w-full ui-skeleton" }),
+          h("div", { class: "h-9 w-full ui-skeleton" }),
+          h("div", { class: "h-9 w-full ui-skeleton" }),
+        ]),
+      ]),
+    ]),
+});
 
 const scrollOffsets = new Map<number, number>();
 
@@ -129,33 +144,13 @@ onUnmounted(() => {
     <ErrorBoundary v-if="openSheet === 'settings'" key="settings">
       <SettingsSheet :open="true" @close="closeSheet" />
       <template #fallback>
-        <div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center" aria-hidden="true">
-          <div class="fixed inset-0 bg-black/50" />
-          <div class="relative z-50 w-full max-w-md ui-overlay p-5">
-            <div class="h-4 w-24 ui-skeleton" />
-            <div class="mt-5 flex flex-col gap-3">
-              <div class="h-9 w-full ui-skeleton" />
-              <div class="h-9 w-full ui-skeleton" />
-              <div class="h-9 w-full ui-skeleton" />
-            </div>
-          </div>
-        </div>
+        <SheetSkeleton />
       </template>
     </ErrorBoundary>
     <ErrorBoundary v-if="openSheet === 'more'" key="more">
       <MobileMoreSheet :open="true" @close="closeSheet" />
       <template #fallback>
-        <div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center" aria-hidden="true">
-          <div class="fixed inset-0 bg-black/50" />
-          <div class="relative z-50 w-full max-w-md ui-overlay p-5">
-            <div class="h-4 w-24 ui-skeleton" />
-            <div class="mt-5 flex flex-col gap-3">
-              <div class="h-9 w-full ui-skeleton" />
-              <div class="h-9 w-full ui-skeleton" />
-              <div class="h-9 w-full ui-skeleton" />
-            </div>
-          </div>
-        </div>
+        <SheetSkeleton />
       </template>
     </ErrorBoundary>
   </div>

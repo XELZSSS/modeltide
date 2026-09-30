@@ -5,16 +5,24 @@ import { useTranslation } from "@/client/i18n";
 
 const ROBOTS_SELECTOR = 'meta[name="robots"]';
 
+export function useDocumentTitle(): (title: string) => void {
+  const { t } = useTranslation();
+  return (title) => {
+    document.title = `${title} · ${t("appName")}`;
+  };
+}
+
 export function useDocumentMeta(): void {
   const route = useRoute();
   const { t } = useTranslation();
+  const setDocumentTitle = useDocumentTitle();
   watch(
     () => [route.name, route.fullPath],
     () => {
       if (route.name == null) return;
       const known = route.name !== "notFound";
       const titleKey = (route.meta.titleKey ?? "notFound") as TranslationKey;
-      document.title = `${t(known ? titleKey : "notFound")} · ${t("appName")}`;
+      setDocumentTitle(t(known ? titleKey : "notFound"));
       const robots = document.querySelector(ROBOTS_SELECTOR);
       if (known) {
         robots?.remove();

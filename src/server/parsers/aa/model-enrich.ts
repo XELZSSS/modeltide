@@ -1,56 +1,8 @@
-import {
-  hasCatalogIdentity,
-  isNonEmptyString,
-  isRecord,
-  numCoerce,
-  obj,
-  str,
-} from "@/server/parsers/parser-primitives";
+import { hasCatalogIdentity, isRecord, obj, str } from "@/server/parsers/parser-primitives";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { MAX_DIRECTORY_ROWS } from "@/server/config/limits";
 import { normalizeModelKey } from "@/shared/utils";
-import { traverse } from "@/server/parsers/rsc-parser";
 import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
-
-export function compactOmniscienceEnrich(m: unknown): Record<string, unknown> {
-  const rec = isRecord(m) ? m : {};
-  const breakdown = obj(rec.omniscienceBreakdown);
-  return {
-    slug: str(rec.slug),
-    omniscience: numCoerce(rec.omniscience),
-    omniscienceBreakdown:
-      breakdown != null
-        ? {
-            accuracy: numCoerce(breakdown.accuracy),
-            attemptRate: numCoerce(breakdown.attemptRate),
-            hallucinationRate: numCoerce(breakdown.hallucinationRate),
-          }
-        : undefined,
-  };
-}
-
-function isValued(rows: Record<string, unknown>[]): boolean {
-  return rows.some((m) => isRecord(m) && numCoerce(m.intelligenceIndex) != null);
-}
-
-function isUsable(rows: Record<string, unknown>[]): boolean {
-  return rows.some((m) => isRecord(m) && isNonEmptyString(m.slug));
-}
-
-export function findModelArray(tree: unknown): Record<string, unknown>[] | null {
-  let initialModels: Record<string, unknown>[] | null = null;
-  let models: Record<string, unknown>[] | null = null;
-  for (const node of traverse(tree)) {
-    const rec = node as Record<string, unknown>;
-    if (!initialModels && Array.isArray(rec.initialModels)) {
-      initialModels = rec.initialModels as Record<string, unknown>[];
-    }
-    if (!models && Array.isArray(rec.models)) models = rec.models as Record<string, unknown>[];
-    if (initialModels && models) break;
-  }
-  const candidates = [initialModels, models].filter((arr): arr is Record<string, unknown>[] => arr != null);
-  return candidates.find(isValued) ?? candidates.find(isUsable) ?? null;
-}
 
 const PROTO_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
@@ -62,6 +14,7 @@ function mergeEntry(cur: Record<string, unknown>, patch: Record<string, unknown>
   if (cur.omniscienceBreakdown && patch.omniscienceBreakdown) {
     const next: Record<string, unknown> = { ...obj(cur.omniscienceBreakdown) };
     for (const [key, value] of Object.entries(obj(patch.omniscienceBreakdown) ?? {})) {
+      if (PROTO_KEYS.has(key)) continue;
       if (value !== null && value !== undefined && value !== "") next[key] = value;
     }
     cur.omniscienceBreakdown = next;

@@ -95,11 +95,11 @@ function isTrimmable(request) {
 }
 
 async function trimOtherCache(cache) {
-  try {
-    const keys = (await cache.keys()).filter(isTrimmable);
-    if (keys.length <= OTHER_CACHE_MAX) return;
-    await Promise.all(keys.slice(0, keys.length - OTHER_CACHE_MAX).map((k) => cache.delete(k)));
-  } catch {}
+  const keys = await cache.keys();
+  if (keys.length <= OTHER_CACHE_MAX) return;
+  const trimmable = keys.filter(isTrimmable);
+  if (trimmable.length <= OTHER_CACHE_MAX) return;
+  await Promise.all(trimmable.slice(0, trimmable.length - OTHER_CACHE_MAX).map((k) => cache.delete(k)));
 }
 
 async function writeAndTrim(cache, request, response) {
@@ -117,7 +117,7 @@ async function handleOther(event) {
   } catch {
     const cached = await cache.match(request);
     if (cached) return cached;
-    throw new Error("offline");
+    return new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
   }
 }
 

@@ -9,7 +9,7 @@ const classes = computed(() => cn("my-8 sm:my-10 first:mt-0 last:mb-0", props.cl
 </script>
 
 <template>
-  <div v-if="!title" :class="cn('my-8 sm:my-10', props.class)">
+  <div v-if="!title" :class="classes">
     <slot />
   </div>
   <section v-else :class="classes" :aria-labelledby="headingId">

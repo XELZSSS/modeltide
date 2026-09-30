@@ -87,8 +87,12 @@ export function useCompareModels(
 export function usePruneCompareIds(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>): void {
   const store = useCompareStore();
   const validIds = computed(() => new Set(toValue(models).map(modelId).filter(Boolean)));
-  watch(validIds, (ids) => {
-    if (ids.size === 0) return;
-    store.pruneCompare(ids);
-  });
+  watch(
+    validIds,
+    (ids) => {
+      if (ids.size === 0) return;
+      store.pruneCompare(ids);
+    },
+    { immediate: true },
+  );
 }

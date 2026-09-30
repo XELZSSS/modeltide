@@ -1,21 +1,18 @@
 export const upstreamConfig = {
   artificialAnalysis: "https://artificialanalysis.ai",
   huggingface: "https://huggingface.co/api/models",
-  huggingfaceSite: "https://huggingface.co",
   openrouter: "https://openrouter.ai",
   arena: "https://arena.ai",
 } as const satisfies Record<string, string>;
 
 export const upstreamEndpoints = {
-  aaIndex: "/evaluations/artificial-analysis-intelligence-index",
+  aaLeaderboard: "/leaderboards/models",
   aaModels: "/models",
   aaOmniscience: "/evaluations/omniscience",
   aaTextToImage: "/image/models",
-  aaChangelog: "/changelog",
   agentBoard: "/leaderboard/agent",
   openRouterRankings: "/api/frontend/v1/rankings/models",
   openRouterDirectory: "/api/v1/models",
-  hfDailyPapers: "/api/daily_papers",
 } as const;
 
 export const providerStatusEndpoints = {

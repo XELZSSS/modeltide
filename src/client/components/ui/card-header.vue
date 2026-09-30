@@ -12,7 +12,7 @@ const wrapperClass = computed(() => cn("ui-card-title border-b border-border pb-
   <p v-if="!hasSubtitle" :class="cn(wrapperClass, 'mb-4')">
     <slot name="title">{{ title }}</slot>
   </p>
-  <div v-else :class="cn('min-w-0 border-b border-border pb-3 mb-4', props.class)">
+  <div v-else :class="cn('min-w-0 mb-4', wrapperClass)">
     <p class="ui-card-title mb-1">
       <slot name="title">{{ title }}</slot>
     </p>

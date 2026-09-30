@@ -35,7 +35,7 @@ export const PRICE_LEG_IDS: readonly PriceLegId[] = [
 
 const finiteOrNull = (v: unknown): number | null => (isFiniteNumber(v) ? v : null);
 
-export function resolveEffectivePricing(pricing: ModelPricing | undefined): EffectivePricing {
+export function resolveEffectivePricing(pricing: ModelPricing | null | undefined): EffectivePricing {
   return {
     input: finiteOrNull(pricing?.input),
     output: finiteOrNull(pricing?.output),

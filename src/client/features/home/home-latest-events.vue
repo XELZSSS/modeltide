@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import SafeLink from "@/client/components/safe-link.vue";
 import Dot from "@/client/components/ui/dot.vue";
+import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import { useTranslation } from "@/client/i18n";
 import { useSuspenseStatusHistory } from "@/client/api/api-queries";
 import { unwrapObject } from "@/client/api/payload-normalize";
@@ -28,7 +29,8 @@ const history = computed(() => unwrapObject<StatusHistoryPayload>(query.data.val
 
 const vm = computed(() => {
   const payload = history.value;
-  const event = (payload.events ?? [])[0] ?? null;
+  const events = [...(payload.events ?? [])].sort((a, b) => (a.at < b.at ? 1 : -1));
+  const event = events[0] ?? null;
   if (!event) return null;
   const summary = payload.sources.find((s) => s.id === event.id);
   const samples = payload.recent?.[event.id] ?? [];
@@ -86,4 +88,5 @@ const vm = computed(() => {
       <span class="whitespace-nowrap">{{ vm.atLabel }}</span>
     </span>
   </SafeLink>
+  <PartialNotice v-if="history.storeMode === 'memory'" :message="t('memoryModeNotice')" />
 </template>

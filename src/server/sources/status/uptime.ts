@@ -24,7 +24,6 @@ function memoryUptime(now: number): UptimePayload {
 
 export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
   const now = Date.now();
-  if (memoryFirstLaunch != null) return uptimePayload(memoryFirstLaunch, now);
   if (!ctx.kv) return memoryUptime(now);
   let raw: string | null;
   try {
@@ -33,16 +32,17 @@ export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
     if (kvReadWarnGate.open()) ctx.log("warn", `[uptime] KV read failed, using memory: ${errMsg(err)}`);
     return memoryUptime(now);
   }
-  let resolved = raw ? Number(raw) : NaN;
-  if (!Number.isFinite(resolved)) {
-    resolved = now;
-    try {
-      await ctx.kv.put(FIRST_LAUNCH_KEY, String(resolved));
-    } catch (err) {
-      if (kvReadWarnGate.open()) ctx.log("warn", `[uptime] failed to persist first launch: ${errMsg(err)}`);
-      return uptimePayload(resolved, now);
-    }
+  const stored = raw ? Number(raw) : NaN;
+  if (Number.isFinite(stored)) {
+    memoryFirstLaunch = stored;
+    return uptimePayload(stored, now);
   }
-  memoryFirstLaunch = resolved;
-  return uptimePayload(resolved, now);
+  const first = memoryFirstLaunch ?? now;
+  memoryFirstLaunch = first;
+  try {
+    await ctx.kv.put(FIRST_LAUNCH_KEY, String(first));
+  } catch (err) {
+    if (kvReadWarnGate.open()) ctx.log("warn", `[uptime] failed to persist first launch: ${errMsg(err)}`);
+  }
+  return uptimePayload(first, now);
 }

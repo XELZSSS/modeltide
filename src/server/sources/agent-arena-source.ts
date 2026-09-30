@@ -14,7 +14,7 @@ async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
     maxBytes: MAX_JSON_BYTES,
     retries: UPSTREAM_FETCH_OPTS.retries,
   });
-  const entries = requireParsed(parseAgentBoards(body));
+  const entries = requireParsed(parseAgentBoards(body), ctx.log, "agent-board");
   return requireRows(entries, "Agent board", "rows from the flight payload", `body=${body.length}B, markup changed?`);
 }
 

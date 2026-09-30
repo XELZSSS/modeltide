@@ -115,7 +115,7 @@ const options = computed<ChartOptions<"doughnut">>(() => ({
         label: (ctx) => {
           const v = typeof ctx.parsed === "number" ? ctx.parsed : 0;
           const pct = total.value > 0 ? ((v / total.value) * 100).toFixed(1) : "0.0";
-          return `${ctx.label}: ${formatShortNumber(v)} (${pct}%)`;
+          return `${ctx.label}: ${formatShortNumber(v, t("notAvailable"))} (${pct}%)`;
         },
       },
     },
@@ -126,7 +126,7 @@ const caption = computed(() =>
   slices.value
     .map((s) => {
       const pct = total.value > 0 ? ((s.total / total.value) * 100).toFixed(1) : "0.0";
-      return `${sliceLabel(s)}: ${formatShortNumber(s.total)} (${pct}%)`;
+      return `${sliceLabel(s)}: ${formatShortNumber(s.total, t("notAvailable"))} (${pct}%)`;
     })
     .join(""),
 );

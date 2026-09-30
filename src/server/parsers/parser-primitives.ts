@@ -44,7 +44,8 @@ export const numIntCoerceNonNegative = (v: unknown): number | null => {
   return n == null ? null : Math.trunc(n);
 };
 
-export const titleCase = (s: string): string => (s ? s[0]!.toUpperCase() + s.slice(1).toLowerCase() : s);
+export const titleCase = (s: string): string =>
+  s ? (s.length >= 2 && s === s.toUpperCase() ? s : s[0]!.toUpperCase() + s.slice(1).toLowerCase()) : s;
 
 export function truncateSafe(s: string, max: number): string {
   if (s.length <= max) return s;
@@ -179,15 +180,14 @@ export function isValidOpenRouterDirectoryRow(m: unknown): boolean {
   return true;
 }
 
-const MAX_NEWS_TITLE_CHARS = 300;
-const MAX_NEWS_TITLE_INPUT_CHARS = MAX_NEWS_TITLE_CHARS + 200;
+export const MAX_NEWS_TITLE_CHARS = 300;
 
 export function isSuitableNewsItem(title: unknown, link: unknown): boolean {
   if (typeof title !== "string" || typeof link !== "string") return false;
   const t = title.trim();
   const l = link.trim();
   if (!t || !l) return false;
-  if (t.length > MAX_NEWS_TITLE_INPUT_CHARS) return false;
+  if (t.length > MAX_NEWS_TITLE_CHARS) return false;
   if (isPlaceholderText(t) || hasGarbageChars(t)) return false;
   if (NEWS_TITLE_BAD_RE.test(t)) return false;
   if (!isHttpUrl(l)) return false;

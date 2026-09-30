@@ -37,8 +37,8 @@ function formatScaled(abs: number, sign: string, value: number, scales: ScaleEnt
   return null;
 }
 
-export function formatShortNumber(n: number | null | undefined) {
-  if (!isFiniteNumber(n)) return "—";
+export function formatShortNumber(n: number | null | undefined, fallback = "—") {
+  if (!isFiniteNumber(n)) return fallback;
   const { abs, sign } = compactParts(n);
   const scaled = formatScaled(abs, sign, abs, SHORT_SCALES, 2);
   if (scaled) return scaled;
@@ -82,8 +82,8 @@ export function formatSpeed(v: number | null | undefined, t: TFunction): string 
 
 const INDEX_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
-export function formatIndex(v: number): string {
-  if (!isFiniteNumber(v)) return "—";
+export function formatIndex(v: number, fallback = "—"): string {
+  if (!isFiniteNumber(v)) return fallback;
   return INDEX_FORMATTER.format(v);
 }
 
@@ -197,6 +197,17 @@ export function formatDate(isoString: string | number | Date, lang: string): str
     return dateFormatter(UTC_DATE_FORMATTERS, lang, "UTC").format(date);
   }
   return dateFormatter(DATE_FORMATTERS, lang).format(date);
+}
+
+const TIME_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+export function formatTime(value: number | string | Date, lang: string): string {
+  let formatter = TIME_FORMATTERS.get(lang);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(localeOf(lang), { hour: "2-digit", minute: "2-digit" });
+    TIME_FORMATTERS.set(lang, formatter);
+  }
+  return formatter.format(new Date(value));
 }
 
 export function benchmarkLabel(key: string, t: TFunction): string {

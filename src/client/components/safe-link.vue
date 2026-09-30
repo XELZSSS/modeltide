@@ -2,7 +2,7 @@
 import { navigate } from "@/client/router";
 import { isInternalHref } from "@/client/utils/url";
 
-const props = defineProps<{ href: string }>();
+const props = defineProps<{ href: string; target?: string; rel?: string }>();
 const emit = defineEmits<{ click: [event: MouseEvent] }>();
 
 function onClick(event: MouseEvent): void {
@@ -19,7 +19,7 @@ function onClick(event: MouseEvent): void {
 </script>
 
 <template>
-  <a :href="href" @click="onClick">
+  <a :href="href" :target="target" :rel="rel" @click="onClick">
     <slot />
   </a>
 </template>

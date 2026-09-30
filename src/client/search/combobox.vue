@@ -11,7 +11,7 @@ import {
   type Ref,
 } from "vue";
 
-export interface ComboboxOptions {
+interface ComboboxOptions {
   initialValue: string;
   minQuery: number;
   itemCount: MaybeRefOrGetter<number>;

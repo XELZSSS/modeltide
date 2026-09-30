@@ -1,6 +1,6 @@
 import type { AppContext } from "@/server/context";
 import { upstreamConfig } from "@/server/config";
-import { UpstreamError } from "@/server/infra/errors";
+import { ClientAbortError, UpstreamError } from "@/server/infra/errors";
 import { errMsg } from "@/server/infra/task-pool";
 import { parseRscPayload } from "@/server/parsers/rsc-parser";
 import { fetchRscText } from "@/server/sources/rsc-fetcher";
@@ -38,12 +38,13 @@ export async function getAndParseEnrich<T>(
   spec: EnrichSpec<T>,
 ): Promise<EnrichResult<T>> {
   try {
-    const rows = await cachedRaw<T[]>(ctx, cacheKey, SLOW_TTL_MS, async (refreshCtx) => {
+    const { value, degraded } = await cachedRaw<T[]>(ctx, cacheKey, SLOW_TTL_MS, async (refreshCtx) => {
       const body = await fetchAaRsc(refreshCtx, spec.path, 0);
       return parseEnrich(spec, body);
     });
-    return { rows, failed: false };
+    return { rows: value, failed: degraded };
   } catch (err) {
+    if (err instanceof ClientAbortError) throw err;
     ctx.log("warn", `[artificial] ${spec.label} enrichment failed: ${errMsg(err)}`);
     return { rows: [], failed: true };
   }

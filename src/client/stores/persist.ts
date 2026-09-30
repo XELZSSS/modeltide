@@ -12,7 +12,11 @@ export function readPersisted<T>(storage: Storage | null, key: string, version: 
     const raw = storage.getItem(key);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as { state?: unknown; version?: unknown } | null;
-    if (parsed == null || typeof parsed !== "object" || parsed.version !== version) return {};
+    if (parsed == null || typeof parsed !== "object") return {};
+    if (parsed.version !== version) {
+      console.warn(`[storage] dropping "${key}": stored version ${String(parsed.version)} != ${version}`);
+      return {};
+    }
     const state = parsed.state;
     return state != null && typeof state === "object" ? (state as Partial<T>) : {};
   } catch (err) {

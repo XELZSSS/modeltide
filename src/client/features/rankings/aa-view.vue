@@ -86,7 +86,7 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
 
     <CompareChipBar
       :models="comparedModels"
-      @remove="store.toggleCompareModel"
+      @remove="store.removeCompareModel"
       @clear="store.clearCompare"
       @compare="handleCompare"
     >

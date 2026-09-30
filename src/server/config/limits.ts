@@ -6,8 +6,6 @@ export const SOURCE_LIMITS = {
   closedReleases: 500,
   agentRankings: 100,
   newsPerCategory: 30,
-  dailyPapers: 20,
-  hfPapersQuota: 5,
   feedItemsPerFeed: 30,
 } as const;
 

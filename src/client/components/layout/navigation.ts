@@ -52,7 +52,7 @@ const HOVER_PREFETCH_DELAY_MS = 150;
 
 const TOUCH_PREFETCH_DELAY_MS = 300;
 
-export interface PrefetchControls {
+interface PrefetchControls {
   hover: (path: string) => void;
   touch: (path: string) => void;
   cancel: () => void;

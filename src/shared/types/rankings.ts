@@ -1,3 +1,5 @@
+import type { ModelPricing } from "@/shared/types/catalog";
+
 type OpenRouterCategory = "coding" | "reasoning" | "general";
 
 export interface OpenRouterRankEntry {
@@ -6,22 +8,17 @@ export interface OpenRouterRankEntry {
   name: string;
   creator: string;
   category: OpenRouterCategory;
-  variant?: string;
-  totalTokens?: number;
-  promptTokens?: number;
-  completionTokens?: number;
-  reasoningTokens?: number;
-  cachedTokens?: number;
-  toolCalls?: number;
-  requestCount?: number;
-  change?: number | null;
-  pricing?: {
-    input: number;
-    output: number;
-    cacheHit?: number | null;
-    cacheWrite?: number | null;
-  };
-  isFree?: boolean;
+  variant: string | null;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  reasoningTokens: number;
+  cachedTokens: number;
+  toolCalls: number;
+  requestCount: number;
+  change: number | null;
+  pricing: ModelPricing | null;
+  isFree: boolean;
 }
 
 export interface OpenSourceModelEntry {
@@ -33,7 +30,7 @@ export interface OpenSourceModelEntry {
   task: string | null;
   createdAt: string | null;
   lastModified: string | null;
-  tags?: string[];
+  tags: string[];
 }
 
 export interface AgentRankEntry {

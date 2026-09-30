@@ -1,5 +1,6 @@
 import type { AppContext } from "@/server/context";
 import { PROVIDER_CONCURRENCY, UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
+import { UpstreamError } from "@/server/infra/errors";
 import { errMsg, runCapped } from "@/server/infra/task-pool";
 import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/incident-parser";
 import { parseOk, type ParseResult } from "@/server/parsers/parse-result";
@@ -38,32 +39,51 @@ const parseGoogleCloudHealth: HealthParse = (raw) => {
   });
 };
 
+function upstreamStatusOf(err: unknown): number | null {
+  return err instanceof UpstreamError && typeof err.statusCode === "number" ? err.statusCode : null;
+}
+
 async function fetchProviderHealth(
   ctx: AppContext,
   url: string,
   label: string,
   parse: HealthParse,
-): Promise<ProviderStatusResult | null> {
+): Promise<ProviderStatusResult> {
   const started = Date.now();
-  let raw: unknown;
+  let response: { status: number; body: unknown };
   try {
-    raw = await ctx.http.json<unknown>(url, UPSTREAM_FETCH_OPTS);
+    response = await ctx.http.jsonWithStatus<unknown>(url, UPSTREAM_FETCH_OPTS);
   } catch (err) {
-    ctx.log("warn", `[provider-status] ${label} fetch failed: ${errMsg(err)}`);
-    return null;
+    const message = errMsg(err);
+    ctx.log("warn", `[provider-status] ${label} fetch failed: ${message}`);
+    return {
+      ok: false,
+      warn: false,
+      warnReason: null,
+      status: upstreamStatusOf(err),
+      latencyMs: Date.now() - started,
+      error: message,
+    };
   }
   const latencyMs = Date.now() - started;
-  const parsed = parse(raw);
+  const parsed = parse(response.body);
   if (!parsed.ok) {
     ctx.log("warn", `[provider-status] ${label} parse failed: ${parsed.error}`);
-    return null;
+    return {
+      ok: false,
+      warn: false,
+      warnReason: null,
+      status: response.status,
+      latencyMs,
+      error: parsed.error,
+    };
   }
   const { level, detail } = parsed.data;
   return {
     ok: level !== "error",
     warn: level === "warn",
     warnReason: level === "warn" ? detail : null,
-    status: 200,
+    status: response.status,
     latencyMs,
     error: level === "error" ? detail : null,
   };
@@ -95,11 +115,11 @@ export const PROVIDER_STATUS_TARGET_COUNT = PROVIDER_STATUS_TARGETS.length;
 
 export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<SourceId, ProviderStatusResult>> {
   const settled = await runCapped(
-    PROVIDER_STATUS_TARGETS.map((target) => async (): Promise<readonly [SourceId, ProviderStatusResult] | null> => {
-      const result = await fetchProviderHealth(ctx, target.url, target.label, target.parse);
-      return result ? ([target.id, result] as const) : null;
-    }),
+    PROVIDER_STATUS_TARGETS.map((target) => async (): Promise<readonly [SourceId, ProviderStatusResult]> => [
+      target.id,
+      await fetchProviderHealth(ctx, target.url, target.label, target.parse),
+    ]),
     PROVIDER_CONCURRENCY,
   );
-  return new Map(settled.flatMap((s) => (s.status === "fulfilled" && s.value ? [s.value] : [])));
+  return new Map(settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : [])));
 }

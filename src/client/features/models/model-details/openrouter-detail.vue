@@ -31,11 +31,8 @@ const priceRows = computed<[TranslationKey, number | null | undefined][]>(() =>
 const cacheWrite = computed(() => (pricing.value ? PRICE_LEGS.cacheWritePrice(pricing.value) : null));
 
 const tokenStats = computed<[TranslationKey, string][]>(() => [
-  ["inputTokens", props.model.promptTokens != null ? formatShortNumber(props.model.promptTokens) : t("notAvailable")],
-  [
-    "outputTokens",
-    props.model.completionTokens != null ? formatShortNumber(props.model.completionTokens) : t("notAvailable"),
-  ],
+  ["inputTokens", formatShortNumber(props.model.promptTokens, t("notAvailable"))],
+  ["outputTokens", formatShortNumber(props.model.completionTokens, t("notAvailable"))],
 ]);
 </script>
 
@@ -45,7 +42,7 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
       <StatCard :label="t('creator')">{{ model.creator }}</StatCard>
       <StatCard v-for="([labelKey, value]) in tokenStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
       <StatCard v-if="model.reasoningTokens != null" :label="t('reasoningTokens')">
-        {{ formatShortNumber(model.reasoningTokens) }}
+        {{ formatShortNumber(model.reasoningTokens, t("notAvailable")) }}
       </StatCard>
       <StatCard v-else :label="t('category')">{{ categoryLabel(model.category, t) }}</StatCard>
     </StatGrid>
@@ -57,13 +54,13 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
         <InfoRow :label="t('category')">{{ categoryLabel(model.category, t) }}</InfoRow>
         <InfoRow :label="t('trend')">{{ formatTrend(model.change, t) }}</InfoRow>
         <InfoRow :label="t('totalTokens')">
-          {{ model.totalTokens != null ? formatShortNumber(model.totalTokens) : t("notAvailable") }}
+          {{ formatShortNumber(model.totalTokens, t("notAvailable")) }}
         </InfoRow>
         <InfoRow v-if="model.cachedTokens != null" :label="t('cachedTokens')">
-          {{ formatShortNumber(model.cachedTokens) }}
+          {{ formatShortNumber(model.cachedTokens, t("notAvailable")) }}
         </InfoRow>
         <InfoRow v-if="model.toolCalls != null" :label="t('toolCalls')">
-          {{ formatShortNumber(model.toolCalls) }}
+          {{ formatShortNumber(model.toolCalls, t("notAvailable")) }}
         </InfoRow>
       </InfoCard>
       <InfoCard :title="t('pricing')">

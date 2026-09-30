@@ -67,9 +67,6 @@ export function cronHealthy(sampled: boolean | null, warmFailed: number, warmTot
 }
 
 async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: number): Promise<ScheduledResult> {
-  if (!env.CACHE) {
-    logger("warn", "[scheduled] CACHE KV not configured: running with memory-only fallback");
-  }
   const runSampling = async (): Promise<boolean | null> => {
     try {
       return await recordStatusSamples(buildContext(env, { workSignal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
@@ -137,7 +134,7 @@ export async function fetchHandler(req: Request, env: Env, ctx?: ExecutionContex
     return methodNotAllowedResponse();
   }
   const res = await handleApi(req, env, url, route, detachHook(ctx));
-  return isHead ? stripBodyForHead(res) : res;
+  return res;
 }
 
 export default {

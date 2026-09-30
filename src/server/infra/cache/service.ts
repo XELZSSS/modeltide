@@ -98,15 +98,6 @@ export class CacheService {
     }
   }
 
-  async withTtl<T>(
-    k: string,
-    ttl: number,
-    fn: () => Promise<{ data: T; ttl?: number }>,
-    opts?: { memoryOnly?: boolean; staleCapMs?: number },
-  ): Promise<T> {
-    return (await this.withTtlResult(k, ttl, fn, opts)).value;
-  }
-
   async withTtlResult<T>(
     k: string,
     ttl: number,

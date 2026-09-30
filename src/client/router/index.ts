@@ -52,6 +52,7 @@ export function useSearchParams(): ComputedRef<URLSearchParams> {
   const route = useRoute();
   return computed(() => {
     const at = route.fullPath.indexOf("?");
-    return new URLSearchParams(at >= 0 ? route.fullPath.slice(at) : "");
+    if (at < 0) return new URLSearchParams();
+    return new URLSearchParams(route.fullPath.slice(at + 1).split("#")[0] ?? "");
   });
 }

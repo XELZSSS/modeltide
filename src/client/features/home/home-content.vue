@@ -6,6 +6,7 @@ import {
   useSuspenseHomeDashboard,
   useSuspenseHallucinationRankings,
 } from "@/client/api/api-queries";
+import { assertPayloadShape } from "@/client/api/payload-normalize";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
 import ChartCard from "@/client/components/ui/chart-card.vue";
@@ -24,10 +25,11 @@ const StatisticsSection = loadableView(() => import("./statistics-section.vue"))
 const { t } = useTranslation();
 
 const artificialState = await useSuspenseArtificialRankingsState();
+assertPayloadShape(artificialState.value.malformed, "artificialIndex");
 const hallucinationRankings = await useSuspenseHallucinationRankings();
 const dashboardData = await useSuspenseHomeDashboard();
 const closedReleasesState = await useSuspenseClosedReleasesState();
-
+assertPayloadShape(closedReleasesState.value.malformed, "closedReleases");
 const artificialData = computed(() => artificialState.value.items);
 const closedReleases = computed(() => closedReleasesState.value.items);
 

@@ -21,8 +21,9 @@ export {
 export {
   MEMORY_CACHE_MAX_KEYS,
   MEMORY_CACHE_MAX_BYTES,
-  L1_MAX_TTL_MS,
+  L1_RESIDENT_BYTES_FACTOR,
   L1_TTL_CAP_MS,
+  L1_MAX_TTL_MS,
   MAX_KV_RETENTION_TTL_S,
 } from "./cache";
 export { cacheKeys } from "./keys";

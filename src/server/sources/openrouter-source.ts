@@ -37,20 +37,21 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<SourcePayload<Op
     if (rankings.data.length === 0) {
       throw new UpstreamError("OpenRouter: rankings upstream returned empty array");
     }
-    const dirData = values[1] ?? ({ pricing: {}, meta: {} } as DirectoryCacheEntryWithPartial);
+    const totalRows = rankings.data.length;
+    const dirData = values[1] ?? ({ pricing: {}, meta: {}, partial: true } as DirectoryCacheEntryWithPartial);
     const stats: RankingScanStats = { scannedRows: 0, validRows: 0 };
     const models = mapModels(rankings.data, dirData.pricing, stats);
     if (stats.validRows === 0) {
-      throw new UpstreamError(`OpenRouter: all ${rankings.data.length} ranking rows had invalid model_permaslug`);
+      throw new UpstreamError(`OpenRouter: all ${totalRows} ranking rows had invalid model_permaslug`);
     }
-    const droppedRows = stats.scannedRows - stats.validRows;
-    const drift = droppedRows >= Math.max(1, Math.ceil(stats.scannedRows * RANKINGS_DRIFT_RATIO));
+    const droppedRows = totalRows - stats.validRows;
+    const drift = droppedRows >= Math.max(1, Math.ceil(totalRows * RANKINGS_DRIFT_RATIO));
     const pricingCount = Object.keys(dirData.pricing).length;
-    const partialFailure = pricingCount === 0 || drift || dirData.partial === true;
+    const partialFailure = pricingCount === 0 || drift || dirData.partial;
     if (partialFailure) {
       ctx.log(
         "warn",
-        `[openrouter] serving a partial payload (pricing=${pricingCount}, dropped=${droppedRows}/${stats.scannedRows}, directoryPartial=${dirData.partial === true})`,
+        `[openrouter] serving a partial payload (pricing=${pricingCount}, dropped=${droppedRows}/${totalRows}, directoryPartial=${dirData.partial})`,
       );
     }
     if (models.length === 0 && stats.validRows > 0) {

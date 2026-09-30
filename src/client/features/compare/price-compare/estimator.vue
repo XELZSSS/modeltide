@@ -28,6 +28,11 @@ const bestMonthlyCost = computed(() => {
   return valid.length > 0 ? Math.min(...valid) : null;
 });
 
+const avgMonthlyCost = computed(() => {
+  const valid = [...monthlyCosts.value.values()].filter((v): v is number => v !== null);
+  return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
+});
+
 function costOf(model: ArtificialAnalysisModel): number | null {
   return monthlyCosts.value.get(modelId(model)) ?? null;
 }
@@ -43,7 +48,7 @@ function isBestCost(model: ArtificialAnalysisModel): boolean {
     <CardContent>
       <CardHeader :title="t('estimatedMonthlyCost')" />
       <div class="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-5">
-        <CostEstimatorInputs :state="costState" layout="label-input-unit" />
+        <CostEstimatorInputs :state="costState" :avg-cost="avgMonthlyCost" />
       </div>
       <div class="flex flex-col gap-3">
         <div

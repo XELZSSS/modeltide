@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:worker": "wrangler dev --config wrangler.jsonc",
     "gen:cache-version": "node scripts/gen-cache-version.cjs",
     "build": "node scripts/gen-cache-version.cjs && vite build",
     "preview": "npm run build && vite preview",

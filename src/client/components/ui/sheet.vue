@@ -10,16 +10,6 @@ let prevOverflow = "";
 let prevPaddingRight = "";
 let inertedAppChildren: HTMLElement[] = [];
 
-let lastPointerTarget: HTMLElement | null = null;
-
-document.addEventListener(
-  "pointerdown",
-  (event) => {
-    lastPointerTarget = event.target instanceof HTMLElement ? event.target : null;
-  },
-  true,
-);
-
 function inertAppChildren(): void {
   const root = document.getElementById("root");
   if (!root) return;
@@ -61,14 +51,10 @@ function lock(): void {
   const panel = panelRef.value;
   if (!panel) return;
   const active = document.activeElement;
-  const focused = active instanceof HTMLElement && active !== document.body ? active : lastPointerTarget;
-  if (focused && !panel.contains(focused)) trigger = focused;
+  if (active instanceof HTMLElement && active !== document.body && !panel.contains(active)) trigger = active;
   const first = panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
   if (first) first.focus();
-  else {
-    panel.setAttribute("tabindex", "-1");
-    panel.focus();
-  }
+  else panel.focus();
   if (lockCount === 0) {
     prevOverflow = document.body.style.overflow;
     prevPaddingRight = document.body.style.paddingRight;
@@ -114,15 +100,15 @@ onUnmounted(unlock);
 
 <template>
   <Teleport v-if="open" to="body">
-    <div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center" @click="emit('close')">
-      <div class="fixed inset-0 bg-black/50 animate-enter" aria-hidden="true" />
+    <div class="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <div class="fixed inset-0 bg-black/50 animate-enter" aria-hidden="true" @click="emit('close')" />
       <div
         ref="panelRef"
         role="dialog"
         aria-modal="true"
         :aria-label="ariaLabel"
+        tabindex="-1"
         :class="cn('relative z-50 w-full max-w-md ui-overlay animate-enter focus:outline-none', props.class)"
-        @click.stop
       >
         <slot />
       </div>

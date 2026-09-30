@@ -1,7 +1,7 @@
 import type { AppContext } from "@/server/context";
 import { MAX_JSON_BYTES, UPSTREAM_FETCH_OPTS, upstreamUrl } from "@/server/config";
 
-const DEFAULT_RSC_HEADERS = { RSC: "1", "Next-Router-State-Tree": "%5B%5D" } as const;
+const DEFAULT_RSC_HEADERS = { RSC: "1" } as const;
 
 interface RscFetchOptions {
   headers?: Record<string, string>;

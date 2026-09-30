@@ -23,7 +23,7 @@ const columns = computed<DataTableColumn<ProviderStats>[]>(() => [
   monoCol("avgIntelligence", t("avgIntelligence"), (p) => formatScore(p.avgIntelligence, t), {
     mobilePrimary: true,
   }),
-  monoCol("avgPrice", t("avgPrice"), (p) => formatPricePerMillion(p.avgPrice, t), { hiddenMd: true }),
+  monoCol("avgPrice", t("avgPrice"), (p) => formatPricePerMillion(p.avgInputPrice, t), { hiddenMd: true }),
   rightCol(
     "avgSpeed",
     t("avgSpeed"),

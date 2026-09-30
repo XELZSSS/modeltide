@@ -39,17 +39,7 @@ const CompareModels = defineComponent({
         hasStaleId,
         (stale, _previous, onCleanup) => {
           if (!stale) return;
-          const timer = setTimeout(() => {
-            pruned.value = true;
-          }, 0);
-          onCleanup(() => clearTimeout(timer));
-        },
-        { immediate: true },
-      );
-      watch(
-        pruned,
-        (show, _previous, onCleanup) => {
-          if (!show) return;
+          pruned.value = true;
           const hide = setTimeout(() => {
             pruned.value = false;
           }, PRUNE_NOTICE_MS);

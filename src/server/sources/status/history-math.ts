@@ -9,7 +9,6 @@ import type {
 } from "@/shared/types";
 import { emptyEntry, type HistorySourceEntry } from "./schema";
 
-const SAMPLE_UPSERT_WINDOW_MS = 4 * ONE_MINUTE;
 const RECENT_WINDOW_MS = ONE_DAY;
 const RETAINED_DAYS = 30;
 
@@ -25,12 +24,12 @@ interface OpenIncident {
 
 function incidentType(sample: UptimeSample): IncidentType | null {
   if (!sample.ok) return "down";
-  return sample.warn === true ? "degraded" : null;
+  return sample.warn ? "degraded" : null;
 }
 
 function sampleReason(sample: UptimeSample): string | null {
-  if (!sample.ok) return sample.error ?? null;
-  if (sample.warn === true) return sample.warnReason ?? null;
+  if (!sample.ok) return sample.error;
+  if (sample.warn) return sample.warnReason;
   return null;
 }
 
@@ -68,14 +67,10 @@ export function deriveEvents(id: SourceId, samples: UptimeSample[], openSince: n
   return events;
 }
 
-function applySampleDelta(bucket: DayBucket, sample: UptimeSample, dir: 1 | -1): void {
-  bucket.total = Math.max(0, bucket.total + dir);
-  if (sample.ok) {
-    bucket.ok = Math.max(0, bucket.ok + dir);
-  }
-  if (sample.warn === true) {
-    bucket.warn = Math.max(0, (bucket.warn ?? 0) + dir);
-  }
+function applySampleDelta(bucket: DayBucket, sample: UptimeSample): void {
+  bucket.total += 1;
+  if (sample.ok) bucket.ok += 1;
+  if (sample.warn) bucket.warn += 1;
 }
 
 function pruneWindows(entry: HistorySourceEntry, now: number): HistorySourceEntry {
@@ -85,11 +80,6 @@ function pruneWindows(entry: HistorySourceEntry, now: number): HistorySourceEntr
     daily: entry.daily.filter((b) => b.day >= cutoffDay).slice(-RETAINED_DAYS),
     openSince: entry.openSince,
   };
-}
-
-function rollbackLastSample(daily: DayBucket[], last: UptimeSample): void {
-  const lastBucket = daily.find((b) => b.day === utcDay(last.t));
-  if (lastBucket) applySampleDelta(lastBucket, last, -1);
 }
 
 function nextOpenSince(
@@ -113,22 +103,16 @@ export function mergeSample(
   const recent = [...prevEntry.recent];
   const last = recent.at(-1);
   if (last != null && sample.t <= last.t) return prevEntry;
-  const isUpsert = last != null && sample.t - last.t < SAMPLE_UPSERT_WINDOW_MS / 2;
-  const daily = prevEntry.daily.map((b) => ({ ...b }));
-  if (isUpsert) {
-    rollbackLastSample(daily, last);
-    recent[recent.length - 1] = sample;
-  } else {
-    recent.push(sample);
-  }
+  recent.push(sample);
 
   const day = utcDay(sample.t);
+  const daily = prevEntry.daily.map((b) => ({ ...b }));
   let bucket = daily.find((b) => b.day === day);
   if (!bucket) {
-    bucket = { day, total: 0, ok: 0 };
+    bucket = { day, total: 0, ok: 0, warn: 0 };
     daily.push(bucket);
   }
-  applySampleDelta(bucket, sample, 1);
+  applySampleDelta(bucket, sample);
 
   return pruneWindows({ recent, daily, openSince: nextOpenSince(prevEntry, last, sample, now) }, now);
 }
@@ -138,7 +122,7 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
   const windowStartMs = now - RECENT_WINDOW_MS;
   let windowTotal = 0;
   let windowOk = 0;
-  let windowDegraded = 0;
+  let windowWarn = 0;
   let latencySum = 0;
   let latencyCount = 0;
   for (const sample of entry.recent) {
@@ -151,7 +135,7 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
         latencyCount += 1;
       }
     }
-    if (sample.warn === true) windowDegraded += 1;
+    if (sample.warn) windowWarn += 1;
   }
   const buckets = entry.daily.slice(-7);
   let sumOk = 0;
@@ -164,7 +148,7 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
   let level: SourceHealthLevel;
   if (!last) level = "unknown";
   else if (!last.ok || (uptime24h != null && uptime24h < UPTIME_ERROR_RATIO)) level = "error";
-  else if (last.warn === true || (uptime24h != null && uptime24h < UPTIME_WARN_RATIO)) level = "warn";
+  else if (last.warn || (uptime24h != null && uptime24h < UPTIME_WARN_RATIO)) level = "warn";
   else level = "ok";
   return {
     id,
@@ -174,7 +158,7 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
     checkedAt: last ? new Date(last.t).toISOString() : null,
     uptime24h,
     uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
-    degraded24h: windowTotal > 0 ? windowDegraded / windowTotal : null,
+    warn24h: windowTotal > 0 ? windowWarn / windowTotal : null,
     avgLatency24h: latencyCount > 0 ? latencySum / latencyCount : null,
     detail: last ? sampleReason(last) : null,
   };

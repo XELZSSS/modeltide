@@ -12,7 +12,7 @@ function modelIdHash(raw: string): string {
 
 export const cacheKeys = {
   intelligenceIndex: cacheKey("artificialIndex"),
-  aaIndexBody: cacheKey("artificialIndex", "body"),
+  aaLeaderboardBody: cacheKey("artificialIndex", "leaderboard-body"),
   aaModelsEnrich: cacheKey("artificialIndex", "models-enrich"),
   aaOmniscienceEnrich: cacheKey("artificialIndex", "omniscience-enrich"),
   homeDashboard: cacheKey("homeDashboard"),
@@ -30,5 +30,4 @@ export const cacheKeys = {
   agentRankings: cacheKey("agentRankings"),
   statusHistoryPayload: cacheKey("statusHistory", "payload"),
   textToImage: cacheKey("artificialIndex", "text-to-image"),
-  changelog: cacheKey("artificialIndex", "changelog"),
 } as const;

@@ -34,7 +34,7 @@ function toClosedReleaseFromIndex(m: unknown): ClosedReleaseEntry | null {
   const rec = m as Partial<ArtificialAnalysisModel>;
   const slug = typeof rec.slug === "string" && rec.slug.trim() !== "" ? rec.slug : str(rec.id);
   const name = str(rec.name);
-  const creator = typeof rec.model_creators?.name === "string" ? rec.model_creators.name : "Unknown";
+  const creator = typeof rec.model_creators?.name === "string" ? rec.model_creators.name : "";
   const date = str(rec.release_date);
   if (!slug || !name) return null;
   return toClosedEntry(slug, name, creator, date);
@@ -57,13 +57,9 @@ export function toClosedReleases(changelog: unknown): ClosedReleaseEntry[] {
   const entries: ClosedReleaseEntry[] = [];
   const seen = new Set<string>();
   for (const record of records) {
-    const key = record.releaseSlug;
-    if (key) {
-      if (seen.has(key)) continue;
-      seen.add(key);
-    }
     const entry = toClosedRelease(record);
-    if (!entry) continue;
+    if (!entry || seen.has(entry.id)) continue;
+    seen.add(entry.id);
     entries.push(entry);
     if (entries.length >= SOURCE_LIMITS.closedReleases) break;
   }

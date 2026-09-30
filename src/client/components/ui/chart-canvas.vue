@@ -13,7 +13,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 
 let chart: Chart | null = null;
 
-function render(): void {
+function create(): void {
   chart?.destroy();
   chart = null;
   const canvas = canvasRef.value;
@@ -26,10 +26,19 @@ function render(): void {
   });
 }
 
-watch(() => [props.type, props.data, props.options, props.plugins], render, { deep: true, flush: "post" });
+function update(): void {
+  if (!chart) return;
+  chart.data = props.data;
+  if (props.options) chart.options = props.options;
+  chart.update();
+}
+
+watch([() => props.type, () => props.plugins], create, { flush: "post" });
+
+watch([() => props.data, () => props.options], update, { deep: true, flush: "post" });
 
 watch(canvasRef, (canvas) => {
-  if (canvas) render();
+  if (canvas) create();
 });
 
 onUnmounted(() => {

@@ -1,4 +1,4 @@
-export const SAMPLE_LOCK_TTL_S = 120;
+export const SAMPLE_LOCK_TTL_S = 300;
 export const HISTORY_KV_RETENTION_TTL_S = 90 * 24 * 60 * 60;
 export const SAMPLE_SELF_HEAL_MS = 45 * 60 * 1000;
 

@@ -9,68 +9,55 @@ import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError } from "@/server/infra/errors";
 import { FEED_ACCEPT, parseFeed } from "@/server/parsers/rss-feed-parser";
 
-import { fetchDailyPapersItems } from "@/server/sources/hf-papers-source";
-import { rssConfig } from "@/server/sources/news-feeds";
+import { rssFeeds } from "@/server/sources/news-feeds";
 import { dedupeBy } from "@/shared/utils";
 import { normalizeNewsLink } from "@/server/parsers/url";
 
 import type { SourcePayload } from "@/shared/types";
 import { cachedPayload, requireParsed, requireRows } from "@/server/sources/pipeline";
 
-function sortNewestFirst(
-  ctx: AppContext,
-  category: NewsCategory,
-  allItems: NewsItem[],
-): { suitable: NewsItem[]; papers: NewsItem[] } {
-  let invalidDateCount = 0;
-  const isPaper = (i: NewsItem) => i.id.startsWith("hf-paper-");
+function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsItem[]): NewsItem[] {
+  let invalidDates = 0;
   const dated = allItems
-    .filter((i) => !isPaper(i))
     .map((item) => {
       const ts = parseTs(item.pubDate, true);
-      if (ts === Number.NEGATIVE_INFINITY) invalidDateCount++;
+      if (ts === Number.NEGATIVE_INFINITY) invalidDates += 1;
       return { item, ts };
-    });
-  dated.sort((a, b) => b.ts - a.ts);
-  if (invalidDateCount > 0)
-    ctx.log("info", `[news] ${invalidDateCount}/${allItems.length} items with invalid dates for "${category}"`);
-  return { suitable: dated.map((d) => d.item), papers: allItems.filter(isPaper) };
-}
-
-const withLinks = (items: NewsItem[]) => items.map((item) => ({ item, link: normalizeNewsLink(item.link) }));
-
-function pickNewsItems(suitable: NewsItem[], papers: NewsItem[]): NewsItem[] {
-  const paperPicked = dedupeBy(withLinks(papers), (r) => r.link).slice(0, SOURCE_LIMITS.hfPapersQuota);
-  const paperLinks = new Set(paperPicked.map((r) => r.link));
-  const restPicked = dedupeBy(withLinks(suitable), (r) => r.link)
-    .filter((r) => !paperLinks.has(r.link))
-    .slice(0, Math.max(0, SOURCE_LIMITS.newsPerCategory - paperPicked.length));
-  return [...paperPicked, ...restPicked].map((r) => r.item);
+    })
+    .filter((entry) => Number.isFinite(entry.ts));
+  if (invalidDates > 0) {
+    ctx.log("info", `[news] dropped ${invalidDates}/${allItems.length} items with invalid dates for "${category}"`);
+  }
+  return dedupeBy(
+    dated.sort((a, b) => b.ts - a.ts),
+    (entry) => normalizeNewsLink(entry.item.link),
+  )
+    .slice(0, SOURCE_LIMITS.newsPerCategory)
+    .map((entry) => entry.item);
 }
 
 async function fetchNews(
   ctx: AppContext,
   category: NewsCategory,
 ): Promise<{ items: NewsItem[]; failCount: number; total: number }> {
-  const urls = rssConfig[category];
-  if (!urls || urls.length === 0) throw new ValidationError(`Unknown news category "${category}"`);
-  const legs = urls.map((url) => ({
-    label: url,
+  const feeds = rssFeeds[category];
+  if (!feeds || feeds.length === 0) throw new ValidationError(`Unknown news category "${category}"`);
+  const legs: { label: string; run: () => Promise<NewsItem[]> }[] = feeds.map((feed) => ({
+    label: feed.id,
     run: async () =>
       requireParsed(
         parseFeed(
-          await ctx.http.text(url, { headers: { accept: FEED_ACCEPT }, ...FAST_FETCH_OPTS }, MAX_FEED_BYTES),
-          url,
+          await ctx.http.text(feed.url, { headers: { accept: FEED_ACCEPT }, ...FAST_FETCH_OPTS }, MAX_FEED_BYTES),
+          feed.url,
         ),
+        ctx.log,
+        feed.id,
       ),
   }));
-  if (category === "research") {
-    legs.push({ label: "hf-daily-papers", run: () => fetchDailyPapersItems(ctx) });
-  }
   const { values, failures } = await runLegs(legs, { concurrency: NEWS_LEG_CONCURRENCY });
   const allItems = values.flatMap((items) => items ?? []);
   if (failures.length === values.length)
-    throw new UpstreamError(`All ${values.length} RSS feed(s) for "${category}" failed`, { retryable: true });
+    throw new UpstreamError(`All ${values.length} feed(s) for "${category}" failed`, { retryable: true });
   if (failures.length > 0) {
     ctx.log(
       "warn",
@@ -79,8 +66,7 @@ async function fetchNews(
         .join("; ")}`,
     );
   }
-  const { suitable, papers } = sortNewestFirst(ctx, category, allItems);
-  return { items: pickNewsItems(suitable, papers), failCount: failures.length, total: values.length };
+  return { items: pickNewsItems(ctx, category, allItems), failCount: failures.length, total: values.length };
 }
 
 export const getNews = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>

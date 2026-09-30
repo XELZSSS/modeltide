@@ -80,10 +80,11 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
       const seen = new Set<string>();
       for (const key of [idKey, slugKey, variantSlugKey]) {
         if (!key) continue;
-        const norm = key.toLowerCase();
-        if (seen.has(norm)) continue;
-        seen.add(norm);
-        if (pricingRecord[norm] === undefined) pricingRecord[norm] = pricingEntry;
+        for (const index of [key.toLowerCase(), normalizeModelKey(key)]) {
+          if (!index || seen.has(index)) continue;
+          seen.add(index);
+          if (pricingRecord[index] === undefined) pricingRecord[index] = pricingEntry;
+        }
       }
     }
     const benchmarks = obj(m.benchmarks);
@@ -203,8 +204,18 @@ function resolvePricing(
   id: string,
   variantKey: string | undefined,
 ): PricingEntry | undefined {
-  const byVariant = variantKey ? lookupPricing(pricing, variantKey.toLowerCase()) : undefined;
-  return byVariant ?? lookupPricing(pricing, id.toLowerCase());
+  const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
+  for (const key of keys) {
+    const hit = lookupPricing(pricing, key.toLowerCase());
+    if (hit) return hit;
+  }
+  for (const key of keys) {
+    const normalized = normalizeModelKey(key);
+    if (!normalized) continue;
+    const hit = lookupPricing(pricing, normalized);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 export interface RankingScanStats {
@@ -303,15 +314,18 @@ export function mapModels(
     const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
     const resolved = resolvePricing(pricing, id, variantKey);
     const isFree = resolved
-      ? resolved.input === 0 && resolved.output === 0 && !resolved.cacheHit && !resolved.cacheWrite
-      : undefined;
+      ? resolved.input === 0 &&
+        resolved.output === 0 &&
+        (resolved.cacheHit == null || resolved.cacheHit === 0) &&
+        (resolved.cacheWrite == null || resolved.cacheWrite === 0)
+      : false;
     out.push({
       rank: i + 1,
       id,
       name,
       creator: creatorFromSlug(id),
       category: categoryFrom(id, name),
-      variant: typeof dominant.variant === "string" && dominant.variant ? dominant.variant : undefined,
+      variant: typeof dominant.variant === "string" && dominant.variant ? dominant.variant : null,
       totalTokens: numOr(row.total_prompt_tokens, 0) + numOr(row.total_completion_tokens, 0),
       promptTokens: numOr(row.total_prompt_tokens, 0),
       completionTokens: numOr(row.total_completion_tokens, 0),
@@ -320,7 +334,7 @@ export function mapModels(
       toolCalls: numOr(row.total_tool_calls, 0),
       requestCount: numOr(row.count, 0),
       change: changePercent(latest.change),
-      pricing: resolved,
+      pricing: resolved ?? null,
       isFree,
     });
   }

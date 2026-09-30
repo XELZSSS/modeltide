@@ -1,21 +1,8 @@
-import {
-  isRecord,
-  isoDate,
-  numCoerce,
-  numIntCoerceNonNegative,
-  isSuitableNewsItem,
-  isValidRowId,
-} from "@/server/parsers/parser-primitives";
+import { isRecord, isoDate, numIntCoerceNonNegative, isValidRowId } from "@/server/parsers/parser-primitives";
 import { toStringOrNull } from "@/shared/utils";
-import type { NewsItem, OpenSourceModelEntry } from "@/shared/types";
-import { SOURCE_LIMITS } from "@/server/config/limits";
-import { upstreamConfig } from "@/server/config";
-import { zeroUpstreamMessage } from "@/server/infra/errors";
+import type { OpenSourceModelEntry } from "@/shared/types";
 import { getOpenLicenseId, isRecognizedNonOpenLicense, licenseTagId } from "@/server/parsers/licenses";
-import type { DailyPaperEntry, HFModel } from "@/server/parsers/upstream-types";
-import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
-import { stripHtml } from "@/server/parsers/html-to-text";
-import { decodeEntities } from "@/server/parsers/html-entities";
+import type { HFModel } from "@/server/parsers/upstream-types";
 
 function resolveAuthor(m: HFModel, id: string): string | null {
   return toStringOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
@@ -102,57 +89,8 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
     task: toStringOrNull(model.pipeline_tag),
     createdAt: isoDate(model.createdAt),
     lastModified: isoDate(model.lastModified),
+    tags: includeTags ? tags.slice(0, 100) : [],
   };
-  if (includeTags) entry.tags = tags.slice(0, 100);
   return entry;
 }
 
-function toNewsItem(entry: unknown): NewsItem | null {
-  if (!isRecord(entry)) return null;
-  const paper = isRecord((entry as DailyPaperEntry).paper) ? (entry as DailyPaperEntry).paper! : undefined;
-  const rawId = toStringOrNull(paper?.id);
-  const rawTitle = typeof paper?.title === "string" ? paper.title : "";
-  const title = stripHtml(decodeEntities(rawTitle));
-  const publishedAt = typeof paper?.publishedAt === "string" ? paper.publishedAt.trim() : "";
-  if (!rawId || !title || !Number.isFinite(Date.parse(publishedAt))) return null;
-  if (!isValidRowId(rawId)) return null;
-  const link = `${upstreamConfig.huggingfaceSite}/papers/${encodeURIComponent(rawId)}`;
-  if (!isSuitableNewsItem(title, link)) return null;
-  return {
-    id: `hf-paper-${rawId}`,
-    title,
-    link,
-    pubDate: publishedAt,
-    source: "Hugging Face Papers",
-  };
-}
-
-export function parseDailyPapers(raw: unknown): ParseResult<NewsItem[]> {
-  if (!Array.isArray(raw)) {
-    return parseFail(`HuggingFace daily papers returned non-array (got ${raw === null ? "null" : typeof raw})`);
-  }
-  const ranked = raw
-    .slice(0, 500)
-    .map((entry) => ({ entry, upvotes: upvotesOf(entry) }))
-    .sort((a, b) => b.upvotes - a.upvotes);
-  const items: NewsItem[] = [];
-  const seen = new Set<string>();
-  for (const { entry } of ranked) {
-    const item = toNewsItem(entry);
-    if (!item || seen.has(item.id)) continue;
-    seen.add(item.id);
-    items.push(item);
-    if (items.length >= SOURCE_LIMITS.dailyPapers) break;
-  }
-  if (items.length === 0) {
-    return parseFail(zeroUpstreamMessage("HuggingFace daily papers", "usable items", `raw=${raw.length}`));
-  }
-  return parseOk(items);
-}
-
-function upvotesOf(entry: unknown): number {
-  if (!isRecord(entry)) return -1;
-  const v = (entry as DailyPaperEntry).paper;
-  const up = isRecord(v) ? (v as { upvotes?: unknown }).upvotes : (entry as { upvotes?: unknown }).upvotes;
-  return numCoerce(up) ?? -1;
-}

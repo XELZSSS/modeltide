@@ -8,11 +8,11 @@ import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
 import { FIVE_MINUTES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import type { HomeDashboardData, HomeOpenSourceEntry, OpenSourceModelEntry, SourcePayload } from "@/shared/types";
-import { isPartialDashboard } from "@/shared/utils";
 import { cachedPayload } from "@/server/sources/pipeline";
 
 const HOME_OR_RANKING_ROWS = 5;
 const HOME_TEXT_TO_IMAGE_ROWS = 8;
+const HOME_OPEN_SOURCE_ROWS = 20;
 
 function homeOpenSourceRow({ id, downloads, task }: OpenSourceModelEntry): HomeOpenSourceEntry {
   return { id, downloads, task };
@@ -30,14 +30,18 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboar
     throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`, { retryable: true });
   }
   const data: HomeDashboardData = {
-    orRankings: orRankings ? orRankings.data.slice(0, HOME_OR_RANKING_ROWS) : null,
-    textToImage: textToImage ? textToImage.data.slice(0, HOME_TEXT_TO_IMAGE_ROWS) : null,
-    opensource: opensource ? opensource.data.map(homeOpenSourceRow) : null,
+    orRankings: (orRankings?.data ?? []).slice(0, HOME_OR_RANKING_ROWS),
+    textToImage: (textToImage?.data ?? []).slice(0, HOME_TEXT_TO_IMAGE_ROWS),
+    opensource: (opensource?.data ?? []).slice(0, HOME_OPEN_SOURCE_ROWS).map(homeOpenSourceRow),
   };
-  const degraded = orRankings?.partial === true || textToImage?.partial === true || opensource?.partial === true;
-  const partial = isPartialDashboard(data) || degraded;
-  if (partial)
+  const partial =
+    failures.length > 0 ||
+    orRankings?.partial === true ||
+    textToImage?.partial === true ||
+    opensource?.partial === true;
+  if (partial) {
     ctx.log("warn", `[home] partial dashboard${reasons ? `: ${reasons}` : " (a leg returned partial data)"}`);
+  }
   return { data, partial };
 }
 

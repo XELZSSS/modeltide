@@ -102,7 +102,8 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
     for (const [id, result] of providerResults) {
       aggregates.set(id, {
         ok: result.ok,
-        ...(result.warn ? { warn: true, warnReason: result.warnReason } : {}),
+        warn: result.warn,
+        warnReason: result.warnReason,
         status: result.status,
         latencyMs: result.ok ? result.latencyMs : null,
         error: result.error,
@@ -121,7 +122,7 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
     }
     const persisted = await mergeSamplesIntoStore(ctx, aggregates, now, token);
     ctx.log("info", `[status-history] round recorded for ${aggregates.size} sources`);
-    return persisted && probed.length > 0 && providerResults.size > 0;
+    return persisted && probed.length > 0 && providersComplete;
   } finally {
     await releaseSampleLock(ctx, token);
   }
@@ -143,8 +144,8 @@ async function mergeSamplesIntoStore(
         latencyMs: agg.latencyMs,
         status: agg.status,
         error: agg.error,
-        ...(agg.warn ? { warn: true } : {}),
-        ...(agg.warnReason != null ? { warnReason: agg.warnReason } : {}),
+        warn: agg.warn,
+        warnReason: agg.warnReason,
       },
       now,
     );

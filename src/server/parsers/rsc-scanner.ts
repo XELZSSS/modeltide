@@ -50,7 +50,7 @@ export const MAX_RSC_BYTES = 5 * 1024 * 1024;
 export const MAX_RSC_LINE_CHARS = 2 * 1024 * 1024;
 export const MAX_SCAN_CHARS = 8_000_000;
 const MAX_OVERSIZED_WINDOWS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
-export const STREAM_LINE_RE = /^[0-9a-fA-F]+:(.*)$/;
+export const STREAM_LINE_RE = /^[0-9a-fA-F]{1,8}:(.*)$/s;
 
 function isTrimWhitespace(c: number): boolean {
   return (

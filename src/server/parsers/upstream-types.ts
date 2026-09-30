@@ -35,11 +35,11 @@ export interface PricingRow {
   name?: string;
   benchmarks?: { artificial_analysis?: { intelligence_index?: unknown; agentic_index?: unknown } };
   pricing?: {
-    prompt?: string | number;
-    completion?: string | number;
-    input_cache_read?: string | number;
-    input_cache_write?: string | number;
-  };
+    prompt?: string | number | null;
+    completion?: string | number | null;
+    input_cache_read?: string | number | null;
+    input_cache_write?: string | number | null;
+  } | null;
 }
 
 export interface RawEntry {
@@ -53,15 +53,6 @@ export interface RawEntry {
   creator?: unknown;
 }
 
-export interface DailyPaperEntry {
-  paper?: {
-    id?: unknown;
-    title?: unknown;
-    upvotes?: unknown;
-    publishedAt?: unknown;
-  };
-}
-
 export interface AgentSignalEntry {
   contenderName?: unknown;
   model?: unknown;
@@ -72,13 +63,10 @@ export interface AgentSignalEntry {
   ciUpper?: unknown;
 }
 
-export interface ChangelogRawEntry {
+export interface ChangelogModelEntry {
   slug?: unknown;
   name?: unknown;
-  release?: unknown;
-  releaseDate?: unknown;
-  creator?: unknown;
-  deprecated?: unknown;
+  releaseSlug?: unknown;
 }
 
 export interface StatuspageSummaryRaw {

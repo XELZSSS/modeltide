@@ -20,7 +20,6 @@ interface ModelQuery {
 
 const HF_API = upstreamConfig.huggingface;
 const HF_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,96}(?:\/[A-Za-z0-9][A-Za-z0-9._-]{0,96})?$/;
-
 function isValidHFModelId(value: string): boolean {
   return value.length <= 200 && isValidRowId(value) && HF_MODEL_ID_RE.test(value);
 }
@@ -71,8 +70,8 @@ export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourceP
       logLicenseDrops(ctx, items.length, tally);
       const bucket = dedupeBy(kept, (m) => m.id);
       requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
-      if (kept.length < items.length)
-        ctx.log("info", `[huggingface] filtered ${items.length - kept.length}/${items.length} rows`);
+      const dropped = items.length - kept.length;
+      if (dropped > 0) ctx.log("info", `[huggingface] filtered ${dropped}/${items.length} rows`);
       return { rows: bucket, partial: items.length < bucketLimit };
     },
   );

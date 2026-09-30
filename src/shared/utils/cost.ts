@@ -13,12 +13,13 @@ export interface CostScenario {
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 const nonNeg = (v: number): number => Math.max(0, v);
 
-export function monthlyCostFor(pricing: ModelPricing | undefined, scenario: CostScenario): number | null {
+export function monthlyCostFor(
+  pricing: ModelPricing | null | undefined,
+  scenario: CostScenario,
+): number | null {
   if (!pricing || !isFiniteNumber(pricing.input) || !isFiniteNumber(pricing.output)) return null;
   const cacheHit = pricing.cacheHit;
   const cacheWrite = pricing.cacheWrite;
-  if (cacheHit != null && !isFiniteNumber(cacheHit)) return null;
-  if (cacheWrite != null && !isFiniteNumber(cacheWrite)) return null;
   const hitRate = clamp01(scenario.cacheHitRate);
   const hasWriteTier = isFiniteNumber(cacheWrite);
   const writeRate = hasWriteTier ? clamp01(Math.min(scenario.cacheWriteRate, 1 - hitRate)) : 0;
@@ -32,7 +33,7 @@ export function monthlyCostFor(pricing: ModelPricing | undefined, scenario: Cost
   return isFiniteNumber(monthly) ? monthly : null;
 }
 
-export function computeBlendPrice(pricing: ModelPricing | undefined): number | null {
+export function computeBlendPrice(pricing: ModelPricing | null | undefined): number | null {
   if (!pricing || !isFiniteNumber(pricing.input) || !isFiniteNumber(pricing.output)) return null;
   const cache = isFiniteNumber(pricing.cacheHit) ? pricing.cacheHit : pricing.input;
   return (7 * cache + 2 * pricing.input + pricing.output) / 10;

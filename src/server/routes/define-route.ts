@@ -134,10 +134,7 @@ export async function handleApiRoute<S extends QuerySchema>(
     const params = validateQuery(rawParams, (def.query ?? {}) as S);
     const payload = await def.handler(context, params);
     const headers = new Headers({ "content-type": "application/json" });
-    const browserCache = applyCacheHeaders(
-      headers,
-      def.cache ?? (payload.partial === true ? PARTIAL_CACHE_HEADERS : undefined),
-    );
+    const browserCache = applyCacheHeaders(headers, payload.partial ? PARTIAL_CACHE_HEADERS : def.cache);
     applyApiHeaders(headers);
     if (!browserCache.includes("no-store")) {
       const etag = payloadEtag(payload.fetchedAt, Array.isArray(payload.data) ? payload.data.length : undefined);

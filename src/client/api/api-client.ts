@@ -2,7 +2,7 @@ import { CACHE_VERSION } from "@/shared/config/cache-version.gen";
 import { API_VERSION_PARAM } from "@/shared/config/paths";
 import type { SourcePayload } from "@/shared/types";
 
-const CLIENT_FETCH_TIMEOUT_MS = 15_000;
+const CLIENT_FETCH_TIMEOUT_MS = 35_000;
 const CONTRACT_VERSION_HEADER = "x-contract-version";
 
 interface QueryCtx {
@@ -50,7 +50,10 @@ const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/
 
 function buildApiUrl(path: string): string {
   const url = apiBase && path.startsWith("/") ? apiBase + path : path;
-  return `${url}${url.includes("?") ? "&" : "?"}${API_VERSION_PARAM}=${CACHE_VERSION}`;
+  const [base, query] = url.split("?", 2);
+  const params = new URLSearchParams(query);
+  params.set(API_VERSION_PARAM, CACHE_VERSION);
+  return `${base}?${params.toString()}`;
 }
 
 function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {

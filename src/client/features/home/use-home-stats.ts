@@ -61,7 +61,7 @@ export function useHomeStats(
     top7(toValue(dashboardData).opensource, (model) => ({
       label: shortModelId(model.id),
       value: model.downloads,
-      valueLabel: formatShortNumber(model.downloads),
+      valueLabel: formatShortNumber(model.downloads, t("notAvailable")),
     })),
   );
 

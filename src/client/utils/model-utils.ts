@@ -54,7 +54,7 @@ export interface ProviderStats {
   name: string;
   color: string;
   count: number;
-  avgPrice: number | null;
+  avgInputPrice: number | null;
   avgSpeed: number | null;
   avgIntelligence: number | null;
 }
@@ -64,10 +64,10 @@ export function computeProviderStats(models: ArtificialAnalysisModel[], unknownL
     .map(({ name, color, models: group }) => {
       const count = group.length;
       const prices = group.map((m) => m.pricing?.input).filter(isFiniteNumber);
-      const avgPrice = avg(prices);
+      const avgInputPrice = avg(prices);
       const avgSpeed = avg(group.map(getOutputSpeed).filter(isFiniteNumber));
       const avgIntelligence = avg(group.map((m) => m.intelligence_index).filter(isFiniteNumber));
-      return { name, color, count, avgPrice, avgSpeed, avgIntelligence };
+      return { name, color, count, avgInputPrice, avgSpeed, avgIntelligence };
     })
     .sort((a, b) => b.count - a.count);
 }

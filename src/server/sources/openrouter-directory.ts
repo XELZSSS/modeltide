@@ -13,8 +13,9 @@ import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 import { cachedRaw } from "@/server/sources/pipeline";
 
 const PRICING_TTL_MS = SLOW_TTL_MS;
+const PRICING_GAP_RATIO = 0.3;
 
-export type DirectoryCacheEntryWithPartial = DirectoryCacheEntry & { partial?: boolean };
+export type DirectoryCacheEntryWithPartial = DirectoryCacheEntry & { partial: boolean };
 
 const DYNAMIC_PRICING = -1;
 
@@ -38,22 +39,33 @@ async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntry
   if (Object.keys(entry.pricing).length === 0) {
     throw new UpstreamError(`OpenRouter: empty pricing response (raw=${rows.length}, kept=0)`);
   }
-  const partial = rows.some((row) => !hasUsablePricing(row));
-  return partial ? { ...entry, partial: true } : entry;
+  const missing = rows.filter((row) => !hasUsablePricing(row)).length;
+  const partial = missing >= Math.ceil(rows.length * PRICING_GAP_RATIO);
+  if (partial) {
+    ctx.log("warn", `[openrouter] directory pricing gaps: ${missing}/${rows.length} rows lack usable pricing`);
+  }
+  return { ...entry, partial };
 }
 
 export async function getModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntryWithPartial> {
-  return cachedRaw<DirectoryCacheEntryWithPartial>(
+  const { value, degraded } = await cachedRaw<DirectoryCacheEntryWithPartial>(
     ctx,
     cacheKeys.openRouterPricing,
     PRICING_TTL_MS,
     fetchModelDirectory,
   );
+  return degraded ? { ...value, partial: true } : value;
 }
 
-export function getModelDirectoryMeta(ctx: AppContext): Promise<Record<string, ModelMetaEntry>> {
-  return cachedRaw<Record<string, ModelMetaEntry>>(ctx, cacheKeys.openRouterMeta, PRICING_TTL_MS, async (ctx) => {
-    const { meta } = await getModelDirectory(ctx);
-    return meta;
-  });
+export async function getModelDirectoryMeta(ctx: AppContext): Promise<Record<string, ModelMetaEntry>> {
+  const { value } = await cachedRaw<Record<string, ModelMetaEntry>>(
+    ctx,
+    cacheKeys.openRouterMeta,
+    PRICING_TTL_MS,
+    async (ctx) => {
+      const { meta } = await getModelDirectory(ctx);
+      return meta;
+    },
+  );
+  return value;
 }

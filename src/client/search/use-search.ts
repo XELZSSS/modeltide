@@ -58,7 +58,7 @@ function detailLink(source: SearchResultSource, id: string): string {
   return modelDetailPath(SEARCH_SOURCE_TO_MODEL_SOURCE[source], id);
 }
 
-export interface SearchState {
+interface SearchState {
   results: ComputedRef<SearchResult[]>;
   isPending: ComputedRef<boolean>;
   isError: ComputedRef<boolean>;

@@ -60,7 +60,7 @@ const aaModel = computed(() => directAa.value ?? fallbackAa.value);
 const hallStats = computed<[TranslationKey, string][]>(() =>
   entry.value
     ? [
-        ["omniscienceIndex", formatIndex(entry.value.omniscienceIndex)],
+        ["omniscienceIndex", formatIndex(entry.value.omniscienceIndex, t("notAvailable"))],
         ["accuracy", formatPercent(entry.value.accuracy, t)],
         ["hallucinationRate", formatPercent(entry.value.hallucinationRate, t)],
         ["attemptRate", formatPercent(entry.value.attemptRate, t)],

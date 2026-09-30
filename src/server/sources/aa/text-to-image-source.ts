@@ -15,7 +15,7 @@ export const getTextToImageLeaderboard = (ctx: AppContext): Promise<SourcePayloa
   cachedPayload<TextToImageModel[]>(ctx, cacheKeys.textToImage, DEFAULT_TTL_MS, async (ctx) => {
     const body = await fetchAaRsc(ctx, upstreamEndpoints.aaTextToImage);
     let rawModels = requireRows(
-      requireParsed(parseTextToImageRows(body)),
+      requireParsed(parseTextToImageRows(body), ctx.log, "text-to-image"),
       "Text-to-image",
       "raw rows",
       `raw=0, kept=0, body=${body.length}B`,

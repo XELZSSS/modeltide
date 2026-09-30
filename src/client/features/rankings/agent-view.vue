@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { h } from "vue";
-import { TrendingDown, TrendingUp } from "@lucide/vue";
 import { useSuspenseAgentRankingsState } from "@/client/api/api-queries";
 import type { AgentRankEntry } from "@/shared/types";
 import RankedTableView, { modelNameCol } from "@/client/components/data/table/ranked-table-view.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
-import { cn } from "@/client/utils/cn";
 import { orNA } from "@/client/utils/format";
-import { rightCol, trendClass, type DataTableColumn } from "@/client/components/data/table/table-columns.vue";
+import { rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.vue";
 import type { TFunction } from "@/shared/i18n";
 
 function buildAgentColumns(t: TFunction): DataTableColumn<AgentRankEntry>[] {
@@ -25,17 +23,12 @@ function buildAgentColumns(t: TFunction): DataTableColumn<AgentRankEntry>[] {
         if (item.score == null || !Number.isFinite(item.score)) {
           return h("span", { class: "ui-mono-value font-semibold" }, t("notAvailable"));
         }
-        const up = item.score >= 0;
-        const TrendIcon = up ? TrendingUp : TrendingDown;
         const halfWidth =
           item.ciLower != null && item.ciUpper != null && Number.isFinite(item.ciLower) && Number.isFinite(item.ciUpper)
             ? (Math.abs(item.ciUpper - item.ciLower) / 2) * 100
             : null;
         return h("span", { class: "ui-mono-value inline-flex flex-col items-end leading-tight" }, [
-          h("span", { class: cn("inline-flex items-center gap-1 font-semibold", trendClass(item.score, true)) }, [
-            h(TrendIcon, { size: 12, "aria-hidden": "true" }),
-            `${Math.abs(item.score * 100).toFixed(2)}%`,
-          ]),
+          h("span", { class: "font-semibold" }, `${(item.score * 100).toFixed(2)}%`),
           halfWidth != null
             ? h("span", { class: "text-xs font-normal text-text-secondary" }, `±${halfWidth.toFixed(2)}%`)
             : null,

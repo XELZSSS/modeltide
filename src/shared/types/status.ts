@@ -2,7 +2,15 @@ export type SourceId =
   | "artificialAnalysis"
   | "huggingface"
   | "openrouter"
-  | "news"
+  | "newsTechCrunch"
+  | "newsArsTechnica"
+  | "newsMitTechReview"
+  | "newsHfBlog"
+  | "newsPytorch"
+  | "newsTomsHardware"
+  | "newsCrunchbase"
+  | "newsArxivNlp"
+  | "newsArxivMl"
   | "arena"
   | "openaiApi"
   | "anthropicApi"
@@ -23,17 +31,17 @@ export interface UptimeSample {
   t: number;
   ok: boolean;
   latencyMs: number | null;
-  status?: number | null;
-  error?: string | null;
-  warn?: boolean;
-  warnReason?: string | null;
+  status: number | null;
+  error: string | null;
+  warn: boolean;
+  warnReason: string | null;
 }
 
 export interface DayBucket {
   day: string;
   total: number;
   ok: number;
-  warn?: number;
+  warn: number;
 }
 
 export interface StatusEvent {
@@ -41,20 +49,20 @@ export interface StatusEvent {
   type: "down" | "up" | "degraded";
   at: string;
   durationMin: number | null;
-  detail?: string | null;
+  detail: string | null;
 }
 
 export interface SourceHistorySummary {
   id: SourceId;
   ok: boolean;
-  level?: SourceHealthLevel;
+  level: SourceHealthLevel;
   latencyMs: number | null;
   checkedAt: string | null;
   uptime24h: number | null;
   uptime7d: number | null;
-  degraded24h: number | null;
+  warn24h: number | null;
   avgLatency24h: number | null;
-  detail?: string | null;
+  detail: string | null;
 }
 
 export interface StatusHistoryPayload {
@@ -64,5 +72,5 @@ export interface StatusHistoryPayload {
   recent: Partial<Record<SourceId, UptimeSample[]>>;
   daily: Partial<Record<SourceId, DayBucket[]>>;
   events: StatusEvent[];
-  storeMode?: StatusStoreMode;
+  storeMode: StatusStoreMode;
 }

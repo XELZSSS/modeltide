@@ -7,7 +7,6 @@ import { stripHtml } from "@/server/parsers/html-to-text";
 import { parseFeed as parseFeedResult } from "@/server/parsers/rss-feed-parser";
 import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc-parser";
 import { isMarkerBoundaryAt } from "@/server/parsers/rsc-scanner";
-import { parseDailyPapers } from "@/server/parsers/hf-parser";
 import { getOpenLicenseId, licenseTagId } from "@/server/parsers/licenses";
 import { byDateDesc, isoDate, numCoerce, numOr } from "@/server/parsers/parser-primitives";
 
@@ -196,23 +195,6 @@ describe("parseRscPayloads", () => {
       ),
     );
     expect(out).toEqual([{ v: 1 }]);
-  });
-});
-
-describe("parseDailyPapers", () => {
-  const paper = (id: string, title: string, upvotes: number) => ({
-    paper: { id, title, upvotes, publishedAt: "2026-09-05T00:00:00Z" },
-  });
-
-  it("fills the cap from the ranked head, skipping duplicate ids and unusable rows", () => {
-    const raw = [
-      paper("dup", "Dup", 100),
-      paper("dup", "Dup again", 99),
-      paper("bad", "test", 98),
-      ...Array.from({ length: 24 }, (_, i) => paper(`p${i}`, `Paper ${i}`, 90 - i)),
-    ];
-    const ids = unwrap(parseDailyPapers(raw)).map((i) => i.id);
-    expect(ids).toEqual(["hf-paper-dup", ...Array.from({ length: 19 }, (_, i) => `hf-paper-p${i}`)]);
   });
 });
 

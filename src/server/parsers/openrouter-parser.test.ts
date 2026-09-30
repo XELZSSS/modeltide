@@ -157,14 +157,14 @@ describe("mapModels", () => {
     expect(models[0]!.isFree).toBe(false);
   });
 
-  it("marks free models and leaves pricing undefined when absent", () => {
+  it("marks free models and leaves pricing null when absent", () => {
     const free = new Map([["a/b", { input: 0, output: 0, cacheHit: 0, cacheWrite: 0 }]]);
     const [m] = mapModels([row({ model_permaslug: "a/b", variant_permaslug: "a/b" })], free);
     expect(m!.isFree).toBe(true);
 
     const [noPricing] = mapModels([row({ model_permaslug: "x/y", variant_permaslug: "x/y" })], new Map());
-    expect(noPricing!.pricing).toBeUndefined();
-    expect(noPricing!.isFree).toBeUndefined();
+    expect(noPricing!.pricing).toBeNull();
+    expect(noPricing!.isFree).toBe(false);
   });
 
   it("falls back to the derived total when no row carries an upstream ranking metric", () => {

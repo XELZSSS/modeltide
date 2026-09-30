@@ -4,25 +4,22 @@ import { BENCHMARK_KEYS, DEFAULT_TTL_MS, MODALITY_KEYS } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { parseRscPayload, findNextData } from "@/server/parsers/rsc-parser";
+import { findNextData } from "@/server/parsers/rsc-parser";
 
 import { getModelDirectoryMeta } from "@/server/sources/openrouter-directory";
 import { compact } from "@/server/parsers/aa/model-compact";
-import {
-  backfillFromMeta,
-  compactOmniscienceEnrich,
-  findModelArray,
-  mergeBySlug,
-  type IntelligenceIndexResult,
-} from "@/server/parsers/aa/model-enrich";
+import { parseLeaderboardModels } from "@/server/parsers/aa/leaderboard-parser";
+import { backfillFromMeta, mergeBySlug, type IntelligenceIndexResult } from "@/server/parsers/aa/model-enrich";
 import { fetchAaRsc, getAndParseEnrich } from "@/server/sources/aa/aa-fetch";
 import type { SourcePayload } from "@/shared/types";
 import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 import { upstreamEndpoints } from "@/server/config";
-import { cachedPayload, cachedRaw, requireParsed, requireRows } from "@/server/sources/pipeline";
+import { cachedPayload, cachedRaw, requireParsed, requireRows, type CachedValue } from "@/server/sources/pipeline";
 
-export function getAaIndexBody(ctx: AppContext): Promise<string> {
-  return cachedRaw(ctx, cacheKeys.aaIndexBody, DEFAULT_TTL_MS, (ctx) => fetchAaRsc(ctx, upstreamEndpoints.aaIndex));
+export function getAaLeaderboardBody(ctx: AppContext): Promise<CachedValue<string>> {
+  return cachedRaw(ctx, cacheKeys.aaLeaderboardBody, DEFAULT_TTL_MS, (ctx) =>
+    fetchAaRsc(ctx, upstreamEndpoints.aaLeaderboard),
+  );
 }
 
 const BENCHMARK_WIRE_NAMES = [
@@ -73,9 +70,11 @@ function compactModelsEnrich(m: Record<string, unknown>): Record<string, unknown
   return row;
 }
 
-async function fetchIntelligenceIndex(ctx: AppContext): Promise<Omit<IntelligenceIndexResult, "fetchedAt">> {
+async function fetchIntelligenceIndex(
+  ctx: AppContext,
+): Promise<{ models: ArtificialAnalysisModel[]; partial: boolean }> {
   const [indexBody, [modelsEnrich, omniscienceEnrich], openRouterMeta] = await Promise.all([
-    getAaIndexBody(ctx),
+    getAaLeaderboardBody(ctx),
     Promise.all([
       getAndParseEnrich<Record<string, unknown>>(ctx, cacheKeys.aaModelsEnrich, {
         label: "/models",
@@ -89,14 +88,13 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<Omit<Intelligenc
         path: upstreamEndpoints.aaOmniscience,
         marker: "initialModels",
         extract: (tree) => findNextData(tree, "initialModels"),
-        map: (arr) =>
-          arr.map(compactOmniscienceEnrich).filter((m) => m.omniscience != null || m.omniscienceBreakdown != null),
+        map: (arr) => arr.map(compactModelsEnrich),
       }),
     ]),
     getModelDirectoryMeta(ctx).catch((): Record<string, ModelMetaEntry> | null => null),
   ]);
 
-  const indexModels = requireParsed(parseRscPayload(indexBody, "intelligenceIndex", findModelArray));
+  const indexModels = requireParsed(parseLeaderboardModels(indexBody.value), ctx.log, "aa-leaderboard");
 
   const enrichFailures =
     [modelsEnrich, omniscienceEnrich].filter((leg) => leg.failed).length + (openRouterMeta === null ? 1 : 0);
@@ -105,7 +103,8 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<Omit<Intelligenc
     .filter((m) => isValidModelIdentity(m.id, m.slug, m.name));
   const ranked = merged.sort(byNumberDesc((m) => m.intelligence_index));
   const models = ranked.slice(0, SOURCE_LIMITS.aaIndexModels);
-  if (models.length < ranked.length) {
+  const capped = models.length < ranked.length;
+  if (capped) {
     ctx.log("warn", `[artificial] index capped at ${models.length}/${ranked.length} models`);
   }
   requireRows(
@@ -116,16 +115,16 @@ async function fetchIntelligenceIndex(ctx: AppContext): Promise<Omit<Intelligenc
   );
   const backfilled = backfillFromMeta(models, openRouterMeta ?? {});
   if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
-  return { models, enrichFailed: enrichFailures > 0 };
+  return { models, partial: enrichFailures > 0 || capped || indexBody.degraded };
 }
 
 export const getIntelligenceIndex = (ctx: AppContext): Promise<SourcePayload<ArtificialAnalysisModel[]>> =>
   cachedPayload<ArtificialAnalysisModel[]>(ctx, cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async (ctx) => {
-    const { models, enrichFailed } = await fetchIntelligenceIndex(ctx);
-    return { rows: models, partial: enrichFailed };
+    const { models, partial } = await fetchIntelligenceIndex(ctx);
+    return { rows: models, partial };
   });
 
 export const getIntelligenceIndexResult = async (ctx: AppContext): Promise<IntelligenceIndexResult> => {
   const { data, fetchedAt, partial } = await getIntelligenceIndex(ctx);
-  return { models: data, enrichFailed: partial === true, fetchedAt };
+  return { models: data, enrichFailed: partial, fetchedAt };
 };

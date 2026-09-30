@@ -3,7 +3,7 @@ export function normalizeNewsLink(link: string): string {
   try {
     const u = new URL(trimmed);
     const port = u.port ? `:${u.port}` : "";
-    return `${u.protocol}//${u.hostname.toLowerCase()}${port}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}${u.hash}`;
+    return `${u.protocol}//${u.hostname.toLowerCase()}${port}${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
   } catch {
     return trimmed.replace(/\/+$/, "");
   }

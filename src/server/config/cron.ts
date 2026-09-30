@@ -1,5 +1,5 @@
-export const SAMPLE_TIMEOUT_MS = 90_000;
-export const WARM_TASK_TIMEOUT_MS = 45_000;
+export const SAMPLE_TIMEOUT_MS = 200_000;
+export const WARM_TASK_TIMEOUT_MS = 65_000;
 export const WARM_CONCURRENCY = 2;
 export const PING_TIMEOUT_MS = 5_000;
 export const PROBE_CONCURRENCY = 3;

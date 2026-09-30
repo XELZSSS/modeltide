@@ -1,8 +1,9 @@
 {
   "id": "/",
+  "lang": "zh-CN",
   "name": "ModelTide",
   "short_name": "Tide",
-  "description": "AI model rankings, release dates, benchmarks, and provider comparisons.",
+  "description": "ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

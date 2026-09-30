@@ -57,6 +57,20 @@ async function fetchBodyText(url: string, res: Response, maxBytes: number, signa
   return text;
 }
 
+export interface JsonResponse<T> {
+  status: number;
+  body: T;
+}
+
+async function parseJsonBody<T>(url: string, res: Response, maxBytes: number, signal: AbortSignal): Promise<T> {
+  const body = await fetchBodyText(url, res, maxBytes, signal);
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new UpstreamError(`Upstream returned invalid JSON for ${url}`);
+  }
+}
+
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_JITTER_MS = 250;
 
@@ -271,14 +285,20 @@ export class HttpClient {
   }
 
   async json<T>(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<T> {
-    return this.doFetch(url, init ?? {}, "application/json", async (res, signal) => {
-      const body = await fetchBodyText(url, res, maxBytes, signal);
-      try {
-        return JSON.parse(body) as T;
-      } catch {
-        throw new UpstreamError(`Upstream returned invalid JSON for ${url}`);
-      }
-    });
+    return this.doFetch(url, init ?? {}, "application/json", (res, signal) =>
+      parseJsonBody<T>(url, res, maxBytes, signal),
+    );
+  }
+
+  async jsonWithStatus<T>(
+    url: string,
+    init?: FetchOptions,
+    maxBytes: number = MAX_JSON_BYTES,
+  ): Promise<JsonResponse<T>> {
+    return this.doFetch(url, init ?? {}, "application/json", async (res, signal) => ({
+      status: res.status,
+      body: await parseJsonBody<T>(url, res, maxBytes, signal),
+    }));
   }
 
   async text(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<string> {

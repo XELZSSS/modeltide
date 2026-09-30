@@ -38,8 +38,8 @@ const tags = computed(() => model.value?.tags ?? []);
   <DetailShell v-else source="os" :title="shortModelId(model.id)">
     <div class="flex flex-col gap-4">
       <StatGrid :columns="2">
-        <StatCard :label="t('downloads')">{{ formatShortNumber(model.downloads) }}</StatCard>
-        <StatCard :label="t('likes')">{{ formatShortNumber(model.likes) }}</StatCard>
+        <StatCard :label="t('downloads')">{{ formatShortNumber(model.downloads, t("notAvailable")) }}</StatCard>
+        <StatCard :label="t('likes')">{{ formatShortNumber(model.likes, t("notAvailable")) }}</StatCard>
       </StatGrid>
       <InfoGrid>
         <InfoCard :title="t('modelInfo')">

@@ -2,10 +2,10 @@ import { defineComponent, h, type Component } from "vue";
 
 type LazyModule = { default: Component };
 
-const resettable = new Set<() => void>();
+const failing = new Set<() => void>();
 
 export function resetLoadableViews(): void {
-  for (const reset of resettable) reset();
+  for (const reset of failing) reset();
 }
 
 export function loadableView(load: () => Promise<LazyModule>): Component {
@@ -20,16 +20,17 @@ export function loadableView(load: () => Promise<LazyModule>): Component {
       })
       .catch((err: unknown) => {
         failure = err;
+        failing.add(reset);
         throw err;
       });
     return pending;
   };
 
-  resettable.add(() => {
-    if (failure === null) return;
+  const reset = (): void => {
     pending = null;
     failure = null;
-  });
+    failing.delete(reset);
+  };
 
   return defineComponent({
     name: "LoadableView",

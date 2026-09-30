@@ -33,7 +33,7 @@ const recent = computed(() => history.value.recent[props.id] ?? EMPTY_SAMPLES);
 const buckets = computed(() => history.value.daily[props.id] ?? EMPTY_BUCKETS);
 const level = computed(() => resolveLevel(summary.value));
 const detail = computed(() => summary.value?.detail ?? null);
-const degraded24h = computed(() => summary.value?.degraded24h ?? 0);
+const warn24h = computed(() => summary.value?.warn24h ?? 0);
 </script>
 
 <template>
@@ -51,9 +51,9 @@ const degraded24h = computed(() => summary.value?.degraded24h ?? 0);
         <StatCard :label="t('latencyAvg24h')">{{ formatLatencySec(summary?.avgLatency24h, t) }}</StatCard>
       </StatGrid>
 
-      <p v-if="degraded24h > 0" class="ui-caption text-warning">
-        {{ t("degraded24h") }}
-        <span class="ui-mono-value text-xs ml-1.5">{{ formatUptimePct(degraded24h, t) }}</span>
+      <p v-if="warn24h > 0" class="ui-caption text-warning">
+        {{ t("warn24h") }}
+        <span class="ui-mono-value text-xs ml-1.5">{{ formatUptimePct(warn24h, t) }}</span>
       </p>
 
       <p v-if="detail" :class="cn('ui-body-secondary break-words', level === 'error' ? 'text-destructive' : 'text-warning')">

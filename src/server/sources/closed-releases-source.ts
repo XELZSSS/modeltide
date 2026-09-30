@@ -19,21 +19,25 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
     ],
     { onFailure: (f) => ctx.log("warn", `[closed-releases] ${f.label} leg failed: ${errMsg(f.reason)}`) },
   );
-  const [index, changelog = []] = values;
+  const [index, changelog] = values;
   const models = index?.models ?? [];
-  if (models.length === 0 && changelog.length === 0) {
+  const changelogModels = changelog?.models ?? [];
+  if (models.length === 0 && changelogModels.length === 0) {
     throw new UpstreamError(`Releases: both index and changelog failed`, { retryable: true });
   }
-  const entries = toClosedReleases(changelog);
-  ctx.log("info", `[closed-releases] rows=${entries.length} (changelog=${changelog.length}, index=${models.length})`);
+  const entries = toClosedReleases(changelogModels);
+  ctx.log(
+    "info",
+    `[closed-releases] rows=${entries.length} (changelog=${changelogModels.length}, index=${models.length})`,
+  );
   let finalEntries = entries;
   const indexFallback = finalEntries.length === 0 && models.length > 0;
   if (indexFallback) {
     finalEntries = toClosedReleasesFromIndex(models);
     ctx.log("warn", `[closed-releases] changelog empty, index fallback rows=${finalEntries.length}`);
   }
-  requireRows(finalEntries, "Releases", "rows", `changelog=${changelog.length}, index=${models.length}`);
-  const partial = index == null || index.enrichFailed || indexFallback;
+  requireRows(finalEntries, "Releases", "rows", `changelog=${changelogModels.length}, index=${models.length}`);
+  const partial = index == null || index.enrichFailed || indexFallback || changelog?.degraded === true;
   if (partial) ctx.log("warn", "[closed-releases] serving partial (degraded enrichment)");
   return { entries: finalEntries, partial };
 }

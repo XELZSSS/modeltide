@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { backfillFromMeta, compactOmniscienceEnrich, mergeBySlug } from "@/server/parsers/aa/model-enrich";
+import { backfillFromMeta, mergeBySlug } from "@/server/parsers/aa/model-enrich";
 import { compact } from "@/server/parsers/aa/model-compact";
+import { parseLeaderboardModels } from "@/server/parsers/aa/leaderboard-parser";
 import { parseChangelogModels, type ChangelogModel } from "@/server/parsers/aa/changelog-parser";
 import { mapEntry } from "@/server/parsers/aa/text-to-image-parser";
 import type { RawEntry } from "@/server/parsers/upstream-types";
@@ -58,7 +59,7 @@ describe("compact", () => {
       agentic_index: 72,
       coding_index: 70,
       release_date: "2026-08-07",
-      pricing: { input: 1.5, output: 6, cacheHit: 0.75 },
+      pricing: { input: 1.5, output: 6, cacheHit: 0.75, cacheWrite: null },
       speed: { median_output_speed: 120 },
     });
     expect(compact(rawModel()).omniscience_breakdown?.total).toEqual({
@@ -79,13 +80,11 @@ describe("compact", () => {
 
   it("averages coding sub-scores only when at least one is present", () => {
     expect(compact(rawModel({ terminalBench21: null })).coding_index).toBe(60);
-    const sparse = compact(rawModel({ terminalBench21: null, scicode: null }));
-    expect(sparse.coding_index).toBeUndefined();
-    expect("coding_index" in sparse).toBe(false);
+    expect(compact(rawModel({ terminalBench21: null, scicode: null })).coding_index).toBeNull();
   });
 
-  it("defaults the omitted text flags once a record describes any modality", () => {
-    const indexRow = compact(
+  it("treats text as the base modality and honours declared flags", () => {
+    const inputOnly = compact(
       rawModel({
         inputModalityText: undefined,
         outputModalityText: undefined,
@@ -93,30 +92,21 @@ describe("compact", () => {
         inputModalitySpeech: false,
       }),
     );
-    expect(indexRow).toMatchObject({
+    expect(inputOnly).toMatchObject({
       input_modality_text: true,
       output_modality_text: true,
       input_modality_image: true,
       input_modality_speech: false,
     });
 
+    expect(compact(rawModel({ inputModalityText: false })).input_modality_text).toBe(false);
     expect(compact(rawModel({ outputModalityText: false })).output_modality_text).toBe(false);
-    expect(compact({ id: "x", slug: "x", name: "X" }).input_modality_text).toBeUndefined();
+    expect(compact({ id: "x", slug: "x", name: "X" }).input_modality_text).toBe(true);
+    expect(compact({ id: "x", slug: "x", name: "X" }).input_modality_image).toBe(false);
   });
 
   it("drops invalid release dates", () => {
-    expect(compact(rawModel({ releaseDate: "not-a-date" })).release_date).toBeUndefined();
-  });
-});
-
-describe("compactOmniscienceEnrich", () => {
-  it("extracts the overlay fields keyed by slug", () => {
-    expect(compactOmniscienceEnrich(rawModel())).toMatchObject({ slug: "gpt-5", omniscience: 0.9 });
-    expect(compactOmniscienceEnrich(rawModel()).omniscienceBreakdown).toEqual({
-      accuracy: 0.88,
-      attemptRate: 0.7,
-      hallucinationRate: 0.1,
-    });
+    expect(compact(rawModel({ releaseDate: "not-a-date" })).release_date).toBeNull();
   });
 });
 
@@ -212,7 +202,7 @@ describe("parseAgentBoards (agent overall composite)", () => {
   const SIGNALS = [
     "task_outcome_explicit",
     "praise_complaint",
-    "steerability",
+    "steering_burden",
     "bash_recovery_steps",
     "tool_hallucination",
   ];
@@ -270,49 +260,41 @@ function clModel(over: Partial<ChangelogModel> = {}): ChangelogModel {
   };
 }
 
-function changelogHtml(): string {
-  const models = [
-    {
-      slug: "claude-opus-4-5-thinking",
-      name: "Claude Opus 4.5 (Reasoning)",
-      deprecated: true,
-      isReasoning: true,
-      effort: null,
-      release: { slug: "claude-opus-4-5", name: "Claude Opus 4.5" },
-      releaseDate: "2025-11-24",
-      creator: { id: "aa", name: "Anthropic", logo: "/img/logos/anthropic_small.svg" },
-    },
+function changelogReleases(): unknown[] {
+  return [
     {
       slug: "claude-opus-4-5",
-      name: "Claude Opus 4.5 (Non-reasoning)",
+      name: "Claude Opus 4.5",
       deprecated: true,
-      isReasoning: false,
-      effort: null,
-      release: { slug: "claude-opus-4-5", name: "Claude Opus 4.5" },
       releaseDate: "2025-11-24",
-      creator: { id: "aa", name: "Anthropic", logo: "/img/logos/anthropic_small.svg" },
+      creator: { slug: "anthropic", name: "Anthropic", logo: "/img/logos/anthropic.svg" },
     },
     {
-      slug: "llama-3-3-70b",
-      name: "Llama 3.3 70B",
+      slug: "llama-3-3",
+      name: "Llama 3.3",
       deprecated: false,
-      isReasoning: false,
-      effort: null,
-      release: { slug: "llama-3-3", name: "Llama 3.3" },
       releaseDate: "2024-12-06",
-      creator: { id: "mm", name: "Meta", logo: "/img/logos/meta_small.svg" },
+      creator: { slug: "meta", name: "Meta", logo: "/img/logos/meta.svg" },
     },
   ];
-  const payload = JSON.stringify({ models }).replace(/"/g, '\\"');
+}
+
+function changelogHtml(): string {
+  const models = [
+    { slug: "claude-opus-4-5-thinking", name: "Claude Opus 4.5 (Reasoning)", releaseSlug: "claude-opus-4-5" },
+    { slug: "claude-opus-4-5", name: "Claude Opus 4.5 (Non-reasoning)", releaseSlug: "claude-opus-4-5" },
+    { slug: "llama-3-3-70b", name: "Llama 3.3 70B", releaseSlug: "llama-3-3" },
+  ];
+  const payload = JSON.stringify({ modelsAndReleases: { releases: changelogReleases() }, models }).replace(/"/g, '\\"');
   return `<html><body><script>self.__next_f.push([1,"${payload}"])</script></body></html>`;
 }
 
-function changelogPayload(models: unknown[]): string {
-  return JSON.stringify({ models });
+function changelogPayload(models: unknown[], releases: unknown[]): string {
+  return JSON.stringify({ modelsAndReleases: { releases }, models });
 }
 
 describe("parseChangelogModels", () => {
-  it("extracts the models array from flight-escaped HTML, skipping deprecated variants", () => {
+  it("extracts the models array from flight-escaped HTML, skipping deprecated releases", () => {
     const models = unwrap(parseChangelogModels(changelogHtml()));
     expect(models).toHaveLength(1);
     expect(models[0]).toMatchObject({
@@ -327,15 +309,18 @@ describe("parseChangelogModels", () => {
   it("extracts plain (non-escaped) models arrays too", () => {
     const models = unwrap(
       parseChangelogModels(
-        `<html><div data-payload='${changelogPayload([
-          {
-            slug: "gpt-5",
-            name: "GPT-5",
-            release: { slug: "gpt-5", name: "GPT-5" },
-            releaseDate: "2026-01-15",
-            creator: { id: "oa", name: "OpenAI" },
-          },
-        ])}'></div></html>`,
+        `<html><div data-payload='${changelogPayload(
+          [{ slug: "gpt-5", name: "GPT-5", releaseSlug: "gpt-5" }],
+          [
+            {
+              slug: "gpt-5",
+              name: "GPT-5",
+              deprecated: false,
+              releaseDate: "2026-01-15",
+              creator: { slug: "openai", name: "OpenAI" },
+            },
+          ],
+        )}'></div></html>`,
       ),
     );
     expect(models).toHaveLength(1);
@@ -346,18 +331,98 @@ describe("parseChangelogModels", () => {
     const html =
       `<script>track({"models":"decoy-string"})</script>` +
       `<script>track({"models":123})</script>` +
-      `<div data-payload='${changelogPayload([
-        {
-          slug: "real",
-          name: "Real",
-          release: { slug: "real", name: "Real" },
-          releaseDate: "2026-03-01",
-          creator: { id: "r", name: "R" },
-        },
-      ])}'></div>`;
+      `<div data-payload='${changelogPayload(
+        [{ slug: "real", name: "Real", releaseSlug: "real" }],
+        [
+          {
+            slug: "real",
+            name: "Real",
+            deprecated: false,
+            releaseDate: "2026-03-01",
+            creator: { slug: "r", name: "R" },
+          },
+        ],
+      )}'></div>`;
     const models = unwrap(parseChangelogModels(html));
     expect(models).toHaveLength(1);
     expect(models[0]).toMatchObject({ slug: "real", creatorName: "R" });
+  });
+});
+function leaderboardHtml(rows: unknown[], links: unknown[], releases: unknown[]): string {
+  const linksPayload = JSON.stringify({ models: links, modelsAndReleases: { releases } });
+  const statsPayload = JSON.stringify({ models: rows });
+  return `<script>push([1,${linksPayload}])</script><script>push([1,${statsPayload}])</script>`;
+}
+
+describe("parseLeaderboardModels", () => {
+  const releases = [
+    {
+      slug: "claude-opus-4-5",
+      name: "Claude Opus 4.5",
+      deprecated: false,
+      releaseDate: "2025-11-24",
+      creator: { slug: "anthropic", name: "Anthropic", logo: "/img/logos/anthropic.svg" },
+    },
+  ];
+  const links = [
+    { slug: "claude-opus-4-5-thinking", name: "Claude Opus 4.5 (Reasoning)", releaseSlug: "claude-opus-4-5" },
+  ];
+  const row = {
+    slug: "claude-opus-4-5-thinking",
+    name: "Claude Opus 4.5 (Reasoning)",
+    shortName: "Opus 4.5 (thinking)",
+    deprecated: false,
+    isReasoning: true,
+    isOpenWeights: false,
+    paramClass: "large",
+    modelCreatorName: "Anthropic",
+    modelCreatorColor: "#cc785c",
+    intelligenceIndex: 57.6,
+    omniscience: 46.4,
+    omniscienceAccuracy: 0.66,
+    omniscienceNonHallucination: 0.414,
+    price1mInputTokens: 4,
+    price1mOutputTokens: 20,
+    cacheHitPrice: 0.2,
+    cacheWritePrice: 5,
+    medianOutputTokensPerSecond: 146.5,
+    terminalBench21: 0.6,
+    gpqa: 0.83,
+    gdpvalNormalized: 0.23,
+  };
+
+  it("normalizes leaderboard rows onto the index shape and joins the release date", () => {
+    const rows = unwrap(parseLeaderboardModels(leaderboardHtml([row], links, releases)));
+    expect(rows).toHaveLength(1);
+    expect(compact(rows[0])).toMatchObject({
+      id: "claude-opus-4-5-thinking",
+      slug: "claude-opus-4-5-thinking",
+      name: "Claude Opus 4.5 (Reasoning)",
+      short_name: "Opus 4.5 (thinking)",
+      model_creators: { name: "Anthropic", color: "#cc785c" },
+      intelligence_index: 57.6,
+      release_date: "2025-11-24",
+      size_class: "large",
+      is_reasoning: true,
+      pricing: { input: 4, output: 20, cacheHit: 0.2, cacheWrite: 5 },
+      speed: { median_output_speed: 146.5 },
+    });
+    expect(compact(rows[0]).benchmarks).toMatchObject({ terminalbench_v2_1: 60, gpqa: 83 });
+    expect(compact(rows[0]).benchmarks?.gdpval).toBeUndefined();
+    const total = compact(rows[0]).omniscience_breakdown?.total;
+    expect(total?.accuracy).toBe(66);
+    expect(total?.attempt_rate).toBeNull();
+    expect(total?.hallucination_rate).toBeCloseTo(58.6, 10);
+    expect(total?.omniscience).toBe(46.4);
+  });
+
+  it("drops deprecated rows and rows without a usable identity", () => {
+    const rows = unwrap(
+      parseLeaderboardModels(
+        leaderboardHtml([row, { ...row, slug: "old-1", deprecated: true }, { slug: "", name: "" }], links, releases),
+      ),
+    );
+    expect(rows.map((r) => r.slug)).toEqual(["claude-opus-4-5-thinking"]);
   });
 });
 

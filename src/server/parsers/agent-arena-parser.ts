@@ -12,10 +12,12 @@ import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-res
 const AGENT_SIGNALS = [
   "task_outcome_explicit",
   "praise_complaint",
-  "steerability",
+  "steering_burden",
   "bash_recovery_steps",
   "tool_hallucination",
 ] as const;
+
+export const MIN_AGENT_BOARDS = 3;
 
 interface AgentSignalRow {
   id: string;
@@ -77,8 +79,8 @@ interface AgentOverall {
   dropped: number;
 }
 
-function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[]): AgentOverall {
-  const required = boards.length;
+function buildAgentOverall(available: { signal: string; rows: AgentSignalRow[] }[]): AgentOverall {
+  const required = available.length;
   const acc = new Map<
     string,
     {
@@ -91,7 +93,7 @@ function buildAgentOverall(boards: { signal: string; rows: AgentSignalRow[] }[])
     }
   >();
   const mean = (xs: number[]): number | null => (xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-  for (const board of boards) {
+  for (const board of available) {
     const seenOnBoard = new Set<string>();
     for (const row of board.rows) {
       if (seenOnBoard.has(row.id)) continue;
@@ -132,23 +134,33 @@ export function parseAgentBoards(body: unknown): ParseResult<AgentRankEntry[]> {
     return parseFail(`Agent board could not be extracted: ${scanned.error}`);
   }
   const perSignal = scanned.data;
+  const warnings: string[] = [];
   const boards = AGENT_SIGNALS.map((signal, i) => ({
     signal,
     rows: (perSignal[i] ?? []).map(toAgentSignalRow).filter((r): r is AgentSignalRow => r !== null),
-  }));
-  const empty = boards.find((b) => b.rows.length === 0);
-  if (empty) {
-    return parseFail(zeroUpstreamMessage(`Agent board "${empty.signal}"`, "usable rows", "markup changed?"));
+  })).filter((board) => {
+    if (board.rows.length > 0) return true;
+    warnings.push(`Agent signal board "${board.signal}" yielded no usable rows`);
+    return false;
+  });
+  if (boards.length < MIN_AGENT_BOARDS) {
+    return parseFail(
+      zeroUpstreamMessage(
+        "Agent board",
+        `at least ${MIN_AGENT_BOARDS} usable signal boards`,
+        `usable=${boards.length}, markup changed?`,
+      ),
+    );
   }
   const overall = buildAgentOverall(boards);
   if (overall.rows.length === 0) {
     return parseFail(
       zeroUpstreamMessage(
         "Agent board",
-        "rows from the five-signal composite",
+        `rows from the ${boards.length}-signal composite`,
         `${overall.dropped} contenders dropped for missing a signal board`,
       ),
     );
   }
-  return parseOk(overall.rows);
+  return parseOk(overall.rows, warnings);
 }
