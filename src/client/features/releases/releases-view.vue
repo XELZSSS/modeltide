@@ -110,27 +110,22 @@ const ReleasesData = defineComponent({
       </template>
     </PageHeader>
     <SuspenseQuery>
-      <Suspense>
-        <ReleasesData>
-          <template #default="{ rows, partial, columns, renderExpandedRow }">
-            <div class="flex items-center gap-2 -mt-2 mb-4">
-              <span class="ui-meta tabular-nums">{{ t("events", { count: rows.length }) }}</span>
-            </div>
-            <PartialNotice v-if="partial" />
-            <SearchableDataTable
-              :data="rows"
-              :columns="columns"
-              :get-row-id="getReleaseRowId"
-              :get-row-name="getReleaseRowName"
-              :get-search-fields="getReleaseSearchFields"
-              :render-expanded-row="renderExpandedRow"
-            />
-          </template>
-        </ReleasesData>
-        <template #fallback>
-          <div class="h-64 w-full ui-skeleton" aria-hidden="true" />
+      <ReleasesData>
+        <template #default="{ rows, partial, columns, renderExpandedRow }">
+          <div class="flex items-center gap-2 -mt-2 mb-4">
+            <span class="ui-meta tabular-nums">{{ t("events", { count: rows.length }) }}</span>
+          </div>
+          <PartialNotice v-if="partial" />
+          <SearchableDataTable
+            :data="rows"
+            :columns="columns"
+            :get-row-id="getReleaseRowId"
+            :get-row-name="getReleaseRowName"
+            :get-search-fields="getReleaseSearchFields"
+            :render-expanded-row="renderExpandedRow"
+          />
         </template>
-      </Suspense>
+      </ReleasesData>
     </SuspenseQuery>
   </PageContainer>
 </template>

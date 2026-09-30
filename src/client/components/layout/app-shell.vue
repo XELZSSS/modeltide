@@ -1,34 +1,14 @@
 <script setup lang="ts">
-import { defineComponent, h, onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useSettingsStore } from "@/client/stores";
 import { useTranslation } from "@/client/i18n";
 import { historyIndex, isPopstateNavigation } from "@/client/router";
-import { loadableView } from "@/client/router/lazy-view";
 import DesktopNav from "@/client/components/layout/desktop-nav.vue";
 import MobileNav from "@/client/components/layout/mobile-nav.vue";
 import ErrorBoundary from "@/client/components/error-boundary.vue";
-
-const loadSettingsSheet = () => import("@/client/components/layout/settings-sheet.vue");
-const loadMobileMoreSheet = () => import("@/client/components/layout/mobile-more-sheet.vue");
-
-const SettingsSheet = loadableView(loadSettingsSheet);
-const MobileMoreSheet = loadableView(loadMobileMoreSheet);
-
-const SheetSkeleton = defineComponent({
-  setup: () => () =>
-    h("div", { class: "fixed inset-0 z-50 flex items-end justify-center sm:items-center", "aria-hidden": "true" }, [
-      h("div", { class: "fixed inset-0 bg-black/50" }),
-      h("div", { class: "relative z-50 w-full max-w-md ui-overlay p-5" }, [
-        h("div", { class: "h-4 w-24 ui-skeleton" }),
-        h("div", { class: "mt-5 flex flex-col gap-3" }, [
-          h("div", { class: "h-9 w-full ui-skeleton" }),
-          h("div", { class: "h-9 w-full ui-skeleton" }),
-          h("div", { class: "h-9 w-full ui-skeleton" }),
-        ]),
-      ]),
-    ]),
-});
+import SettingsSheet from "@/client/components/layout/settings-sheet.vue";
+import MobileMoreSheet from "@/client/components/layout/mobile-more-sheet.vue";
 
 const scrollOffsets = new Map<number, number>();
 
@@ -143,15 +123,9 @@ onUnmounted(() => {
     <MobileNav @more-open="openSheet = 'more'" @settings-open="openSheet = 'settings'" />
     <ErrorBoundary v-if="openSheet === 'settings'" key="settings">
       <SettingsSheet :open="true" @close="closeSheet" />
-      <template #fallback>
-        <SheetSkeleton />
-      </template>
     </ErrorBoundary>
     <ErrorBoundary v-if="openSheet === 'more'" key="more">
       <MobileMoreSheet :open="true" @close="closeSheet" />
-      <template #fallback>
-        <SheetSkeleton />
-      </template>
     </ErrorBoundary>
   </div>
 </template>

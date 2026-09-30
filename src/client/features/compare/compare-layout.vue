@@ -66,47 +66,31 @@ const CompareModels = defineComponent({
 <template>
   <PageContainer>
     <SuspenseQuery>
-      <Suspense>
-        <CompareModels :back-to="props.backTo" :title="props.title">
-          <template #default="{ models, pruned, clearAndBack }">
-            <div v-if="models.length < 2" class="flex flex-col gap-3 items-center py-16 text-center animate-enter">
-              <div class="w-full">
-                <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
-              </div>
-              <EmptyState :message="t('compareLimit')" compact />
-              <p v-if="pruned" class="ui-caption" role="status">
-                {{ t("compareStale") }}
-              </p>
-              <BackButton label-key="back" :to="props.backTo" />
-            </div>
-            <DetailPageLayout
-              v-else
-              back-label-key="back"
-              :back-to="props.backTo"
-              :title="props.title"
-              :description="t('artificialSource')"
-              compact
-            >
+      <CompareModels :back-to="props.backTo" :title="props.title">
+        <template #default="{ models, pruned, clearAndBack }">
+          <div v-if="models.length < 2" class="flex flex-col gap-3 items-center py-16 text-center animate-enter">
+            <div class="w-full">
               <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
-              <slot :models="models" />
-            </DetailPageLayout>
-          </template>
-        </CompareModels>
-        <template #fallback>
+            </div>
+            <EmptyState :message="t('compareLimit')" compact />
+            <p v-if="pruned" class="ui-caption" role="status">
+              {{ t("compareStale") }}
+            </p>
+            <BackButton label-key="back" :to="props.backTo" />
+          </div>
           <DetailPageLayout
+            v-else
             back-label-key="back"
             :back-to="props.backTo"
             :title="props.title"
             :description="t('artificialSource')"
             compact
           >
-            <div class="flex flex-col md:flex-row gap-4 sm:gap-6">
-              <div class="w-full md:w-1/2 h-[240px] sm:h-[320px] ui-skeleton" aria-hidden="true" />
-              <div class="w-full md:w-1/2 h-[240px] sm:h-[300px] ui-skeleton" aria-hidden="true" />
-            </div>
+            <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
+            <slot :models="models" />
           </DetailPageLayout>
         </template>
-      </Suspense>
+      </CompareModels>
     </SuspenseQuery>
   </PageContainer>
 </template>

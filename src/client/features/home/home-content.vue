@@ -17,10 +17,10 @@ import { useHomeStats } from "./use-home-stats";
 import KpiStrip from "./home-cards.vue";
 import ProviderSpeedCard from "./provider-speed-card.vue";
 import TextToImageSection from "./text-to-image-section.vue";
+import StatisticsSection from "./statistics-section.vue";
 
 const IndexAreaChart = loadableView(() => import("./home-charts.vue"));
 const UsageDonut = loadableView(() => import("./usage-donut.vue"));
-const StatisticsSection = loadableView(() => import("./statistics-section.vue"));
 
 const { t } = useTranslation();
 
@@ -84,17 +84,7 @@ const partial = computed(
     </div>
   </PageSection>
 
-  <Suspense>
-    <StatisticsSection :trending-stats="trendingStats" :hallucination-stats="hallucinationStats" />
-    <template #fallback>
-      <PageSection :title="t('statistics')">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ChartCard loading :title="t('openSourceTrendingStats')" :subtitle="t('huggingFaceSource')" />
-          <ChartCard loading :title="t('hallucinationStats')" :subtitle="t('hallucinationSource')" />
-        </div>
-      </PageSection>
-    </template>
-  </Suspense>
+  <StatisticsSection :trending-stats="trendingStats" :hallucination-stats="hallucinationStats" />
 
   <TextToImageSection :models="t2iModels" />
 </template>

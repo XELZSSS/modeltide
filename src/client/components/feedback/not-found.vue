@@ -11,7 +11,7 @@ const { t } = useTranslation();
 
 <template>
   <PageContainer>
-    <div class="flex flex-col items-center justify-center gap-4 py-24 text-center animate-enter">
+    <div class="flex flex-col items-center justify-center gap-4 py-24 text-center">
       <div class="border border-border bg-bg-secondary px-4 py-2 text-4xl sm:text-5xl font-semibold tabular-nums text-text-tertiary">
         404
       </div>

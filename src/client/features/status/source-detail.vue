@@ -17,6 +17,7 @@ import DetailPageLayout from "@/client/components/layout/detail-page-layout.vue"
 import StatCard from "@/client/components/ui/stat-card.vue";
 import StatGrid from "@/client/components/ui/stat-grid.vue";
 import ChartSkeleton from "@/client/components/ui/chart-skeleton.vue";
+import { LATENCY_CHART_HEIGHT } from "@/client/components/ui/chart";
 import UptimeStrip from "@/client/features/status/status-parts.vue";
 import StatusEventList from "@/client/features/status/status-events.vue";
 
@@ -63,7 +64,7 @@ const warn24h = computed(() => summary.value?.warn24h ?? 0);
       <SectionCard :title="t('latencyHistory')">
         <Suspense v-if="recent.length > 1">
           <LatencyChart :samples="recent" />
-          <template #fallback><ChartSkeleton height="h-[200px]" /></template>
+          <template #fallback><ChartSkeleton :height="LATENCY_CHART_HEIGHT" /></template>
         </Suspense>
         <p v-else class="ui-body-secondary py-10 text-center">{{ t("historyAccumulating") }}</p>
       </SectionCard>

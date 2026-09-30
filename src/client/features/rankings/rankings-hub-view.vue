@@ -5,7 +5,7 @@ import SearchInput from "@/client/search/search-input.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { useClientTab } from "@/client/hooks/use-client-tab";
 import { useTranslation } from "@/client/i18n";
-import { loadableView } from "@/client/router/lazy-view";
+import AgentRankingsTab from "./agent-view.vue";
 import { DEFAULT_RANKING_TAB, MODEL_SOURCES, RANKING_TABS, type RankingTabId } from "@/client/config/nav-config";
 import type { TabItem } from "@/client/components/ui/tabs";
 import type { TranslationKey } from "@/shared/i18n";
@@ -14,8 +14,6 @@ import OpenRouterTab from "./open-router-tab.vue";
 import OpenSourceTab from "./open-source-tab.vue";
 import HallucinationRankingsTab from "./hallucination-rankings-tab.vue";
 import ProviderCompareTab from "./provider-compare-tab.vue";
-
-const AgentRankingsTab = loadableView(() => import("./agent-view.vue"));
 
 const TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   modelRankings: MODEL_SOURCES.aa.sourceLabelKey,

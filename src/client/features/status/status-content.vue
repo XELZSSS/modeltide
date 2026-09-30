@@ -99,7 +99,7 @@ const overall = computed(() => {
   </Card>
 
   <PageSection>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-enter">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
       <SafeLink
         v-for="card in cards"
         :key="card.id"

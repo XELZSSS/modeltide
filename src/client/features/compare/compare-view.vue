@@ -2,6 +2,7 @@
 import { useTranslation } from "@/client/i18n";
 import { MODEL_SOURCES } from "@/client/config/nav-config";
 import ChartCard from "@/client/components/ui/chart-card.vue";
+import { BUTTERFLY_CHART_HEIGHT, RADAR_CHART_HEIGHT } from "@/client/components/ui/chart";
 import { loadableView } from "@/client/router/lazy-view";
 import ComparePageLayout from "./compare-layout.vue";
 
@@ -22,7 +23,7 @@ const { t } = useTranslation();
               loading
               class="w-full md:w-1/2"
               content-class="h-full flex items-center justify-center"
-              skeleton-height="h-[240px] sm:h-[320px]"
+              :skeleton-height="RADAR_CHART_HEIGHT"
             />
           </template>
         </Suspense>
@@ -34,7 +35,7 @@ const { t } = useTranslation();
               :title="t('compareValues')"
               class="w-full md:w-1/2"
               content-class="h-full"
-              skeleton-height="h-[240px] sm:h-[300px]"
+              :skeleton-height="BUTTERFLY_CHART_HEIGHT"
             />
           </template>
         </Suspense>

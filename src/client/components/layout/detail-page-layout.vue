@@ -13,7 +13,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="flex flex-col gap-5 min-w-0 animate-enter">
+  <div class="flex flex-col gap-5 min-w-0">
     <BackButton :label-key="backLabelKey" :to="backTo" />
     <PageHeader :compact="compact" :title="title" :description="description" />
     <div class="flex flex-col gap-4 sm:gap-5"><slot /></div>

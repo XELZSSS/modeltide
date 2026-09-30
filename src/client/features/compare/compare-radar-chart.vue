@@ -13,6 +13,7 @@ import Card from "@/client/components/ui/card.vue";
 import CardContent from "@/client/components/ui/card-content.vue";
 import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
+import { RADAR_CHART_HEIGHT } from "@/client/components/ui/chart";
 import { axisTickStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName, modelId } from "@/client/utils/model-utils";
@@ -84,7 +85,7 @@ const caption = computed(() =>
 <template>
   <Card class="w-full md:w-1/2">
     <CardContent class="h-full flex items-center justify-center">
-      <ChartFrame height="h-[240px] sm:h-[320px]">
+      <ChartFrame :height="RADAR_CHART_HEIGHT">
         <ChartCanvas type="radar" :data="data" :options="options" role="img" :aria-label="t('modelComparison')" />
         <figcaption class="sr-only">{{ caption }}</figcaption>
       </ChartFrame>

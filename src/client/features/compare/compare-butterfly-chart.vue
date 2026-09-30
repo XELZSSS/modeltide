@@ -22,6 +22,7 @@ import CardContent from "@/client/components/ui/card-content.vue";
 import CardHeader from "@/client/components/ui/card-header.vue";
 import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
+import { BUTTERFLY_CHART_HEIGHT } from "@/client/components/ui/chart";
 import { axisTickStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName } from "@/client/utils/model-utils";
@@ -121,7 +122,7 @@ const caption = computed(() =>
   <Card class="w-full md:w-1/2">
     <CardContent class="h-full">
       <CardHeader :title="t('compareValues')" />
-      <ChartFrame height="h-[240px] sm:h-[300px]">
+      <ChartFrame :height="BUTTERFLY_CHART_HEIGHT">
         <ChartCanvas type="bar" :data="data" :options="options" role="img" :aria-label="t('compareValues')" />
         <figcaption class="sr-only">{{ caption }}</figcaption>
       </ChartFrame>

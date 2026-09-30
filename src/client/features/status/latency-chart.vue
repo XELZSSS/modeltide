@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { ChartOptions } from "chart.js";
 import { useTranslation } from "@/client/i18n";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
+import { LATENCY_CHART_HEIGHT } from "@/client/components/ui/chart";
 import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import { registerLine } from "@/client/utils/charts-register";
 import { cartesianChartOptions, seriesColor, useChartTheme } from "@/client/theme/chart-theme";
@@ -62,7 +63,7 @@ const options = computed<ChartOptions<"line">>(() =>
 </script>
 
 <template>
-  <ChartFrame height="h-[200px]">
+  <ChartFrame :height="LATENCY_CHART_HEIGHT">
     <ChartCanvas type="line" :data="data" :options="options" role="img" :aria-label="t('latencyHistory')" />
   </ChartFrame>
 </template>

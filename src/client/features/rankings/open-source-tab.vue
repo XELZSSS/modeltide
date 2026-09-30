@@ -2,9 +2,7 @@
 import { useSuspenseOpenSourceModelsState } from "@/client/api/api-queries";
 import { assertPayloadShape } from "@/client/api/payload-normalize";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
-import { loadableView } from "@/client/router/lazy-view";
-
-const OpenSourceRankingsView = loadableView(() => import("./open-source-view.vue"));
+import OpenSourceRankingsView from "./open-source-view.vue";
 
 const state = await useSuspenseOpenSourceModelsState();
 assertPayloadShape(state.value.malformed, "openSourceModels");

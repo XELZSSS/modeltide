@@ -4,18 +4,17 @@ import { useRoute } from "vue-router";
 import { useSuspenseArtificialRankingsState, useSuspenseOpenRouterRankings } from "@/client/api/api-queries";
 import { isPartialPayload, unwrapList } from "@/client/api/payload-normalize";
 import { MODEL_SOURCES, type ModelSource } from "@/client/config/nav-config";
-import { loadableView } from "@/client/router/lazy-view";
 import NotFound from "@/client/components/feedback/not-found.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import PageContainer from "@/client/components/layout/page-container.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import DetailShell, { findModel } from "@/client/features/models/model-details/detail-views.vue";
+import AaContent from "@/client/features/models/model-details/aa-detail.vue";
+import OrContent from "@/client/features/models/model-details/openrouter-detail.vue";
+import OpenSourceDetail from "@/client/features/models/model-details/open-source-detail.vue";
+import HallucinationDetail from "@/client/features/models/model-details/hallucination-detail.vue";
 import type { ArtificialAnalysisModel, OpenRouterRankEntry } from "@/shared/types";
 
-const AaContent = loadableView(() => import("@/client/features/models/model-details/aa-detail.vue"));
-const OrContent = loadableView(() => import("@/client/features/models/model-details/openrouter-detail.vue"));
-const OpenSourceDetail = loadableView(() => import("@/client/features/models/model-details/open-source-detail.vue"));
-const HallucinationDetail = loadableView(() => import("@/client/features/models/model-details/hallucination-detail.vue"));
 
 function isModelSource(value: string): value is ModelSource {
   return Object.hasOwn(MODEL_SOURCES, value);
