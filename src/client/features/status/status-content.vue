@@ -25,7 +25,6 @@ interface SourceCard {
   label: string;
   level: ReturnType<typeof resolveLevel>;
   style: (typeof LEVEL_STYLES)[keyof typeof LEVEL_STYLES];
-  detail: string | null;
   buckets: DayBucket[];
   recentlyDegraded: boolean;
   uptime24h: number | null;
@@ -49,7 +48,6 @@ const cards = computed<SourceCard[]>(() =>
       label: sourceLabel(summary.id, t),
       level,
       style: LEVEL_STYLES[level],
-      detail: level === "ok" ? null : (summary.detail ?? null),
       buckets: history.value.daily[summary.id] ?? EMPTY_BUCKETS,
       recentlyDegraded: degradedIds.value.has(summary.id),
       uptime24h: summary.uptime24h,
@@ -119,13 +117,6 @@ const overall = computed(() => {
             </div>
           </div>
         </div>
-        <p
-          v-if="card.detail"
-          class="ui-caption text-text-secondary mb-2 line-clamp-2 break-words"
-          :title="card.detail"
-        >
-          {{ card.detail }}
-        </p>
         <UptimeStrip :buckets="card.buckets" />
         <div class="flex items-center justify-between gap-3 mt-3 ui-caption">
           <span>
