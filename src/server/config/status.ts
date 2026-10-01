@@ -1,6 +1,9 @@
 export const SAMPLE_LOCK_TTL_S = 300;
 export const HISTORY_KV_RETENTION_TTL_S = 90 * 24 * 60 * 60;
-export const SAMPLE_SELF_HEAL_MS = 45 * 60 * 1000;
+// Hourly cron on the free plan: only self-heal from user traffic when more
+// than one scheduled round was missed, otherwise every hourly tick would look
+// "stale" for 15 minutes and trigger duplicate sampling on the hot path.
+export const SAMPLE_SELF_HEAL_MS = 90 * 60 * 1000;
 
 const KV_READ_WARN_THROTTLE_MS = 30 * 60 * 1000;
 export const UNKNOWN_QUERY_WARN_THROTTLE_MS = 30 * 60 * 1000;

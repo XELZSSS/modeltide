@@ -1,6 +1,9 @@
 import { WARM_TASK_TIMEOUT_MS } from "@/server/config/cron";
 
-const UPSTREAM_TIMEOUT_MS = 30_000;
+// Free plan: 50 external subrequests + 6 simultaneous connections per
+// invocation. Keep per-call timeouts short so one slow upstream cannot wedge
+// the shared slot pool and trip the sampling deadline for every source.
+const UPSTREAM_TIMEOUT_MS = 12_000;
 
 export const BACKOFF_MAX_MS = 2_000;
 
@@ -13,7 +16,7 @@ const FETCH_OPTS = [UPSTREAM_FETCH_OPTS, FAST_FETCH_OPTS] as const;
 export const WORST_CASE_UPSTREAM_CALL_MS =
   Math.max(...FETCH_OPTS.map((o) => o.timeoutMs * (o.retries + 1))) + BACKOFF_MAX_MS;
 
-export const PROBE_TIMEOUT_MS = 30_000;
+export const PROBE_TIMEOUT_MS = 8_000;
 
 export const UPSTREAM_MAX_CONNECTIONS = 6;
 

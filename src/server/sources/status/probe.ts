@@ -17,17 +17,15 @@ function buildTargets(): ProbeTarget[] {
   const newsTargets = (Object.keys(rssFeeds) as (keyof typeof rssFeeds)[]).flatMap((category) =>
     rssFeeds[category].map((feed) => ({ id: feed.id, url: feed.url })),
   );
+  // Free plan: one representative URL per host. artificialAnalysis and
+  // openrouter each expose two endpoints on the same host; probing both
+  // doubles subrequests without adding liveness signal (16 -> 14 targets).
   return [
     {
       id: "artificialAnalysis",
       url: upstreamUrl(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaLeaderboard),
     },
-    { id: "openrouter", url: upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterDirectory) },
     { id: "openrouter", url: upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterRankings) },
-    {
-      id: "artificialAnalysis",
-      url: upstreamUrl(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaTextToImage),
-    },
     { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
     { id: "arena", url: upstreamUrl(upstreamConfig.arena, upstreamEndpoints.agentBoard) },
     ...newsTargets,

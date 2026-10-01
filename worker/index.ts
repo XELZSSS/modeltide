@@ -34,9 +34,13 @@ export async function pingCronMonitor(env: Env, healthy: boolean): Promise<void>
   }
 }
 
-export function warmTiersFor(fireMinuteUtc: number, fireHourUtc: number): WarmTier[] {
-  if (fireMinuteUtc >= 30) return ["core"];
-  return ["core", "hourly", ...(fireHourUtc % 6 === 0 ? (["static"] as const) : [])];
+export function warmTiersFor(_fireMinuteUtc: number, _fireHourUtc: number): WarmTier[] {
+  // Free plan: sampling alone costs ~23 subrequests; a core warmup adds ~10.
+  // core+hourly (10 tasks) or +static (11 tasks) would push a single cron
+  // invocation past the 50-subrequest cap and the 1k/day KV-write budget, so
+  // only warm core here. Hourly/static refresh on demand via stale-while-
+  // revalidate on user traffic.
+  return ["core"];
 }
 
 interface ScheduledResult {
@@ -92,7 +96,12 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
       return { failed: Number.MAX_SAFE_INTEGER, total: Number.MAX_SAFE_INTEGER };
     }
   };
-  const [sampled, warm] = await Promise.all([runSampling(), runWarmup()]);
+  // Sequential, not parallel: sampling (4+2 workers) plus warmup (2 workers)
+  // would otherwise contend for the 6 simultaneous connections and burst past
+  // the free-plan subrequest budget in one window. Sampling first also lets a
+  // timed-out sample fail fast without dragging warmup down with it.
+  const sampled = await runSampling();
+  const warm = await runWarmup();
   return {
     sampled,
     warmFailed: warm.failed,

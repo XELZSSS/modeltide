@@ -113,6 +113,18 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
       ctx.log("warn", "[status-history] round produced no samples (probes aborted or all upstreams unreachable)");
       return false;
     }
+    // All 20+ independent upstreams failing in the same round is almost
+    // certainly a local budget hit (sampling deadline, 50-subrequest cap, CPU
+    // kill) rather than a global outage. Persisting it would paint every
+    // source red with "aborted" and open false incidents; drop the round.
+    const anyReachable = [...aggregates.values()].some((agg) => agg.ok);
+    if (!anyReachable) {
+      ctx.log(
+        "warn",
+        "[status-history] round discarded: every source failed, treating as local sampling failure, not an outage",
+      );
+      return false;
+    }
     const providersComplete = providerResults.size === PROVIDER_STATUS_TARGET_COUNT;
     if (!providersComplete) {
       ctx.log(

@@ -44,6 +44,11 @@ function buildHeaders(userAgent: string, accept: string, extra?: Record<string, 
   return { "user-agent": userAgent, accept, ...extra };
 }
 
+function isSubrequestLimit(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return msg.includes("Too many subrequests") || msg.includes("subrequest");
+}
+
 async function fetchBodyText(url: string, res: Response, maxBytes: number, signal: AbortSignal): Promise<string> {
   const contentLength = res.headers.get("content-length")?.trim();
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
@@ -237,7 +242,8 @@ export class HttpClient {
       try {
         try {
           res = await fetch(url, { headers, signal, ...rest });
-        } catch {
+        } catch (err) {
+          if (isSubrequestLimit(err)) throw new UpstreamError(`Subrequest limit hit for ${url}`, { retryable: false });
           timedOut = signal.aborted;
           failMsg = timedOut ? `Upstream timeout for ${url}` : `Upstream network error for ${url}`;
         }
@@ -318,24 +324,26 @@ export class HttpClient {
       return { ok: false, status: null, latencyMs: Date.now() - queuedAt, error: "aborted" };
     }
     try {
-      let attemptStart = Date.now();
+      const attemptStart = Date.now();
       try {
-        let res = await fetch(url, {
+        const res = await fetch(url, {
           method: "HEAD",
           headers: buildHeaders(USER_AGENT, "*/*"),
           signal,
           cache: "no-store",
         });
-        if (res.status === 405 || res.status === 501) {
-          void res.body?.cancel()?.catch(() => {});
-          attemptStart = Date.now();
-          res = await fetch(url, { headers: buildHeaders(USER_AGENT, "*/*"), signal, cache: "no-store" });
-        }
         const latencyMs = Date.now() - attemptStart;
         void res.body?.cancel()?.catch(() => {});
+        // 405/501 proves the host is alive but rejects HEAD; a second GET
+        // would cost another subrequest (free plan: 50/invocation), so treat
+        // it as reachable instead of falling back.
+        if (res.status === 405 || res.status === 501) {
+          return { ok: true, status: res.status, latencyMs, error: null };
+        }
         return { ok: res.ok, status: res.status, latencyMs, error: res.ok ? null : `HTTP ${res.status}` };
-      } catch {
+      } catch (err) {
         const latencyMs = Date.now() - attemptStart;
+        if (isSubrequestLimit(err)) return { ok: false, status: null, latencyMs, error: "subrequest-limit" };
         if (this.defaultSignal?.aborted) return { ok: false, status: null, latencyMs, error: "aborted" };
         return { ok: false, status: null, latencyMs, error: timeout.aborted ? "timeout" : "network error" };
       }

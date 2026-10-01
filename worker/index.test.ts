@@ -116,9 +116,9 @@ describe("pingCronMonitor", () => {
 
 describe("warmTiersFor", () => {
   const cases: [string, number, number, string[]][] = [
-    ["off-peak minute of a non-6th hour", 13, 3, ["core", "hourly"]],
+    ["off-peak minute of a non-6th hour", 13, 3, ["core"]],
     ["peak minute", 43, 3, ["core"]],
-    ["off-peak minute of a 6th hour", 13, 6, ["core", "hourly", "static"]],
+    ["off-peak minute of a 6th hour", 13, 6, ["core"]],
     ["peak minute of a 6th hour", 43, 6, ["core"]],
   ];
 
