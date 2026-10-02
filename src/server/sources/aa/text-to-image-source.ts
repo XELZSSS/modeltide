@@ -8,7 +8,7 @@ import type { SourcePayload } from "@/shared/types";
 import { dedupeBy } from "@/shared/utils";
 
 import { mapEntry, parseTextToImageRows } from "@/server/parsers/aa/text-to-image-parser";
-import { fetchAaRsc } from "@/server/sources/aa/aa-fetch";
+import { fetchAaRsc } from "./aa-fetch";
 import { cachedPayload, requireParsed, requireRows } from "@/server/sources/pipeline";
 
 export const getTextToImageLeaderboard = (ctx: AppContext): Promise<SourcePayload<TextToImageModel[]>> =>

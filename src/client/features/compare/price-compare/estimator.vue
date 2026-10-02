@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { approxEq } from "@/shared/utils";
-import { modelDisplayName, modelId } from "@/client/utils/model-utils";
+import { modelDisplayName, modelId } from "@/shared/utils/models";
 import { formatDollar } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
 import type { ArtificialAnalysisModel } from "@/shared/types";
@@ -59,7 +59,10 @@ function isBestCost(model: ArtificialAnalysisModel): boolean {
           <span class="text-sm truncate" :style="{ color: seriesColor(theme, index) }">
             {{ modelDisplayName(model) }}
           </span>
-          <span v-if="costOf(model) != null" :class="cn('font-mono text-sm', isBestCost(model) && 'font-semibold text-success')">
+          <span
+            v-if="costOf(model) != null"
+            :class="cn('font-mono text-sm', isBestCost(model) && 'font-semibold text-success')"
+          >
             {{ formatDollar(costOf(model), t) }}
             <WinnerMark v-if="isBestCost(model)" />
           </span>

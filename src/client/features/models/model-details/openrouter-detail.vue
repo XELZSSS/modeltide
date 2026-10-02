@@ -4,7 +4,7 @@ import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
 import type { OpenRouterRankEntry } from "@/shared/types";
 import { categoryLabel, formatPricePerMillion, formatShortNumber, formatTrend } from "@/client/utils/format";
-import { PRICE_LEGS, type PriceLegId } from "@/client/utils/pricing";
+import { PRICE_LEGS, type PriceLegId } from "@/shared/utils/pricing";
 import StatGrid from "@/client/components/ui/stat-grid.vue";
 import InfoGrid from "@/client/components/ui/info-grid.vue";
 import InfoCard from "@/client/components/ui/info-card.vue";
@@ -40,7 +40,7 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
   <div class="flex flex-col gap-4">
     <StatGrid :columns="4">
       <StatCard :label="t('creator')">{{ model.creator }}</StatCard>
-      <StatCard v-for="([labelKey, value]) in tokenStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
+      <StatCard v-for="[labelKey, value] in tokenStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
       <StatCard v-if="model.reasoningTokens != null" :label="t('reasoningTokens')">
         {{ formatShortNumber(model.reasoningTokens, t("notAvailable")) }}
       </StatCard>
@@ -64,7 +64,7 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
         </InfoRow>
       </InfoCard>
       <InfoCard :title="t('pricing')">
-        <InfoRow v-for="([labelKey, value]) in priceRows" :key="labelKey" :label="t(labelKey)">
+        <InfoRow v-for="[labelKey, value] in priceRows" :key="labelKey" :label="t(labelKey)">
           {{ formatPricePerMillion(value, t) }}
         </InfoRow>
         <InfoRow v-if="cacheWrite != null" :label="t('cacheWritePrice')">

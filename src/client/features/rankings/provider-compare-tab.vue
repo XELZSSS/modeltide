@@ -8,7 +8,7 @@ import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import LabeledDot from "@/client/components/ui/labeled-dot.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatPricePerMillion, formatScore, formatSpeed } from "@/client/utils/format";
-import { computeProviderStats, type ProviderStats } from "@/client/utils/model-utils";
+import { computeProviderStats, type ProviderStats } from "@/shared/utils/models";
 
 const state = await useSuspenseArtificialRankingsState();
 assertPayloadShape(state.value.malformed, "artificialIndex");

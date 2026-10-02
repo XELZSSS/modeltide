@@ -1,8 +1,7 @@
 import type { AppContext } from "@/server/context";
-import { UpstreamError } from "@/server/infra/errors";
-import { errMsg } from "@/server/infra/task-pool";
+import { errMsg, UpstreamError } from "@/server/infra/errors";
 import { runLegs } from "@/server/sources/join-legs";
-import { getTextToImageLeaderboard } from "@/server/sources/aa/text-to-image-source";
+import { getTextToImageLeaderboard } from "@/server/sources/aa";
 import { getModels } from "@/server/sources/hf-source";
 import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
 import { FIVE_MINUTES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
@@ -46,13 +45,8 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboar
 }
 
 export async function getHomeDashboard(ctx: AppContext): Promise<SourcePayload<HomeDashboardData>> {
-  return cachedPayload(
-    ctx,
-    cacheKeys.homeDashboard,
-    FIVE_MINUTES,
-    async (ctx) => {
-      const { data, partial } = await fetchHomeDashboard(ctx);
-      return { rows: data, partial };
-    },
-  );
+  return cachedPayload(ctx, cacheKeys.homeDashboard, FIVE_MINUTES, async (ctx) => {
+    const { data, partial } = await fetchHomeDashboard(ctx);
+    return { rows: data, partial };
+  });
 }

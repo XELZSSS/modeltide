@@ -10,13 +10,14 @@ import { getModelDirectoryMeta } from "@/server/sources/openrouter-directory";
 import { compact } from "@/server/parsers/aa/model-compact";
 import { parseLeaderboardModels } from "@/server/parsers/aa/leaderboard-parser";
 import { backfillFromMeta, mergeBySlug, type IntelligenceIndexResult } from "@/server/parsers/aa/model-enrich";
-import { fetchAaRsc, getAndParseEnrich } from "@/server/sources/aa/aa-fetch";
+import { fetchAaRsc, getAndParseEnrich } from "./aa-fetch";
 import type { SourcePayload } from "@/shared/types";
 import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 import { upstreamEndpoints } from "@/server/config";
-import { cachedPayload, cachedRaw, requireParsed, requireRows, type CachedValue } from "@/server/sources/pipeline";
+import type { CacheResult } from "@/server/infra/cache/service";
+import { cachedPayload, cachedRaw, requireParsed, requireRows } from "@/server/sources/pipeline";
 
-export function getAaLeaderboardBody(ctx: AppContext): Promise<CachedValue<string>> {
+export function getAaLeaderboardBody(ctx: AppContext): Promise<CacheResult<string>> {
   return cachedRaw(ctx, cacheKeys.aaLeaderboardBody, DEFAULT_TTL_MS, (ctx) =>
     fetchAaRsc(ctx, upstreamEndpoints.aaLeaderboard),
   );

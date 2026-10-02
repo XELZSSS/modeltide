@@ -26,7 +26,7 @@ export function useNavigation(): Navigation {
       if (!nav) return [];
       return [
         {
-          path: nav.path,
+          path: route.path,
           group: nav.group,
           label: t(nav.labelKey),
           icon: nav.icon,

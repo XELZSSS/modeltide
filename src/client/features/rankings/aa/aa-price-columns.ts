@@ -11,8 +11,8 @@ import {
 } from "@/client/components/data/table/table-columns.vue";
 import CompareModelCell from "./compare-model-cell.vue";
 import { computeBlendPrice } from "@/shared/utils";
-import { modelId } from "@/client/utils/model-utils";
-import { resolveEffectivePricing, PRICE_LEGS, type EffectivePricing, type PriceLegPick } from "@/client/utils/pricing";
+import { modelId } from "@/shared/utils/models";
+import { resolveEffectivePricing, PRICE_LEGS, type EffectivePricing, type PriceLegPick } from "@/shared/utils/pricing";
 
 export interface PricingRow {
   model: ArtificialAnalysisModel;

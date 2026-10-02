@@ -45,5 +45,3 @@ export async function runCapped<T>(
   await Promise.all(Array.from({ length: workers }, () => worker()));
   return results;
 }
-
-export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));

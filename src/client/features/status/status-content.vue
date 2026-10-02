@@ -8,8 +8,8 @@ import { cn } from "@/client/utils/cn";
 import { formatUptime, formatUptimePct } from "@/client/utils/format";
 import { sourceLabel } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary, StatusHistoryPayload } from "@/shared/types";
-import { LEVEL_STYLES, recentlyDegradedIds, resolveLevel } from "@/client/utils/status-level";
-import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SOURCES } from "@/client/utils/empty";
+import { LEVEL_STYLES, recentlyDegradedIds, resolveLevel } from "@/shared/utils/status-level";
+import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SOURCES } from "@/shared/utils/empty";
 import SafeLink from "@/client/components/safe-link.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
@@ -77,7 +77,8 @@ const overall = computed(() => {
   if (!hasData) return { color: "var(--text-tertiary)", message: t("historyAccumulating") };
   if (erroring > 0) return { color: "var(--destructive)", message: t("statusDegraded", { down: erroring, total }) };
   if (warning > 0) return { color: "var(--warning)", message: t("statusWarnBanner", { warn: warning, total }) };
-  if (unprobed > 0) return { color: "var(--text-tertiary)", message: t("statusProbing", { probed: total - unprobed, total }) };
+  if (unprobed > 0)
+    return { color: "var(--text-tertiary)", message: t("statusProbing", { probed: total - unprobed, total }) };
   return { color: "var(--success)", message: t("statusAllOk") };
 });
 </script>
@@ -127,7 +128,10 @@ const overall = computed(() => {
             {{ t("uptime7d") }}
             <span class="ui-mono-value text-xs text-text-primary ml-1.5">{{ formatUptimePct(card.uptime7d, t) }}</span>
           </span>
-          <ChevronRight :size="16" class="shrink-0 text-text-tertiary transition-transform duration-fast group-hover:translate-x-0.5" />
+          <ChevronRight
+            :size="16"
+            class="shrink-0 text-text-tertiary transition-transform duration-fast group-hover:translate-x-0.5"
+          />
         </div>
       </SafeLink>
     </div>

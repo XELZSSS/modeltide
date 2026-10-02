@@ -4,7 +4,7 @@ import { extractNeedleJsonArrays, MAX_SCAN_CHARS } from "@/server/parsers/rsc-sc
 const CANDIDATE_PREFIX_CHARS = 256;
 
 export const AA_MODELS_KEY = '"models"';
-export const AA_RELEASES_KEY = '"releases"';
+const AA_RELEASES_KEY = '"releases"';
 
 export const AA_SCAN_OPTS = {
   prefixChars: CANDIDATE_PREFIX_CHARS,

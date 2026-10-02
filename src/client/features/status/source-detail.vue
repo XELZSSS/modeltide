@@ -7,8 +7,8 @@ import { cn } from "@/client/utils/cn";
 import { formatLatencySec, formatUptimePct } from "@/client/utils/format";
 import { SOURCE_LABELS } from "@/shared/config";
 import type { SourceId, StatusHistoryPayload } from "@/shared/types";
-import { LEVEL_STYLES, resolveLevel } from "@/client/utils/status-level";
-import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SAMPLES } from "@/client/utils/empty";
+import { LEVEL_STYLES, resolveLevel } from "@/shared/utils/status-level";
+import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SAMPLES } from "@/shared/utils/empty";
 import { loadableView } from "@/client/router/lazy-view";
 import PageContainer from "@/client/components/layout/page-container.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
@@ -57,7 +57,10 @@ const warn24h = computed(() => summary.value?.warn24h ?? 0);
         <span class="ui-mono-value text-xs ml-1.5">{{ formatUptimePct(warn24h, t) }}</span>
       </p>
 
-      <p v-if="detail" :class="cn('ui-body-secondary break-words', level === 'error' ? 'text-destructive' : 'text-warning')">
+      <p
+        v-if="detail"
+        :class="cn('ui-body-secondary break-words', level === 'error' ? 'text-destructive' : 'text-warning')"
+      >
         {{ detail }}
       </p>
 

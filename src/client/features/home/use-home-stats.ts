@@ -8,10 +8,10 @@ import type {
   TextToImageModel,
 } from "@/shared/types";
 import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
-import { computeProviderStats, modelDisplayName, shortModelId } from "@/client/utils/model-utils";
+import { computeProviderStats, modelDisplayName, shortModelId } from "@/shared/utils/models";
 import { formatShortNumber, orNA } from "@/client/utils/format";
 import type { HomeBarStat } from "./statistics-section.vue";
-import { EMPTY_ARRAY } from "@/client/utils/empty";
+import { EMPTY_ARRAY } from "@/shared/utils/empty";
 
 export interface HomeKpi {
   id: string;
@@ -85,7 +85,8 @@ export function useHomeStats(
     for (const m of toValue(artificialData)) {
       if (
         m.is_reasoning === true &&
-        (!bestReasoningModel || (m.intelligence_index ?? -Infinity) > (bestReasoningModel.intelligence_index ?? -Infinity))
+        (!bestReasoningModel ||
+          (m.intelligence_index ?? -Infinity) > (bestReasoningModel.intelligence_index ?? -Infinity))
       ) {
         bestReasoningModel = m;
       }

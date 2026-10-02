@@ -48,9 +48,12 @@ export function initCostStorageSync(): void {
   syncing = true;
   const storage = safeStorage("local");
   const store = useCostStore();
-  store.$subscribe((_mutation, state) => writePersisted(storage, STORAGE_KEYS.cost, VERSION, { values: state.values }), {
-    detached: true,
-  });
+  store.$subscribe(
+    (_mutation, state) => writePersisted(storage, STORAGE_KEYS.cost, VERSION, { values: state.values }),
+    {
+      detached: true,
+    },
+  );
   window.addEventListener("storage", (event) => {
     if (event.key !== STORAGE_KEYS.cost || event.newValue == null) return;
     try {

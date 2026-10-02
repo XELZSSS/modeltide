@@ -9,7 +9,11 @@ const props = withDefaults(defineProps<{ title: string; description?: string; co
 const slots = useSlots();
 
 const classes = computed(() =>
-  cn("flex flex-col sm:flex-row sm:items-end justify-between gap-4", props.compact ? "mb-6" : "mb-8 sm:mb-12", props.class),
+  cn(
+    "flex flex-col sm:flex-row sm:items-end justify-between gap-4",
+    props.compact ? "mb-6" : "mb-8 sm:mb-12",
+    props.class,
+  ),
 );
 </script>
 

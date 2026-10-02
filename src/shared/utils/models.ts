@@ -1,6 +1,6 @@
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { isFiniteNumber } from "@/shared/utils";
-import type { ModelSource } from "@/client/config/nav-config";
+import type { ModelSource } from "@/shared/types";
 
 export function getOutputSpeed(model: ArtificialAnalysisModel): number | null {
   return model.speed?.median_output_speed ?? null;

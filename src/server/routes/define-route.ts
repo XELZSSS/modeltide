@@ -1,11 +1,8 @@
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
-import {
-  UNKNOWN_QUERY_WARN_MAX_PATHS,
-  UNKNOWN_QUERY_WARN_THROTTLE_MS,
-  keyedThrottleGate,
-} from "@/server/config/status";
+import { UNKNOWN_QUERY_WARN_MAX_PATHS, UNKNOWN_QUERY_WARN_THROTTLE_MS } from "@/server/config/status";
 import { ApiError, ClientAbortError, UpstreamError, isTimeoutLike } from "@/server/infra/errors";
+import { keyedThrottleGate } from "@/server/infra/throttle";
 import { logger, type Logger } from "@/server/infra/logger";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
 import type { AppContext } from "@/server/context";

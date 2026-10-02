@@ -87,7 +87,8 @@ const aggregated = computed(() => aggregateTaskShare(props.models));
 const slices = computed(() => aggregated.value.slices);
 const total = computed(() => aggregated.value.total);
 
-const sliceLabel = (slice: TaskSlice): string => (slice.key === OTHER_TASK_KEY ? t("otherTasks") : taskLabel(slice.key, t));
+const sliceLabel = (slice: TaskSlice): string =>
+  slice.key === OTHER_TASK_KEY ? t("otherTasks") : taskLabel(slice.key, t);
 
 const data = computed<ChartData<"doughnut">>(() => ({
   labels: slices.value.map((s) => sliceLabel(s)),

@@ -4,7 +4,10 @@ import { cn } from "@/client/utils/cn";
 
 const props = defineProps<{ label: string; class?: string }>();
 const classes = computed(() =>
-  cn("flex flex-row items-baseline justify-between min-w-0 py-1.5 gap-3 border-b border-border/60 last:border-0", props.class),
+  cn(
+    "flex flex-row items-baseline justify-between min-w-0 py-1.5 gap-3 border-b border-border/60 last:border-0",
+    props.class,
+  ),
 );
 </script>
 

@@ -94,4 +94,8 @@ describe("shared/i18n", () => {
       expect(placeholders(zh[key]), key).toEqual(placeholders(en[key]));
     }
   });
+
+  it("keeps the zh and en key sets identical", () => {
+    expect(Object.keys(zh).sort()).toEqual(Object.keys(en).sort());
+  });
 });

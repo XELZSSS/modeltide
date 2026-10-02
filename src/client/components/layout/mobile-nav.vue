@@ -35,7 +35,11 @@ const isMoreActive = computed(() => mobileMore.value.some((item) => isNavActive(
       :class="barItemClass(isNavActive(pathname, item))"
       @touchstart="touch(item.path)"
     >
-      <span v-if="isNavActive(pathname, item)" class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />
+      <span
+        v-if="isNavActive(pathname, item)"
+        class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent"
+        aria-hidden="true"
+      />
       <component :is="item.icon" :size="18" />
       <span>{{ item.label }}</span>
     </SafeLink>

@@ -13,8 +13,8 @@ import {
   orNA,
 } from "@/client/utils/format";
 import { computeBlendPrice, unclampedPercent } from "@/shared/utils";
-import { getOutputSpeed } from "@/client/utils/model-utils";
-import { resolveEffectivePricing, PRICE_LEGS } from "@/client/utils/pricing";
+import { getOutputSpeed } from "@/shared/utils/models";
+import { resolveEffectivePricing, PRICE_LEGS } from "@/shared/utils/pricing";
 import { cn } from "@/client/utils/cn";
 import StatGrid from "@/client/components/ui/stat-grid.vue";
 import InfoGrid from "@/client/components/ui/info-grid.vue";
@@ -54,7 +54,7 @@ const hasAnyModality = computed(() =>
   MODALITY_KEYS.some((key) =>
     Boolean(
       props.model[`input_modality_${key}` as keyof ArtificialAnalysisModel] ||
-        props.model[`output_modality_${key}` as keyof ArtificialAnalysisModel],
+      props.model[`output_modality_${key}` as keyof ArtificialAnalysisModel],
     ),
   ),
 );
@@ -96,7 +96,7 @@ function titleCaseSizeClass(s: string): string {
 <template>
   <div class="flex flex-col gap-4">
     <StatGrid :columns="4">
-      <StatCard v-for="([labelKey, value]) in scoreStats" :key="labelKey" :label="t(labelKey)">
+      <StatCard v-for="[labelKey, value] in scoreStats" :key="labelKey" :label="t(labelKey)">
         {{ formatScore(value, t) }}
       </StatCard>
     </StatGrid>

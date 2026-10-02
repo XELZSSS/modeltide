@@ -13,10 +13,7 @@ export interface CostScenario {
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 const nonNeg = (v: number): number => Math.max(0, v);
 
-export function monthlyCostFor(
-  pricing: ModelPricing | null | undefined,
-  scenario: CostScenario,
-): number | null {
+export function monthlyCostFor(pricing: ModelPricing | null | undefined, scenario: CostScenario): number | null {
   if (!pricing || !isFiniteNumber(pricing.input) || !isFiniteNumber(pricing.output)) return null;
   const cacheHit = pricing.cacheHit;
   const cacheWrite = pricing.cacheWrite;

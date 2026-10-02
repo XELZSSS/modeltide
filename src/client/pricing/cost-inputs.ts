@@ -1,8 +1,8 @@
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type { TranslationKey } from "@/shared/i18n";
 import { monthlyCostFor, type CostScenario } from "@/shared/utils";
-import { modelId } from "@/client/utils/model-utils";
-import { resolveEffectivePricing } from "@/client/utils/pricing";
+import { modelId } from "@/shared/utils/models";
+import { resolveEffectivePricing } from "@/shared/utils/pricing";
 import { useCostStore } from "@/client/stores";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 

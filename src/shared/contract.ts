@@ -1,4 +1,4 @@
-import type { API_DOMAINS } from "@/shared/config/paths";
+import type { ApiDomain } from "@/shared/config/paths";
 import type {
   AgentRankEntry,
   ArtificialAnalysisModel,
@@ -10,10 +10,9 @@ import type {
   SourcePayload,
   StatusHistoryPayload,
 } from "@/shared/types";
+export type { ApiDomain };
 
-type Domain = keyof typeof API_DOMAINS;
-
-interface ApiContract extends Record<Domain, unknown> {
+interface ApiContract extends Record<ApiDomain, unknown> {
   artificialIndex: ArtificialAnalysisModel[];
   homeDashboard: HomeDashboardData;
   news: NewsItem[];
@@ -24,8 +23,6 @@ interface ApiContract extends Record<Domain, unknown> {
   openRouterRankings: OpenRouterRankEntry[];
   statusHistory: StatusHistoryPayload;
 }
-
-export type ApiDomain = keyof ApiContract;
 
 export type PayloadOf<D extends ApiDomain> = ApiContract[D];
 

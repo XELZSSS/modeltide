@@ -41,7 +41,9 @@ function buildOpenRouterBodyColumns(t: TFunction): DataTableColumn<OpenRouterRan
       hiddenMd: true,
       emphasis: "strong",
     }),
-    monoCol("requests", t("requests"), (item) => formatShortNumber(item.requestCount, t("notAvailable")), { emphasis: "muted" }),
+    monoCol("requests", t("requests"), (item) => formatShortNumber(item.requestCount, t("notAvailable")), {
+      emphasis: "muted",
+    }),
     rightCol("creator", t("creator"), (item) =>
       h(RightAlignedText, { class: "ui-caption" }, () => item.creator || t("unknown")),
     ),
@@ -62,7 +64,9 @@ const props = defineProps<{ data?: SourcePayload<OpenRouterRankEntry[]> }>();
 
 const { t } = useTranslation();
 
-const state = computed(() => (props.data ? unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings") : null));
+const state = computed(() =>
+  props.data ? unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings") : null,
+);
 assertPayloadShape(state.value?.malformed ?? false, "openRouterRankings");
 </script>
 

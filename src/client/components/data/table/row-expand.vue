@@ -25,13 +25,13 @@ import { computed } from "vue";
 import { ChevronRight } from "@lucide/vue";
 import Button from "@/client/components/ui/button.vue";
 import { useTranslation } from "@/client/i18n";
+import type { RowListEmits } from "./row-list";
 
-const props = withDefaults(
-  defineProps<{ rowId: string; rowName: string; isExpanded: boolean; size?: number }>(),
-  { size: 14 },
-);
+const props = withDefaults(defineProps<{ rowId: string; rowName: string; isExpanded: boolean; size?: number }>(), {
+  size: 14,
+});
 
-const emit = defineEmits<{ toggleExpand: [rowId: string | null] }>();
+const emit = defineEmits<RowListEmits>();
 
 const { t } = useTranslation();
 

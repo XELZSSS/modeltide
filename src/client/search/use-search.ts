@@ -6,7 +6,7 @@ import {
   useOpenRouterRankings,
 } from "@/client/api/api-queries";
 import { unwrapListPartial } from "@/client/api/payload-normalize";
-import { modelDetailPath } from "@/client/utils/model-utils";
+import { modelDetailPath } from "@/shared/utils/models";
 import type { SearchResult, SearchResultSource } from "@/client/search/types";
 import type {
   ArtificialAnalysisModel,
@@ -18,7 +18,7 @@ import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { foldSearchStr, matchFolded, prepareFields, fuzzyHit, type PreparedFields } from "@/client/search/match";
 import { normalizeModelKey } from "@/shared/utils";
-import { EMPTY_ARRAY } from "@/client/utils/empty";
+import { EMPTY_ARRAY } from "@/shared/utils/empty";
 
 type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
 
@@ -169,7 +169,9 @@ export function useSearchAllRankings(
 
   return {
     results,
-    isPending: computed(() => enabled.value && (artificialQ.isPending.value || openSourceQ.isPending.value || orQ.isPending.value)),
+    isPending: computed(
+      () => enabled.value && (artificialQ.isPending.value || openSourceQ.isPending.value || orQ.isPending.value),
+    ),
     isError: computed(
       () =>
         enabled.value &&

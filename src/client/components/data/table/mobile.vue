@@ -1,18 +1,19 @@
 <script setup lang="ts" generic="T">
-import { computed, type VNodeChild } from "vue";
-import type { DataTableColumn, RowListProps } from "./table-columns.vue";
-import ExpandToggle, { ExpandedRowPanel } from "./row-expand.vue";
+import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
+import type { DataTableColumn, RowListProps } from "./table-columns.vue";
+import { CellView, useRowList, type RowListEmits } from "./row-list";
+import ExpandToggle, { ExpandedRowPanel } from "./row-expand.vue";
+
+const props = defineProps<RowListProps<T>>();
+
+const emit = defineEmits<RowListEmits>();
 
 interface MobileColumnLayout<T> {
   primaryCol: DataTableColumn<T>;
   mainStatCol?: DataTableColumn<T>;
   secondaryCols: DataTableColumn<T>[];
 }
-
-const props = defineProps<RowListProps<T>>();
-
-const emit = defineEmits<{ toggleExpand: [rowId: string | null] }>();
 
 function resolveMobileColumns(columns: DataTableColumn<T>[]): MobileColumnLayout<T> | null {
   if (columns.length === 0) return null;
@@ -25,12 +26,7 @@ function resolveMobileColumns(columns: DataTableColumn<T>[]): MobileColumnLayout
 
 const layout = computed(() => resolveMobileColumns(props.columns));
 
-const CellView = (cellProps: { render: (row: T) => VNodeChild; row: T }): VNodeChild =>
-  cellProps.render(cellProps.row);
-
-const renderExpanded = (row: T): VNodeChild => props.renderExpandedRow?.(row);
-const rowName = (row: T): string => props.getRowName?.(row) ?? props.getRowId(row);
-const isRowExpanded = (row: T): boolean => props.expandedRowId === props.getRowId(row);
+const { renderExpanded, rowName, isRowExpanded } = useRowList(props);
 </script>
 
 <template>
@@ -58,7 +54,9 @@ const isRowExpanded = (row: T): boolean => props.expandedRowId === props.getRowI
             <CellView :render="layout.primaryCol.cell" :row="row" />
           </div>
           <div v-if="layout.mainStatCol" class="shrink-0 text-right min-w-0 max-w-[40%]">
-            <span v-if="layout.mainStatCol.header" class="ui-meta mr-1.5 truncate">{{ layout.mainStatCol.header }}</span>
+            <span v-if="layout.mainStatCol.header" class="ui-meta mr-1.5 truncate">{{
+              layout.mainStatCol.header
+            }}</span>
             <div class="ui-mono-value font-semibold">
               <CellView :render="layout.mainStatCol.cell" :row="row" />
             </div>

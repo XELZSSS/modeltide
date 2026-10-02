@@ -35,7 +35,7 @@ import { seriesColor, useChartTheme } from "@/client/theme/chart-theme";
 import Card from "@/client/components/ui/card.vue";
 import CardContent from "@/client/components/ui/card-content.vue";
 import Dot from "@/client/components/ui/dot.vue";
-import { modelDisplayName } from "@/client/utils/model-utils";
+import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "./compare-logic";
 
@@ -57,7 +57,11 @@ const winners = computed(() => computeWinners(props.rows, props.models, modelKey
 
 const ValueView = (cellProps: { render: () => VNodeChild }): VNodeChild => cellProps.render();
 
-function getWinner(row: CompareRow<ArtificialAnalysisModel>, model: ArtificialAnalysisModel, index: number): Winner | null {
+function getWinner(
+  row: CompareRow<ArtificialAnalysisModel>,
+  model: ArtificialAnalysisModel,
+  index: number,
+): Winner | null {
   return winners.value.get(rowKey(row))?.get(modelKeyOf(model, index)) ?? null;
 }
 </script>

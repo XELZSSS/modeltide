@@ -1,6 +1,6 @@
 import type { AppContext } from "@/server/context";
-import { kvReadWarnGate } from "@/server/config/status";
-import { errMsg } from "@/server/infra/task-pool";
+import { errMsg } from "@/server/infra/errors";
+import { kvReadWarnGate } from "@/server/infra/throttle";
 import { FIRST_LAUNCH_KEY } from "./schema";
 
 let memoryFirstLaunch: number | null = null;

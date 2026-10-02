@@ -9,7 +9,6 @@ export interface Prefetchable {
 }
 
 export interface RouteNav {
-  path: string;
   group: NavGroup;
   labelKey: TranslationKey;
   icon: Component;

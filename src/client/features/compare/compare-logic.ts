@@ -1,8 +1,8 @@
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq, unclampedPercent } from "@/shared/utils";
-import { modelId } from "@/client/utils/model-utils";
-import { resolveEffectivePricing, PRICE_LEG_IDS, PRICE_LEGS, type PriceLegPick } from "@/client/utils/pricing";
+import { modelId } from "@/shared/utils/models";
+import { resolveEffectivePricing, PRICE_LEG_IDS, PRICE_LEGS, type PriceLegPick } from "@/shared/utils/pricing";
 import { ceilToStep } from "@/client/theme/chart-theme";
 export interface CompareRow<T> {
   id?: string;

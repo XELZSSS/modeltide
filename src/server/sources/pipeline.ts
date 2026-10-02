@@ -4,6 +4,7 @@ import type { ParseResult } from "@/server/parsers/parse-result";
 import { UpstreamError, zeroUpstream } from "@/server/infra/errors";
 import type { Logger } from "@/server/infra/logger";
 import { ttlFor } from "@/shared/config";
+import type { CacheResult } from "@/server/infra/cache/service";
 
 export function requireParsed<T>(result: ParseResult<T>, log?: Logger, label = "parser"): T {
   if (!result.ok) throw new UpstreamError(result.error);
@@ -19,11 +20,6 @@ export function requireRows<T>(rows: T[], label: string, unit: string, detail?: 
 interface CacheScope {
   memoryOnly?: boolean;
   staleCapMs?: number;
-}
-
-export interface CachedValue<T> {
-  value: T;
-  degraded: boolean;
 }
 
 interface PayloadBuild<T> {
@@ -42,7 +38,7 @@ export function cachedRaw<T>(
   ttl: number,
   fetch: (ctx: AppContext) => Promise<T>,
   scope?: CacheScope,
-): Promise<CachedValue<T>> {
+): Promise<CacheResult<T>> {
   const refreshCtx = ctx.refreshContext ?? ctx;
   return ctx.cache.withTtlResult<T>(key, ttl, async () => ({ data: await fetch(refreshCtx) }), scope);
 }

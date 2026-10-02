@@ -45,7 +45,9 @@ function detailOf(event: StatusEvent): string | null {
         <Dot size="sm" :color="resolveEventStyle(event.type).color" class="mt-1.5" />
         <div class="min-w-0">
           <div class="text-sm">
-            <span :class="cn('font-medium', resolveEventStyle(event.type).text)">{{ t(resolveEventStyle(event.type).labelKey) }}</span>
+            <span :class="cn('font-medium', resolveEventStyle(event.type).text)">{{
+              t(resolveEventStyle(event.type).labelKey)
+            }}</span>
             <template v-if="showSource">
               <span class="text-text-secondary mx-1.5">·</span>
               <span class="text-text-secondary">{{ sourceLabel(event.id, t) }}</span>

@@ -2,14 +2,12 @@ import { STATIC_TTL_MS } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import type { ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError } from "@/server/infra/errors";
-import { getChangelogModels } from "@/server/sources/aa/changelog-source";
-import { getIntelligenceIndexResult } from "@/server/sources/aa/index-source";
+import { errMsg, UpstreamError } from "@/server/infra/errors";
+import { getChangelogModels, getIntelligenceIndexResult } from "@/server/sources/aa";
 import { runLegs } from "@/server/sources/join-legs";
 import { toClosedReleases, toClosedReleasesFromIndex } from "@/server/parsers/closed-releases-parser";
 import type { SourcePayload } from "@/shared/types";
 import { cachedPayload, requireRows } from "@/server/sources/pipeline";
-import { errMsg } from "@/server/infra/task-pool";
 
 async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedReleaseEntry[]; partial: boolean }> {
   const { values } = await runLegs(
@@ -43,12 +41,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
 }
 
 export const getClosedReleases = (ctx: AppContext): Promise<SourcePayload<ClosedReleaseEntry[]>> =>
-  cachedPayload(
-    ctx,
-    cacheKeys.closedReleases,
-    STATIC_TTL_MS,
-    async (ctx) => {
-      const { entries: finalEntries, partial } = await fetchClosedReleases(ctx);
-      return { rows: finalEntries, partial };
-    },
-  );
+  cachedPayload(ctx, cacheKeys.closedReleases, STATIC_TTL_MS, async (ctx) => {
+    const { entries: finalEntries, partial } = await fetchClosedReleases(ctx);
+    return { rows: finalEntries, partial };
+  });

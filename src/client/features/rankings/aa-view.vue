@@ -14,8 +14,8 @@ import SearchableDataTable from "@/client/components/data/table/data-table.vue";
 import ModelExpandedDetail from "./aa/aa-cells.vue";
 import { buildRankingColumns } from "./aa/aa-rank-columns";
 import { buildPricingColumns, type PricingRow } from "./aa/aa-price-columns";
-import { modelId } from "@/client/utils/model-utils";
-import { EMPTY_MODELS } from "@/client/utils/empty";
+import { modelId } from "@/shared/utils/models";
+import { EMPTY_MODELS } from "@/shared/utils/empty";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 const VIEW_MODES = ["rankings", "pricing"] as const;

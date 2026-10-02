@@ -26,6 +26,6 @@ export type {
   StatusHistoryPayload,
 } from "@/shared/types/status";
 
-export type { ThemeMode, HomeOpenSourceEntry, HomeDashboardData } from "@/shared/types/app";
+export type { ThemeMode, HomeOpenSourceEntry, HomeDashboardData, ModelSource } from "@/shared/types/app";
 
 export type { SourcePayload } from "@/shared/types/payload";

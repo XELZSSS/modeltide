@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { WARM_TASK_TIMEOUT_MS, warmBatchTimeoutMs } from "@/server/config";
 import { TaskNotRunError } from "@/server/infra/task-pool";
-import { cronHealthy, failTarget, pingCronMonitor, warmRoundOutcome, warmTiersFor } from "./index";
+import { cronHealthy, failTarget, pingCronMonitor, warmRoundOutcome } from "./index";
 
 describe("cronHealthy", () => {
   const cases: [string, boolean | null, number, number, boolean][] = [
@@ -111,18 +111,5 @@ describe("pingCronMonitor", () => {
     } finally {
       vi.unstubAllGlobals();
     }
-  });
-});
-
-describe("warmTiersFor", () => {
-  const cases: [string, number, number, string[]][] = [
-    ["off-peak minute of a non-6th hour", 13, 3, ["core"]],
-    ["peak minute", 43, 3, ["core"]],
-    ["off-peak minute of a 6th hour", 13, 6, ["core"]],
-    ["peak minute of a 6th hour", 43, 6, ["core"]],
-  ];
-
-  it.each(cases)("%s warms %j", (_label, minute, hour, expected) => {
-    expect(warmTiersFor(minute, hour)).toEqual(expected);
   });
 });

@@ -43,9 +43,7 @@ export function buildContext(
   });
   const base: AppContext = {
     cache,
-    http: new HttpClient(
-      init?.workSignal ? { signal: init.workSignal, background } : { background },
-    ),
+    http: new HttpClient(init?.workSignal ? { signal: init.workSignal, background } : { background }),
     kv,
     log: logger,
     onDetach: init?.onDetach,

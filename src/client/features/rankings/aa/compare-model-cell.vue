@@ -5,7 +5,7 @@ import Button from "@/client/components/ui/button.vue";
 import RankingNameCell from "@/client/components/data/table/table-columns.vue";
 import { useTranslation } from "@/client/i18n";
 import { cn } from "@/client/utils/cn";
-import { modelId } from "@/client/utils/model-utils";
+import { modelId } from "@/shared/utils/models";
 import { useCompareStore } from "@/client/stores";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 

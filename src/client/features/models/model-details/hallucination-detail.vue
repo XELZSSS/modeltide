@@ -74,7 +74,7 @@ const hallStats = computed<[TranslationKey, string][]>(() =>
   <DetailShell v-else source="hall" :title="entry.model">
     <div class="flex flex-col gap-4">
       <StatGrid :columns="4">
-        <StatCard v-for="([labelKey, value]) in hallStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
+        <StatCard v-for="[labelKey, value] in hallStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
       </StatGrid>
       <InfoCard :title="t('modelInfo')">
         <InfoRow :label="t('modelNameOrId')">{{ entry.model }}</InfoRow>

@@ -4,7 +4,7 @@ import type { DayBucket } from "@/shared/types";
 import { cn } from "@/client/utils/cn";
 import { ONE_DAY } from "@/shared/config";
 import { useTranslation } from "@/client/i18n";
-import { DAY_BAR_CLASSES, dayBarLevel } from "@/client/utils/status-level";
+import { DAY_BAR_CLASSES, dayBarLevel } from "@/shared/utils/status-level";
 import { formatDate } from "@/client/utils/format";
 
 const props = defineProps<{ buckets: DayBucket[] }>();
@@ -46,7 +46,11 @@ function titleFor(day: string): string {
   const pct = ratio == null ? null : Math.round(ratio * 1000) / 10;
   if (!bucket || pct == null) return `${formatDate(day, lang.value)} · ${t("uptimeNoData")}`;
   const degraded = bucket.warn ?? 0;
-  return [formatDate(bucket.day, lang.value), `${pct}% (${bucket.total})`, degraded > 0 ? t("dayDegraded", { count: degraded }) : null]
+  return [
+    formatDate(bucket.day, lang.value),
+    `${pct}% (${bucket.total})`,
+    degraded > 0 ? t("dayDegraded", { count: degraded }) : null,
+  ]
     .filter(Boolean)
     .join(" · ");
 }

@@ -1,19 +1,11 @@
 import type { AppContext } from "@/server/context";
 import { PROVIDER_CONCURRENCY, UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
-import { UpstreamError } from "@/server/infra/errors";
-import { errMsg, runCapped } from "@/server/infra/task-pool";
+import { errMsg, UpstreamError } from "@/server/infra/errors";
+import { runCapped } from "@/server/infra/task-pool";
+import type { SourceAggregate } from "@/server/sources/status/aggregate";
 import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/incident-parser";
 import { parseOk, type ParseResult } from "@/server/parsers/parse-result";
 import type { SourceId, SourceLevel } from "@/shared/types";
-
-interface ProviderStatusResult {
-  ok: boolean;
-  warn: boolean;
-  warnReason: string | null;
-  status: number | null;
-  latencyMs: number;
-  error: string | null;
-}
 
 type HealthParse = (raw: unknown) => ParseResult<{ level: SourceLevel; detail: string }>;
 
@@ -48,7 +40,7 @@ async function fetchProviderHealth(
   url: string,
   label: string,
   parse: HealthParse,
-): Promise<ProviderStatusResult> {
+): Promise<SourceAggregate> {
   const started = Date.now();
   let response: { status: number; body: unknown };
   try {
@@ -61,7 +53,7 @@ async function fetchProviderHealth(
       warn: false,
       warnReason: null,
       status: upstreamStatusOf(err),
-      latencyMs: Date.now() - started,
+      latencyMs: null,
       error: message,
     };
   }
@@ -74,18 +66,19 @@ async function fetchProviderHealth(
       warn: false,
       warnReason: null,
       status: response.status,
-      latencyMs,
+      latencyMs: null,
       error: parsed.error,
     };
   }
   const { level, detail } = parsed.data;
+  const ok = level !== "error";
   return {
-    ok: level !== "error",
+    ok,
     warn: level === "warn",
     warnReason: level === "warn" ? detail : null,
     status: response.status,
-    latencyMs,
-    error: level === "error" ? detail : null,
+    latencyMs: ok ? latencyMs : null,
+    error: ok ? null : detail,
   };
 }
 
@@ -113,9 +106,9 @@ const PROVIDER_STATUS_TARGETS: readonly {
 
 export const PROVIDER_STATUS_TARGET_COUNT = PROVIDER_STATUS_TARGETS.length;
 
-export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<SourceId, ProviderStatusResult>> {
+export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<SourceId, SourceAggregate>> {
   const settled = await runCapped(
-    PROVIDER_STATUS_TARGETS.map((target) => async (): Promise<readonly [SourceId, ProviderStatusResult]> => [
+    PROVIDER_STATUS_TARGETS.map((target) => async (): Promise<readonly [SourceId, SourceAggregate]> => [
       target.id,
       await fetchProviderHealth(ctx, target.url, target.label, target.parse),
     ]),

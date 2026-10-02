@@ -16,11 +16,11 @@ export const API_PREFIX = "/api";
 
 export const API_VERSION_PARAM = "v";
 
-type Domain = keyof typeof API_DOMAINS;
+export type ApiDomain = keyof typeof API_DOMAINS;
 
 const QUERY_KEY_PREFIX = ["api", "v2"] as const;
 
-export function cacheKey(domain: Domain, ...parts: (string | number)[]): string {
+export function cacheKey(domain: ApiDomain, ...parts: (string | number)[]): string {
   return [API_DOMAINS[domain], ...parts].join(":");
 }
 
@@ -52,4 +52,4 @@ export const apiPaths = {
   agentRankings: `${API_PREFIX}/${API_DOMAINS.agentRankings}`,
   statusHistory: `${API_PREFIX}/${API_DOMAINS.statusHistory}`,
   homeDashboard: `${API_PREFIX}/${API_DOMAINS.homeDashboard}`,
-} as const satisfies Record<Domain, string>;
+} as const satisfies Record<ApiDomain, string>;

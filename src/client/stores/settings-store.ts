@@ -55,7 +55,8 @@ export function initSettingsStorageSync(): void {
   const storage = safeStorage("local");
   const store = useSettingsStore();
   store.$subscribe(
-    (_mutation, state) => writePersisted(storage, STORAGE_KEYS.settings, VERSION, { themeMode: state.themeMode, lang: state.lang }),
+    (_mutation, state) =>
+      writePersisted(storage, STORAGE_KEYS.settings, VERSION, { themeMode: state.themeMode, lang: state.lang }),
     { detached: true },
   );
   window.addEventListener("storage", (event) => {

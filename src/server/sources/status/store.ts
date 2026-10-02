@@ -1,19 +1,19 @@
 import { ONE_MINUTE } from "@/shared/config";
 import {
   HISTORY_KV_RETENTION_TTL_S,
-  kvReadWarnGate,
   SAMPLE_LOCK_TTL_S,
   SAMPLE_SELF_HEAL_MS,
   STALE_SAMPLE_WARN_MS,
   STALE_WARN_THROTTLE_MS,
-  throttleGate,
 } from "@/server/config/status";
 import type { AppContext } from "@/server/context";
-import { errMsg } from "@/server/infra/task-pool";
+import { errMsg } from "@/server/infra/errors";
+import { kvReadWarnGate, throttleGate } from "@/server/infra/throttle";
 import type { SourceId } from "@/shared/types";
 import { fetchProviderStatuses, PROVIDER_STATUS_TARGET_COUNT } from "@/server/sources/incident-source";
+import type { SourceAggregate } from "./aggregate";
 import { mergeSample } from "./history-math";
-import { aggregateProbes, probeTargets, type SourceAggregate } from "./probe";
+import { aggregateProbes, probeTargets } from "./probe";
 import { HISTORY_KEY, HISTORY_SCHEMA_VERSION, SAMPLE_LOCK_KEY, salvageStore, type HistoryStore } from "./schema";
 
 async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
@@ -99,24 +99,13 @@ export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Pr
     if (probed.length === 0) ctx.log("warn", "[status-history] probe leg returned no results");
     if (providerResults.size === 0) ctx.log("warn", "[status-history] provider-status leg returned no results");
     const aggregates = aggregateProbes(probed);
-    for (const [id, result] of providerResults) {
-      aggregates.set(id, {
-        ok: result.ok,
-        warn: result.warn,
-        warnReason: result.warnReason,
-        status: result.status,
-        latencyMs: result.ok ? result.latencyMs : null,
-        error: result.error,
-      });
-    }
+    for (const [id, agg] of providerResults) aggregates.set(id, agg);
     if (aggregates.size === 0) {
       ctx.log("warn", "[status-history] round produced no samples (probes aborted or all upstreams unreachable)");
       return false;
     }
-    // All 20+ independent upstreams failing in the same round is almost
-    // certainly a local budget hit (sampling deadline, 50-subrequest cap, CPU
-    // kill) rather than a global outage. Persisting it would paint every
-    // source red with "aborted" and open false incidents; drop the round.
+    // Every upstream failing at once is a local budget hit, not an outage;
+    // persisting it would open false incidents for every source.
     const anyReachable = [...aggregates.values()].some((agg) => agg.ok);
     if (!anyReachable) {
       ctx.log(

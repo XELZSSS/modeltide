@@ -6,7 +6,8 @@ import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import { useRouteSearchTerm } from "@/client/stores";
 import { MIN_QUERY, useSearchAllRankings } from "@/client/search/use-search";
-import Combobox, { useCombobox } from "@/client/search/combobox.vue";
+import Combobox from "@/client/search/combobox.vue";
+import { useCombobox } from "@/client/search/use-combobox";
 
 const props = defineProps<{ class?: string }>();
 

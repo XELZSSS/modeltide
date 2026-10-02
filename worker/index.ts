@@ -34,14 +34,7 @@ export async function pingCronMonitor(env: Env, healthy: boolean): Promise<void>
   }
 }
 
-export function warmTiersFor(_fireMinuteUtc: number, _fireHourUtc: number): WarmTier[] {
-  // Free plan: sampling alone costs ~23 subrequests; a core warmup adds ~10.
-  // core+hourly (10 tasks) or +static (11 tasks) would push a single cron
-  // invocation past the 50-subrequest cap and the 1k/day KV-write budget, so
-  // only warm core here. Hourly/static refresh on demand via stale-while-
-  // revalidate on user traffic.
-  return ["core"];
-}
+export const WARM_TIERS: readonly WarmTier[] = ["core"];
 
 interface ScheduledResult {
   sampled: boolean | null;
@@ -70,7 +63,7 @@ export function cronHealthy(sampled: boolean | null, warmFailed: number, warmTot
   return sampled !== false && warmTotal > 0 && warmFailed === 0;
 }
 
-async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: number): Promise<ScheduledResult> {
+async function scheduledTask(env: Env): Promise<ScheduledResult> {
   const runSampling = async (): Promise<boolean | null> => {
     try {
       return await recordStatusSamples(buildContext(env, { workSignal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
@@ -81,9 +74,7 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
   };
   const runWarmup = async (): Promise<{ failed: number; total: number }> => {
     try {
-      const tasks = warmTiersFor(fireMinuteUtc, fireHourUtc).flatMap((tier) =>
-        warmTasks(env, tier, WARM_TASK_TIMEOUT_MS),
-      );
+      const tasks = WARM_TIERS.flatMap((tier) => warmTasks(env, tier, WARM_TASK_TIMEOUT_MS));
       const batchSignal = AbortSignal.timeout(warmBatchTimeoutMs(tasks.length));
       const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: batchSignal });
       const { notRun, failed, degraded, total } = warmRoundOutcome(results);
@@ -96,10 +87,7 @@ async function scheduledTask(env: Env, fireMinuteUtc: number, fireHourUtc: numbe
       return { failed: Number.MAX_SAFE_INTEGER, total: Number.MAX_SAFE_INTEGER };
     }
   };
-  // Sequential, not parallel: sampling (4+2 workers) plus warmup (2 workers)
-  // would otherwise contend for the 6 simultaneous connections and burst past
-  // the free-plan subrequest budget in one window. Sampling first also lets a
-  // timed-out sample fail fast without dragging warmup down with it.
+  // Sequential, not parallel: parallel rounds would contend for the 6 connections and burst the subrequest budget.
   const sampled = await runSampling();
   const warm = await runWarmup();
   return {
@@ -149,12 +137,9 @@ export async function fetchHandler(req: Request, env: Env, ctx?: ExecutionContex
 export default {
   fetch: fetchHandler,
 
-  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(
-      (() => {
-        const at = new Date(controller.scheduledTime);
-        return scheduledTask(env, at.getUTCMinutes(), at.getUTCHours());
-      })()
+      scheduledTask(env)
         .then((result) => pingCronMonitor(env, result.healthy))
         .catch(async (err) => {
           logger("error", `[scheduled] ${err instanceof Error ? err.message : String(err)}`);

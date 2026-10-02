@@ -123,7 +123,7 @@ function hasGarbageChars(t: string): boolean {
   return REPEATED_CHAR_RE.test(t) || CONTROL_CHARS_RE.test(t);
 }
 
-export function isNonEmptyString(v: unknown): v is string {
+function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
 }
 

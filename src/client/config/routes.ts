@@ -54,7 +54,7 @@ export const ROUTES: RouteRecordRaw[] = [
     meta: {
       titleKey: "home",
       prefetch: [qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw, qStatusHistory],
-      nav: { path: "/", group: "primary", labelKey: "home", icon: Home },
+      nav: { group: "primary", labelKey: "home", icon: Home },
     },
   },
   {
@@ -66,7 +66,6 @@ export const ROUTES: RouteRecordRaw[] = [
       load: loadRankingsHubView,
       prefetch: RANKING_TAB_QUERIES[DEFAULT_RANKING_TAB],
       nav: {
-        path: "/models",
         group: "primary",
         labelKey: "rankings",
         icon: Award,
@@ -94,7 +93,7 @@ export const ROUTES: RouteRecordRaw[] = [
       titleKey: "releases",
       load: loadReleasesView,
       prefetch: [qClosedReleasesRaw],
-      nav: { path: "/releases", group: "secondary", labelKey: "navReleases", icon: Megaphone },
+      nav: { group: "secondary", labelKey: "navReleases", icon: Megaphone },
     },
   },
   {
@@ -105,7 +104,7 @@ export const ROUTES: RouteRecordRaw[] = [
       titleKey: "aiNews",
       load: loadNewsView,
       prefetch: newsPrefetch,
-      nav: { path: "/news", group: "secondary", labelKey: "aiNews", icon: Newspaper },
+      nav: { group: "secondary", labelKey: "aiNews", icon: Newspaper },
     },
   },
   {
@@ -116,7 +115,7 @@ export const ROUTES: RouteRecordRaw[] = [
       titleKey: "statusPageTitle",
       load: loadStatusView,
       prefetch: [qStatusHistory],
-      nav: { path: "/status", group: "secondary", labelKey: "navStatus", icon: Activity, activePrefixes: ["/status"] },
+      nav: { group: "secondary", labelKey: "navStatus", icon: Activity, activePrefixes: ["/status"] },
     },
   },
   {

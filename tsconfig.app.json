@@ -8,7 +8,7 @@
     "src/client/**/*.ts",
     "src/client/**/*.vue",
     "src/shared/**/*.ts",
-    "src/contract/**/*.ts",
+    "build/**/*.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "vite.shared.ts"

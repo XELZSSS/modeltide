@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { h } from "vue";
 import { formatShortNumber, orNA } from "@/client/utils/format";
-import { shortModelId } from "@/client/utils/model-utils";
+import { shortModelId } from "@/shared/utils/models";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import RankedTableView, { modelNameCol } from "@/client/components/data/table/ranked-table-view.vue";
 import { monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.vue";
@@ -15,7 +15,9 @@ function buildOpenSourceColumns(t: TFunction): DataTableColumn<OpenSourceModelEn
       (item) => item.id,
       (item) => shortModelId(item.id),
     ),
-    monoCol("downloads", t("downloads"), (item) => formatShortNumber(item.downloads, t("notAvailable")), { emphasis: "strong" }),
+    monoCol("downloads", t("downloads"), (item) => formatShortNumber(item.downloads, t("notAvailable")), {
+      emphasis: "strong",
+    }),
     monoCol("likes", t("likes"), (item) => formatShortNumber(item.likes, t("notAvailable")), { hiddenMd: true }),
     rightCol("license", t("license"), (item) => h("span", { class: "text-sm" }, orNA(item.license, t)), {
       hiddenMd: true,

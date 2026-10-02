@@ -17,7 +17,7 @@ const AGENT_SIGNALS = [
   "tool_hallucination",
 ] as const;
 
-export const MIN_AGENT_BOARDS = 3;
+const MIN_AGENT_BOARDS = 3;
 
 interface AgentSignalRow {
   id: string;

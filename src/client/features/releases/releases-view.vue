@@ -21,7 +21,7 @@ import {
   getReleaseRowId,
   getReleaseSearchFields,
   type ReleaseRow,
-} from "@/client/utils/release-feed";
+} from "@/shared/utils/release-feed";
 
 const { t } = useTranslation();
 

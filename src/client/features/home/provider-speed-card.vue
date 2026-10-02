@@ -17,7 +17,11 @@ const { t } = useTranslation();
     <CardContent class="flex flex-col h-full">
       <CardHeader :title="t('providerSpeed')" :subtitle="t('artificialSource')" />
       <div class="flex flex-col gap-3 flex-1 justify-between">
-        <div v-for="p in providerStats.slice(0, 6)" :key="p.name" class="flex items-center justify-between gap-3 min-w-0">
+        <div
+          v-for="p in providerStats.slice(0, 6)"
+          :key="p.name"
+          class="flex items-center justify-between gap-3 min-w-0"
+        >
           <LabeledDot :color="p.color" class="flex-1">{{ p.name }}</LabeledDot>
           <span class="text-sm font-semibold font-mono ml-3 shrink-0">
             {{ formatSpeed(p.avgSpeed, t) }} {{ t("tokensPerSecond") }}

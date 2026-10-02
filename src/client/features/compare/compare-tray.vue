@@ -5,7 +5,7 @@ import Button from "@/client/components/ui/button.vue";
 import Badge from "@/client/components/ui/badge.vue";
 import { useTranslation } from "@/client/i18n";
 import { useCompareStore } from "@/client/stores";
-import { modelDisplayName } from "@/client/utils/model-utils";
+import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelKeyOf } from "./compare-logic";
 

@@ -39,20 +39,15 @@ export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpan
 </script>
 
 <script setup lang="ts" generic="T">
-import { type VNodeChild } from "vue";
 import type { RowListProps } from "./table-columns.vue";
+import { CellView, useRowList, type RowListEmits } from "./row-list";
 import ExpandToggle, { ExpandedRowPanel } from "./row-expand.vue";
 
 const props = defineProps<RowListProps<T>>();
 
-const emit = defineEmits<{ toggleExpand: [rowId: string | null] }>();
+const emit = defineEmits<RowListEmits>();
 
-const CellView = (cellProps: { render: (row: T) => VNodeChild; row: T }): VNodeChild =>
-  cellProps.render(cellProps.row);
-
-const renderExpanded = (row: T): VNodeChild => props.renderExpandedRow?.(row);
-const rowName = (row: T): string => props.getRowName?.(row) ?? props.getRowId(row);
-const isRowExpanded = (row: T): boolean => props.expandedRowId === props.getRowId(row);
+const { renderExpanded, rowName, isRowExpanded } = useRowList(props);
 </script>
 
 <template>

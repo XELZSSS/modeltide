@@ -6,7 +6,7 @@ import EmptyState from "@/client/components/feedback/empty-state.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import { useTranslation } from "@/client/i18n";
 import HallucinationRankingsView from "./hallucination-view.vue";
-import { isHallucinationDataUnavailable } from "@/client/utils/hallucination";
+import { isHallucinationDataUnavailable } from "@/shared/utils/hallucination";
 
 const state = await useSuspenseArtificialRankingsState();
 const rankings = useHallucinationRankings(computed(() => state.value.items));

@@ -4,6 +4,7 @@ import { rssFeeds } from "@/server/sources/news-feeds";
 import type { ProbeResult } from "@/server/infra/http-client";
 import { runCapped } from "@/server/infra/task-pool";
 import type { SourceId } from "@/shared/types";
+import type { SourceAggregate } from "./aggregate";
 
 interface ProbeTarget {
   id: SourceId;
@@ -17,9 +18,7 @@ function buildTargets(): ProbeTarget[] {
   const newsTargets = (Object.keys(rssFeeds) as (keyof typeof rssFeeds)[]).flatMap((category) =>
     rssFeeds[category].map((feed) => ({ id: feed.id, url: feed.url })),
   );
-  // Free plan: one representative URL per host. artificialAnalysis and
-  // openrouter each expose two endpoints on the same host; probing both
-  // doubles subrequests without adding liveness signal (16 -> 14 targets).
+  // One URL per host: probing both endpoints of a host doubles subrequests without adding liveness signal.
   return [
     {
       id: "artificialAnalysis",
@@ -38,15 +37,6 @@ export async function probeTargets(ctx: AppContext): Promise<{ target: ProbeTarg
     PROBE_CONCURRENCY,
   );
   return probed.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
-}
-
-export interface SourceAggregate {
-  ok: boolean;
-  warn: boolean;
-  warnReason: string | null;
-  status: number | null;
-  latencyMs: number | null;
-  error: string | null;
 }
 
 interface MutableAggregate {

@@ -13,7 +13,7 @@ import ChartFrame from "@/client/components/ui/chart-frame.vue";
 import { useTranslation } from "@/client/i18n";
 import { cartesianChartOptions, ceilToStep, hexToRgba, seriesColor, useChartTheme } from "@/client/theme/chart-theme";
 import { axisGridStyle, axisTickStyle } from "@/client/utils/charts";
-import { modelDisplayName } from "@/client/utils/model-utils";
+import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import type { CompareRow } from "@/client/features/compare/compare-logic";
 

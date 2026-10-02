@@ -9,7 +9,7 @@ import PageContainer from "@/client/components/layout/page-container.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { useSuspenseArtificialRankings } from "@/client/api/api-queries";
 import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
-import { modelId } from "@/client/utils/model-utils";
+import { modelId } from "@/shared/utils/models";
 import CompareChipBar from "./compare-tray.vue";
 
 const PRUNE_NOTICE_MS = 8000;

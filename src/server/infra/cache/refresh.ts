@@ -1,9 +1,71 @@
 import { INFLIGHT_HANG_GUARD_MS } from "@/server/config";
 import { ClientAbortError, UpstreamError, isTimeoutLike } from "@/server/infra/errors";
-import { refreshFailureCooldown } from "./cooldown";
-import type { InflightRegistry } from "./inflight";
+import { pruneBounded } from "@/server/infra/throttle";
 import type { KvStore } from "./kv";
 import type { TierStore } from "./tier-store";
+
+// ---------- failure cooldown ----------
+
+export const FAILURE_COOLDOWN_MS = 45_000;
+const FAILURE_COOLDOWN_MAX_KEYS = 512;
+
+class FailureCooldown {
+  private lastFail = new Map<string, { at: number; timeout: boolean; windowMs?: number }>();
+
+  shouldSkip(key: string, windowMs: number): boolean {
+    const entry = this.lastFail.get(key);
+    if (entry == null) return false;
+    if (Date.now() - entry.at < (entry.windowMs ?? windowMs)) return true;
+    this.lastFail.delete(key);
+    return false;
+  }
+
+  wasTimeout(key: string): boolean {
+    return this.lastFail.get(key)?.timeout === true;
+  }
+
+  record(key: string, err?: unknown): void {
+    const now = Date.now();
+    const timeout = isTimeoutLike(err);
+    const windowMs = err instanceof UpstreamError ? err.retryAfterMs : undefined;
+    this.lastFail.delete(key);
+    this.lastFail.set(key, windowMs != null ? { at: now, timeout, windowMs } : { at: now, timeout });
+    pruneBounded(this.lastFail, FAILURE_COOLDOWN_MAX_KEYS, (t) => now - t.at >= (t.windowMs ?? FAILURE_COOLDOWN_MS));
+  }
+
+  clear(): void {
+    this.lastFail.clear();
+  }
+}
+
+export const refreshFailureCooldown = new FailureCooldown();
+
+// ---------- inflight registry ----------
+
+export class InflightRegistry {
+  private map = new Map<string, Promise<unknown>>();
+
+  get<T>(vk: string): Promise<T> | undefined {
+    return this.map.get(vk) as Promise<T> | undefined;
+  }
+
+  run<T>(vk: string, p: Promise<T>): Promise<T> {
+    this.map.set(vk, p);
+    return p;
+  }
+
+  release(vk: string, p: Promise<unknown>): void {
+    if (this.map.get(vk) === p) this.map.delete(vk);
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
+export const sharedInflight = new InflightRegistry();
+
+// ---------- refresh runner ----------
 
 function shouldCoolDown(err: unknown): boolean {
   if (err instanceof ClientAbortError || (err instanceof UpstreamError && err.watchdog)) return false;

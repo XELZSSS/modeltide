@@ -62,7 +62,7 @@ async function fetchBodyText(url: string, res: Response, maxBytes: number, signa
   return text;
 }
 
-export interface JsonResponse<T> {
+interface JsonResponse<T> {
   status: number;
   body: T;
 }
@@ -334,9 +334,7 @@ export class HttpClient {
         });
         const latencyMs = Date.now() - attemptStart;
         void res.body?.cancel()?.catch(() => {});
-        // 405/501 proves the host is alive but rejects HEAD; a second GET
-        // would cost another subrequest (free plan: 50/invocation), so treat
-        // it as reachable instead of falling back.
+        // 405/501 means the host is alive but rejects HEAD; a fallback GET would cost another subrequest.
         if (res.status === 405 || res.status === 501) {
           return { ok: true, status: res.status, latencyMs, error: null };
         }

@@ -2,7 +2,7 @@ import { computed, toValue, watch, type ComputedRef, type MaybeRefOrGetter } fro
 import { defineStore } from "pinia";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { STORAGE_KEYS } from "@/shared/config";
-import { modelId } from "@/client/utils/model-utils";
+import { modelId } from "@/shared/utils/models";
 import { readPersisted, safeStorage, writePersisted } from "@/client/stores/persist";
 
 const MAX_COMPARE = 2;
@@ -10,7 +10,10 @@ const VERSION = 0;
 
 function cleanIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  return [...new Set(raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0))].slice(0, MAX_COMPARE);
+  return [...new Set(raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0))].slice(
+    0,
+    MAX_COMPARE,
+  );
 }
 
 function readCompareIds(): string[] {
@@ -62,9 +65,12 @@ export function initCompareStorageSync(): void {
   if (syncing) return;
   syncing = true;
   const storage = safeStorage("session");
-  useCompareStore().$subscribe((_mutation, state) => writePersisted(storage, STORAGE_KEYS.compare, VERSION, { compareIds: state.compareIds }), {
-    detached: true,
-  });
+  useCompareStore().$subscribe(
+    (_mutation, state) => writePersisted(storage, STORAGE_KEYS.compare, VERSION, { compareIds: state.compareIds }),
+    {
+      detached: true,
+    },
+  );
 }
 
 export function useCompareModels(
@@ -80,7 +86,9 @@ export function useCompareModels(
     return map;
   });
   return computed(() =>
-    store.compareIds.map((id) => rankingMap.value.get(id)).filter((model): model is ArtificialAnalysisModel => model != null),
+    store.compareIds
+      .map((id) => rankingMap.value.get(id))
+      .filter((model): model is ArtificialAnalysisModel => model != null),
   );
 }
 

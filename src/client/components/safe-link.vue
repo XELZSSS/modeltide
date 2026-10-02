@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { navigate } from "@/client/router";
-import { isInternalHref } from "@/client/utils/url";
+import { isInternalHref } from "@/shared/utils/url";
 
 const props = defineProps<{ href: string; target?: string; rel?: string }>();
 const emit = defineEmits<{ click: [event: MouseEvent] }>();

@@ -33,8 +33,7 @@ const KNOWN_NON_OPEN = new Set([
   "intel-research",
 ]);
 
-export const isRecognizedNonOpenLicense = (id: string): boolean =>
-  KNOWN_NON_OPEN.has(id) || hasDeniedCcClause(id);
+export const isRecognizedNonOpenLicense = (id: string): boolean => KNOWN_NON_OPEN.has(id) || hasDeniedCcClause(id);
 
 function normalizeLicenseId(raw: string): string {
   return raw.toLowerCase().trim().replace(/_+/g, "-").replace(/\s+/g, "");

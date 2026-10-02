@@ -30,8 +30,15 @@ function ratingText(entry: TextToImageModel): string {
             <span v-if="entry.creatorName" class="ui-caption truncate shrink-0">({{ entry.creatorName }})</span>
           </div>
           <div class="flex flex-wrap gap-x-4 gap-y-1.5 ui-caption">
-            <span>{{ t("elo") }}: <strong class="text-text-primary font-semibold">{{ ratingText(entry) }}</strong></span>
-            <span v-if="entry.pricePer1kImages != null">{{ t("price") }}: <strong class="text-text-primary font-semibold">{{ formatDollar(entry.pricePer1kImages, t) }}{{ t("per1kImages") }}</strong></span>
+            <span
+              >{{ t("elo") }}: <strong class="text-text-primary font-semibold">{{ ratingText(entry) }}</strong></span
+            >
+            <span v-if="entry.pricePer1kImages != null"
+              >{{ t("price") }}:
+              <strong class="text-text-primary font-semibold"
+                >{{ formatDollar(entry.pricePer1kImages, t) }}{{ t("per1kImages") }}</strong
+              ></span
+            >
           </div>
         </CardContent>
       </Card>

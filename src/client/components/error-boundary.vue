@@ -49,8 +49,8 @@ function retry(): void {
       :title="t('errorBoundaryTitle')"
       :message="error.message || t('errorBoundaryRetry')"
     />
-    <p v-if="!online" class="ui-caption" role="status">{{ t('offlineRetry') }}</p>
-    <Button variant="outline" size="sm" :disabled="!online" @click="retry">{{ t('errorBoundaryRetry') }}</Button>
+    <p v-if="!online" class="ui-caption" role="status">{{ t("offlineRetry") }}</p>
+    <Button variant="outline" size="sm" :disabled="!online" @click="retry">{{ t("errorBoundaryRetry") }}</Button>
   </div>
   <Suspense v-else :key="attempt">
     <slot />

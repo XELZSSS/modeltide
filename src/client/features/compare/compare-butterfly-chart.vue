@@ -25,7 +25,7 @@ import ChartFrame from "@/client/components/ui/chart-frame.vue";
 import { BUTTERFLY_CHART_HEIGHT } from "@/client/components/ui/chart";
 import { axisTickStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { modelDisplayName } from "@/client/utils/model-utils";
+import { modelDisplayName } from "@/shared/utils/models";
 import { buildValueRows } from "./compare-logic";
 
 const props = defineProps<{ models: ArtificialAnalysisModel[] }>();

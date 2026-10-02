@@ -1,10 +1,9 @@
 import { byDateDesc } from "@/server/parsers/parser-primitives";
 import type { AppContext } from "@/server/context";
-import { ClientAbortError } from "@/server/infra/errors";
+import { ClientAbortError, errMsg } from "@/server/infra/errors";
 import { parseChangelogModels, type ChangelogModel } from "@/server/parsers/aa/changelog-parser";
-import { getAaLeaderboardBody } from "@/server/sources/aa/index-source";
+import { getAaLeaderboardBody } from "./index-source";
 import { requireParsed } from "@/server/sources/pipeline";
-import { errMsg } from "@/server/infra/task-pool";
 
 export interface ChangelogModels {
   models: ChangelogModel[];

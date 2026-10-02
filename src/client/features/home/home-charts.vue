@@ -14,7 +14,7 @@ import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
 import { CHART_EMPTY_CLASS, CHART_HEIGHT } from "@/client/components/ui/chart";
 import { useTranslation } from "@/client/i18n";
-import { modelDisplayName, shortModelId } from "@/client/utils/model-utils";
+import { modelDisplayName, shortModelId } from "@/shared/utils/models";
 import { cn } from "@/client/utils/cn";
 import {
   useChartTheme,

@@ -93,4 +93,3 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
   };
   return entry;
 }
-

@@ -14,7 +14,10 @@ export function parseTextToImageRows(body: unknown): ParseResult<Record<string, 
   );
   if (!scanned.ok) return parseFail(`Text-to-image parse failed: ${scanned.error}`);
   const dropped = scanned.data.filter((row) => mapEntry(row) === null).length;
-  return parseOk(scanned.data, dropped > 0 ? [`Dropped ${dropped} text-to-image rows without a usable identity or elo`] : []);
+  return parseOk(
+    scanned.data,
+    dropped > 0 ? [`Dropped ${dropped} text-to-image rows without a usable identity or elo`] : [],
+  );
 }
 
 export function mapEntry(raw: unknown): Omit<TextToImageModel, "rank"> | null {

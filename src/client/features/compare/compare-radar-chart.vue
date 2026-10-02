@@ -16,7 +16,7 @@ import ChartFrame from "@/client/components/ui/chart-frame.vue";
 import { RADAR_CHART_HEIGHT } from "@/client/components/ui/chart";
 import { axisTickStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { modelDisplayName, modelId } from "@/client/utils/model-utils";
+import { modelDisplayName, modelId } from "@/shared/utils/models";
 import { buildRadarData, radarMaxFor } from "./compare-logic";
 
 const props = defineProps<{ models: ArtificialAnalysisModel[] }>();

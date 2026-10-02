@@ -2,11 +2,10 @@ import { parseTs } from "@/server/parsers/parser-primitives";
 import { NEWS_TTL_MS, ttlForRatio } from "@/shared/config";
 import { SOURCE_LIMITS } from "@/server/config/limits";
 import { FAST_FETCH_OPTS, MAX_FEED_BYTES, NEWS_LEG_CONCURRENCY, cacheKeys } from "@/server/config";
-import { errMsg } from "@/server/infra/task-pool";
 import { runLegs } from "@/server/sources/join-legs";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError, ValidationError } from "@/server/infra/errors";
+import { errMsg, UpstreamError, ValidationError } from "@/server/infra/errors";
 import { FEED_ACCEPT, parseFeed } from "@/server/parsers/rss-feed-parser";
 
 import { rssFeeds } from "@/server/sources/news-feeds";

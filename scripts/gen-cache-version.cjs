@@ -5,12 +5,12 @@ const { createHash } = require("crypto");
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "src", "shared", "config", "cache-version.gen.ts");
 
-const DATA_LAYER_ROOTS = ["src/contract", "src/server", "src/shared", "worker"];
+const DATA_LAYER_ROOTS = ["src/server", "src/shared", "worker"];
 
 const WORKER_RUNTIME_DEPS = ["fast-xml-parser", "strnum"];
 
 const HASHED = [
-  "src/contract/",
+  "src/shared/contract.ts",
   "src/server/context.ts",
   "src/server/config/",
   "src/server/infra/",

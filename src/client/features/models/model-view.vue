@@ -15,7 +15,6 @@ import OpenSourceDetail from "@/client/features/models/model-details/open-source
 import HallucinationDetail from "@/client/features/models/model-details/hallucination-detail.vue";
 import type { ArtificialAnalysisModel, OpenRouterRankEntry } from "@/shared/types";
 
-
 function isModelSource(value: string): value is ModelSource {
   return Object.hasOwn(MODEL_SOURCES, value);
 }

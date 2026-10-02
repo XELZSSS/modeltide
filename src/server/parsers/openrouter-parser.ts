@@ -199,11 +199,7 @@ function lookupPricing(pricing: PricingLookup, key: string): PricingEntry | unde
   return Object.hasOwn(pricing, key) ? pricing[key] : undefined;
 }
 
-function resolvePricing(
-  pricing: PricingLookup,
-  id: string,
-  variantKey: string | undefined,
-): PricingEntry | undefined {
+function resolvePricing(pricing: PricingLookup, id: string, variantKey: string | undefined): PricingEntry | undefined {
   const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
   for (const key of keys) {
     const hit = lookupPricing(pricing, key.toLowerCase());
@@ -295,11 +291,7 @@ function compareRanked(a: RankedGroup, b: RankedGroup): number {
   return aid === bid ? 0 : aid < bid ? -1 : 1;
 }
 
-export function mapModels(
-  rows: unknown,
-  pricing: PricingLookup,
-  stats?: RankingScanStats,
-): OpenRouterRankEntry[] {
+export function mapModels(rows: unknown, pricing: PricingLookup, stats?: RankingScanStats): OpenRouterRankEntry[] {
   const ranked: RankedGroup[] = Array.from(groupRows(rows, stats).values()).map((group) => ({
     group,
     derivedTokens: usageTotal(group.agg),

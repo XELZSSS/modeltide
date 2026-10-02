@@ -1,9 +1,4 @@
-import {
-  isSuitableNewsItem,
-  isRecord,
-  truncateSafe,
-  MAX_NEWS_TITLE_CHARS,
-} from "@/server/parsers/parser-primitives";
+import { isSuitableNewsItem, isRecord, truncateSafe, MAX_NEWS_TITLE_CHARS } from "@/server/parsers/parser-primitives";
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
 import { MAX_FEED_BYTES } from "@/server/config";

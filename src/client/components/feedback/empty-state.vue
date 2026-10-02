@@ -27,7 +27,13 @@ const classes = computed(() =>
 
 <template>
   <Card :class="classes" :role="variant === 'error' ? 'alert' : 'status'">
-    <component :is="icon" v-if="icon" :size="compact ? 24 : 32" class="opacity-50 text-text-tertiary" aria-hidden="true" />
+    <component
+      :is="icon"
+      v-if="icon"
+      :size="compact ? 24 : 32"
+      class="opacity-50 text-text-tertiary"
+      aria-hidden="true"
+    />
     <p v-if="title" class="ui-card-title text-center text-text-primary">{{ title }}</p>
     <p class="ui-body-secondary text-center text-balance max-w-md">{{ message }}</p>
   </Card>

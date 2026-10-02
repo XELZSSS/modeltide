@@ -72,3 +72,5 @@ export function wrapUpstream(prefix: string, err: unknown): UpstreamError {
     ...(cause?.watchdog ? { watchdog: true } : {}),
   });
 }
+
+export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));

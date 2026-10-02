@@ -3,6 +3,8 @@ import type { OpenRouterRankEntry, OpenSourceModelEntry } from "@/shared/types/r
 
 export type ThemeMode = "light" | "dark";
 
+export type ModelSource = "aa" | "or" | "os" | "hall";
+
 export type HomeOpenSourceEntry = Pick<OpenSourceModelEntry, "id" | "downloads" | "task">;
 
 export interface HomeDashboardData {

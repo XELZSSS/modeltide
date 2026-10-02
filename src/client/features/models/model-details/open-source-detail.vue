@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
 import { formatDate, formatShortNumber, orNA } from "@/client/utils/format";
-import { encodeModelIdPath, shortModelId } from "@/client/utils/model-utils";
+import { encodeModelIdPath, shortModelId } from "@/shared/utils/models";
 import { useSuspenseOpenSourceModel } from "@/client/api/api-queries";
 import StatGrid from "@/client/components/ui/stat-grid.vue";
 import InfoGrid from "@/client/components/ui/info-grid.vue";
@@ -46,7 +46,7 @@ const tags = computed(() => model.value?.tags ?? []);
           <InfoRow :label="t('creator')">{{ orNA(model.author, t) }}</InfoRow>
           <InfoRow :label="t('license')">{{ orNA(model.license, t) }}</InfoRow>
           <InfoRow :label="t('task')">{{ orNA(model.task, t) }}</InfoRow>
-          <InfoRow v-for="([labelKey, value]) in dateRows" :key="labelKey" :label="t(labelKey)">
+          <InfoRow v-for="[labelKey, value] in dateRows" :key="labelKey" :label="t(labelKey)">
             {{ value ? formatDate(value, lang) : t("notAvailable") }}
           </InfoRow>
         </InfoCard>
