@@ -42,14 +42,22 @@ export const qOpenSourceModelsRaw = createApiQuery("openSourceModels", queryKeys
   },
 });
 
-export function qNewsRaw(category: NewsCategory) {
+type NewsQuery = ReturnType<typeof createApiQuery<"news">>;
+
+const newsQueries = new Map<NewsCategory, NewsQuery>();
+
+export function qNewsRaw(category: NewsCategory): NewsQuery {
   const resolved = (NEWS_CATEGORIES.includes(category) ? category : NEWS_CATEGORIES[0]) as NewsCategory;
-  return createApiQuery("news", queryKeys.news(resolved), {
+  const existing = newsQueries.get(resolved);
+  if (existing) return existing;
+  const created = createApiQuery("news", queryKeys.news(resolved), {
     ttl: NEWS_TTL_MS,
     partialRefetchMs: PARTIAL_FAIL_TTL_MS,
     isPartialData: isPartialPayload,
     query: { category: resolved },
   });
+  newsQueries.set(resolved, created);
+  return created;
 }
 
 export const qStatusHistory = createApiQuery("statusHistory", queryKeys.statusHistory, {

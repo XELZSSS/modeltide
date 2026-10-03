@@ -31,40 +31,48 @@ const visible = computed(() => {
 function detailOf(event: StatusEvent): string | null {
   return event.type === "up" ? null : (event.detail ?? null);
 }
+
+// Precompute per-row view models instead of calling resolveEventStyle/detailOf
+// three times per row inside the template.
+const rows = computed(() =>
+  visible.value.map((event) => ({
+    event,
+    style: resolveEventStyle(event.type),
+    detail: detailOf(event),
+  })),
+);
 </script>
 
 <template>
   <EmptyState v-if="visible.length === 0" compact :message="emptyMessage" />
   <div v-else class="ui-card divide-y divide-border">
     <div
-      v-for="event in visible"
-      :key="`${event.id}-${event.at}-${event.type}`"
+      v-for="row in rows"
+      :key="`${row.event.id}-${row.event.at}-${row.event.type}`"
       class="flex items-start justify-between gap-3 px-4 py-3"
     >
       <div class="flex items-start gap-2 min-w-0">
-        <Dot size="sm" :color="resolveEventStyle(event.type).color" class="mt-1.5" />
+        <Dot size="sm" :color="row.style.color" class="mt-1.5" />
         <div class="min-w-0">
           <div class="text-sm">
-            <span :class="cn('font-medium', resolveEventStyle(event.type).text)">{{
-              t(resolveEventStyle(event.type).labelKey)
-            }}</span>
+            <span :class="cn('font-medium', row.style.text)">{{ t(row.style.labelKey) }}</span>
             <template v-if="showSource">
               <span class="text-text-secondary mx-1.5">·</span>
-              <span class="text-text-secondary">{{ sourceLabel(event.id, t) }}</span>
+              <span class="text-text-secondary">{{ sourceLabel(row.event.id, t) }}</span>
             </template>
           </div>
           <p
-            v-if="detailOf(event)"
+            v-if="row.detail"
             class="ui-caption text-text-secondary mt-0.5 line-clamp-2 break-words"
-            :title="detailOf(event) ?? undefined"
+            :title="row.detail ?? undefined"
           >
-            {{ detailOf(event) }}
+            {{ row.detail }}
           </p>
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0 text-xs text-text-secondary">
-        <span v-if="event.type !== 'up'" class="font-mono">{{ eventDurationLabel(t, event.durationMin) }}</span>
-        <span v-if="showTime">{{ formatRelativeTime(event.at, t, lang) }}</span>
+        <span v-if="row.event.type !== 'up'" class="font-mono">{{ eventDurationLabel(t, row.event.durationMin) }}</span>
+        <span v-if="showTime">{{ formatRelativeTime(row.event.at, t, lang) }}</span>
       </div>
     </div>
   </div>

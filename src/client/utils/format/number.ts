@@ -48,8 +48,8 @@ export function formatTokens(n: number | null | undefined, t?: TFunction): strin
   const { abs } = compactParts(n);
   const scaled = formatScaled(abs, "", n, TOKEN_SCALES, 1);
   if (scaled) {
-    const [num, suffix] = [scaled.slice(0, -1), scaled.slice(-1)];
-    return `${num.endsWith(".0") ? num.slice(0, -2) : num}${suffix}`;
+    const num = scaled.slice(0, -1);
+    return `${num.endsWith(".0") ? num.slice(0, -2) : num}${scaled.charAt(scaled.length - 1)}`;
   }
   if (Number.isInteger(n)) return String(n);
   return String(parseFloat(n.toFixed(1)));

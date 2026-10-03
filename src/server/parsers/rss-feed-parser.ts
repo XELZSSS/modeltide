@@ -13,7 +13,9 @@ import { SOURCE_LIMITS } from "@/server/config/limits";
 
 const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
 const UNSAFE_LINK_CHARS_RE = /["<>]/;
-
+const DOCTYPE_RE = /<!DOCTYPE/i;
+const DOCTYPE_ENTITY_RE = /<!ENTITY/i;
+const SPACE_RE = / /g;
 const MAX_LINK_CHARS = 2048;
 const MAX_ID_CHARS = 2048;
 const MAX_DATE_CHARS = 64;
@@ -97,8 +99,8 @@ export function parseFeed(xml: unknown, sourceUrl: unknown): ParseResult<NewsIte
     return parseFail(`Feed too large at ${sourceUrlStr} (${bytes} bytes)`);
   }
   const head = xml.slice(0, 8192);
-  const doctypeAt = head.search(/<!DOCTYPE/i);
-  if (doctypeAt !== -1 && /<!ENTITY/i.test(head.slice(doctypeAt))) {
+  const doctypeAt = head.search(DOCTYPE_RE);
+  if (doctypeAt !== -1 && DOCTYPE_ENTITY_RE.test(head.slice(doctypeAt))) {
     return parseFail(`Feed with entity-bearing DOCTYPE rejected at ${sourceUrlStr}`);
   }
   let parsed: unknown;
@@ -120,7 +122,7 @@ function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
 function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | null {
   const rawLink = itemLink(item);
   if (!rawLink) return null;
-  const link = rawLink.trim().slice(0, MAX_LINK_CHARS).replace(/ /g, "%20");
+  const link = rawLink.trim().slice(0, MAX_LINK_CHARS).replace(SPACE_RE, "%20");
   if (UNSAFE_LINK_CHARS_RE.test(link) || hasControlChars(link)) return null;
   const rawTitle = textOf(item.title) ?? "";
   const title = cleanTitle(rawTitle);

@@ -8,7 +8,7 @@ import {
 import { L1_RESIDENT_BYTES_FACTOR } from "@/server/config/cache";
 import { kvReadWarnGate } from "@/server/infra/throttle";
 import { logger, type Logger } from "@/server/infra/logger";
-import { fnv1aHash, utf8ByteLength } from "@/server/infra/hash";
+import { fnv1aHashUint32, utf8ByteLength } from "@/server/infra/hash";
 import { ONE_DAY } from "@/shared/config";
 import type { KvStore } from "./kv";
 
@@ -36,17 +36,17 @@ function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
 
 export function jitteredTtl(vk: string, ttl: number): number {
   const base = Number.isFinite(ttl) && ttl > 0 ? ttl : 60_000;
-  const h1 = (parseInt(fnv1aHash(vk), 36) % 50) / 1000;
+  const h1 = (fnv1aHashUint32(vk) % 50) / 1000;
   const factor = 0.95 + h1;
   if (base < 60_000) return Math.max(1000, Math.round(base * factor));
   return Math.max(60_000, Math.round(base * factor));
 }
 
-export function encodeEnvelope<T>(data: T, ttl: number): string {
+function encodeEnvelope<T>(data: T, ttl: number): string {
   return JSON.stringify({ d: data, e: Date.now() + ttl, t: ttl });
 }
 
-export function decodeEnvelope<T>(raw: string): { env: StaleEnvelope<T>; bytes: number } | undefined {
+function decodeEnvelope<T>(raw: string): { env: StaleEnvelope<T>; bytes: number } | undefined {
   let env: StaleEnvelope<T>;
   try {
     env = JSON.parse(raw) as StaleEnvelope<T>;

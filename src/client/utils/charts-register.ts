@@ -17,9 +17,12 @@ import {
 } from "chart.js";
 import { applyChartDefaults } from "./charts";
 
+// Defaults are idempotent chart settings — apply once here instead of
+// re-applying on every registerChart call.
+applyChartDefaults(ChartJS);
+
 function registerChart(...elements: Parameters<(typeof ChartJS)["register"]>[number][]): void {
   (ChartJS.register as (...args: unknown[]) => void)(...elements);
-  applyChartDefaults(ChartJS);
 }
 
 export function registerBar(): void {

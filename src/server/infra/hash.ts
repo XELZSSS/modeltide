@@ -1,10 +1,14 @@
-export function fnv1aHash(raw: string, seed = 2166136261, prime = 16777619): string {
+export function fnv1aHashUint32(raw: string, seed = 2166136261, prime = 16777619): number {
   let h = seed;
   for (let i = 0; i < raw.length; i++) {
     h ^= raw.charCodeAt(i);
     h = Math.imul(h, prime);
   }
-  return (h >>> 0).toString(36);
+  return h >>> 0;
+}
+
+export function fnv1aHash(raw: string, seed = 2166136261, prime = 16777619): string {
+  return fnv1aHashUint32(raw, seed, prime).toString(36);
 }
 
 export function utf8ByteLength(s: string): number {

@@ -3,7 +3,7 @@ import { extractNeedleJsonArrays } from "@/server/parsers/rsc-scanner";
 import {
   AA_MODELS_KEY,
   AA_SCAN_OPTS,
-  collectModelReleaseLinks,
+  collectModelReleaseLinksFromArrays,
   collectReleases,
   type ReleaseInfo,
 } from "@/server/parsers/aa/release-index";
@@ -61,20 +61,24 @@ function normalizeRow(
 export function parseLeaderboardModels(html: unknown): ParseResult<Record<string, unknown>[]> {
   if (typeof html !== "string" || !html) return parseFail("AA leaderboard page is not a string");
   const releases = collectReleases(html);
-  const links = collectModelReleaseLinks(html);
+  // Scan the "models" needle once and share the arrays between link collection and row parsing.
+  const modelArrays = extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS);
+  const links = collectModelReleaseLinksFromArrays(modelArrays);
   let best: Record<string, unknown>[] = [];
-  let seen = 0;
-  for (const value of extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS)) {
+  let bestRaw = 0;
+  for (const value of modelArrays) {
     if (!Array.isArray(value)) continue;
     const rows = value as unknown[];
     if (rows.length === 0 || !isRecord(rows[0]) || !("intelligenceIndex" in rows[0])) continue;
-    seen += rows.length;
     const kept = rows
       .map((raw) => (isRecord(raw) ? normalizeRow(raw, releases, links) : null))
       .filter((row): row is Record<string, unknown> => row !== null);
-    if (kept.length > best.length) best = kept;
+    if (kept.length > best.length) {
+      best = kept;
+      bestRaw = rows.length;
+    }
   }
   if (best.length === 0) return parseFail("AA leaderboard page yielded no usable model rows");
-  const dropped = seen - best.length;
+  const dropped = bestRaw - best.length;
   return parseOk(best, dropped > 0 ? [`Skipped ${dropped} deprecated leaderboard rows`] : []);
 }

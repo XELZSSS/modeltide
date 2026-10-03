@@ -12,16 +12,14 @@ const FAILURE_COOLDOWN_MAX_KEYS = 512;
 class FailureCooldown {
   private lastFail = new Map<string, { at: number; timeout: boolean; windowMs?: number }>();
 
-  shouldSkip(key: string, windowMs: number): boolean {
+  shouldSkip(key: string, windowMs: number): { skip: boolean; wasTimeout: boolean } {
     const entry = this.lastFail.get(key);
-    if (entry == null) return false;
-    if (Date.now() - entry.at < (entry.windowMs ?? windowMs)) return true;
+    if (entry == null) return { skip: false, wasTimeout: false };
+    if (Date.now() - entry.at < (entry.windowMs ?? windowMs)) {
+      return { skip: true, wasTimeout: entry.timeout };
+    }
     this.lastFail.delete(key);
-    return false;
-  }
-
-  wasTimeout(key: string): boolean {
-    return this.lastFail.get(key)?.timeout === true;
+    return { skip: false, wasTimeout: false };
   }
 
   record(key: string, err?: unknown): void {
@@ -87,9 +85,11 @@ export class RefreshRunner {
   ): Promise<T> {
     const existing = this.inflight.get<T>(vk);
     if (existing) return existing;
-    if (refreshFailureCooldown.shouldSkip(vk, this.failureCooldownMs)) {
-      const timeout = refreshFailureCooldown.wasTimeout(vk);
-      throw new UpstreamError(`Upstream refresh skipped (failure cooldown) for ${vk}`, { timeout });
+    const cooldown = refreshFailureCooldown.shouldSkip(vk, this.failureCooldownMs);
+    if (cooldown.skip) {
+      throw new UpstreamError(`Upstream refresh skipped (failure cooldown) for ${vk}`, {
+        timeout: cooldown.wasTimeout,
+      });
     }
 
     let p!: Promise<T>;

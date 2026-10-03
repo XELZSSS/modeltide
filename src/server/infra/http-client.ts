@@ -49,9 +49,12 @@ function isSubrequestLimit(err: unknown): boolean {
   return msg.includes("Too many subrequests") || msg.includes("subrequest");
 }
 
+const UTF8_DECODER = new TextDecoder();
+const CONTENT_LENGTH_DIGITS_RE = /^\d+$/;
+
 async function fetchBodyText(url: string, res: Response, maxBytes: number, signal: AbortSignal): Promise<string> {
   const contentLength = res.headers.get("content-length")?.trim();
-  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+  if (contentLength && CONTENT_LENGTH_DIGITS_RE.test(contentLength) && Number(contentLength) > maxBytes) {
     void res.body?.cancel()?.catch(() => {});
     throw new UpstreamError(`Upstream payload too large for ${url}`);
   }
@@ -78,6 +81,9 @@ async function parseJsonBody<T>(url: string, res: Response, maxBytes: number, si
 
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_JITTER_MS = 250;
+
+// fetch() never mutates the headers object it is given, so a shared probe header set is safe.
+const PROBE_HEADERS: Record<string, string> = { "user-agent": USER_AGENT, accept: "*/*" };
 
 function computeBackoff(attempt: number): number {
   return Math.min(BACKOFF_BASE_MS * 2 ** attempt + Math.random() * BACKOFF_JITTER_MS, BACKOFF_MAX_MS);
@@ -206,7 +212,7 @@ async function readBodyText(
     merged.set(c, offset);
     offset += c.byteLength;
   }
-  return { text: new TextDecoder().decode(merged), bytes: total };
+  return { text: UTF8_DECODER.decode(merged), bytes: total };
 }
 
 export class HttpClient {
@@ -328,7 +334,7 @@ export class HttpClient {
       try {
         const res = await fetch(url, {
           method: "HEAD",
-          headers: buildHeaders(USER_AGENT, "*/*"),
+          headers: PROBE_HEADERS,
           signal,
           cache: "no-store",
         });

@@ -21,7 +21,14 @@ export function partialPollInterval(
     return false;
   }
   const settled = (state?.dataUpdateCount ?? 0) + (state?.errorUpdateCount ?? 0);
-  const base = partialPollCounts.get(pollKey) ?? settled;
+  // A query reset (route change) zeroes dataUpdateCount; restart the window
+  // from the current count instead of keeping a stale, larger base.
+  const prev = partialPollCounts.get(pollKey);
+  const base = prev == null || settled < prev ? settled : prev;
   partialPollCounts.set(pollKey, base);
-  return settled - base >= MAX_PARTIAL_POLLS ? false : partialRefetchMs;
+  if (settled - base >= MAX_PARTIAL_POLLS) {
+    partialPollCounts.delete(pollKey);
+    return false;
+  }
+  return partialRefetchMs;
 }

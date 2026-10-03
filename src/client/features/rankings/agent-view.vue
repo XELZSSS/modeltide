@@ -5,7 +5,7 @@ import type { AgentRankEntry } from "@/shared/types";
 import RankedTableView, { modelNameCol } from "@/client/components/data/table/ranked-table-view.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import { orNA } from "@/client/utils/format";
-import { rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.vue";
+import { rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.ts";
 import type { TFunction } from "@/shared/i18n";
 
 function buildAgentColumns(t: TFunction): DataTableColumn<AgentRankEntry>[] {

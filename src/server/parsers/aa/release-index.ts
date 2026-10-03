@@ -47,9 +47,9 @@ export function collectReleases(html: string): Map<string, ReleaseInfo> {
   return releases;
 }
 
-export function collectModelReleaseLinks(html: string): Map<string, string> {
+export function collectModelReleaseLinksFromArrays(arrays: readonly unknown[]): Map<string, string> {
   const links = new Map<string, string>();
-  for (const value of extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS)) {
+  for (const value of arrays) {
     if (!Array.isArray(value)) continue;
     const rows = value as unknown[];
     if (rows.length === 0 || !isRecord(rows[0]) || !("releaseSlug" in rows[0])) continue;
@@ -62,4 +62,8 @@ export function collectModelReleaseLinks(html: string): Map<string, string> {
     }
   }
   return links;
+}
+
+export function collectModelReleaseLinks(html: string): Map<string, string> {
+  return collectModelReleaseLinksFromArrays(extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS));
 }

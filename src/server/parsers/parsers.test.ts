@@ -8,7 +8,7 @@ import { parseFeed as parseFeedResult } from "@/server/parsers/rss-feed-parser";
 import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc-parser";
 import { isMarkerBoundaryAt } from "@/server/parsers/rsc-scanner";
 import { getOpenLicenseId, licenseTagId } from "@/server/parsers/licenses";
-import { byDateDesc, isoDate, numCoerce, numOr } from "@/server/parsers/parser-primitives";
+import { sortByDateDesc, isoDate, numCoerce, numOr } from "@/server/parsers/parser-primitives";
 
 function readFeed(xml: string, url = "https://x.example/feed") {
   const res = parseFeedResult(xml, url);
@@ -298,11 +298,11 @@ describe("primitives", () => {
     expect(isoDate(input)).toBeNull();
   });
 
-  it("byDateDesc sinks unparseable dates and never returns a NaN comparator", () => {
-    const cmp = byDateDesc<{ d: string }>((r) => r.d);
-    expect(cmp({ d: "nope" }, { d: "also-nope" })).toBe(0);
-
-    const sorted = [{ d: "2026-01-02" }, { d: "not-a-date" }, { d: "2026-03-04" }, { d: "" }].sort(cmp);
+  it("sortByDateDesc sinks unparseable dates and never returns a NaN ordering", () => {
+    const sorted = sortByDateDesc(
+      [{ d: "2026-01-02" }, { d: "not-a-date" }, { d: "2026-03-04" }, { d: "" }],
+      (r) => r.d,
+    );
     expect(sorted.map((r) => r.d)).toEqual(["2026-03-04", "2026-01-02", "not-a-date", ""]);
   });
 });

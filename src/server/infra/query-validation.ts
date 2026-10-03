@@ -34,6 +34,9 @@ export const qStr = (o: { default?: string; maxLength?: number } = {}): StringSp
   ...o,
 });
 
+const INTEGER_QUERY_RE = /^[+-]?\d+$/;
+const NUMBER_QUERY_RE = /^[+-]?(\d+(\.\d+)?)$/;
+
 type SpecValue<S extends QuerySpec> = S extends EnumSpec<infer V> ? V : S extends NumberSpec ? number : string;
 export type ValidatedQuery<S extends QuerySchema> = { [K in keyof S]: SpecValue<S[K]> };
 
@@ -46,7 +49,7 @@ function parseSingle(name: string, v: string, spec: QuerySpec): string | number 
     return v;
   }
   if (spec.type === "number") {
-    const re = spec.integer ? /^[+-]?\d+$/ : /^[+-]?(\d+(\.\d+)?)$/;
+    const re = spec.integer ? INTEGER_QUERY_RE : NUMBER_QUERY_RE;
     if (!re.test(v)) {
       throw new ValidationError(
         spec.integer ? `Query param "${name}" must be an integer` : `Query param "${name}" must be a number`,

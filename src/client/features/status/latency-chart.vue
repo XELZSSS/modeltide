@@ -16,9 +16,16 @@ function decimateSamples<T extends { t: number; latencyMs?: number | null }>(sam
   if (samples.length <= max) return samples;
   const bucketSize = samples.length / max;
   const out: T[] = [];
+  // Pick each bucket's peak by index; slicing would allocate a temp array per bucket.
   for (let i = 0; i < max; i++) {
-    const bucket = samples.slice(Math.floor(i * bucketSize), Math.floor((i + 1) * bucketSize));
-    out.push(bucket.reduce((best, cur) => ((cur.latencyMs ?? -1) > (best.latencyMs ?? -1) ? cur : best)));
+    const start = Math.floor(i * bucketSize);
+    const end = Math.floor((i + 1) * bucketSize);
+    let best = samples[start]!;
+    for (let j = start + 1; j < end; j++) {
+      const cur = samples[j]!;
+      if ((cur.latencyMs ?? -1) > (best.latencyMs ?? -1)) best = cur;
+    }
+    out.push(best);
   }
   return out;
 }

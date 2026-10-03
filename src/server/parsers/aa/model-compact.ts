@@ -65,9 +65,12 @@ function compactOmniscience(
   };
 }
 
+const MODALITY_FIELD_SUFFIXES = MODALITY_KEYS.map((mo) => mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase());
+
 function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unknown>): void {
-  for (const mo of MODALITY_KEYS) {
-    const suffix = mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase();
+  for (let i = 0; i < MODALITY_KEYS.length; i++) {
+    const mo = MODALITY_KEYS[i]!;
+    const suffix = MODALITY_FIELD_SUFFIXES[i]!;
     const inputMo = bool(m[`inputModality${suffix}`]);
     if (inputMo !== undefined) model[`input_modality_${mo}`] = inputMo;
     const outputMo = bool(m[`outputModality${suffix}`]);

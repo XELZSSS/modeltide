@@ -1,7 +1,7 @@
 <script lang="ts">
 import { h, type FunctionalComponent } from "vue";
 import { cn } from "@/client/utils/cn";
-import type { DataTableColumn } from "./table-columns.vue";
+import type { DataTableColumn } from "./table-columns.ts";
 
 type HeaderColumn = Pick<DataTableColumn<never>, "id" | "header" | "width" | "hiddenMd" | "align">;
 
@@ -38,27 +38,43 @@ export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpan
   );
 </script>
 
-<script setup lang="ts" generic="T">
-import type { RowListProps } from "./table-columns.vue";
-import { CellView, useRowList, type RowListEmits } from "./row-list";
-import ExpandToggle, { ExpandedRowPanel } from "./row-expand.vue";
+<script setup lang="ts" generic="T extends object">
+import { computed, type VNodeChild } from "vue";
+import type { RowListProps } from "./table-columns.ts";
+import { CellView, type RowListEmits } from "./row-list";
+import ExpandToggle from "./expand-toggle.vue";
+import { ExpandedRowPanel } from "./expanded-row-panel.ts";
 
 const props = defineProps<RowListProps<T>>();
 
 const emit = defineEmits<RowListEmits>();
 
-const { renderExpanded, rowName, isRowExpanded } = useRowList(props);
+// Derive ids, names and expansion once per row instead of calling the
+// accessors three to five times per row inside the template.
+const rows = computed(() =>
+  props.pagedData.map((row) => {
+    const id = props.getRowId(row);
+    return {
+      row,
+      id,
+      name: props.getRowName?.(row) ?? id,
+      expanded: props.expandedRowId === id,
+    };
+  }),
+);
+
+const renderExpanded = (row: T): VNodeChild => props.renderExpandedRow?.(row);
 </script>
 
 <template>
   <tbody>
-    <template v-for="row in pagedData" :key="getRowId(row)">
+    <template v-for="item in rows" :key="item.id">
       <tr
         :class="
           cn(
             'border-b border-border last:border-b-0 transition-colors duration-fast bg-bg-card',
             'hoverable:hover:bg-hover',
-            isRowExpanded(row) && 'bg-bg-secondary/60',
+            item.expanded && 'bg-bg-secondary/60',
           )
         "
       >
@@ -66,19 +82,19 @@ const { renderExpanded, rowName, isRowExpanded } = useRowList(props);
           <div :class="cellInnerClasses(col)">
             <ExpandToggle
               v-if="isExpandable && colIdx === 0"
-              :row-id="getRowId(row)"
-              :row-name="rowName(row)"
-              :is-expanded="isRowExpanded(row)"
+              :row-id="item.id"
+              :row-name="item.name"
+              :is-expanded="item.expanded"
               @toggle-expand="emit('toggleExpand', $event)"
             />
-            <CellView :render="col.cell" :row="row" />
+            <CellView :render="col.cell" :row="item.row" />
           </div>
         </td>
       </tr>
-      <tr v-if="isRowExpanded(row) && isExpandable" class="border-b border-border last:border-b-0 bg-bg-secondary/60">
+      <tr v-if="item.expanded && isExpandable" class="border-b border-border last:border-b-0 bg-bg-secondary/60">
         <td :colspan="columns.length">
-          <ExpandedRowPanel :row-id="getRowId(row)" :row-name="rowName(row)">
-            <CellView :render="renderExpanded" :row="row" />
+          <ExpandedRowPanel :row-id="item.id" :row-name="item.name">
+            <CellView :render="renderExpanded" :row="item.row" />
           </ExpandedRowPanel>
         </td>
       </tr>

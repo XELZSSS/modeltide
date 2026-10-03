@@ -9,7 +9,7 @@ import {
   trendClass,
   RightAlignedText,
   type DataTableColumn,
-} from "@/client/components/data/table/table-columns.vue";
+} from "@/client/components/data/table/table-columns.ts";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import OpenRouterModelDetail from "@/client/features/models/model-details/openrouter-detail.vue";

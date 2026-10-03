@@ -42,13 +42,6 @@ watch([debounced, searchTerm], () => {
 });
 
 const pending = computed(() => isPending.value || inputValue.value !== searchTerm.value);
-
-function optionClass(index: number): string {
-  return cn(
-    "w-full text-left p-2.5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-    activeIndex.value === index ? "bg-hover" : "hoverable:hover:bg-hover",
-  );
-}
 </script>
 
 <template>
@@ -74,10 +67,15 @@ function optionClass(index: number): string {
       <div
         v-for="(result, index) in results"
         :id="`${listboxId}-option-${index}`"
-        :key="`${result.source}-${result.id}-${index}`"
+        :key="`${result.source}-${result.id}`"
         role="option"
         :aria-selected="activeIndex === index"
-        :class="optionClass(index)"
+        :class="
+          cn(
+            'w-full text-left p-2.5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
+            activeIndex === index ? 'bg-hover' : 'hoverable:hover:bg-hover',
+          )
+        "
         @mouseenter="onHover(index)"
         @mousedown.prevent
         @click="onSelectIndex(index)"

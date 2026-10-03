@@ -19,16 +19,23 @@ export const numCoerceNonNegative = (v: unknown): number | null => {
 };
 
 const ISO_LIKE_RE = /^\d{4}-\d{2}-\d{2}(?:[T ]\S*)?$/;
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
 export const isoDate = (v: unknown): string | null => {
   if (typeof v !== "string") return null;
   const trimmed = v.trim();
   if (!trimmed || !ISO_LIKE_RE.test(trimmed)) return null;
-  const ms = Date.parse(trimmed);
-  if (Number.isNaN(ms)) return null;
-  const datePart = trimmed.slice(0, 10);
-  const normalized = new Date(`${datePart}T00:00:00Z`).toISOString().slice(0, 10);
-  if (normalized !== datePart) return null;
-  return trimmed;
+  const month = Number(trimmed.slice(5, 7));
+  if (month < 1 || month > 12) return null;
+  const day = Number(trimmed.slice(8, 10));
+  if (day < 1) return null;
+  const year = Number(trimmed.slice(0, 4));
+  const maxDay = month === 2 && isLeapYear(year) ? 29 : (DAYS_IN_MONTH[month - 1] as number);
+  return day <= maxDay ? trimmed : null;
 };
 
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -61,20 +68,12 @@ export function parseTs(v: unknown, positiveOnly = false): number {
   return t;
 }
 
-export function byDateDesc<T>(getDate: (item: T) => unknown): (a: T, b: T) => number {
-  const parsed = new Map<T, number>();
-  const tsOf = (item: T): number => {
-    const cached = parsed.get(item);
-    if (cached !== undefined) return cached;
-    const ts = parseTs(getDate(item));
-    parsed.set(item, ts);
-    return ts;
-  };
-  return (a, b) => {
-    const ta = tsOf(a);
-    const tb = tsOf(b);
-    return ta === tb ? 0 : tb - ta;
-  };
+/** Sort in place by descending date; unparseable dates sink to the end. */
+export function sortByDateDesc<T>(items: T[], getDate: (item: T) => unknown): T[] {
+  const stamped = items.map((item) => ({ item, ts: parseTs(getDate(item)) }));
+  stamped.sort((a, b) => (a.ts === b.ts ? 0 : b.ts - a.ts));
+  for (let i = 0; i < items.length; i++) items[i] = stamped[i]!.item;
+  return items;
 }
 
 export function byNumberDesc<T>(score: (item: T) => number | null | undefined): (a: T, b: T) => number {
@@ -128,7 +127,8 @@ function isNonEmptyString(v: unknown): v is string {
 }
 
 function isPlaceholderText(t: string): boolean {
-  return PLACEHOLDER_TEXTS.has(t.trim().toLowerCase());
+  // All callers pass an already-trimmed string.
+  return PLACEHOLDER_TEXTS.has(t.toLowerCase());
 }
 
 export function isUnsuitableContent(t: string): boolean {

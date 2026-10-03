@@ -80,8 +80,8 @@ export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourceP
 };
 
 async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
-  const trimmed = id.trim();
-  const encoded = trimmed
+  // `id` arrives already trimmed from getModelById.
+  const encoded = id
     .split("/")
     .map((seg) => encodeURIComponent(seg))
     .join("/");

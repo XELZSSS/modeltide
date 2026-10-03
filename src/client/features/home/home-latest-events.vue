@@ -8,7 +8,7 @@ import { useSuspenseStatusHistory } from "@/client/api/api-queries";
 import { unwrapObject } from "@/client/api/payload-normalize";
 import { eventDurationLabel, resolveEventStyle } from "@/client/features/status/status-events";
 import { sourceLabel } from "@/shared/config";
-import type { StatusHistoryPayload } from "@/shared/types";
+import type { StatusEvent, StatusHistoryPayload } from "@/shared/types";
 import { formatLatencySec, formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { LEVEL_STYLES, resolveLevel } from "@/shared/utils/status-level";
 
@@ -29,8 +29,11 @@ const history = computed(() => unwrapObject<StatusHistoryPayload>(query.data.val
 
 const vm = computed(() => {
   const payload = history.value;
-  const events = [...(payload.events ?? [])].sort((a, b) => (a.at < b.at ? 1 : -1));
-  const event = events[0] ?? null;
+  // Single pass for the latest event instead of copy + O(n log n) sort.
+  const event = (payload.events ?? []).reduce<StatusEvent | null>(
+    (latest, e) => (latest == null || e.at > latest.at ? e : latest),
+    null,
+  );
   if (!event) return null;
   const summary = payload.sources.find((s) => s.id === event.id);
   const samples = payload.recent?.[event.id] ?? [];

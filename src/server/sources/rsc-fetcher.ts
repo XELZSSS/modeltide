@@ -18,7 +18,7 @@ export async function fetchRscText(
   return ctx.http.text(
     upstreamUrl(base, path),
     {
-      headers: opts.headers ?? { ...DEFAULT_RSC_HEADERS },
+      headers: opts.headers ?? DEFAULT_RSC_HEADERS,
       retries: opts.retries ?? UPSTREAM_FETCH_OPTS.retries,
       timeoutMs: UPSTREAM_FETCH_OPTS.timeoutMs,
     },

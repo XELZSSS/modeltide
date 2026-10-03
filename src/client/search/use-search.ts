@@ -27,6 +27,11 @@ interface PreparedEntry {
   fields: PreparedFields;
 }
 
+// Field preparation is pure per item object; TanStack Query structural sharing
+// keeps item identity across refetches, so a WeakMap avoids recomputing
+// (toLowerCase + tokenize + CJK bigrams) for every item on each data refresh.
+const preparedCache = new WeakMap<object, PreparedFields>();
+
 interface SourceConfig {
   entries: readonly PreparedEntry[];
   map(item: SearchItem): SearchResult;
@@ -37,7 +42,17 @@ function defineSource<T extends SearchItem>(
   getFields: (item: T) => (string | undefined | null)[],
   map: (item: T) => SearchResult,
 ): SourceConfig {
-  return { entries: items.map((item) => ({ item, fields: prepareFields(getFields(item)) })), map };
+  return {
+    entries: items.map((item) => {
+      let fields = preparedCache.get(item);
+      if (fields == null) {
+        fields = prepareFields(getFields(item));
+        preparedCache.set(item, fields);
+      }
+      return { item, fields };
+    }),
+    map,
+  };
 }
 
 function collect(config: SourceConfig, needle: string): { result: SearchResult; match: number }[] {

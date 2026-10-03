@@ -87,7 +87,16 @@ function ensureObserver(): void {
   currentTheme();
   if (observing) return;
   observing = true;
-  const notify = () => publish(resolveChartTheme());
+  // Coalesce bursts of class mutations (e.g. theme toggles) into one recompute.
+  let scheduled = false;
+  const notify = (): void => {
+    if (scheduled) return;
+    scheduled = true;
+    queueMicrotask(() => {
+      scheduled = false;
+      publish(resolveChartTheme());
+    });
+  };
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
   const observer = new MutationObserver(notify);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });

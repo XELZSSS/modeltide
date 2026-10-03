@@ -2,7 +2,7 @@
 import { formatIndex, formatPercent } from "@/client/utils/format";
 import type { HallucinationRankingEntry } from "@/shared/types";
 import RankedTableView, { modelNameCol } from "@/client/components/data/table/ranked-table-view.vue";
-import { monoCol, type DataTableColumn } from "@/client/components/data/table/table-columns.vue";
+import { monoCol, type DataTableColumn } from "@/client/components/data/table/table-columns.ts";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import type { TFunction } from "@/shared/i18n";
 

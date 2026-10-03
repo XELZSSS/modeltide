@@ -36,6 +36,10 @@ const API_SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
 };
 
+const WEAK_ETAG_PREFIX_RE = /^W\//;
+const CORS_ENTRIES = Object.entries(CORS_HEADERS);
+const API_SECURITY_ENTRIES = Object.entries(API_SECURITY_HEADERS);
+
 export function payloadEtag(fetchedAt: string, variant?: number): string {
   const suffix = variant === undefined ? "" : `-${variant}`;
   return `W/"${CACHE_VERSION}-${fetchedAt}${suffix}"`;
@@ -43,15 +47,15 @@ export function payloadEtag(fetchedAt: string, variant?: number): string {
 
 export function ifNoneMatchSatisfied(ifNoneMatch: string | null, etag: string): boolean {
   if (!ifNoneMatch) return false;
-  const target = etag.replace(/^W\//, "");
+  const target = etag.replace(WEAK_ETAG_PREFIX_RE, "");
   return ifNoneMatch.split(",").some((candidate) => {
     const tag = candidate.trim();
-    return tag === "*" || tag.replace(/^W\//, "") === target;
+    return tag === "*" || tag.replace(WEAK_ETAG_PREFIX_RE, "") === target;
   });
 }
 
 export function applyApiHeaders(h: Headers): void {
-  for (const [k, v] of Object.entries(CORS_HEADERS)) h.set(k, v);
-  for (const [k, v] of Object.entries(API_SECURITY_HEADERS)) h.set(k, v);
+  for (const [k, v] of CORS_ENTRIES) h.set(k, v);
+  for (const [k, v] of API_SECURITY_ENTRIES) h.set(k, v);
   h.set(CONTRACT_VERSION_HEADER, CACHE_VERSION);
 }

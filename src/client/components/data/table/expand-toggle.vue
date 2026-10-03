@@ -1,31 +1,12 @@
-<script lang="ts">
-import { h, type FunctionalComponent } from "vue";
-import { cn } from "@/client/utils/cn";
-
-const panelId = (rowId: string): string => `${rowId}-panel`;
-
-export const ExpandedRowPanel: FunctionalComponent<{ rowId: string; rowName: string; class?: string }> = (
-  props,
-  { slots },
-) =>
-  h(
-    "div",
-    {
-      id: panelId(props.rowId),
-      role: "region",
-      "aria-label": props.rowName,
-      class: cn("animate-enter px-4 py-3", props.class),
-    },
-    slots.default?.(),
-  );
-</script>
-
 <script setup lang="ts">
 import { computed } from "vue";
 import { ChevronRight } from "@lucide/vue";
 import Button from "@/client/components/ui/button.vue";
+import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import type { RowListEmits } from "./row-list";
+
+const panelId = (rowId: string): string => `${rowId}-panel`;
 
 const props = withDefaults(defineProps<{ rowId: string; rowName: string; isExpanded: boolean; size?: number }>(), {
   size: 14,

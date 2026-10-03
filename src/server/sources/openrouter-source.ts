@@ -5,7 +5,7 @@ import type { OpenRouterRankEntry, SourcePayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, wrapUpstream } from "@/server/infra/errors";
 
-import { mapModels, type RankingScanStats } from "@/server/parsers/openrouter-parser";
+import { mapModels, type RankingScanStats } from "@/server/parsers/openrouter-ranking-parser";
 import type { ModelRow } from "@/server/parsers/upstream-types";
 import { getModelDirectory, type DirectoryCacheEntryWithPartial } from "@/server/sources/openrouter-directory";
 import { runLegs } from "@/server/sources/join-legs";

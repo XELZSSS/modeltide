@@ -45,8 +45,12 @@ function collectNumeric<T>(
 }
 
 function pickExtreme(values: { val: number }[], which: "max" | "min"): number {
-  const nums = values.map((v) => v.val);
-  return which === "min" ? Math.min(...nums) : Math.max(...nums);
+  let extreme = values[0]!.val;
+  for (let i = 1; i < values.length; i++) {
+    const val = values[i]!.val;
+    if (which === "min" ? val < extreme : val > extreme) extreme = val;
+  }
+  return extreme;
 }
 
 function decideRowWinners<T>(
@@ -77,8 +81,10 @@ interface RadarRow {
   values: Record<string, number | null>;
 }
 
-export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
-  const rows = [
+function radarMetricGetters(
+  t: TFunction,
+): readonly { metric: string; getValue: (m: ArtificialAnalysisModel) => number | null }[] {
+  return [
     { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.intelligence_index) },
     { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.coding_index) },
     { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.agentic_index) },
@@ -86,17 +92,28 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]):
     { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.hle) },
     { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.scicode) },
     { metric: t("ifbench"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.ifbench) },
-  ].map(({ metric, getValue }) => {
+  ];
+}
+
+function buildRadarRows(t: TFunction, models: ArtificialAnalysisModel[], keys: readonly string[]): RadarRow[] {
+  return radarMetricGetters(t).map(({ metric, getValue }) => {
     const values: Record<string, number | null> = {};
-    for (const model of models) {
-      const key = modelId(model);
+    for (let i = 0; i < models.length; i++) {
+      const key = keys[i]!;
       if (!key || key in values) continue;
-      const val = getValue(model);
+      const val = getValue(models[i]!);
       values[key] = val != null ? Number(val.toFixed(2)) : null;
     }
     return { metric, values };
   });
-  return rows;
+}
+
+export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
+  return buildRadarRows(
+    t,
+    models,
+    models.map((model) => modelId(model)),
+  );
 }
 
 export function radarMaxFor(rows: RadarRow[], fallback = 100): number {
@@ -117,7 +134,7 @@ interface CompareValueRow {
 
 export function buildValueRows(t: TFunction, models: ArtificialAnalysisModel[]): CompareValueRow[] {
   const keys = models.map((model) => modelId(model));
-  return buildRadarData(t, models).map((row) => ({
+  return buildRadarRows(t, models, keys).map((row) => ({
     metric: row.metric,
     values: keys.map((key) => (key ? (row.values[key] ?? null) : null)),
   }));

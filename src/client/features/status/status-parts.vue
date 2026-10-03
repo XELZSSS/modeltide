@@ -40,29 +40,30 @@ onUnmounted(() => {
 
 const days = computed(() => getLast30Days(dayKey.value * ONE_DAY));
 
-function titleFor(day: string): string {
-  const bucket = byDay.value.get(day);
-  const ratio = bucket && bucket.total > 0 ? bucket.ok / bucket.total : null;
-  const pct = ratio == null ? null : Math.round(ratio * 1000) / 10;
-  if (!bucket || pct == null) return `${formatDate(day, lang.value)} · ${t("uptimeNoData")}`;
-  const degraded = bucket.warn ?? 0;
-  return [
-    formatDate(bucket.day, lang.value),
-    `${pct}% (${bucket.total})`,
-    degraded > 0 ? t("dayDegraded", { count: degraded }) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
+// Precompute each day's level class and tooltip instead of re-deriving them
+// (Map lookup + level + formatDate) inside the template.
+const dayCells = computed(() =>
+  days.value.map((day) => {
+    const bucket = byDay.value.get(day);
+    const ratio = bucket && bucket.total > 0 ? bucket.ok / bucket.total : null;
+    const pct = ratio == null ? null : Math.round(ratio * 1000) / 10;
+    const title =
+      !bucket || pct == null
+        ? `${formatDate(day, lang.value)} · ${t("uptimeNoData")}`
+        : [
+            formatDate(bucket.day, lang.value),
+            `${pct}% (${bucket.total})`,
+            (bucket.warn ?? 0) > 0 ? t("dayDegraded", { count: bucket.warn ?? 0 }) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+    return { day, levelClass: DAY_BAR_CLASSES[dayBarLevel(bucket)], title };
+  }),
+);
 </script>
 
 <template>
   <div class="flex items-end gap-0.5 h-7" role="img" :aria-label="t('last30Days')">
-    <span
-      v-for="day in days"
-      :key="day"
-      :class="cn('flex-1 h-full', DAY_BAR_CLASSES[dayBarLevel(byDay.get(day))])"
-      :title="titleFor(day)"
-    />
+    <span v-for="cell in dayCells" :key="cell.day" :class="cn('flex-1 h-full', cell.levelClass)" :title="cell.title" />
   </div>
 </template>

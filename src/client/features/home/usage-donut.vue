@@ -73,10 +73,15 @@ function aggregateTaskShare(models: { task: string | null | undefined }[]): {
     counts.set(task, (counts.get(task) ?? 0) + 1);
   }
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const slices: TaskSlice[] = ranked.slice(0, TASK_SLICE_LIMIT).map(([key, total]) => ({ key, total }));
-  const tailTotal = ranked.slice(TASK_SLICE_LIMIT).reduce((sum, [, count]) => sum + count, 0) + other;
+  let total = other;
+  const slices: TaskSlice[] = ranked.slice(0, TASK_SLICE_LIMIT).map(([key, count]) => {
+    total += count;
+    return { key, total: count };
+  });
+  const tailTotal = ranked.slice(TASK_SLICE_LIMIT).reduce((sum, [, count]) => sum + count, 0);
+  total += tailTotal;
   if (tailTotal > 0) slices.push({ key: OTHER_TASK_KEY, total: tailTotal });
-  return { slices, total: slices.reduce((sum, s) => sum + s.total, 0) };
+  return { slices, total };
 }
 
 const props = defineProps<{ models: { task: string | null | undefined }[] }>();

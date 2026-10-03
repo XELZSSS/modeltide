@@ -35,7 +35,9 @@ function update(): void {
 
 watch([() => props.type, () => props.plugins], create, { flush: "post" });
 
-watch([() => props.data, () => props.options], update, { deep: true, flush: "post" });
+// Callers pass freshly-built computed objects; shallow reference watching is
+// sufficient and avoids deep-traversing the chart data on every update.
+watch([() => props.data, () => props.options], update, { flush: "post" });
 
 watch(canvasRef, (canvas) => {
   if (canvas) create();

@@ -46,9 +46,13 @@ const NewsCategoryData = defineComponent({
         () => (isMobile.value ? MOBILE_PAGE_SIZE : DEFAULT_PAGE_SIZE),
       ),
     )!;
+    // safeHref rebuilds the link string per call; derive once per row.
+    const rows = computed(() =>
+      paged.pagedData.value.map((item) => ({ item, id: getNewsRowId(item), href: safeHref(item.link) })),
+    );
     return () =>
       slots.default?.({
-        items: paged.pagedData.value,
+        rows: rows.value,
         page: paged.page.value,
         totalPages: paged.totalPages.value,
         goToPage: paged.goToPage,
@@ -62,12 +66,11 @@ const [activeCategory, setActiveCategory] = useClientTab("tab", NEWS_CATEGORIES,
 
 const tabs = computed<TabItem[]>(() => NEWS_CATEGORIES.map((id) => ({ id, label: t(CATEGORY_LABELS[id]) })));
 
-function rowTag(item: NewsItem): string {
-  return safeHref(item.link) ? "a" : "div";
+function rowTag(href: string | undefined): string {
+  return href ? "a" : "div";
 }
 
-function rowAttrs(item: NewsItem): Record<string, string> {
-  const href = safeHref(item.link);
+function rowAttrs(item: NewsItem, href: string | undefined): Record<string, string> {
   if (!href) return {};
   return {
     href,
@@ -82,23 +85,23 @@ function rowAttrs(item: NewsItem): Record<string, string> {
   <TabbedPage :title="t('aiNews')" :tabs="tabs" :active-tab="activeCategory" @tab-change="setActiveCategory">
     <SuspenseQuery>
       <NewsCategoryData :category-id="activeCategory">
-        <template #default="{ items, page, totalPages, goToPage, partial }">
+        <template #default="{ rows, page, totalPages, goToPage, partial }">
           <PartialNotice v-if="partial" />
-          <EmptyState v-if="items.length === 0" :icon="Search" :message="t('noResults')" />
+          <EmptyState v-if="rows.length === 0" :icon="Search" :message="t('noResults')" />
           <div v-else class="flex flex-col gap-2">
             <ul class="ui-card flex flex-col divide-y divide-border">
-              <li v-for="item in items" :key="getNewsRowId(item)">
-                <component :is="rowTag(item)" v-bind="rowAttrs(item)" :class="ROW_CLASS">
+              <li v-for="row in rows" :key="row.id">
+                <component :is="rowTag(row.href)" v-bind="rowAttrs(row.item, row.href)" :class="ROW_CLASS">
                   <h2
                     class="ui-body font-medium leading-relaxed min-w-0 break-words decoration-accent/50 underline-offset-4 group-hover:underline transition-colors duration-fast"
                   >
-                    {{ item.title }}
+                    {{ row.item.title }}
                   </h2>
                   <div class="flex items-center gap-3 shrink-0 ui-caption mt-1">
-                    <span class="hidden sm:inline truncate max-w-48">{{ item.source }}</span>
-                    <span class="flex items-center gap-1.5 shrink-0" :title="formatDate(item.pubDate, lang)">
+                    <span class="hidden sm:inline truncate max-w-48">{{ row.item.source }}</span>
+                    <span class="flex items-center gap-1.5 shrink-0" :title="formatDate(row.item.pubDate, lang)">
                       <Clock :size="12" aria-hidden="true" />
-                      {{ formatRelativeTime(item.pubDate, t, lang) }}
+                      {{ formatRelativeTime(row.item.pubDate, t, lang) }}
                     </span>
                     <ExternalLink
                       :size="14"

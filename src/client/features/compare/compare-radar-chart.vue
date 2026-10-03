@@ -27,13 +27,14 @@ const theme = useChartTheme();
 const radarData = computed(() => buildRadarData(t, props.models));
 const radarMax = computed(() => radarMaxFor(radarData.value));
 
+const display = computed(() => props.models.map((model) => ({ key: modelId(model), name: modelDisplayName(model) })));
+
 const data = computed<ChartData<"radar">>(() => ({
   labels: radarData.value.map((row) => row.metric),
-  datasets: props.models.map((model, index) => {
+  datasets: display.value.map(({ key, name }, index) => {
     const color = seriesColor(theme.value, index);
-    const key = modelId(model);
     return {
-      label: modelDisplayName(model),
+      label: name,
       data: radarData.value.map((row) => (key ? (row.values[key] ?? null) : null)),
       borderColor: color,
       backgroundColor: hexToRgba(color, 0.06),
@@ -71,10 +72,9 @@ const options = computed<ChartOptions<"radar">>(() => ({
 const caption = computed(() =>
   radarData.value
     .map((row) => {
-      const values = props.models.map((m) => {
-        const key = modelId(m);
+      const values = display.value.map(({ key, name }) => {
         const v = key ? row.values[key] : null;
-        return `${modelDisplayName(m)}: ${typeof v === "number" ? v.toFixed(1) : "—"}`;
+        return `${name}: ${typeof v === "number" ? v.toFixed(1) : "—"}`;
       });
       return `${row.metric} — ${values.join(", ")}`;
     })

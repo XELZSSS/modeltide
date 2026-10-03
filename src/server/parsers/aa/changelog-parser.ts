@@ -38,7 +38,7 @@ function collectModels(
       if (!slug || !name || !releaseSlug) continue;
       const release = releases.get(releaseSlug);
       if (!release) continue;
-      if (![slug, name, release.name].every(isUsableField)) continue;
+      if (!isUsableField(slug) || !isUsableField(name) || !isUsableField(release.name)) continue;
       mapped.push({
         slug,
         name,

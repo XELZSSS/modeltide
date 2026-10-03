@@ -227,9 +227,11 @@ interface NeedleCandidate {
   valueAt: number;
 }
 
+const EMBEDDED_ESCAPE_RE = /\\(.)/g;
+
 function unescapeEmbedded(window: string): string {
   if (!window.includes("\\")) return window;
-  return window.replace(/\\(.)/g, (m, c: string) => (c === '"' ? '"' : c === "\\" ? "\\" : m));
+  return window.replace(EMBEDDED_ESCAPE_RE, (m, c: string) => (c === '"' ? '"' : c === "\\" ? "\\" : m));
 }
 
 function skipWs(text: string, pos: number): number {

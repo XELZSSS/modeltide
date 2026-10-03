@@ -8,7 +8,7 @@ import {
   rightCol,
   RightAlignedText,
   type DataTableColumn,
-} from "@/client/components/data/table/table-columns.vue";
+} from "@/client/components/data/table/table-columns.ts";
 import CompareModelCell from "./compare-model-cell.vue";
 import { computeBlendPrice } from "@/shared/utils";
 import { modelId } from "@/shared/utils/models";

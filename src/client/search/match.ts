@@ -2,7 +2,7 @@ export function foldSearchStr(raw: string): string {
   return raw.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
-export function usableFields(fields: (string | null | undefined)[]): string[] {
+function usableFields(fields: (string | null | undefined)[]): string[] {
   return fields.filter((f): f is string => typeof f === "string" && f.length > 0);
 }
 
@@ -17,14 +17,25 @@ export function matchFolded(folded: string[], needle: string): { matched: boolea
   return { matched: best > 0, score: best };
 }
 
-export function matchTerm(fields: string[], needle: string): { matched: boolean; score: number } {
-  return matchFolded(fields.map(foldSearchStr), needle);
-}
+// Folded fields are pure per item object; cache them so repeated keystrokes
+// (each running filterByTerm over the same data) don't re-fold every field.
+const foldedFieldsCache = new WeakMap<object, string[]>();
 
-export function filterByTerm<T>(items: T[], term: string, getFields: (item: T) => (string | null | undefined)[]): T[] {
+export function filterByTerm<T extends object>(
+  items: T[],
+  term: string,
+  getFields: (item: T) => (string | null | undefined)[],
+): T[] {
   const needle = foldSearchStr(term);
   if (!needle) return items;
-  return items.filter((item) => matchTerm(usableFields(getFields(item)), needle).matched);
+  return items.filter((item) => {
+    let folded = foldedFieldsCache.get(item);
+    if (folded == null) {
+      folded = usableFields(getFields(item)).map(foldSearchStr);
+      foldedFieldsCache.set(item, folded);
+    }
+    return matchFolded(folded, needle).matched;
+  });
 }
 
 const FUZZY_MIN_TERM = 3;

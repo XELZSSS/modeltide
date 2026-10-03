@@ -1,114 +1,10 @@
-import {
-  isRecord,
-  isValidRowId,
-  numCoerce,
-  numCoerceNonNegative,
-  numOr,
-  obj,
-  parseTs,
-  str,
-  titleCase,
-  isValidOpenRouterDirectoryRow,
-} from "@/server/parsers/parser-primitives";
-import { MAX_DIRECTORY_ROWS, PER_MILLION, SOURCE_LIMITS, perMillionOrNull } from "@/server/config/limits";
+import { isRecord, isValidRowId, numCoerce, numOr, parseTs, titleCase } from "@/server/parsers/parser-primitives";
+import { MAX_DIRECTORY_ROWS, SOURCE_LIMITS } from "@/server/config/limits";
 import type { OpenRouterRankEntry } from "@/shared/types";
+import { normalizeModelKey } from "@/shared/utils";
 
-import { normalizeModelKey, toStringOrNull } from "@/shared/utils";
-
-import type { ModelMetaEntry, ModelRow, PricingRow } from "@/server/parsers/upstream-types";
-
-export interface PricingEntry {
-  input: number;
-  output: number;
-  cacheHit: number | null;
-  cacheWrite: number | null;
-}
-
-type PricingRecord = Record<string, PricingEntry>;
-
-export interface DirectoryCacheEntry {
-  pricing: PricingRecord;
-  meta: Record<string, ModelMetaEntry>;
-}
-
-function buildPricingEntry(
-  input: number | null,
-  output: number | null,
-  cacheHit: number | null,
-  cacheWrite: number | null,
-): PricingEntry | null {
-  if (input == null || output == null) return null;
-  return {
-    input: input * PER_MILLION,
-    output: output * PER_MILLION,
-    cacheHit: perMillionOrNull(cacheHit),
-    cacheWrite: perMillionOrNull(cacheWrite),
-  };
-}
-
-function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
-  return {
-    intelligenceIndex: target.intelligenceIndex ?? patch.intelligenceIndex,
-    agenticIndex: target.agenticIndex ?? patch.agenticIndex,
-  };
-}
-
-export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
-  const pricingRecord: PricingRecord = Object.create(null);
-  const metaRecord: Record<string, ModelMetaEntry> = Object.create(null);
-  if (!Array.isArray(rows)) return { pricing: pricingRecord, meta: metaRecord };
-  const count = Math.min(rows.length, MAX_DIRECTORY_ROWS);
-  for (let i = 0; i < count; i++) {
-    const raw: unknown = rows[i];
-    if (!isValidOpenRouterDirectoryRow(raw)) continue;
-    const m = raw as unknown as PricingRow;
-    const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
-    const pricingEntry = buildPricingEntry(
-      numCoerceNonNegative(pricing.prompt),
-      numCoerceNonNegative(pricing.completion),
-      numCoerceNonNegative(pricing.input_cache_read),
-      numCoerceNonNegative(pricing.input_cache_write),
-    );
-    if (pricingEntry) {
-      const idKey = toStringOrNull(m.id);
-      const slugKey = toStringOrNull(m.canonical_slug);
-      let variantSlugKey: string | null = null;
-      if (idKey && slugKey) {
-        const variantAt = idKey.lastIndexOf(":");
-        if (variantAt > 0) variantSlugKey = `${slugKey}${idKey.slice(variantAt)}`;
-      }
-      const seen = new Set<string>();
-      for (const key of [idKey, slugKey, variantSlugKey]) {
-        if (!key) continue;
-        for (const index of [key.toLowerCase(), normalizeModelKey(key)]) {
-          if (!index || seen.has(index)) continue;
-          seen.add(index);
-          if (pricingRecord[index] === undefined) pricingRecord[index] = pricingEntry;
-        }
-      }
-    }
-    const benchmarks = obj(m.benchmarks);
-    const aaBenchmarks = obj(benchmarks?.artificial_analysis);
-    const intelligenceIndex = numCoerce(aaBenchmarks?.intelligence_index);
-    const agenticIndex = numCoerce(aaBenchmarks?.agentic_index);
-    if (intelligenceIndex == null && agenticIndex == null) continue;
-    const metaEntry: ModelMetaEntry = {};
-    if (intelligenceIndex != null) metaEntry.intelligenceIndex = intelligenceIndex;
-    if (agenticIndex != null) metaEntry.agenticIndex = agenticIndex;
-    const keys = new Set<string>();
-    for (const value of [m.name, m.id, m.canonical_slug]) {
-      if (typeof value === "string") {
-        const key = normalizeModelKey(value);
-        if (key) keys.add(key);
-      }
-    }
-    for (const key of keys) {
-      const cur = metaRecord[key];
-      metaRecord[key] = cur ? mergeMetaRecord(cur, metaEntry) : metaEntry;
-    }
-  }
-  return { pricing: pricingRecord, meta: metaRecord };
-}
+import type { ModelRow } from "@/server/parsers/upstream-types";
+import type { PricingEntry } from "@/server/parsers/openrouter-directory-parser";
 
 const CREATORS: Record<string, string> = {
   anthropic: "Anthropic",
@@ -131,18 +27,34 @@ const CREATORS: Record<string, string> = {
 };
 export function creatorFromSlug(slug: unknown): string {
   if (typeof slug !== "string" || !slug.trim()) return "Unknown";
-  const p = slug.split("/")[0]?.trim() || "Unknown";
-  const lower = p.toLowerCase();
+  const slashAt = slug.indexOf("/");
+  const owner = (slashAt === -1 ? slug : slug.slice(0, slashAt)).trim();
+  if (!owner) return "Unknown";
+  const lower = owner.toLowerCase();
   if (Object.hasOwn(CREATORS, lower)) return CREATORS[lower]!;
-  return p.split(/[-_]/).filter(Boolean).map(titleCase).join(" ");
+  return owner.split(/[-_]/).filter(Boolean).map(titleCase).join(" ");
 }
 const CODING_RE = /\b(?:coder|coding|code|codex)\b/;
 const REASONING_RE = /\b(?:reasoning|thought)\b/;
 const REASONING_SUFFIX_RE = /-(?:r1|o1)\b/;
-export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry["category"] {
-  const v = `${str(slug)} ${str(name)}`.toLowerCase();
+
+function categoryOf(text: string): OpenRouterRankEntry["category"] | null {
+  const v = text.toLowerCase();
   if (CODING_RE.test(v)) return "coding";
   if (REASONING_RE.test(v) || REASONING_SUFFIX_RE.test(v)) return "reasoning";
+  return null;
+}
+
+export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry["category"] {
+  // The regexes never match across the separator, so slug and name can be tested independently.
+  if (typeof slug === "string" && slug) {
+    const fromSlug = categoryOf(slug);
+    if (fromSlug) return fromSlug;
+  }
+  if (typeof name === "string" && name) {
+    const fromName = categoryOf(name);
+    if (fromName) return fromName;
+  }
   return "general";
 }
 export function titleFromSlug(permaslug: unknown): string {
@@ -192,7 +104,7 @@ function changePercent(value: unknown): number | null {
   return n == null ? null : n * 100;
 }
 
-type PricingLookup = Map<string, PricingEntry> | PricingRecord;
+type PricingLookup = Map<string, PricingEntry> | Record<string, PricingEntry>;
 
 function lookupPricing(pricing: PricingLookup, key: string): PricingEntry | undefined {
   if (pricing instanceof Map) return pricing.get(key);

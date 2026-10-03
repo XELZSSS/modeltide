@@ -5,7 +5,11 @@ import { getOpenLicenseId, isRecognizedNonOpenLicense, licenseTagId } from "@/se
 import type { HFModel } from "@/server/parsers/upstream-types";
 
 function resolveAuthor(m: HFModel, id: string): string | null {
-  return toStringOrNull(m.author) ?? (id.split("/")[0]?.trim() || null);
+  const explicit = toStringOrNull(m.author);
+  if (explicit) return explicit;
+  const slash = id.indexOf("/");
+  const owner = slash === -1 ? id : id.slice(0, slash);
+  return owner.trim() || null;
 }
 
 interface LicenseDrops {

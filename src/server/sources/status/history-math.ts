@@ -106,8 +106,17 @@ export function mergeSample(
   recent.push(sample);
 
   const day = utcDay(sample.t);
-  const daily = prevEntry.daily.map((b) => ({ ...b }));
-  let bucket = daily.find((b) => b.day === day);
+  // Copy only the bucket being mutated instead of every daily bucket.
+  const daily: DayBucket[] = [];
+  let bucket: DayBucket | undefined;
+  for (const b of prevEntry.daily) {
+    if (b.day === day) {
+      bucket = { ...b };
+      daily.push(bucket);
+    } else {
+      daily.push(b);
+    }
+  }
   if (!bucket) {
     bucket = { day, total: 0, ok: 0, warn: 0 };
     daily.push(bucket);

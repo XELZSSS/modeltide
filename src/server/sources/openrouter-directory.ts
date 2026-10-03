@@ -8,7 +8,7 @@ import {
   numCoerce,
   numCoerceNonNegative,
 } from "@/server/parsers/parser-primitives";
-import { parseDirectoryRows, type DirectoryCacheEntry } from "@/server/parsers/openrouter-parser";
+import { parseDirectoryRows, type DirectoryCacheEntry } from "@/server/parsers/openrouter-directory-parser";
 import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 import { cachedRaw } from "@/server/sources/pipeline";
 

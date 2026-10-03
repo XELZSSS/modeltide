@@ -26,14 +26,16 @@ export function buildHistoryPayload(
     sources.push(buildSourceSummary(id, entry, now));
   }
 
-  events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  // Parse timestamps once instead of inside the comparator (O(n log n) Date.parse calls).
+  const stamped = events.map((event) => ({ event, at: Date.parse(event.at) }));
+  stamped.sort((a, b) => b.at - a.at);
   return {
     firstLaunchAt: uptime.firstLaunchAt,
     uptimeMs: uptime.uptimeMs,
     sources,
     recent,
     daily,
-    events: events.slice(0, MAX_EVENTS),
+    events: stamped.slice(0, MAX_EVENTS).map((s) => s.event),
     storeMode,
   };
 }

@@ -30,14 +30,11 @@ export function benchmarkLabel(key: string, t: TFunction): string {
   return labelKey ? t(labelKey) : key;
 }
 
+// oxlint-disable-next-line no-control-regex
+const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f\ufeff]/g;
+
 function stripControlChars(s: string): string {
-  let out = "";
-  for (let i = 0; i < s.length; i++) {
-    const code = s.charCodeAt(i);
-    if (code <= 0x1f || code === 0x7f || code === 0xfeff) continue;
-    out += s.charAt(i);
-  }
-  return out;
+  return s.replace(CONTROL_CHARS_RE, "");
 }
 
 export function safeHref(url: string | null | undefined): string | undefined {

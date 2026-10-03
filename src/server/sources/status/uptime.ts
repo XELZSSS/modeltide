@@ -33,7 +33,9 @@ export async function getUptime(ctx: AppContext): Promise<UptimePayload> {
     return memoryUptime(now);
   }
   const stored = raw ? Number(raw) : NaN;
-  if (Number.isFinite(stored)) {
+  // Guard against corrupted sentinel values ("0"/negative) that would otherwise
+  // poison memoryFirstLaunch with a 1970-era timestamp.
+  if (Number.isFinite(stored) && stored > 0) {
     memoryFirstLaunch = stored;
     return uptimePayload(stored, now);
   }

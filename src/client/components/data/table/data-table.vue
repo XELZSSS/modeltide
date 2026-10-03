@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="T">
+<script setup lang="ts" generic="T extends object">
 import { computed, ref, useSlots, watch, type VNodeChild } from "vue";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import Pagination from "@/client/components/ui/pagination.vue";
@@ -6,7 +6,7 @@ import { useTranslation } from "@/client/i18n";
 import { useDevice } from "@/client/device";
 import { filterByTerm } from "@/client/search/match";
 import { useRouteSearchTerm } from "@/client/stores";
-import type { DataTableColumn } from "./table-columns.vue";
+import type { DataTableColumn } from "./table-columns.ts";
 import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "./paging";
 import TableBody, { TableHeader } from "./desktop.vue";
 import MobileTableBody from "./mobile.vue";

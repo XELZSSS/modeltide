@@ -4,7 +4,7 @@ import { formatShortNumber, orNA } from "@/client/utils/format";
 import { shortModelId } from "@/shared/utils/models";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import RankedTableView, { modelNameCol } from "@/client/components/data/table/ranked-table-view.vue";
-import { monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.vue";
+import { monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.ts";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import type { TFunction } from "@/shared/i18n";
 

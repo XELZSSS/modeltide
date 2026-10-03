@@ -6,6 +6,8 @@ import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 
 const PROTO_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
+const TRAILING_VERSION_DIGITS_RE = /\d{4,8}$/;
+
 function mergeEntry(cur: Record<string, unknown>, patch: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(patch)) {
     if (PROTO_KEYS.has(key)) continue;
@@ -34,8 +36,9 @@ export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<stri
     for (const raw of (group as unknown[]).slice(0, MAX_DIRECTORY_ROWS)) {
       if (!isRecord(raw)) continue;
       const slug = str(raw.slug);
-      if (!slug || !merged.has(slug)) continue;
-      const current = merged.get(slug)!;
+      if (!slug) continue;
+      const current = merged.get(slug);
+      if (current === undefined) continue;
       mergeEntry(current, raw);
     }
   }
@@ -71,7 +74,7 @@ function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEnt
   }
   if (looseHit) return looseHit;
   for (const key of keys) {
-    const stripped = key.replace(/\d{4,8}$/, "");
+    const stripped = key.replace(TRAILING_VERSION_DIGITS_RE, "");
     if (!stripped || stripped === key) continue;
     const e = metaEntry(meta, stripped);
     if (e) return e;

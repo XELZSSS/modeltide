@@ -35,8 +35,9 @@ const KNOWN_NON_OPEN = new Set([
 
 export const isRecognizedNonOpenLicense = (id: string): boolean => KNOWN_NON_OPEN.has(id) || hasDeniedCcClause(id);
 
+// Caller (licenseTagId) already lowercases and trims; only structural normalization remains.
 function normalizeLicenseId(raw: string): string {
-  return raw.toLowerCase().trim().replace(/_+/g, "-").replace(/\s+/g, "");
+  return raw.replace(/_+/g, "-").replace(/\s+/g, "");
 }
 
 export function licenseTagId(tag: unknown): string | null {

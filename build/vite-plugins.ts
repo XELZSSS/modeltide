@@ -43,7 +43,9 @@ export function serviceWorkerVersion(): Plugin {
   return {
     name: "modeltide:sw-version",
     apply: "build",
-    closeBundle() {
+    // writeBundle (unlike closeBundle) only fires after the client bundle is
+    // on disk, and never during cleanup of a failed build.
+    writeBundle() {
       if (this.environment.name !== "client") return;
       const file = path.join(clientOutDir, "sw.js");
       const source = fs.readFileSync(file, "utf8");
@@ -74,7 +76,9 @@ export function cspHashGuard(): Plugin {
   return {
     name: "modeltide:csp-hash",
     apply: "build",
-    closeBundle() {
+    // writeBundle (unlike closeBundle) only fires after the client bundle is
+    // on disk, and never during cleanup of a failed build.
+    writeBundle() {
       if (this.environment.name !== "client") return;
       const html = fs.readFileSync(path.join(clientOutDir, "index.html"), "utf8");
       const script = INLINE_SCRIPT.exec(html)?.[1];

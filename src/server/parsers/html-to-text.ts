@@ -26,8 +26,11 @@ const BLOCK_TAGS = new Set([
   "tbody",
 ]);
 
+const TAG_NAME_RE = /^\/?[a-zA-Z][a-zA-Z0-9-]*/;
+const WHITESPACE_RUN_RE = /\s+/g;
+
 function tagNameOf(tagInner: string): string {
-  const m = /^\/?[a-zA-Z][a-zA-Z0-9-]*/.exec(tagInner.trim());
+  const m = TAG_NAME_RE.exec(tagInner.trim());
   return (m?.[0] ?? "").toLowerCase().replace(/^\//, "");
 }
 
@@ -94,7 +97,7 @@ export function stripHtml(s: unknown): string {
     if (BLOCK_TAGS.has(name)) parts.push(" ");
     i = end + 1;
   }
-  return parts.join("").replace(/\s+/g, " ").trim();
+  return parts.join("").replace(WHITESPACE_RUN_RE, " ").trim();
 }
 
 function findTagEnd(html: string, start: number): number {

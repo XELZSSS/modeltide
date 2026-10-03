@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, type VNodeChild } from "vue";
 import { ExternalLink } from "@lucide/vue";
-import {
-  col,
-  rightCol,
-  RightAlignedText,
-  type DataTableColumn,
-} from "@/client/components/data/table/table-columns.vue";
+import { col, rightCol, RightAlignedText, type DataTableColumn } from "@/client/components/data/table/table-columns.ts";
 import SearchableDataTable from "@/client/components/data/table/data-table.vue";
 import PageContainer from "@/client/components/layout/page-container.vue";
 import PageHeader from "@/client/components/layout/page-header.vue";

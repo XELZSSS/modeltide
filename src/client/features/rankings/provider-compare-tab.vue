@@ -3,7 +3,7 @@ import { computed, h } from "vue";
 import { useSuspenseArtificialRankingsState } from "@/client/api/api-queries";
 import { assertPayloadShape } from "@/client/api/payload-normalize";
 import SearchableDataTable from "@/client/components/data/table/data-table.vue";
-import { col, monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.vue";
+import { col, monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.ts";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import LabeledDot from "@/client/components/ui/labeled-dot.vue";
 import { useTranslation } from "@/client/i18n";

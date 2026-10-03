@@ -1,4 +1,4 @@
-import { isoDate, byDateDesc, isRecord, str } from "@/server/parsers/parser-primitives";
+import { isoDate, sortByDateDesc, isRecord, str } from "@/server/parsers/parser-primitives";
 import { upstreamConfig } from "@/server/config";
 import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
@@ -53,7 +53,7 @@ export function toClosedReleasesFromIndex(models: unknown): ClosedReleaseEntry[]
 export function toClosedReleases(changelog: unknown): ClosedReleaseEntry[] {
   if (!Array.isArray(changelog)) return [];
   const records = changelog.filter((e): e is ChangelogModel => isRecord(e) && typeof e.slug === "string");
-  records.sort(byDateDesc((e) => e.releaseDate));
+  sortByDateDesc(records, (e) => e.releaseDate);
   const entries: ClosedReleaseEntry[] = [];
   const seen = new Set<string>();
   for (const record of records) {

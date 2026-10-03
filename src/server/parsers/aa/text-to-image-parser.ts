@@ -5,7 +5,7 @@ import type { RawEntry } from "@/server/parsers/upstream-types";
 import { findLongestData, findNextData, parseRscPayload } from "@/server/parsers/rsc-parser";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
 
-export function parseTextToImageRows(body: unknown): ParseResult<Record<string, unknown>[]> {
+export function parseTextToImageRows(body: unknown): ParseResult<Omit<TextToImageModel, "rank">[]> {
   if (typeof body !== "string" || !body) return parseFail("Text-to-image returned an empty body");
   const scanned = parseRscPayload<Record<string, unknown>>(
     body,
@@ -13,11 +13,17 @@ export function parseTextToImageRows(body: unknown): ParseResult<Record<string, 
     (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
   );
   if (!scanned.ok) return parseFail(`Text-to-image parse failed: ${scanned.error}`);
-  const dropped = scanned.data.filter((row) => mapEntry(row) === null).length;
-  return parseOk(
-    scanned.data,
-    dropped > 0 ? [`Dropped ${dropped} text-to-image rows without a usable identity or elo`] : [],
-  );
+  // Map once: the old flow ran mapEntry a second time in the source just to count drops.
+  let dropped = 0;
+  const rows: Omit<TextToImageModel, "rank">[] = [];
+  for (const entry of scanned.data.map(mapEntry)) {
+    if (entry === null) {
+      dropped += 1;
+      continue;
+    }
+    rows.push(entry);
+  }
+  return parseOk(rows, dropped > 0 ? [`Dropped ${dropped} text-to-image rows without a usable identity or elo`] : []);
 }
 
 export function mapEntry(raw: unknown): Omit<TextToImageModel, "rank"> | null {

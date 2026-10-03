@@ -1,4 +1,4 @@
-import { byDateDesc } from "@/server/parsers/parser-primitives";
+import { sortByDateDesc } from "@/server/parsers/parser-primitives";
 import type { AppContext } from "@/server/context";
 import { ClientAbortError, errMsg } from "@/server/infra/errors";
 import { parseChangelogModels, type ChangelogModel } from "@/server/parsers/aa/changelog-parser";
@@ -11,7 +11,7 @@ export interface ChangelogModels {
 }
 
 function newestFirst(models: ChangelogModel[]): ChangelogModel[] {
-  return models.sort(byDateDesc((m) => m.releaseDate));
+  return sortByDateDesc(models, (m) => m.releaseDate);
 }
 
 export async function getChangelogModels(ctx: AppContext): Promise<ChangelogModels> {

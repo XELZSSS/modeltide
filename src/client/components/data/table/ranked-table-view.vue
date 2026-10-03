@@ -1,6 +1,7 @@
 <script lang="ts">
 import { h } from "vue";
-import RankingNameCell, { type DataTableColumn } from "./table-columns.vue";
+import RankingNameCell from "./table-columns.vue";
+import type { DataTableColumn } from "./table-columns.ts";
 
 export function modelNameCol<T>(
   header: string,
@@ -21,7 +22,7 @@ export function modelNameCol<T>(
 }
 </script>
 
-<script setup lang="ts" generic="T">
+<script setup lang="ts" generic="T extends object">
 import { computed, type VNodeChild } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TFunction } from "@/shared/i18n";

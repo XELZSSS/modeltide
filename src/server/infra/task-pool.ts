@@ -41,7 +41,9 @@ export async function runCapped<T>(
       }
     }
   };
-  const workers = Math.max(1, Math.min(concurrency, total));
-  await Promise.all(Array.from({ length: workers }, () => worker()));
+  const workerCount = Math.max(1, Math.min(concurrency, total));
+  const runners: Promise<void>[] = [];
+  for (let i = 0; i < workerCount; i++) runners.push(worker());
+  await Promise.all(runners);
   return results;
 }
