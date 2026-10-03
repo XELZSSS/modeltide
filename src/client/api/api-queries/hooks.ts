@@ -10,7 +10,7 @@ import type {
 } from "@/shared/types";
 import { dedupeBy } from "@/shared/utils";
 import { buildHallucinationRankings } from "@/shared/utils/hallucination";
-import { EMPTY_ARRAY } from "@/shared/utils/empty";
+import { EMPTY_ARRAY } from "@/client/utils/empty";
 import {
   normalizeHomeDashboard,
   unwrapList,

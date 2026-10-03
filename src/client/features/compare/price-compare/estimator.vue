@@ -13,7 +13,7 @@ import { seriesColor, useChartTheme } from "@/client/theme/chart-theme";
 import { useMonthlyCosts } from "@/client/pricing/cost-inputs";
 import CostEstimatorInputs from "@/client/pricing/cost-form.vue";
 import { WinnerMark } from "@/client/features/compare/compare-table.vue";
-import { modelKeyOf } from "@/client/features/compare/compare-logic";
+import { modelKeyOf } from "@/client/utils/compare-logic";
 
 const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
 

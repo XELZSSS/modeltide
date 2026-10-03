@@ -22,11 +22,11 @@ import CardContent from "@/client/components/ui/card-content.vue";
 import CardHeader from "@/client/components/ui/card-header.vue";
 import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
-import { BUTTERFLY_CHART_HEIGHT } from "@/client/components/ui/chart";
+import { BUTTERFLY_CHART_HEIGHT } from "@/client/utils/chart-metrics";
 import { axisTickStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName } from "@/shared/utils/models";
-import { buildValueRows } from "./compare-logic";
+import { buildValueRows } from "@/client/utils/compare-logic";
 
 const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
 

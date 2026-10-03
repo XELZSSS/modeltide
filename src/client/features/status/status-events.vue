@@ -7,7 +7,7 @@ import { sourceLabel } from "@/shared/config";
 import { useTranslation } from "@/client/i18n";
 import Dot from "@/client/components/ui/dot.vue";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
-import { eventDurationLabel, resolveEventStyle } from "@/client/features/status/status-events";
+import { eventDurationLabel, resolveEventStyle } from "@/client/utils/status-events";
 
 const props = withDefaults(
   defineProps<{

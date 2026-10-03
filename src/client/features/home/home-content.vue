@@ -10,7 +10,7 @@ import { assertPayloadShape } from "@/client/api/payload-normalize";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
 import ChartCard from "@/client/components/ui/chart-card.vue";
-import { FLEX_CHART_HEIGHT } from "@/client/components/ui/chart";
+import { FLEX_CHART_HEIGHT } from "@/client/utils/chart-metrics";
 import { useTranslation } from "@/client/i18n";
 import { loadableView } from "@/client/router/lazy-view";
 import { useHomeStats } from "./use-home-stats";

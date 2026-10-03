@@ -4,7 +4,7 @@ import { rssFeeds } from "@/server/sources/news-feeds";
 import type { ProbeResult } from "@/server/infra/http-client";
 import { runCapped } from "@/server/infra/task-pool";
 import type { SourceId } from "@/shared/types";
-import type { SourceAggregate } from "./aggregate";
+import { sourceAggregate, type SourceAggregate } from "./aggregate";
 
 interface ProbeTarget {
   id: SourceId;
@@ -87,16 +87,13 @@ function summarizeGroup(g: MutableAggregate): SourceAggregate {
     g.failures > 0
       ? `${g.failures}/${g.total} endpoints failed`
       : `${g.rejected}/${g.total} endpoints rejected the probe`;
-  const detail = degraded ? `${head}${g.firstError ? `: ${g.firstError}` : ""}` : null;
-  const served = degraded && g.ok;
-  return {
+  return sourceAggregate({
     ok: g.ok,
-    warn: served,
-    warnReason: served ? detail : null,
+    degraded,
     status: g.status,
     latencyMs: g.latencyCount > 0 ? Math.round(g.latencySum / g.latencyCount) : null,
-    error: g.ok ? null : detail,
-  };
+    detail: degraded ? `${head}${g.firstError ? `: ${g.firstError}` : ""}` : null,
+  });
 }
 
 export function aggregateProbes(probed: { target: ProbeTarget; probe: ProbeResult }[]): Map<SourceId, SourceAggregate> {

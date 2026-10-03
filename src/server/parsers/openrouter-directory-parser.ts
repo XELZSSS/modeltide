@@ -38,6 +38,26 @@ function buildPricingEntry(
   };
 }
 
+export function directoryRowPricing(raw: unknown): PricingEntry | null {
+  if (!isValidOpenRouterDirectoryRow(raw)) return null;
+  const m = raw as unknown as PricingRow;
+  const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
+  return buildPricingEntry(
+    numCoerceNonNegative(pricing.prompt),
+    numCoerceNonNegative(pricing.completion),
+    numCoerceNonNegative(pricing.input_cache_read),
+    numCoerceNonNegative(pricing.input_cache_write),
+  );
+}
+
+const DYNAMIC_PRICING = -1;
+
+export function hasDynamicPricing(raw: unknown): boolean {
+  if (!isValidOpenRouterDirectoryRow(raw)) return false;
+  const pricing = (raw as unknown as PricingRow).pricing as NonNullable<PricingRow["pricing"]>;
+  return numCoerce(pricing.prompt) === DYNAMIC_PRICING && numCoerce(pricing.completion) === DYNAMIC_PRICING;
+}
+
 function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
   return {
     intelligenceIndex: target.intelligenceIndex ?? patch.intelligenceIndex,
@@ -54,13 +74,7 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
     const raw: unknown = rows[i];
     if (!isValidOpenRouterDirectoryRow(raw)) continue;
     const m = raw as unknown as PricingRow;
-    const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
-    const pricingEntry = buildPricingEntry(
-      numCoerceNonNegative(pricing.prompt),
-      numCoerceNonNegative(pricing.completion),
-      numCoerceNonNegative(pricing.input_cache_read),
-      numCoerceNonNegative(pricing.input_cache_write),
-    );
+    const pricingEntry = directoryRowPricing(raw);
     if (pricingEntry) {
       const idKey = toStringOrNull(m.id);
       const slugKey = toStringOrNull(m.canonical_slug);

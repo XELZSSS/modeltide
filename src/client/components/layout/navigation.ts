@@ -1,7 +1,8 @@
-import { computed, onUnmounted, type Component, type ComputedRef } from "vue";
+import { computed, type Component, type ComputedRef } from "vue";
 import { useTranslation } from "@/client/i18n";
 import { ROUTES } from "@/client/config/routes";
-import { loadRouteChunk, prefetchQueriesForRoute } from "@/client/router/prefetch";
+import { routePrefetchTarget } from "@/client/router/prefetch";
+import { usePrefetchIntent, type PrefetchIntent } from "@/client/hooks/use-prefetch-intent";
 import type { NavGroup } from "@/client/config/route-meta";
 
 export interface NavItem {
@@ -48,44 +49,6 @@ export function isNavActive(pathname: string, item: NavItem): boolean {
   return false;
 }
 
-const HOVER_PREFETCH_DELAY_MS = 150;
-
-const TOUCH_PREFETCH_DELAY_MS = 300;
-
-interface PrefetchControls {
-  hover: (path: string) => void;
-  touch: (path: string) => void;
-  cancel: () => void;
-}
-
-export function usePrefetch(): PrefetchControls {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  const cancel = (): void => {
-    if (timer === null) return;
-    clearTimeout(timer);
-    timer = null;
-  };
-
-  onUnmounted(cancel);
-
-  return {
-    hover: (path) => {
-      cancel();
-      timer = setTimeout(() => {
-        timer = null;
-        prefetchQueriesForRoute(path);
-        loadRouteChunk(path);
-      }, HOVER_PREFETCH_DELAY_MS);
-    },
-    touch: (path) => {
-      loadRouteChunk(path);
-      cancel();
-      timer = setTimeout(() => {
-        timer = null;
-        prefetchQueriesForRoute(path);
-      }, TOUCH_PREFETCH_DELAY_MS);
-    },
-    cancel,
-  };
+export function usePrefetch(): PrefetchIntent<string> {
+  return usePrefetchIntent<string>(routePrefetchTarget);
 }

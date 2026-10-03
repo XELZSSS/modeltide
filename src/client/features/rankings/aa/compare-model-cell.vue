@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { Check, Plus } from "@lucide/vue";
 import Button from "@/client/components/ui/button.vue";
-import RankingNameCell from "@/client/components/data/table/table-columns.vue";
+import RankingNameCell from "@/client/components/data/table/ranking-name-cell.vue";
 import { useTranslation } from "@/client/i18n";
 import { cn } from "@/client/utils/cn";
 import { modelId } from "@/shared/utils/models";

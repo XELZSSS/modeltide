@@ -6,7 +6,7 @@ import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import { useTranslation } from "@/client/i18n";
 import { useSuspenseStatusHistory } from "@/client/api/api-queries";
 import { unwrapObject } from "@/client/api/payload-normalize";
-import { eventDurationLabel, resolveEventStyle } from "@/client/features/status/status-events";
+import { eventDurationLabel, resolveEventStyle } from "@/client/utils/status-events";
 import { sourceLabel } from "@/shared/config";
 import type { StatusEvent, StatusHistoryPayload } from "@/shared/types";
 import { formatLatencySec, formatRelativeTime, formatUptimePct } from "@/client/utils/format";

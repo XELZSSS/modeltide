@@ -2,7 +2,7 @@
 import { h, type FunctionalComponent } from "vue";
 import { TrendingDown, TrendingUp } from "@lucide/vue";
 import { cn } from "@/client/utils/cn";
-import type { Winner } from "./compare-logic";
+import type { Winner } from "@/client/utils/compare-logic";
 
 export const WinnerMark: FunctionalComponent = () =>
   h(TrendingUp, { size: 12, class: "inline ml-0.5 text-success", "aria-hidden": "true" });
@@ -37,7 +37,7 @@ import CardContent from "@/client/components/ui/card-content.vue";
 import Dot from "@/client/components/ui/dot.vue";
 import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "./compare-logic";
+import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "@/client/utils/compare-logic";
 
 const props = defineProps<{
   rows: CompareRow<ArtificialAnalysisModel>[];

@@ -17,7 +17,11 @@ withDefaults(
   { tabSize: "sm", tabFill: false },
 );
 
-const emit = defineEmits<{ tabChange: [tabId: string] }>();
+const emit = defineEmits<{ tabChange: [tabId: string]; tabIntent: [tabId: string, active: boolean] }>();
+
+function forwardTabIntent(tabId: string, active: boolean): void {
+  emit("tabIntent", tabId, active);
+}
 </script>
 
 <template>
@@ -31,6 +35,7 @@ const emit = defineEmits<{ tabChange: [tabId: string] }>();
       :tab-size="tabSize"
       :fill="tabFill"
       :aria-label="title"
+      @tab-intent="forwardTabIntent"
       @tab-change="emit('tabChange', $event)"
     >
       <slot />

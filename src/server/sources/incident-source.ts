@@ -2,7 +2,7 @@ import type { AppContext } from "@/server/context";
 import { PROVIDER_CONCURRENCY, UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
 import { errMsg, UpstreamError } from "@/server/infra/errors";
 import { runCapped } from "@/server/infra/task-pool";
-import type { SourceAggregate } from "@/server/sources/status/aggregate";
+import { sourceAggregate, type SourceAggregate } from "@/server/sources/status/aggregate";
 import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/incident-parser";
 import { parseOk, type ParseResult } from "@/server/parsers/parse-result";
 import type { SourceId, SourceLevel } from "@/shared/types";
@@ -48,38 +48,23 @@ async function fetchProviderHealth(
   } catch (err) {
     const message = errMsg(err);
     ctx.log("warn", `[provider-status] ${label} fetch failed: ${message}`);
-    return {
-      ok: false,
-      warn: false,
-      warnReason: null,
-      status: upstreamStatusOf(err),
-      latencyMs: null,
-      error: message,
-    };
+    return sourceAggregate({ ok: false, status: upstreamStatusOf(err), latencyMs: null, detail: message });
   }
   const latencyMs = Date.now() - started;
   const parsed = parse(response.body);
   if (!parsed.ok) {
     ctx.log("warn", `[provider-status] ${label} parse failed: ${parsed.error}`);
-    return {
-      ok: false,
-      warn: false,
-      warnReason: null,
-      status: response.status,
-      latencyMs: null,
-      error: parsed.error,
-    };
+    return sourceAggregate({ ok: false, status: response.status, latencyMs: null, detail: parsed.error });
   }
   const { level, detail } = parsed.data;
   const ok = level !== "error";
-  return {
+  return sourceAggregate({
     ok,
-    warn: level === "warn",
-    warnReason: level === "warn" ? detail : null,
+    degraded: level === "warn",
     status: response.status,
     latencyMs: ok ? latencyMs : null,
-    error: ok ? null : detail,
-  };
+    detail,
+  });
 }
 
 const PROVIDER_STATUS_TARGETS: readonly {

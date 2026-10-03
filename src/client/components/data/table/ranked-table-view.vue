@@ -1,6 +1,6 @@
 <script lang="ts">
 import { h } from "vue";
-import RankingNameCell from "./table-columns.vue";
+import RankingNameCell from "./ranking-name-cell.vue";
 import type { DataTableColumn } from "./table-columns.ts";
 
 export function modelNameCol<T>(

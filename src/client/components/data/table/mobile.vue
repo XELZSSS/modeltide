@@ -2,7 +2,7 @@
 import { computed, type VNodeChild } from "vue";
 import { cn } from "@/client/utils/cn";
 import type { DataTableColumn, RowListProps } from "./table-columns.ts";
-import { CellView, type RowListEmits } from "./row-list";
+import { CellView, type RowListEmits } from "./cell-view";
 import ExpandToggle from "./expand-toggle.vue";
 import { ExpandedRowPanel } from "./expanded-row-panel.ts";
 

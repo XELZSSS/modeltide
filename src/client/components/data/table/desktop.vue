@@ -41,7 +41,7 @@ export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpan
 <script setup lang="ts" generic="T extends object">
 import { computed, type VNodeChild } from "vue";
 import type { RowListProps } from "./table-columns.ts";
-import { CellView, type RowListEmits } from "./row-list";
+import { CellView, type RowListEmits } from "./cell-view";
 import ExpandToggle from "./expand-toggle.vue";
 import { ExpandedRowPanel } from "./expanded-row-panel.ts";
 

@@ -13,7 +13,7 @@ import Badge from "@/client/components/ui/badge.vue";
 import StatCard from "@/client/components/ui/stat-card.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
 import NotFound from "@/client/components/feedback/not-found.vue";
-import DetailShell from "@/client/features/models/model-details/detail-views.vue";
+import DetailShell from "@/client/components/model-detail/detail-views.vue";
 
 const props = defineProps<{ decodedId: string }>();
 

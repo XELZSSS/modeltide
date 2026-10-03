@@ -8,7 +8,7 @@ import { formatLatencySec, formatUptimePct } from "@/client/utils/format";
 import { SOURCE_LABELS } from "@/shared/config";
 import type { SourceId, StatusHistoryPayload } from "@/shared/types";
 import { LEVEL_STYLES, resolveLevel } from "@/shared/utils/status-level";
-import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SAMPLES } from "@/shared/utils/empty";
+import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SAMPLES } from "@/client/utils/empty";
 import { loadableView } from "@/client/router/lazy-view";
 import PageContainer from "@/client/components/layout/page-container.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
@@ -17,7 +17,7 @@ import DetailPageLayout from "@/client/components/layout/detail-page-layout.vue"
 import StatCard from "@/client/components/ui/stat-card.vue";
 import StatGrid from "@/client/components/ui/stat-grid.vue";
 import ChartSkeleton from "@/client/components/ui/chart-skeleton.vue";
-import { LATENCY_CHART_HEIGHT } from "@/client/components/ui/chart";
+import { LATENCY_CHART_HEIGHT } from "@/client/utils/chart-metrics";
 import UptimeStrip from "@/client/features/status/status-parts.vue";
 import StatusEventList from "@/client/features/status/status-events.vue";
 

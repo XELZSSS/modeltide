@@ -11,7 +11,7 @@ import Pagination from "@/client/components/ui/pagination.vue";
 import TabbedPage from "@/client/components/layout/tabbed-page.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { useClientTab } from "@/client/hooks/use-client-tab";
-import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "@/client/components/data/table";
+import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "@/client/components/data/table/paging";
 import { formatDate, formatRelativeTime, safeHref } from "@/client/utils/format";
 import type { TabItem } from "@/client/components/ui/tabs";
 import type { TranslationKey } from "@/shared/i18n";

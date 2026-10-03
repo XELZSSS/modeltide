@@ -4,7 +4,7 @@ import { ChevronRight } from "@lucide/vue";
 import Button from "@/client/components/ui/button.vue";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
-import type { RowListEmits } from "./row-list";
+import type { RowListEmits } from "./cell-view";
 
 const panelId = (rowId: string): string => `${rowId}-panel`;
 

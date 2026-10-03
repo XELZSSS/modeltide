@@ -15,7 +15,7 @@ import { cartesianChartOptions, ceilToStep, hexToRgba, seriesColor, useChartThem
 import { axisGridStyle, axisTickStyle } from "@/client/utils/charts";
 import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import type { CompareRow } from "@/client/features/compare/compare-logic";
+import type { CompareRow } from "@/client/utils/compare-logic";
 
 const PRICE_AXIS_FLOOR = 1;
 

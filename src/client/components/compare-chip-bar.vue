@@ -7,7 +7,7 @@ import { useTranslation } from "@/client/i18n";
 import { useCompareStore } from "@/client/stores";
 import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { modelKeyOf } from "./compare-logic";
+import { modelKeyOf } from "@/client/utils/compare-logic";
 
 const LIMIT_NOTICE_MS = 2500;
 

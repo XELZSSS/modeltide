@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ModelDetailContent from "@/client/features/models/model-details/aa-detail.vue";
+import ModelDetailContent from "@/client/components/model-detail/aa-detail.vue";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 defineProps<{ model: ArtificialAnalysisModel }>();

@@ -14,10 +14,15 @@ import NotFoundView from "@/client/components/feedback/not-found.vue";
 import { DEFAULT_RANKING_TAB, type RankingTabId } from "@/client/config/nav-config";
 import { NEWS_CATEGORIES } from "@/shared/config";
 import { loadableView } from "@/client/router/lazy-view";
+import { preloadChunk } from "@/client/router/prefetch";
+import { RANKING_TAB_LOADS } from "@/client/features/rankings/tab-loaders";
 import HomeView from "@/client/features/home/home-view.vue";
 import type { Prefetchable } from "@/client/config/route-meta";
 
-const loadRankingsHubView = () => import("@/client/features/rankings/rankings-hub-view.vue");
+const loadRankingsHubView = () => {
+  preloadChunk(RANKING_TAB_LOADS[DEFAULT_RANKING_TAB]);
+  return import("@/client/features/rankings/rankings-hub-view.vue");
+};
 const loadModelView = () => import("@/client/features/models/model-view.vue");
 const loadCompareView = () => import("@/client/features/compare/compare-view.vue");
 const loadPriceCompareView = () => import("@/client/features/compare/price-compare-view.vue");
@@ -37,7 +42,7 @@ const SourceDetailView = loadableView(loadSourceView);
 
 const newsPrefetch: readonly Prefetchable[] = [qNewsRaw(NEWS_CATEGORIES[0])];
 
-const RANKING_TAB_QUERIES: Record<RankingTabId, readonly Prefetchable[]> = {
+export const RANKING_TAB_QUERIES: Record<RankingTabId, readonly Prefetchable[]> = {
   modelRankings: [qArtificialRaw],
   openRouterRankings: [qOpenRouter],
   openSourceRankings: [qOpenSourceModelsRaw],

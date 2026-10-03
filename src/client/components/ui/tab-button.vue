@@ -33,7 +33,7 @@ const props = withDefaults(
   { active: false, size: "md", role: "tab" },
 );
 
-const emit = defineEmits<{ click: [] }>();
+const emit = defineEmits<{ click: []; intent: [active: boolean] }>();
 
 const classes = computed(() => cn(tabButtonVariants({ active: props.active, size: props.size }), props.class));
 const ariaChecked = computed(() =>
@@ -51,6 +51,11 @@ const tabindex = computed(() => props.tabIndex ?? (props.role === "tab" ? (props
     v-bind="ariaChecked"
     :tabindex="tabindex"
     :class="classes"
+    @mouseenter="emit('intent', true)"
+    @mouseleave="emit('intent', false)"
+    @focus="emit('intent', true)"
+    @blur="emit('intent', false)"
+    @touchstart.passive="emit('intent', true)"
     @click="emit('click')"
   >
     <slot />

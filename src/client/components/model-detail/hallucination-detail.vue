@@ -12,8 +12,8 @@ import InfoRow from "@/client/components/ui/info-row.vue";
 import StatCard from "@/client/components/ui/stat-card.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
 import NotFound from "@/client/components/feedback/not-found.vue";
-import ModelDetailContent from "@/client/features/models/model-details/aa-detail.vue";
-import DetailShell, { findModel } from "@/client/features/models/model-details/detail-views.vue";
+import ModelDetailContent from "@/client/components/model-detail/aa-detail.vue";
+import DetailShell, { findModel } from "@/client/components/model-detail/detail-views.vue";
 
 function indexAaModels(models: ArtificialAnalysisModel[]): Map<string, ArtificialAnalysisModel[]> {
   const index = new Map<string, ArtificialAnalysisModel[]>();

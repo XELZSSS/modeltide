@@ -12,7 +12,7 @@ import {
 } from "@/client/components/data/table/table-columns.ts";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
-import OpenRouterModelDetail from "@/client/features/models/model-details/openrouter-detail.vue";
+import OpenRouterModelDetail from "@/client/components/model-detail/openrouter-detail.vue";
 import { useTranslation } from "@/client/i18n";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { assertPayloadShape, unwrapListPartial } from "@/client/api/payload-normalize";
@@ -64,10 +64,11 @@ const props = defineProps<{ data?: SourcePayload<OpenRouterRankEntry[]> }>();
 
 const { t } = useTranslation();
 
-const state = computed(() =>
-  props.data ? unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings") : null,
-);
-assertPayloadShape(state.value?.malformed ?? false, "openRouterRankings");
+const state = computed(() => {
+  const value = props.data ? unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings") : null;
+  assertPayloadShape(value?.malformed ?? false, "openRouterRankings");
+  return value;
+});
 </script>
 
 <template>

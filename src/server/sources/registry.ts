@@ -13,14 +13,11 @@ import { getModelById, getModels } from "@/server/sources/hf-source";
 import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
 import { getStatusHistory } from "@/server/sources/status-history";
 
-export type WarmTier = "core" | "hourly" | "static";
-
 interface SourceDefinition<D extends ApiDomain, Q extends QuerySchema> {
   query?: Q;
   cache?: { browser: string; cdn: string };
   handler(ctx: AppContext, params: ValidatedQuery<Q>): Promise<DomainPayload<D>>;
-  warm?: WarmTier;
-  warmParams?: ValidatedQuery<Q>[];
+  warm?: boolean;
 }
 
 interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends SourceDefinition<
@@ -44,21 +41,18 @@ function defineSource<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
 const ENTRIES = {
   artificialIndex: defineSource("artificialIndex", {
     handler: (ctx) => getIntelligenceIndex(ctx),
-    warm: "core",
+    warm: true,
   }),
   homeDashboard: defineSource("homeDashboard", {
     handler: (ctx) => getHomeDashboard(ctx),
-    warm: "core",
+    warm: true,
   }),
   news: defineSource("news", {
     query: { category: qEnum(NEWS_CATEGORIES, NEWS_CATEGORIES[0]) },
     handler: (ctx, params) => getNews(ctx, params.category),
-    warm: "hourly",
-    warmParams: NEWS_CATEGORIES.map((category) => ({ category })),
   }),
   agentRankings: defineSource("agentRankings", {
     handler: (ctx) => getAgentRankings(ctx),
-    warm: "hourly",
   }),
   openSourceModels: defineSource("openSourceModels", {
     query: {
@@ -72,12 +66,9 @@ const ENTRIES = {
       }),
     },
     handler: (ctx, params) => getModels(ctx, params),
-    warm: "hourly",
-    warmParams: [{ ...OPEN_SOURCE_MODELS_DEFAULTS }],
   }),
   closedReleases: defineSource("closedReleases", {
     handler: (ctx) => getClosedReleases(ctx),
-    warm: "static",
   }),
   openSourceModel: defineSource("openSourceModel", {
     query: { id: qStr({ maxLength: 200 }) },
@@ -86,7 +77,7 @@ const ENTRIES = {
   }),
   openRouterRankings: defineSource("openRouterRankings", {
     handler: (ctx) => getOpenRouterRankings(ctx),
-    warm: "core",
+    warm: true,
   }),
   statusHistory: defineSource("statusHistory", {
     cache: SHORT_CACHE_HEADERS,
@@ -96,20 +87,12 @@ const ENTRIES = {
 
 export const SOURCES: readonly SourceEntry[] = Object.values(ENTRIES);
 
-for (const source of SOURCES) {
-  if (source.warm && source.query && !source.warmParams?.length) {
-    throw new Error(`[registry] ${source.path} declares a warm tier without warmParams`);
-  }
-}
-
-export function warmTasks(env: Env, tier: WarmTier, taskTimeoutMs: number): (() => Promise<unknown>)[] {
+export function warmTasks(env: Env, taskTimeoutMs: number): (() => Promise<unknown>)[] {
   const tasks: (() => Promise<unknown>)[] = [];
   for (const source of SOURCES) {
-    if (source.warm !== tier) continue;
-    const paramSets = source.warmParams?.length ? source.warmParams : [{} as ValidatedQuery<QuerySchema>];
-    for (const params of paramSets) {
-      tasks.push(() => source.handler(buildContext(env, { workSignal: AbortSignal.timeout(taskTimeoutMs) }), params));
-    }
+    if (!source.warm) continue;
+    const params = {} as ValidatedQuery<QuerySchema>;
+    tasks.push(() => source.handler(buildContext(env, { workSignal: AbortSignal.timeout(taskTimeoutMs) }), params));
   }
   return tasks;
 }

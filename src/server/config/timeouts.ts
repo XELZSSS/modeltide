@@ -1,4 +1,4 @@
-import { WARM_TASK_TIMEOUT_MS } from "@/server/config/cron";
+import { WARM_TASK_TIMEOUT_MS } from "@/server/config/cron-budget";
 
 // Free plan: 50 external subrequests and 6 simultaneous connections per invocation.
 // Per-call timeouts stay short so one slow upstream cannot wedge the slot pool and trip the sampling deadline.

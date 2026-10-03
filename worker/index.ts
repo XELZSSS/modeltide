@@ -1,6 +1,6 @@
 import { buildContext, type Env } from "@/server/context";
 import { recordStatusSamples } from "@/server/sources/status";
-import { warmTasks, type WarmTier } from "@/server/sources/registry";
+import { warmTasks } from "@/server/sources/registry";
 import { runCapped, TaskNotRunError } from "@/server/infra/task-pool";
 import {
   SAMPLE_TIMEOUT_MS,
@@ -33,8 +33,6 @@ export async function pingCronMonitor(env: Env, healthy: boolean): Promise<void>
     logger("warn", `[cron-monitor] ping failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
-
-export const WARM_TIERS: readonly WarmTier[] = ["core"];
 
 interface ScheduledResult {
   sampled: boolean | null;
@@ -74,7 +72,7 @@ async function scheduledTask(env: Env): Promise<ScheduledResult> {
   };
   const runWarmup = async (): Promise<{ failed: number; total: number }> => {
     try {
-      const tasks = WARM_TIERS.flatMap((tier) => warmTasks(env, tier, WARM_TASK_TIMEOUT_MS));
+      const tasks = warmTasks(env, WARM_TASK_TIMEOUT_MS);
       const batchSignal = AbortSignal.timeout(warmBatchTimeoutMs(tasks.length));
       const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: batchSignal });
       const { notRun, failed, degraded, total } = warmRoundOutcome(results);

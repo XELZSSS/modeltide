@@ -9,7 +9,7 @@ import CostEstimator from "@/client/features/compare/price-compare/estimator.vue
 import { MODEL_SOURCES } from "@/client/config/nav-config";
 import { loadableView } from "@/client/router/lazy-view";
 import ComparePageLayout from "./compare-layout.vue";
-import { buildPriceRows, type CompareRow, type Winner } from "./compare-logic";
+import { buildPriceRows, type CompareRow, type Winner } from "@/client/utils/compare-logic";
 
 const PriceChart = loadableView(() => import("@/client/features/compare/price-compare/price-chart.vue"));
 

@@ -1,5 +1,5 @@
 import { SLOW_TTL_MS } from "@/shared/config";
-import { MAX_JSON_BYTES, UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig, upstreamEndpoints } from "@/server/config";
+import { UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig, upstreamEndpoints } from "@/server/config";
 import type { AgentRankEntry, SourcePayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { fetchRscText } from "@/server/sources/rsc-fetcher";
@@ -11,7 +11,6 @@ const AGENT_PATH = upstreamEndpoints.agentBoard;
 async function fetchAgentBoard(ctx: AppContext): Promise<AgentRankEntry[]> {
   const body = await fetchRscText(ctx, upstreamConfig.arena, AGENT_PATH, {
     headers: { RSC: "1", accept: "*/*" },
-    maxBytes: MAX_JSON_BYTES,
     retries: UPSTREAM_FETCH_OPTS.retries,
   });
   const entries = requireParsed(parseAgentBoards(body), ctx.log, "agent-board");

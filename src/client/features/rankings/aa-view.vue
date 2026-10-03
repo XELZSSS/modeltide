@@ -6,7 +6,7 @@ import { useClientTab } from "@/client/hooks/use-client-tab";
 import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
 import { useEffectivePricingMap, useMonthlyCosts } from "@/client/pricing/cost-inputs";
 import CostEstimatorInputs from "@/client/pricing/cost-form.vue";
-import CompareChipBar from "@/client/features/compare/compare-tray.vue";
+import CompareChipBar from "@/client/components/compare-chip-bar.vue";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
 import TabButton from "@/client/components/ui/tab-button.vue";
@@ -15,7 +15,7 @@ import ModelExpandedDetail from "./aa/aa-cells.vue";
 import { buildRankingColumns } from "./aa/aa-rank-columns";
 import { buildPricingColumns, type PricingRow } from "./aa/aa-price-columns";
 import { modelId } from "@/shared/utils/models";
-import { EMPTY_MODELS } from "@/shared/utils/empty";
+import { EMPTY_MODELS } from "@/client/utils/empty";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 const VIEW_MODES = ["rankings", "pricing"] as const;

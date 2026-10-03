@@ -3,7 +3,7 @@ import { computed } from "vue";
 import type { ChartOptions } from "chart.js";
 import { useTranslation } from "@/client/i18n";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
-import { LATENCY_CHART_HEIGHT } from "@/client/components/ui/chart";
+import { LATENCY_CHART_HEIGHT } from "@/client/utils/chart-metrics";
 import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import { registerLine } from "@/client/utils/charts-register";
 import { cartesianChartOptions, seriesColor, useChartTheme } from "@/client/theme/chart-theme";

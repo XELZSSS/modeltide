@@ -8,11 +8,11 @@ import NotFound from "@/client/components/feedback/not-found.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import PageContainer from "@/client/components/layout/page-container.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
-import DetailShell, { findModel } from "@/client/features/models/model-details/detail-views.vue";
-import AaContent from "@/client/features/models/model-details/aa-detail.vue";
-import OrContent from "@/client/features/models/model-details/openrouter-detail.vue";
-import OpenSourceDetail from "@/client/features/models/model-details/open-source-detail.vue";
-import HallucinationDetail from "@/client/features/models/model-details/hallucination-detail.vue";
+import DetailShell, { findModel } from "@/client/components/model-detail/detail-views.vue";
+import AaContent from "@/client/components/model-detail/aa-detail.vue";
+import OrContent from "@/client/components/model-detail/openrouter-detail.vue";
+import OpenSourceDetail from "@/client/components/model-detail/open-source-detail.vue";
+import HallucinationDetail from "@/client/components/model-detail/hallucination-detail.vue";
 import type { ArtificialAnalysisModel, OpenRouterRankEntry } from "@/shared/types";
 
 function isModelSource(value: string): value is ModelSource {

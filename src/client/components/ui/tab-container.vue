@@ -17,7 +17,7 @@ const props = withDefaults(
   { tabSize: "sm", fill: false },
 );
 
-const emit = defineEmits<{ tabChange: [tabId: string] }>();
+const emit = defineEmits<{ tabChange: [tabId: string]; tabIntent: [tabId: string, active: boolean] }>();
 
 const groupClasses = computed(() =>
   cn("w-fit max-w-full overflow-x-auto no-scrollbar sm:flex-wrap", props.fill && "w-full sm:w-full"),
@@ -51,6 +51,7 @@ function onKeydown(event: KeyboardEvent): void {
         :tab-index="activeTab === tab.id ? 0 : -1"
         :aria-controls="activeTab === tab.id ? `panel-${tab.id}` : undefined"
         :id="`tab-${tab.id}`"
+        @intent="emit('tabIntent', tab.id, $event)"
         @click="emit('tabChange', tab.id)"
       >
         {{ tab.label }}

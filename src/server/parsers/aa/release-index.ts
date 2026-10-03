@@ -63,7 +63,3 @@ export function collectModelReleaseLinksFromArrays(arrays: readonly unknown[]): 
   }
   return links;
 }
-
-export function collectModelReleaseLinks(html: string): Map<string, string> {
-  return collectModelReleaseLinksFromArrays(extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS));
-}

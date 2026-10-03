@@ -3,12 +3,11 @@ import { UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig, upstreamEndpoints, upst
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
 import {
-  isRecord,
-  isValidOpenRouterDirectoryRow,
-  numCoerce,
-  numCoerceNonNegative,
-} from "@/server/parsers/parser-primitives";
-import { parseDirectoryRows, type DirectoryCacheEntry } from "@/server/parsers/openrouter-directory-parser";
+  directoryRowPricing,
+  hasDynamicPricing,
+  parseDirectoryRows,
+  type DirectoryCacheEntry,
+} from "@/server/parsers/openrouter-directory-parser";
 import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 import { cachedRaw } from "@/server/sources/pipeline";
 
@@ -16,18 +15,6 @@ const PRICING_TTL_MS = SLOW_TTL_MS;
 const PRICING_GAP_RATIO = 0.3;
 
 export type DirectoryCacheEntryWithPartial = DirectoryCacheEntry & { partial: boolean };
-
-const DYNAMIC_PRICING = -1;
-
-function hasUsablePricing(row: unknown): boolean {
-  if (!isValidOpenRouterDirectoryRow(row) || !isRecord(row)) return false;
-  const pricing = row.pricing;
-  if (!isRecord(pricing)) return false;
-  if (numCoerce(pricing.prompt) === DYNAMIC_PRICING && numCoerce(pricing.completion) === DYNAMIC_PRICING) {
-    return true;
-  }
-  return numCoerceNonNegative(pricing.prompt) != null && numCoerceNonNegative(pricing.completion) != null;
-}
 
 async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntryWithPartial> {
   const res = (await ctx.http.json<unknown>(
@@ -39,7 +26,7 @@ async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntry
   if (Object.keys(entry.pricing).length === 0) {
     throw new UpstreamError(`OpenRouter: empty pricing response (raw=${rows.length}, kept=0)`);
   }
-  const missing = rows.filter((row) => !hasUsablePricing(row)).length;
+  const missing = rows.filter((row) => directoryRowPricing(row) === null && !hasDynamicPricing(row)).length;
   const partial = missing >= Math.ceil(rows.length * PRICING_GAP_RATIO);
   if (partial) {
     ctx.log("warn", `[openrouter] directory pricing gaps: ${missing}/${rows.length} rows lack usable pricing`);

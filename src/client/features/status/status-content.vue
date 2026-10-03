@@ -9,7 +9,7 @@ import { formatUptime, formatUptimePct } from "@/client/utils/format";
 import { sourceLabel } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary, StatusHistoryPayload } from "@/shared/types";
 import { LEVEL_STYLES, recentlyDegradedIds, resolveLevel } from "@/shared/utils/status-level";
-import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SOURCES } from "@/shared/utils/empty";
+import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SOURCES } from "@/client/utils/empty";
 import SafeLink from "@/client/components/safe-link.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import PageSection from "@/client/components/layout/page-section.vue";

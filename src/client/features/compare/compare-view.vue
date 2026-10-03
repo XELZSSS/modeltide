@@ -2,7 +2,7 @@
 import { useTranslation } from "@/client/i18n";
 import { MODEL_SOURCES } from "@/client/config/nav-config";
 import ChartCard from "@/client/components/ui/chart-card.vue";
-import { BUTTERFLY_CHART_HEIGHT, RADAR_CHART_HEIGHT } from "@/client/components/ui/chart";
+import { BUTTERFLY_CHART_HEIGHT, RADAR_CHART_HEIGHT } from "@/client/utils/chart-metrics";
 import { loadableView } from "@/client/router/lazy-view";
 import ComparePageLayout from "./compare-layout.vue";
 

@@ -1,12 +1,16 @@
 import type { AppContext } from "@/server/context";
-import { upstreamConfig } from "@/server/config";
+import { FAST_FETCH_OPTS, UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
 import { ClientAbortError, errMsg, UpstreamError } from "@/server/infra/errors";
 import { parseRscPayload } from "@/server/parsers/rsc-parser";
 import { fetchRscText } from "@/server/sources/rsc-fetcher";
 import { cachedRaw } from "@/server/sources/pipeline";
 import { SLOW_TTL_MS } from "@/shared/config";
 
-export function fetchAaRsc(ctx: AppContext, path: string, retries = 1): Promise<string> {
+export function fetchAaRsc(
+  ctx: AppContext,
+  path: string,
+  retries: number = UPSTREAM_FETCH_OPTS.retries,
+): Promise<string> {
   return fetchRscText(ctx, upstreamConfig.artificialAnalysis, path, { retries });
 }
 
@@ -38,7 +42,7 @@ export async function getAndParseEnrich<T>(
 ): Promise<EnrichResult<T>> {
   try {
     const { value, degraded } = await cachedRaw<T[]>(ctx, cacheKey, SLOW_TTL_MS, async (refreshCtx) => {
-      const body = await fetchAaRsc(refreshCtx, spec.path, 0);
+      const body = await fetchAaRsc(refreshCtx, spec.path, FAST_FETCH_OPTS.retries);
       return parseEnrich(spec, body);
     });
     return { rows: value, failed: degraded };

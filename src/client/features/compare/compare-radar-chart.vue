@@ -13,11 +13,11 @@ import Card from "@/client/components/ui/card.vue";
 import CardContent from "@/client/components/ui/card-content.vue";
 import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
-import { RADAR_CHART_HEIGHT } from "@/client/components/ui/chart";
+import { RADAR_CHART_HEIGHT } from "@/client/utils/chart-metrics";
 import { axisTickStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName, modelId } from "@/shared/utils/models";
-import { buildRadarData, radarMaxFor } from "./compare-logic";
+import { buildRadarData, radarMaxFor } from "@/client/utils/compare-logic";
 
 const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
 

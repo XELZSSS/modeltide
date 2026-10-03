@@ -18,7 +18,7 @@ import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { foldSearchStr, matchFolded, prepareFields, fuzzyHit, type PreparedFields } from "@/client/search/match";
 import { normalizeModelKey } from "@/shared/utils";
-import { EMPTY_ARRAY } from "@/shared/utils/empty";
+import { EMPTY_ARRAY } from "@/client/utils/empty";
 
 type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
 
