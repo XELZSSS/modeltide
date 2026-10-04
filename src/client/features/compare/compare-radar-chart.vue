@@ -83,7 +83,7 @@ const caption = computed(() =>
 </script>
 
 <template>
-  <Card class="w-full md:w-1/2">
+  <Card class="w-full">
     <CardContent class="h-full flex items-center justify-center">
       <ChartFrame :height="RADAR_CHART_HEIGHT">
         <ChartCanvas type="radar" :data="data" :options="options" role="img" :aria-label="t('modelComparison')" />

@@ -1,5 +1,5 @@
 import type { AppContext } from "@/server/context";
-import { PROVIDER_CONCURRENCY, UPSTREAM_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
+import { PROVIDER_CONCURRENCY, PROVIDER_STATUS_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
 import { errMsg, UpstreamError } from "@/server/infra/errors";
 import { runCapped } from "@/server/infra/task-pool";
 import { sourceAggregate, type SourceAggregate } from "@/server/sources/status/aggregate";
@@ -44,7 +44,7 @@ async function fetchProviderHealth(
   const started = Date.now();
   let response: { status: number; body: unknown };
   try {
-    response = await ctx.http.jsonWithStatus<unknown>(url, UPSTREAM_FETCH_OPTS);
+    response = await ctx.http.jsonWithStatus<unknown>(url, PROVIDER_STATUS_FETCH_OPTS);
   } catch (err) {
     const message = errMsg(err);
     ctx.log("warn", `[provider-status] ${label} fetch failed: ${message}`);

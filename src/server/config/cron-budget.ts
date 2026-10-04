@@ -3,8 +3,8 @@ export const SAMPLE_TIMEOUT_MS = 90_000;
 export const WARM_TASK_TIMEOUT_MS = 25_000;
 export const WARM_CONCURRENCY = 2;
 export const PING_TIMEOUT_MS = 5_000;
-// 4 + 2 = 6 in-flight fetches: the runtime's simultaneous-connection limit, so sampling never self-throttles.
-export const PROBE_CONCURRENCY = 4;
+// 2 + 2 = 4 in-flight fetches: the background pool's slot cap, which only interactive traffic can shrink.
+export const PROBE_CONCURRENCY = 2;
 export const PROVIDER_CONCURRENCY = 2;
 export const NEWS_LEG_CONCURRENCY = 2;
 

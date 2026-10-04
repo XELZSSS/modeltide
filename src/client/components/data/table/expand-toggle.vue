@@ -5,8 +5,7 @@ import Button from "@/client/components/ui/button.vue";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import type { RowListEmits } from "./cell-view";
-
-const panelId = (rowId: string): string => `${rowId}-panel`;
+import { rowPanelId } from "./expanded-row-panel.ts";
 
 const props = withDefaults(defineProps<{ rowId: string; rowName: string; isExpanded: boolean; size?: number }>(), {
   size: 14,
@@ -31,7 +30,7 @@ function onToggle(event: MouseEvent): void {
     class="shrink-0 size-7"
     :aria-expanded="isExpanded"
     :aria-label="label"
-    :aria-controls="isExpanded ? panelId(rowId) : undefined"
+    :aria-controls="isExpanded ? rowPanelId(rowId) : undefined"
     @click="onToggle"
   >
     <span :class="cn('shrink-0 text-text-secondary transition-transform duration-fast', isExpanded && 'rotate-90')">

@@ -1,10 +1,7 @@
 import { isRecord, numCoerce, str } from "@/server/parsers/parser-primitives";
-import { extractNeedleJsonArrays } from "@/server/parsers/rsc-scanner";
 import {
-  AA_MODELS_KEY,
-  AA_SCAN_OPTS,
   collectModelReleaseLinksFromArrays,
-  collectReleases,
+  scanReleaseIndex,
   type ReleaseInfo,
 } from "@/server/parsers/aa/release-index";
 import { BENCHMARK_FIELD_OVERRIDES } from "@/server/parsers/aa/model-compact";
@@ -60,9 +57,7 @@ function normalizeRow(
 
 export function parseLeaderboardModels(html: unknown): ParseResult<Record<string, unknown>[]> {
   if (typeof html !== "string" || !html) return parseFail("AA leaderboard page is not a string");
-  const releases = collectReleases(html);
-  // Scan the "models" needle once and share the arrays between link collection and row parsing.
-  const modelArrays = extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS);
+  const { releases, modelArrays } = scanReleaseIndex(html);
   const links = collectModelReleaseLinksFromArrays(modelArrays);
   let best: Record<string, unknown>[] = [];
   let bestRaw = 0;

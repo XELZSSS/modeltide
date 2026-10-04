@@ -17,6 +17,7 @@ import type { TabItem } from "@/client/components/ui/tabs";
 import type { TranslationKey } from "@/shared/i18n";
 import type { NewsCategory, NewsItem } from "@/shared/types";
 import { NEWS_CATEGORIES } from "@/shared/config";
+import { ROW_PADDING } from "@/client/config/layout";
 
 const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
   industry: "catIndustry",
@@ -26,8 +27,7 @@ const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
   research: "catResearch",
 };
 
-const ROW_CLASS =
-  "group flex items-start justify-between gap-4 px-4 py-3.5 transition-colors duration-fast hoverable:hover:bg-hover focus-visible:outline-none focus-visible:bg-hover";
+const ROW_CLASS = `group flex items-start justify-between gap-4 ${ROW_PADDING} transition-colors duration-fast hoverable:hover:bg-hover focus-visible:outline-none focus-visible:bg-hover`;
 
 const getNewsRowId = (item: NewsItem): string => item.link || `${item.source}::${item.title}::${item.pubDate}`;
 

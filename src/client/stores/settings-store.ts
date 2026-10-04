@@ -1,10 +1,10 @@
 import { defineStore } from "pinia";
 import type { ThemeMode } from "@/shared/types";
 import type { Lang } from "@/shared/i18n";
-import { STORAGE_KEYS } from "@/shared/config";
+import { SETTINGS_STORAGE_VERSION, STORAGE_KEYS } from "@/shared/config";
 import { readPersisted, safeStorage, writePersisted } from "@/client/stores/persist";
 
-const VERSION = 1;
+const VERSION = SETTINGS_STORAGE_VERSION;
 
 interface PersistedSettings {
   themeMode?: unknown;

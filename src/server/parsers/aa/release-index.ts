@@ -47,6 +47,25 @@ export function collectReleases(html: string): Map<string, ReleaseInfo> {
   return releases;
 }
 
+export interface ReleaseIndexScan {
+  releases: Map<string, ReleaseInfo>;
+  modelArrays: unknown[];
+}
+
+let cachedHtml = "";
+let cachedScan: ReleaseIndexScan | null = null;
+
+export function scanReleaseIndex(html: string): ReleaseIndexScan {
+  if (cachedScan && cachedHtml === html) return cachedScan;
+  const scan: ReleaseIndexScan = {
+    releases: collectReleases(html),
+    modelArrays: extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS),
+  };
+  cachedHtml = html;
+  cachedScan = scan;
+  return scan;
+}
+
 export function collectModelReleaseLinksFromArrays(arrays: readonly unknown[]): Map<string, string> {
   const links = new Map<string, string>();
   for (const value of arrays) {

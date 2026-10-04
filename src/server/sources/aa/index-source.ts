@@ -15,6 +15,7 @@ import type { SourcePayload } from "@/shared/types";
 import type { ModelMetaEntry } from "@/server/parsers/upstream-types";
 import { upstreamEndpoints } from "@/server/config";
 import type { CacheResult } from "@/server/infra/cache/service";
+import { errMsg } from "@/server/infra/errors";
 import { cachedPayload, cachedRaw, requireParsed, requireRows } from "@/server/sources/pipeline";
 
 export function getAaLeaderboardBody(ctx: AppContext): Promise<CacheResult<string>> {
@@ -24,7 +25,7 @@ export function getAaLeaderboardBody(ctx: AppContext): Promise<CacheResult<strin
 }
 
 const BENCHMARK_WIRE_NAMES = [
-  "mmluPro",
+  "itbenchSre",
   "tauBanking",
   "terminalBench21",
   "terminalbenchHard",
@@ -57,6 +58,7 @@ const MODELS_ENRICH_FIELDS = [
   "cacheWritePrice",
   "medianCanonicalAnswerOutputSpeed",
   "omniscienceBreakdown",
+  "omniscienceHallucinationRate",
   "creator",
   ...BENCHMARK_KEYS,
   ...BENCHMARK_WIRE_NAMES,
@@ -92,7 +94,10 @@ async function fetchIntelligenceIndex(
         map: (arr) => arr.map(compactModelsEnrich),
       }),
     ]),
-    getModelDirectoryMeta(ctx).catch((): Record<string, ModelMetaEntry> | null => null),
+    getModelDirectoryMeta(ctx).catch((err: unknown): Record<string, ModelMetaEntry> | null => {
+      ctx.log("warn", `[artificial] OpenRouter directory metadata leg failed: ${errMsg(err)}`);
+      return null;
+    }),
   ]);
 
   const indexModels = requireParsed(parseLeaderboardModels(indexBody.value), ctx.log, "aa-leaderboard");

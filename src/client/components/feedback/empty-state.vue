@@ -8,7 +8,7 @@ const props = withDefaults(
     icon?: Component;
     message: string;
     title?: string;
-    variant?: "empty" | "error";
+    variant?: "empty" | "error" | "plain";
     compact?: boolean;
     class?: string;
   }>(),
@@ -16,17 +16,19 @@ const props = withDefaults(
 );
 
 const classes = computed(() =>
-  cn(
-    props.compact
-      ? "flex flex-col items-center justify-center gap-2 p-6 text-center"
-      : "flex flex-col items-center justify-center gap-3 p-10 text-center min-h-[240px]",
-    props.class,
-  ),
+  props.variant === "plain"
+    ? cn("flex flex-col items-center justify-center gap-2 text-center", props.class)
+    : cn(
+        props.compact
+          ? "flex flex-col items-center justify-center gap-2 p-6 text-center"
+          : "flex flex-col items-center justify-center gap-3 p-10 text-center min-h-[240px]",
+        props.class,
+      ),
 );
 </script>
 
 <template>
-  <Card :class="classes" :role="variant === 'error' ? 'alert' : 'status'">
+  <component :is="variant === 'plain' ? 'div' : Card" :class="classes" :role="variant === 'error' ? 'alert' : 'status'">
     <component
       :is="icon"
       v-if="icon"
@@ -36,5 +38,5 @@ const classes = computed(() =>
     />
     <p v-if="title" class="ui-card-title text-center text-text-primary">{{ title }}</p>
     <p class="ui-body-secondary text-center text-balance max-w-md">{{ message }}</p>
-  </Card>
+  </component>
 </template>

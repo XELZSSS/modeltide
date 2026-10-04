@@ -50,7 +50,7 @@ const renderExpanded = (row: T): VNodeChild => props.renderExpandedRow?.(row);
       <div
         :class="
           cn(
-            'border border-border bg-bg-card p-4 overflow-hidden transition-colors duration-fast',
+            'ui-card p-4 overflow-hidden transition-colors duration-fast',
             'hoverable:hover:border-text-tertiary/40',
             item.expanded && 'border-text-tertiary/40',
           )

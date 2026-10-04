@@ -3,15 +3,12 @@ import { computed, h, type VNodeChild } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatDollar } from "@/client/utils/format";
-import ChartCard from "@/client/components/ui/chart-card.vue";
 import CompareTable, { WinnerValue } from "@/client/features/compare/compare-table.vue";
 import CostEstimator from "@/client/features/compare/price-compare/estimator.vue";
 import { MODEL_SOURCES } from "@/client/config/nav-config";
-import { loadableView } from "@/client/router/lazy-view";
 import ComparePageLayout from "./compare-layout.vue";
 import { buildPriceRows, type CompareRow, type Winner } from "@/client/utils/compare-logic";
 
-const PriceChart = loadableView(() => import("@/client/features/compare/price-compare/price-chart.vue"));
 
 const { t } = useTranslation();
 
@@ -36,12 +33,6 @@ function renderPrice(
         <p class="text-sm font-semibold">{{ t("priceBreakdown") }}</p>
         <CompareTable :rows="priceRows" :models="models" :render-value="renderPrice" />
       </div>
-      <Suspense>
-        <PriceChart :price-rows="priceRows" :models="models" />
-        <template #fallback>
-          <ChartCard :title="t('priceComparison')" loading />
-        </template>
-      </Suspense>
       <CostEstimator :models="models" />
     </template>
   </ComparePageLayout>

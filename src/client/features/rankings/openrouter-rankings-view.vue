@@ -83,9 +83,7 @@ const state = computed(() => {
       :build-body-columns="buildOpenRouterBodyColumns"
     >
       <template #expandedRow="{ row }">
-        <div class="p-4 sm:p-5">
-          <OpenRouterModelDetail :model="row" />
-        </div>
+        <OpenRouterModelDetail :model="row" />
       </template>
     </RankedTableView>
   </template>

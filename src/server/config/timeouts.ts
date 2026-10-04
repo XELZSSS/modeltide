@@ -9,6 +9,7 @@ export const BACKOFF_MAX_MS = 2_000;
 export const UPSTREAM_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 } as const;
 
 export const FAST_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 0 } as const;
+export const PROVIDER_STATUS_FETCH_OPTS = { timeoutMs: 6_000, retries: 1 } as const;
 
 const FETCH_OPTS = [UPSTREAM_FETCH_OPTS, FAST_FETCH_OPTS] as const;
 

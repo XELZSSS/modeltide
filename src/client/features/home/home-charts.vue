@@ -12,7 +12,8 @@ import CardContent from "@/client/components/ui/card-content.vue";
 import CardHeader from "@/client/components/ui/card-header.vue";
 import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
-import { CHART_EMPTY_CLASS, CHART_HEIGHT } from "@/client/utils/chart-metrics";
+import { CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT } from "@/client/utils/chart-metrics";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
 import { modelDisplayName, shortModelId } from "@/shared/utils/models";
 import { cn } from "@/client/utils/cn";
@@ -134,13 +135,16 @@ const caption = computed(() =>
 </script>
 
 <template>
-  <Card>
-    <CardContent>
+  <Card class="h-full">
+    <CardContent class="flex flex-col h-full">
       <CardHeader :title="t('intelligenceIndex')" :subtitle="t('artificialSource')" />
-      <div v-if="rows.length === 0" :class="cn(CHART_EMPTY_CLASS, CHART_HEIGHT)" role="status">
-        {{ t("noRankingsData") }}
-      </div>
-      <ChartFrame v-else>
+      <EmptyState
+        v-if="rows.length === 0"
+        variant="plain"
+        :message="t('noRankingsData')"
+        :class="cn(CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT)"
+      />
+      <ChartFrame v-else :height="FLEX_CHART_HEIGHT">
         <ChartCanvas
           type="line"
           :data="data"

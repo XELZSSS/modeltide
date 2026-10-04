@@ -1,5 +1,5 @@
 import {
-  MAX_KV_RETENTION_TTL_S,
+  CACHE_ENTRY_KV_TTL_S,
   L1_MAX_TTL_MS,
   L1_TTL_CAP_MS,
   MEMORY_CACHE_MAX_BYTES,
@@ -8,6 +8,7 @@ import {
 import { L1_RESIDENT_BYTES_FACTOR } from "@/server/config/cache";
 import { kvReadWarnGate } from "@/server/infra/throttle";
 import { logger, type Logger } from "@/server/infra/logger";
+import { errMsg } from "@/server/infra/errors";
 import { fnv1aHashUint32, utf8ByteLength } from "@/server/infra/hash";
 import { ONE_DAY } from "@/shared/config";
 import type { KvStore } from "./kv";
@@ -46,11 +47,12 @@ function encodeEnvelope<T>(data: T, ttl: number): string {
   return JSON.stringify({ d: data, e: Date.now() + ttl, t: ttl });
 }
 
-function decodeEnvelope<T>(raw: string): { env: StaleEnvelope<T>; bytes: number } | undefined {
+function decodeEnvelope<T>(raw: string, k: string, log: Logger): { env: StaleEnvelope<T>; bytes: number } | undefined {
   let env: StaleEnvelope<T>;
   try {
     env = JSON.parse(raw) as StaleEnvelope<T>;
-  } catch {
+  } catch (err) {
+    log("warn", `[cache] KV entry decode failed for ${k}: ${errMsg(err)}`);
     return undefined;
   }
   if (!isEnvelope<T>(env)) return undefined;
@@ -146,7 +148,7 @@ export class TierStore {
       return undefined;
     }
     if (!raw) return undefined;
-    return decodeEnvelope<T>(raw);
+    return decodeEnvelope<T>(raw, this.vk(k), this.log);
   }
 
   async storeCurrent<T>(kv: KvStore | undefined, vk: string, data: T, ttl: number): Promise<void> {
@@ -169,7 +171,7 @@ export class TierStore {
   }
 
   private async setSerialized(kv: KvStore, k: string, serialized: string, ttl: number): Promise<void> {
-    const expirationTtl = Math.min(Math.max(Math.ceil((ttl + maxStaleMs(ttl)) / 1000), 60), MAX_KV_RETENTION_TTL_S);
+    const expirationTtl = Math.min(Math.max(Math.ceil((ttl + maxStaleMs(ttl)) / 1000), 60), CACHE_ENTRY_KV_TTL_S);
     await kv.put(k, serialized, { expirationTtl });
   }
 }

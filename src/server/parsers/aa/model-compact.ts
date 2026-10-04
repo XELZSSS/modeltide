@@ -13,7 +13,7 @@ import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing }
 import { clampedPercent, unclampedPercent } from "@/shared/utils";
 
 export const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
-  mmlu_pro: "mmluPro",
+  itbench_sre: "itbenchSre",
   tau_banking: "tauBanking",
   terminalbench_v2_1: "terminalBench21",
   terminalbench_hard: "terminalbenchHard",
@@ -53,13 +53,14 @@ function compactPricing(m: Record<string, unknown>): ModelPricing | null {
 function compactOmniscience(
   omniscienceBreakdown: Record<string, unknown> | undefined,
   omniscience: number | null,
+  hallucinationRate: number | null,
 ): ModelOmniscienceBreakdown | null {
-  if (omniscienceBreakdown == null && omniscience == null) return null;
+  if (omniscienceBreakdown == null && omniscience == null && hallucinationRate == null) return null;
   return {
     total: {
       accuracy: clampedPercent(numCoerce(omniscienceBreakdown?.accuracy)),
       attempt_rate: clampedPercent(numCoerce(omniscienceBreakdown?.attemptRate)),
-      hallucination_rate: clampedPercent(numCoerce(omniscienceBreakdown?.hallucinationRate)),
+      hallucination_rate: clampedPercent(numCoerce(omniscienceBreakdown?.hallucinationRate) ?? hallucinationRate),
       omniscience: unclampedPercent(omniscience),
     },
   };
@@ -110,7 +111,11 @@ export function compact(m: unknown): ArtificialAnalysisModel {
     output_modality_image: false,
     output_modality_speech: false,
     output_modality_video: false,
-    omniscience_breakdown: compactOmniscience(obj(rec.omniscienceBreakdown), numCoerce(rec.omniscience)),
+    omniscience_breakdown: compactOmniscience(
+      obj(rec.omniscienceBreakdown),
+      numCoerce(rec.omniscience),
+      numCoerce(rec.omniscienceHallucinationRate),
+    ),
   };
   assignModalities(model, rec);
   return model;

@@ -1,6 +1,7 @@
 export { API_PREFIX, API_DOMAINS, queryKeys, apiPaths } from "@/shared/config/paths";
 export {
   STORAGE_KEYS,
+  SETTINGS_STORAGE_VERSION,
   MAX_MODEL_LIMIT,
   UPTIME_WARN_RATIO,
   UPTIME_ERROR_RATIO,
@@ -30,3 +31,4 @@ export {
   ABSOLUTE_SCORE_BENCHMARKS,
   BENCHMARK_LABELS,
 } from "@/shared/config/benchmarks";
+export { THEME_COLORS } from "@/shared/config/theme";

@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafbfc" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1a1a" />
-    <meta name="description" content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析" />
+    <meta name="description" content="ModelTide - AI model data dashboard: rankings, benchmarks, pricing, releases and provider status" />
     <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
@@ -15,15 +15,15 @@
     <link rel="preload" href="/fonts/plex-mono-600-latin.woff2" as="font" type="font/woff2" crossorigin />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="ModelTide" />
-    <meta property="og:description" content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析" />
-    <meta property="og:locale" content="zh_CN" />
-    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:description" content="ModelTide - AI model data dashboard: rankings, benchmarks, pricing, releases and provider status" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="zh_CN" />
     <meta property="og:image" content="/icons/icon-512.png" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="ModelTide" />
     <meta
       name="twitter:description"
-      content="ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析"
+      content="ModelTide - AI model data dashboard: rankings, benchmarks, pricing, releases and provider status"
     />
     <title>ModelTide</title>
     <link rel="stylesheet" href="/styles/base.css" />
@@ -35,7 +35,7 @@
           var raw = localStorage.getItem("settings");
           if (raw) {
             var p = JSON.parse(raw);
-            var st = p && p.state;
+            var st = p && p.version === 1 ? p.state : null;
             if (st && (st.themeMode === "dark" || st.themeMode === "light")) stored = st.themeMode;
             if (st && (st.lang === "zh" || st.lang === "en")) lang = st.lang;
           }

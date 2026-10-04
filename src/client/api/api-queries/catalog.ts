@@ -77,15 +77,25 @@ export const qClosedReleasesRaw = createApiQuery("closedReleases", queryKeys.clo
 
 type OpenSourceModelQuery = ReturnType<typeof createApiQuery<"openSourceModel">>;
 
+const MAX_MODEL_QUERIES = 64;
+
 const openSourceModelQueries = new Map<string, OpenSourceModelQuery>();
 
 export function qOpenSourceModel(id: string): OpenSourceModelQuery {
   const existing = openSourceModelQueries.get(id);
-  if (existing) return existing;
+  if (existing) {
+    openSourceModelQueries.delete(id);
+    openSourceModelQueries.set(id, existing);
+    return existing;
+  }
   const created = createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
     ttl: ONE_MINUTE,
     query: { id },
   });
   openSourceModelQueries.set(id, created);
+  if (openSourceModelQueries.size > MAX_MODEL_QUERIES) {
+    const oldest = openSourceModelQueries.keys().next().value;
+    if (oldest !== undefined) openSourceModelQueries.delete(oldest);
+  }
   return created;
 }

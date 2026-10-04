@@ -1,11 +1,8 @@
 import type { TranslationKey } from "@/shared/i18n";
 
 export const BENCHMARK_KEYS = [
-  "aime25",
   "gpqa",
   "hle",
-  "mmlu_pro",
-  "livecodebench",
   "gdpval",
   "scicode",
   "ifbench",
@@ -17,7 +14,7 @@ export const BENCHMARK_KEYS = [
   "terminalbench_v4_0",
   "critpt",
   "apex_agents",
-  "math500",
+  "itbench_sre",
   "mmmu_pro",
   "automation_bench",
   "omniscience",
@@ -28,11 +25,8 @@ export type BenchmarkKey = (typeof BENCHMARK_KEYS)[number];
 export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["gdpval"]);
 
 export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
-  aime25: "benchmarkAime25",
   gpqa: "benchmarkGpqa",
   hle: "benchmarkHle",
-  mmlu_pro: "benchmarkMmluPro",
-  livecodebench: "benchmarkLivecodebench",
   gdpval: "benchmarkGdpval",
   scicode: "benchmarkScicode",
   ifbench: "benchmarkIfbench",
@@ -44,7 +38,7 @@ export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
   terminalbench_v4_0: "benchmarkTerminalbenchV4_0",
   critpt: "benchmarkCritpt",
   apex_agents: "benchmarkApexAgents",
-  math500: "benchmarkMath500",
+  itbench_sre: "benchmarkItbenchSre",
   mmmu_pro: "benchmarkMmmuPro",
   automation_bench: "benchmarkAutomationBench",
   omniscience: "benchmarkOmniscience",

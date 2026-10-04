@@ -11,6 +11,7 @@ import InfoCard from "@/client/components/ui/info-card.vue";
 import InfoRow from "@/client/components/ui/info-row.vue";
 import Badge from "@/client/components/ui/badge.vue";
 import StatCard from "@/client/components/ui/stat-card.vue";
+import { DETAIL_BLOCK_GAP } from "@/client/config/layout";
 
 const PRICE_ROW_LEGS = ["cacheHitPrice", "promptPrice", "completionPrice"] as const satisfies readonly PriceLegId[];
 
@@ -37,7 +38,7 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
+  <div :class="DETAIL_BLOCK_GAP">
     <StatGrid :columns="4">
       <StatCard :label="t('creator')">{{ model.creator }}</StatCard>
       <StatCard v-for="[labelKey, value] in tokenStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>

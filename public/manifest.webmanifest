@@ -1,9 +1,9 @@
 {
   "id": "/",
-  "lang": "zh-CN",
+  "lang": "en",
   "name": "ModelTide",
   "short_name": "Tide",
-  "description": "ModelTide - AI 模型数据看板，聚合排名、评测、价格、发布动态、提供商分析",
+  "description": "ModelTide - AI model data dashboard: rankings, benchmarks, pricing, releases and provider status",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

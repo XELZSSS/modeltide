@@ -1,7 +1,8 @@
 import { h, type FunctionalComponent } from "vue";
 import { cn } from "@/client/utils/cn";
+import { ROW_PADDING } from "@/client/config/layout";
 
-const panelId = (rowId: string): string => `${rowId}-panel`;
+export const rowPanelId = (rowId: string): string => `${rowId}-panel`;
 
 export const ExpandedRowPanel: FunctionalComponent<{ rowId: string; rowName: string; class?: string }> = (
   props,
@@ -10,10 +11,10 @@ export const ExpandedRowPanel: FunctionalComponent<{ rowId: string; rowName: str
   h(
     "div",
     {
-      id: panelId(props.rowId),
+      id: rowPanelId(props.rowId),
       role: "region",
       "aria-label": props.rowName,
-      class: cn("animate-enter px-4 py-3", props.class),
+      class: cn("animate-enter", ROW_PADDING, props.class),
     },
     slots.default?.(),
   );

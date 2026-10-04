@@ -10,7 +10,6 @@ import type { SourceId, StatusHistoryPayload } from "@/shared/types";
 import { LEVEL_STYLES, resolveLevel } from "@/shared/utils/status-level";
 import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SAMPLES } from "@/client/utils/empty";
 import { loadableView } from "@/client/router/lazy-view";
-import PageContainer from "@/client/components/layout/page-container.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
 import SectionCard from "@/client/components/layout/section-card.vue";
 import DetailPageLayout from "@/client/components/layout/detail-page-layout.vue";
@@ -38,52 +37,50 @@ const warn24h = computed(() => summary.value?.warn24h ?? 0);
 </script>
 
 <template>
-  <PageContainer>
-    <DetailPageLayout
-      back-label-key="backToStatus"
-      back-to="/status"
-      :title="t(SOURCE_LABELS[id])"
-      :description="t('statusPageTitle')"
+  <DetailPageLayout
+    back-label-key="backToStatus"
+    back-to="/status"
+    :title="t(SOURCE_LABELS[id])"
+    :description="t('statusPageTitle')"
+  >
+    <StatGrid :columns="4">
+      <StatCard :label="t('statusCurrent')">{{ t(LEVEL_STYLES[level].labelKey) }}</StatCard>
+      <StatCard :label="t('uptime24h')">{{ formatUptimePct(summary?.uptime24h ?? null, t) }}</StatCard>
+      <StatCard :label="t('uptime7d')">{{ formatUptimePct(summary?.uptime7d ?? null, t) }}</StatCard>
+      <StatCard :label="t('latencyAvg24h')">{{ formatLatencySec(summary?.avgLatency24h, t) }}</StatCard>
+    </StatGrid>
+
+    <p v-if="warn24h > 0" class="ui-caption text-warning">
+      {{ t("warn24h") }}
+      <span class="ui-mono-value text-xs ml-1.5">{{ formatUptimePct(warn24h, t) }}</span>
+    </p>
+
+    <p
+      v-if="detail"
+      :class="cn('ui-body-secondary break-words', level === 'error' ? 'text-destructive' : 'text-warning')"
     >
-      <StatGrid :columns="4">
-        <StatCard :label="t('statusCurrent')">{{ t(LEVEL_STYLES[level].labelKey) }}</StatCard>
-        <StatCard :label="t('uptime24h')">{{ formatUptimePct(summary?.uptime24h ?? null, t) }}</StatCard>
-        <StatCard :label="t('uptime7d')">{{ formatUptimePct(summary?.uptime7d ?? null, t) }}</StatCard>
-        <StatCard :label="t('latencyAvg24h')">{{ formatLatencySec(summary?.avgLatency24h, t) }}</StatCard>
-      </StatGrid>
+      {{ detail }}
+    </p>
 
-      <p v-if="warn24h > 0" class="ui-caption text-warning">
-        {{ t("warn24h") }}
-        <span class="ui-mono-value text-xs ml-1.5">{{ formatUptimePct(warn24h, t) }}</span>
-      </p>
+    <SectionCard :title="t('latencyHistory')">
+      <Suspense v-if="recent.length > 1">
+        <LatencyChart :samples="recent" />
+        <template #fallback><ChartSkeleton :height="LATENCY_CHART_HEIGHT" /></template>
+      </Suspense>
+      <p v-else class="ui-body-secondary py-10 text-center">{{ t("historyAccumulating") }}</p>
+    </SectionCard>
 
-      <p
-        v-if="detail"
-        :class="cn('ui-body-secondary break-words', level === 'error' ? 'text-destructive' : 'text-warning')"
-      >
-        {{ detail }}
-      </p>
+    <SectionCard :title="t('last30Days')">
+      <UptimeStrip :buckets="buckets" />
+    </SectionCard>
 
-      <SectionCard :title="t('latencyHistory')">
-        <Suspense v-if="recent.length > 1">
-          <LatencyChart :samples="recent" />
-          <template #fallback><ChartSkeleton :height="LATENCY_CHART_HEIGHT" /></template>
-        </Suspense>
-        <p v-else class="ui-body-secondary py-10 text-center">{{ t("historyAccumulating") }}</p>
-      </SectionCard>
-
-      <SectionCard :title="t('last30Days')">
-        <UptimeStrip :buckets="buckets" />
-      </SectionCard>
-
-      <PageSection :title="t('recentEvents')">
-        <StatusEventList
-          :events="history.events ?? EMPTY_EVENTS"
-          :source-id="id"
-          :limit="10"
-          :empty-message="t('noRecentEvents')"
-        />
-      </PageSection>
-    </DetailPageLayout>
-  </PageContainer>
+    <PageSection :title="t('recentEvents')">
+      <StatusEventList
+        :events="history.events ?? EMPTY_EVENTS"
+        :source-id="id"
+        :limit="10"
+        :empty-message="t('noRecentEvents')"
+      />
+    </PageSection>
+  </DetailPageLayout>
 </template>

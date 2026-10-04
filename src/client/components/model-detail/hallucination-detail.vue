@@ -11,6 +11,7 @@ import InfoCard from "@/client/components/ui/info-card.vue";
 import InfoRow from "@/client/components/ui/info-row.vue";
 import StatCard from "@/client/components/ui/stat-card.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
+import { DETAIL_BLOCK_GAP } from "@/client/config/layout";
 import NotFound from "@/client/components/feedback/not-found.vue";
 import ModelDetailContent from "@/client/components/model-detail/aa-detail.vue";
 import DetailShell, { findModel } from "@/client/components/model-detail/detail-views.vue";
@@ -72,7 +73,7 @@ const hallStats = computed<[TranslationKey, string][]>(() =>
 <template>
   <NotFound v-if="!entry" />
   <DetailShell v-else source="hall" :title="entry.model">
-    <div class="flex flex-col gap-4">
+    <div :class="DETAIL_BLOCK_GAP">
       <StatGrid :columns="4">
         <StatCard v-for="[labelKey, value] in hallStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
       </StatGrid>

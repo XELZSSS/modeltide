@@ -38,6 +38,8 @@ import Dot from "@/client/components/ui/dot.vue";
 import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "@/client/utils/compare-logic";
+import { ROW_PADDING } from "@/client/config/layout";
+import { RenderView } from "@/client/components/data/table/cell-view";
 
 const props = defineProps<{
   rows: CompareRow<ArtificialAnalysisModel>[];
@@ -55,8 +57,6 @@ const isMobile = useDevice();
 
 const winners = computed(() => computeWinners(props.rows, props.models, modelKeyOf));
 
-const ValueView = (cellProps: { render: () => VNodeChild }): VNodeChild => cellProps.render();
-
 function getWinner(
   row: CompareRow<ArtificialAnalysisModel>,
   model: ArtificialAnalysisModel,
@@ -69,7 +69,7 @@ function getWinner(
 <template>
   <div v-if="isMobile" class="flex flex-col gap-3">
     <Card v-for="(model, index) in models" :key="modelKeyOf(model, index)">
-      <CardContent class="flex flex-col gap-3 sm:p-4">
+      <CardContent compact class="flex flex-col gap-3">
         <p class="flex items-center gap-2 text-sm font-medium truncate" :style="{ color: seriesColor(theme, index) }">
           <Dot size="sm" :color="seriesColor(theme, index)" />
           {{ modelDisplayName(model) }}
@@ -77,7 +77,7 @@ function getWinner(
         <div class="flex flex-col gap-2">
           <div v-for="row in rows" :key="rowKey(row)" class="flex items-center justify-between gap-3">
             <span class="ui-caption">{{ row.label }}</span>
-            <ValueView :render="() => renderValue(row, model, getWinner(row, model, index))" />
+            <RenderView :render="() => renderValue(row, model, getWinner(row, model, index))" />
           </div>
         </div>
       </CardContent>
@@ -93,7 +93,8 @@ function getWinner(
                 scope="col"
                 :class="
                   cn(
-                    'px-4 py-3.5 text-xs font-medium text-text-tertiary',
+                    ROW_PADDING,
+                    'text-xs font-medium text-text-tertiary',
                     'text-left',
                     'font-semibold text-text-secondary sticky left-0 z-10 bg-bg-card',
                   )
@@ -105,7 +106,7 @@ function getWinner(
                 v-for="(model, index) in models"
                 :key="modelKeyOf(model, index)"
                 scope="col"
-                :class="cn('px-4 py-3.5 text-xs font-medium text-text-tertiary', 'text-right', 'font-semibold')"
+                :class="cn(ROW_PADDING, 'text-xs font-medium text-text-tertiary', 'text-right', 'font-semibold')"
                 :style="{ color: seriesColor(theme, index) }"
               >
                 {{ modelDisplayName(model) }}
@@ -118,7 +119,8 @@ function getWinner(
                 scope="row"
                 :class="
                   cn(
-                    'px-4 py-3.5 text-xs font-medium text-text-tertiary',
+                    ROW_PADDING,
+                    'text-xs font-medium text-text-tertiary',
                     'text-left',
                     'text-text-secondary sticky left-0 bg-bg-card z-10',
                   )
@@ -129,9 +131,9 @@ function getWinner(
               <td
                 v-for="(model, index) in models"
                 :key="modelKeyOf(model, index)"
-                :class="cn('px-4 py-3.5 text-sm', 'text-right')"
+                :class="cn(ROW_PADDING, 'text-sm', 'text-right')"
               >
-                <ValueView :render="() => renderValue(row, model, getWinner(row, model, index))" />
+                <RenderView :render="() => renderValue(row, model, getWinner(row, model, index))" />
               </td>
             </tr>
           </tbody>

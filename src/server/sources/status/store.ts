@@ -8,85 +8,18 @@ import {
 } from "@/server/config/status";
 import type { AppContext } from "@/server/context";
 import { errMsg } from "@/server/infra/errors";
-import { kvReadWarnGate, throttleGate } from "@/server/infra/throttle";
+import { throttleGate } from "@/server/infra/throttle";
 import type { SourceId } from "@/shared/types";
 import { fetchProviderStatuses, PROVIDER_STATUS_TARGET_COUNT } from "@/server/sources/incident-source";
 import type { SourceAggregate } from "./aggregate";
 import { mergeSample } from "./history-math";
 import { aggregateProbes, probeTargets } from "./probe";
-import { HISTORY_KEY, HISTORY_SCHEMA_VERSION, SAMPLE_LOCK_KEY, salvageStore, type HistoryStore } from "./schema";
-
-async function acquireSampleLock(ctx: AppContext): Promise<string | null> {
-  if (!ctx.kv) return "memory";
-  const rand = crypto.getRandomValues(new Uint32Array(1))[0]!;
-  const token = `${Date.now()}:${rand.toString(36)}`;
-  const expiresAt = Date.now() + SAMPLE_LOCK_TTL_S * 1000;
-  const value = `${token}:${expiresAt}`;
-  const isLiveLock = (held: string): boolean => {
-    const heldExpiry = Number(held.split(":").at(-1));
-    return Number.isFinite(heldExpiry) && heldExpiry > Date.now();
-  };
-  try {
-    const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
-    if (held && isLiveLock(held)) return null;
-    await ctx.kv.put(SAMPLE_LOCK_KEY, value, { expirationTtl: SAMPLE_LOCK_TTL_S });
-    return token;
-  } catch (err) {
-    ctx.log("warn", `[status-history] sample lock acquire failed: ${errMsg(err)}`);
-    throw err;
-  }
-}
-
-async function releaseSampleLock(ctx: AppContext, token: string | null): Promise<void> {
-  if (!ctx.kv || !token || token === "memory") return;
-  try {
-    const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
-    if (held && held.startsWith(`${token}:`)) {
-      await ctx.kv.delete(SAMPLE_LOCK_KEY);
-    }
-  } catch (err) {
-    ctx.log("warn", `[status-history] sample lock release failed, leaving to TTL expiry: ${errMsg(err)}`);
-  }
-}
-
-let memoryStore: HistoryStore = { sources: {} };
-
-const memoryOrEmpty = (): HistoryStore => (Object.keys(memoryStore.sources).length > 0 ? memoryStore : { sources: {} });
+import { HISTORY_KEY, HISTORY_SCHEMA_VERSION, SAMPLE_LOCK_KEY, type HistoryStore } from "./schema";
+import { acquireSampleLock, releaseSampleLock } from "./sample-lock";
+import { readStoreResult, setMemoryStore } from "./store-read";
 
 const staleWarnGate = throttleGate(STALE_WARN_THROTTLE_MS);
 const selfHealGate = throttleGate(SAMPLE_LOCK_TTL_S * 1000);
-
-function warnKvReadFailure(ctx: AppContext, err: unknown): void {
-  if (!kvReadWarnGate.open()) return;
-  ctx.log("warn", `[status-history] KV read failed, serving memory: ${errMsg(err)}`);
-}
-
-interface StoreRead {
-  store: HistoryStore;
-  canWriteToKv: boolean;
-}
-
-async function readStoreResult(ctx: AppContext): Promise<StoreRead> {
-  if (!ctx.kv) return { store: memoryStore, canWriteToKv: false };
-  let raw: string | null;
-  try {
-    raw = await ctx.kv.get(HISTORY_KEY);
-  } catch (err) {
-    warnKvReadFailure(ctx, err);
-    return { store: memoryStore, canWriteToKv: false };
-  }
-  if (raw == null) return { store: memoryOrEmpty(), canWriteToKv: true };
-  try {
-    const salvaged = salvageStore(JSON.parse(raw));
-    if (salvaged) return { store: salvaged, canWriteToKv: true };
-  } catch {}
-  try {
-    await ctx.kv.delete(HISTORY_KEY);
-  } catch (err) {
-    ctx.log("warn", `[status-history] corrupt history clear failed: ${errMsg(err)}`);
-  }
-  return { store: memoryOrEmpty(), canWriteToKv: Object.keys(memoryStore.sources).length === 0 };
-}
 
 export async function recordStatusSamples(ctx: AppContext, now = Date.now()): Promise<boolean | null> {
   const token = await acquireSampleLock(ctx);
@@ -151,7 +84,7 @@ async function mergeSamplesIntoStore(
       now,
     );
   }
-  memoryStore = store;
+  setMemoryStore(store);
   if (!ctx.kv) return true;
   if (!canWriteToKv) return false;
   const held = await ctx.kv.get(SAMPLE_LOCK_KEY);

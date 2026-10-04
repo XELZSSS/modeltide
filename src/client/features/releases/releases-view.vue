@@ -3,8 +3,7 @@ import { computed, defineComponent, h, type VNodeChild } from "vue";
 import { ExternalLink } from "@lucide/vue";
 import { col, rightCol, RightAlignedText, type DataTableColumn } from "@/client/components/data/table/table-columns.ts";
 import SearchableDataTable from "@/client/components/data/table/data-table.vue";
-import PageContainer from "@/client/components/layout/page-container.vue";
-import PageHeader from "@/client/components/layout/page-header.vue";
+import PageShell from "@/client/components/layout/page-shell.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import SearchInput from "@/client/search/search-input.vue";
@@ -65,7 +64,7 @@ const ReleasesData = defineComponent({
     function renderExpandedRow(row: ReleaseRow): VNodeChild {
       const href = safeHref(row.link);
       if (!href) return null;
-      return h("div", { class: "flex flex-col gap-3 p-4 sm:p-5" }, [
+      return h("div", { class: "flex flex-col gap-3" }, [
         h(
           "a",
           {
@@ -98,29 +97,27 @@ const ReleasesData = defineComponent({
 </script>
 
 <template>
-  <PageContainer>
-    <PageHeader :title="t('releases')" :description="t('releaseDataSources')">
-      <template #actions>
-        <SearchInput />
-      </template>
-    </PageHeader>
+  <PageShell :title="t('releases')" :description="t('releaseDataSources')">
+    <template #actions>
+      <SearchInput />
+    </template>
     <SuspenseQuery>
       <ReleasesData>
         <template #default="{ rows, partial, columns, renderExpandedRow }">
-          <div class="flex items-center gap-2 -mt-2 mb-4">
+          <div class="flex flex-col gap-4">
             <span class="ui-meta tabular-nums">{{ t("events", { count: rows.length }) }}</span>
+            <PartialNotice v-if="partial" />
+            <SearchableDataTable
+              :data="rows"
+              :columns="columns"
+              :get-row-id="getReleaseRowId"
+              :get-row-name="getReleaseRowName"
+              :get-search-fields="getReleaseSearchFields"
+              :render-expanded-row="renderExpandedRow"
+            />
           </div>
-          <PartialNotice v-if="partial" />
-          <SearchableDataTable
-            :data="rows"
-            :columns="columns"
-            :get-row-id="getReleaseRowId"
-            :get-row-name="getReleaseRowName"
-            :get-search-fields="getReleaseSearchFields"
-            :render-expanded-row="renderExpandedRow"
-          />
         </template>
       </ReleasesData>
     </SuspenseQuery>
-  </PageContainer>
+  </PageShell>
 </template>

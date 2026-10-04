@@ -64,11 +64,11 @@ const CompareModels = defineComponent({
 </script>
 
 <template>
-  <PageContainer>
-    <SuspenseQuery>
-      <CompareModels :back-to="props.backTo" :title="props.title">
-        <template #default="{ models, pruned, clearAndBack }">
-          <div v-if="models.length < 2" class="flex flex-col gap-3 items-center py-16 text-center animate-enter">
+  <SuspenseQuery>
+    <CompareModels :back-to="props.backTo" :title="props.title">
+      <template #default="{ models, pruned, clearAndBack }">
+        <PageContainer v-if="models.length < 2">
+          <div class="flex flex-col gap-3 items-center py-16 text-center animate-enter">
             <div class="w-full">
               <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
             </div>
@@ -78,19 +78,19 @@ const CompareModels = defineComponent({
             </p>
             <BackButton label-key="back" :to="props.backTo" />
           </div>
-          <DetailPageLayout
-            v-else
-            back-label-key="back"
-            :back-to="props.backTo"
-            :title="props.title"
-            :description="t('artificialSource')"
-            compact
-          >
-            <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
-            <slot :models="models" />
-          </DetailPageLayout>
-        </template>
-      </CompareModels>
-    </SuspenseQuery>
-  </PageContainer>
+        </PageContainer>
+        <DetailPageLayout
+          v-else
+          back-label-key="back"
+          :back-to="props.backTo"
+          :title="props.title"
+          :description="t('artificialSource')"
+          compact
+        >
+          <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
+          <slot :models="models" />
+        </DetailPageLayout>
+      </template>
+    </CompareModels>
+  </SuspenseQuery>
 </template>

@@ -1,16 +1,10 @@
-import {
-  BACKOFF_MAX_MS,
-  MAX_JSON_BYTES,
-  PROBE_TIMEOUT_MS,
-  RETRY_AFTER_MAX_MS,
-  UPSTREAM_BACKGROUND_SLOTS,
-  UPSTREAM_MAX_CONNECTIONS,
-  USER_AGENT,
-} from "@/server/config";
-import { utf8ByteLength } from "@/server/infra/hash";
+import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, USER_AGENT } from "@/server/config";
 import { UpstreamError } from "@/server/infra/errors";
+import { acquireSlot, releaseSlot, poolFor } from "@/server/infra/connection-pool";
+import { fetchBodyText, parseJsonBody, type JsonResponse } from "@/server/infra/body-readers";
+import { parseRetryAfterMs, computeBackoff, sleepAbortable } from "@/server/infra/retry";
 
-interface FetchOptions extends Omit<RequestInit, "headers"> {
+export interface FetchOptions extends Omit<RequestInit, "headers"> {
   timeoutMs?: number;
   retries?: number;
   headers?: Record<string, string>;
@@ -23,23 +17,6 @@ export interface ProbeResult {
   error: string | null;
 }
 
-function parseRetryAfterMs(res: Response): number | null {
-  const raw = res.headers.get("retry-after");
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  const secs = Number(trimmed);
-  if (trimmed !== "" && Number.isFinite(secs) && secs >= 0) {
-    const ms = Math.min(secs, RETRY_AFTER_MAX_MS / 1000) * 1000;
-    return ms > 0 ? ms : null;
-  }
-  const date = Date.parse(raw);
-  if (Number.isFinite(date)) {
-    const delay = Math.min(Math.max(date - Date.now(), 0), RETRY_AFTER_MAX_MS);
-    return delay > 0 ? delay : null;
-  }
-  return null;
-}
-
 function buildHeaders(userAgent: string, accept: string, extra?: Record<string, string>): Record<string, string> {
   return { "user-agent": userAgent, accept, ...extra };
 }
@@ -49,171 +26,8 @@ function isSubrequestLimit(err: unknown): boolean {
   return msg.includes("Too many subrequests") || msg.includes("subrequest");
 }
 
-const UTF8_DECODER = new TextDecoder();
-const CONTENT_LENGTH_DIGITS_RE = /^\d+$/;
-
-async function fetchBodyText(url: string, res: Response, maxBytes: number, signal: AbortSignal): Promise<string> {
-  const contentLength = res.headers.get("content-length")?.trim();
-  if (contentLength && CONTENT_LENGTH_DIGITS_RE.test(contentLength) && Number(contentLength) > maxBytes) {
-    void res.body?.cancel()?.catch(() => {});
-    throw new UpstreamError(`Upstream payload too large for ${url}`);
-  }
-  const { text, bytes } = await readBodyText(res, url, maxBytes, signal);
-  if (bytes > maxBytes) {
-    throw new UpstreamError(`Upstream payload too large for ${url}`);
-  }
-  return text;
-}
-
-interface JsonResponse<T> {
-  status: number;
-  body: T;
-}
-
-async function parseJsonBody<T>(url: string, res: Response, maxBytes: number, signal: AbortSignal): Promise<T> {
-  const body = await fetchBodyText(url, res, maxBytes, signal);
-  try {
-    return JSON.parse(body) as T;
-  } catch {
-    throw new UpstreamError(`Upstream returned invalid JSON for ${url}`);
-  }
-}
-
-const BACKOFF_BASE_MS = 500;
-const BACKOFF_JITTER_MS = 250;
-
 // fetch() never mutates the headers object it is given, so a shared probe header set is safe.
 const PROBE_HEADERS: Record<string, string> = { "user-agent": USER_AGENT, accept: "*/*" };
-
-function computeBackoff(attempt: number): number {
-  return Math.min(BACKOFF_BASE_MS * 2 ** attempt + Math.random() * BACKOFF_JITTER_MS, BACKOFF_MAX_MS);
-}
-
-function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal?.aborted) {
-      resolve();
-      return;
-    }
-    const t = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = (): void => {
-      clearTimeout(t);
-      resolve();
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-interface SlotWaiter {
-  resolve: () => void;
-  detach: () => void;
-}
-
-interface SlotPool {
-  active: number;
-  waiters: SlotWaiter[];
-  max: number;
-}
-
-const interactivePool: SlotPool = { active: 0, waiters: [], max: UPSTREAM_MAX_CONNECTIONS };
-const backgroundPool: SlotPool = { active: 0, waiters: [], max: UPSTREAM_BACKGROUND_SLOTS };
-
-function poolLimit(pool: SlotPool): number {
-  const other = pool === backgroundPool ? interactivePool : backgroundPool;
-  return Math.max(0, Math.min(pool.max, UPSTREAM_MAX_CONNECTIONS - other.active));
-}
-
-function wakeWaiters(pool: SlotPool): void {
-  while (pool.waiters.length > 0 && pool.active < poolLimit(pool)) {
-    const next = pool.waiters.shift()!;
-    next.detach();
-    pool.active += 1;
-    next.resolve();
-  }
-}
-
-function acquireSlot(signal: AbortSignal | undefined, pool: SlotPool): Promise<void> {
-  if (signal?.aborted) return Promise.reject(signal.reason);
-  if (pool.active < poolLimit(pool)) {
-    pool.active += 1;
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve, reject) => {
-    const waiter: SlotWaiter = { resolve, detach: () => {} };
-    if (signal) {
-      const onAbort = (): void => {
-        const i = pool.waiters.indexOf(waiter);
-        if (i !== -1) pool.waiters.splice(i, 1);
-        reject(signal.reason);
-      };
-      waiter.detach = () => signal.removeEventListener("abort", onAbort);
-      signal.addEventListener("abort", onAbort, { once: true });
-    }
-    pool.waiters.push(waiter);
-  });
-}
-
-function releaseSlot(pool: SlotPool): void {
-  pool.active -= 1;
-  wakeWaiters(pool);
-  wakeWaiters(pool === backgroundPool ? interactivePool : backgroundPool);
-}
-
-async function readBodyText(
-  res: Response,
-  url: string,
-  maxBytes: number,
-  signal: AbortSignal,
-): Promise<{ text: string; bytes: number }> {
-  const body = res.body;
-  if (!body) {
-    try {
-      const text = await res.text();
-      return { text, bytes: utf8ByteLength(text) };
-    } catch (e) {
-      throw new UpstreamError(
-        `Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
-        signal.aborted ? { timeout: true } : { retryable: true },
-      );
-    }
-  }
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        total += value.byteLength;
-        if (total > maxBytes) {
-          await reader.cancel().catch(() => {});
-          throw new UpstreamError(`Upstream payload too large for ${url}`);
-        }
-        chunks.push(value);
-      }
-    }
-  } catch (e) {
-    if (e instanceof UpstreamError) throw e;
-    await reader.cancel().catch(() => {});
-    throw new UpstreamError(
-      `Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
-      signal.aborted ? { timeout: true } : { retryable: true },
-    );
-  } finally {
-    reader.releaseLock();
-  }
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    merged.set(c, offset);
-    offset += c.byteLength;
-  }
-  return { text: UTF8_DECODER.decode(merged), bytes: total };
-}
 
 export class HttpClient {
   private defaultSignal?: AbortSignal;
@@ -232,7 +46,7 @@ export class HttpClient {
     const { timeoutMs = 10_000, retries = 0, headers: initHeaders, signal: initSignalOpt, ...rest } = init;
     const initSignal = initSignalOpt ?? this.defaultSignal;
     const headers = buildHeaders(USER_AGENT, accept, initHeaders);
-    const pool = this.background ? backgroundPool : interactivePool;
+    const pool = poolFor(this.background);
     for (let attempt = 0; attempt <= retries; attempt++) {
       const deadline = AbortSignal.timeout(timeoutMs);
       const signal = initSignal ? AbortSignal.any([initSignal, deadline]) : deadline;
@@ -321,7 +135,7 @@ export class HttpClient {
 
   async probe(url: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<ProbeResult> {
     const queuedAt = Date.now();
-    const pool = this.background ? backgroundPool : interactivePool;
+    const pool = poolFor(this.background);
     const timeout = AbortSignal.timeout(timeoutMs);
     const signal = this.defaultSignal ? AbortSignal.any([this.defaultSignal, timeout]) : timeout;
     try {

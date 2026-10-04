@@ -8,6 +8,7 @@ import { useTranslation } from "@/client/i18n";
 import Dot from "@/client/components/ui/dot.vue";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { eventDurationLabel, resolveEventStyle } from "@/client/utils/status-events";
+import { ROW_PADDING } from "@/client/config/layout";
 
 const props = withDefaults(
   defineProps<{
@@ -49,7 +50,7 @@ const rows = computed(() =>
     <div
       v-for="row in rows"
       :key="`${row.event.id}-${row.event.at}-${row.event.type}`"
-      class="flex items-start justify-between gap-3 px-4 py-3"
+      :class="cn('flex items-start justify-between gap-3', ROW_PADDING)"
     >
       <div class="flex items-start gap-2 min-w-0">
         <Dot size="sm" :color="row.style.color" class="mt-1.5" />

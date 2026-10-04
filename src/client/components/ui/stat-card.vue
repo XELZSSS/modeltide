@@ -8,7 +8,7 @@ defineProps<{ label: string; icon?: Component; class?: string }>();
 
 <template>
   <Card>
-    <CardContent class="flex flex-col items-center justify-center gap-1.5 py-4 text-center sm:p-4">
+    <CardContent compact class="flex flex-col items-center justify-center gap-1.5 text-center">
       <div class="flex items-center justify-center gap-1.5 min-w-0 max-w-full">
         <span v-if="icon" class="text-accent shrink-0" aria-hidden="true">
           <component :is="icon" class="size-4" />

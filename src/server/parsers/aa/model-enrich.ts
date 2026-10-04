@@ -85,17 +85,19 @@ function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEnt
 export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record<string, ModelMetaEntry>): number {
   let filled = 0;
   for (const m of models) {
-    if (m.intelligence_index != null && m.agentic_index != null) continue;
     const entry = matchMeta(m, meta);
-    if (entry) {
-      if (m.intelligence_index == null && entry.intelligenceIndex != null) {
-        m.intelligence_index = entry.intelligenceIndex;
-        filled++;
-      }
-      if (m.agentic_index == null && entry.agenticIndex != null) {
-        m.agentic_index = entry.agenticIndex;
-        filled++;
-      }
+    if (!entry) continue;
+    if (m.intelligence_index == null && entry.intelligenceIndex != null) {
+      m.intelligence_index = entry.intelligenceIndex;
+      filled++;
+    }
+    if (m.agentic_index == null && entry.agenticIndex != null) {
+      m.agentic_index = entry.agenticIndex;
+      filled++;
+    }
+    if (entry.codingIndex != null && m.coding_index !== entry.codingIndex) {
+      m.coding_index = entry.codingIndex;
+      filled++;
     }
   }
   return filled;

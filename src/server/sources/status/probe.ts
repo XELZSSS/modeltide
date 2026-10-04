@@ -32,11 +32,17 @@ function buildTargets(): ProbeTarget[] {
 }
 
 export async function probeTargets(ctx: AppContext): Promise<{ target: ProbeTarget; probe: ProbeResult }[]> {
-  const probed = await runCapped(
+  const settled = await runCapped(
     buildTargets().map((target) => async () => ({ target, probe: await ctx.http.probe(target.url) })),
     PROBE_CONCURRENCY,
   );
-  return probed.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  const results = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  const measured = results.filter((r) => r.probe.error !== "aborted");
+  const skipped = results.length - measured.length;
+  if (skipped > 0) {
+    ctx.log("warn", `[status-history] ${skipped}/${results.length} probes aborted locally before reaching an upstream`);
+  }
+  return measured;
 }
 
 interface MutableAggregate {

@@ -99,43 +99,41 @@ const overall = computed(() => {
     </CardContent>
   </Card>
 
-  <PageSection>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-      <SafeLink
-        v-for="card in cards"
-        :key="card.id"
-        :href="`/status/${card.id}`"
-        class="group block ui-card p-4 transition-colors duration-fast hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-      >
-        <div class="flex items-center justify-between gap-3 mb-3">
-          <LabeledDot size="sm" :color="card.style.dot" text-class="ui-body" class="flex-1">
-            {{ card.label }}
-          </LabeledDot>
-          <div class="shrink-0 text-right">
-            <span :class="cn('ui-caption font-medium', card.style.text)">{{ t(card.style.labelKey) }}</span>
-            <div v-if="card.recentlyDegraded && card.level === 'ok'" class="ui-caption text-warning mt-0.5">
-              {{ t("degradedRecently") }}
-            </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+    <SafeLink
+      v-for="card in cards"
+      :key="card.id"
+      :href="`/status/${card.id}`"
+      class="group block ui-card p-4 transition-colors duration-fast hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+    >
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <LabeledDot size="sm" :color="card.style.dot" text-class="ui-body" class="flex-1">
+          {{ card.label }}
+        </LabeledDot>
+        <div class="shrink-0 text-right">
+          <span :class="cn('ui-caption font-medium', card.style.text)">{{ t(card.style.labelKey) }}</span>
+          <div v-if="card.recentlyDegraded && card.level === 'ok'" class="ui-caption text-warning mt-0.5">
+            {{ t("degradedRecently") }}
           </div>
         </div>
-        <UptimeStrip :buckets="card.buckets" />
-        <div class="flex items-center justify-between gap-3 mt-3 ui-caption">
-          <span>
-            {{ t("uptime24h") }}
-            <span class="ui-mono-value text-xs text-text-primary ml-1.5">{{ formatUptimePct(card.uptime24h, t) }}</span>
-          </span>
-          <span>
-            {{ t("uptime7d") }}
-            <span class="ui-mono-value text-xs text-text-primary ml-1.5">{{ formatUptimePct(card.uptime7d, t) }}</span>
-          </span>
-          <ChevronRight
-            :size="16"
-            class="shrink-0 text-text-tertiary transition-transform duration-fast group-hover:translate-x-0.5"
-          />
-        </div>
-      </SafeLink>
-    </div>
-  </PageSection>
+      </div>
+      <div aria-hidden="true"><UptimeStrip :buckets="card.buckets" /></div>
+      <div class="flex items-center justify-between gap-3 mt-3 ui-caption">
+        <span>
+          {{ t("uptime24h") }}
+          <span class="ui-mono-value text-xs text-text-primary ml-1.5">{{ formatUptimePct(card.uptime24h, t) }}</span>
+        </span>
+        <span>
+          {{ t("uptime7d") }}
+          <span class="ui-mono-value text-xs text-text-primary ml-1.5">{{ formatUptimePct(card.uptime7d, t) }}</span>
+        </span>
+        <ChevronRight
+          :size="16"
+          class="shrink-0 text-text-tertiary transition-transform duration-fast group-hover:translate-x-0.5"
+        />
+      </div>
+    </SafeLink>
+  </div>
 
   <PageSection v-if="counts.hasData" :title="t('recentEvents')">
     <StatusEventList

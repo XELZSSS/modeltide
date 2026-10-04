@@ -1,12 +1,13 @@
 <script lang="ts">
 import { h, type FunctionalComponent } from "vue";
 import { cn } from "@/client/utils/cn";
+import { ROW_PADDING } from "@/client/config/layout";
 import type { DataTableColumn } from "./table-columns.ts";
 
 type HeaderColumn = Pick<DataTableColumn<never>, "id" | "header" | "width" | "hiddenMd" | "align">;
 
 function cellClasses(col: HeaderColumn): string {
-  return cn("px-4 py-3.5", col.hiddenMd && "hidden md:table-cell");
+  return cn(ROW_PADDING, col.hiddenMd && "hidden md:table-cell");
 }
 
 function cellInnerClasses(col: HeaderColumn): string {

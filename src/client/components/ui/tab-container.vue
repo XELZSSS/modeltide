@@ -22,7 +22,7 @@ const emit = defineEmits<{ tabChange: [tabId: string]; tabIntent: [tabId: string
 const groupClasses = computed(() =>
   cn("w-fit max-w-full overflow-x-auto no-scrollbar sm:flex-wrap", props.fill && "w-full sm:w-full"),
 );
-const panelClasses = computed(() => cn("min-w-0", props.class));
+const panelClasses = computed(() => cn("min-w-0 flex flex-col gap-4", props.class));
 
 function onKeydown(event: KeyboardEvent): void {
   const nextIndex = nextIndexForKey(

@@ -1,6 +1,6 @@
 import { raceAbort } from "@/server/infra/abort";
-import { ClientAbortError } from "@/server/infra/errors";
-import type { Logger } from "@/server/infra/logger";
+import { ClientAbortError, errMsg } from "@/server/infra/errors";
+import { logger, type Logger } from "@/server/infra/logger";
 import { refreshFailureCooldown, FAILURE_COOLDOWN_MS, sharedInflight, type InflightRegistry } from "./refresh";
 import { maxStaleMs, type StaleEnvelope, l1TtlFor, sharedL1, type MemoryL1, TierStore } from "./tier-store";
 import type { KvStore } from "./kv";
@@ -32,6 +32,7 @@ export class CacheService {
   private refreshRunner: RefreshRunner;
   private callerSignal?: AbortSignal;
   private onDetach?: (work: Promise<unknown>) => void;
+  private log: Logger;
 
   constructor(
     private kv: KvStore | undefined,
@@ -47,6 +48,7 @@ export class CacheService {
     );
     this.callerSignal = stores?.callerSignal;
     this.onDetach = stores?.onDetach;
+    this.log = stores?.log ?? logger;
   }
 
   private staleBudget(storedTtl: number, capMs?: number): number {
@@ -82,7 +84,9 @@ export class CacheService {
         const refresh = this.refreshRunner.run(vk, ttl, fn, kv);
         try {
           this.onDetach(refresh.then(undefined, () => {}));
-        } catch {}
+        } catch (err) {
+          this.log("warn", `[cache] onDetach callback failed: ${errMsg(err)}`);
+        }
         return { value: stale.value, degraded: false };
       }
     }

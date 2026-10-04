@@ -62,6 +62,7 @@ function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMe
   return {
     intelligenceIndex: target.intelligenceIndex ?? patch.intelligenceIndex,
     agenticIndex: target.agenticIndex ?? patch.agenticIndex,
+    codingIndex: target.codingIndex ?? patch.codingIndex,
   };
 }
 
@@ -96,11 +97,13 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
     const benchmarks = obj(m.benchmarks);
     const aaBenchmarks = obj(benchmarks?.artificial_analysis);
     const intelligenceIndex = numCoerce(aaBenchmarks?.intelligence_index);
+    const codingIndex = numCoerce(aaBenchmarks?.coding_index);
     const agenticIndex = numCoerce(aaBenchmarks?.agentic_index);
-    if (intelligenceIndex == null && agenticIndex == null) continue;
+    if (intelligenceIndex == null && codingIndex == null && agenticIndex == null) continue;
     const metaEntry: ModelMetaEntry = {};
     if (intelligenceIndex != null) metaEntry.intelligenceIndex = intelligenceIndex;
     if (agenticIndex != null) metaEntry.agenticIndex = agenticIndex;
+    if (codingIndex != null) metaEntry.codingIndex = codingIndex;
     const keys = new Set<string>();
     for (const value of [m.name, m.id, m.canonical_slug]) {
       if (typeof value === "string") {

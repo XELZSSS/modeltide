@@ -33,7 +33,7 @@ const isExpandable = computed(() => props.renderExpandedRow != null || slots.exp
 const renderExpanded = computed<(row: T) => VNodeChild>(
   () => props.renderExpandedRow ?? ((row: T) => slots.expandedRow?.({ row }) ?? null),
 );
-const rootEl = ref<HTMLDivElement | null>(null);
+const bodyEl = ref<HTMLDivElement | null>(null);
 
 const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(
   () => filtered.value,
@@ -61,42 +61,41 @@ function setExpandedId(rowId: string | null): void {
 function handlePageChange(p: number): void {
   goToPage(p);
   expandedId.value = null;
-  rootEl.value?.querySelector<HTMLElement>("[data-table-top]")?.focus();
+  bodyEl.value?.focus({ preventScroll: true });
 }
 </script>
 
 <template>
-  <div ref="rootEl" class="flex flex-col gap-4 min-w-0">
-    <span data-table-top="true" tabindex="-1" class="outline-none" aria-hidden="true" />
+  <div class="flex flex-col gap-4 min-w-0">
     <EmptyState v-if="dedupedData.length === 0" :message="t('noResults')" />
-    <template v-else-if="isMobile">
-      <MobileTableBody
-        :paged-data="pagedData"
-        :columns="columns"
-        :get-row-id="getRowId"
-        :get-row-name="getRowName"
-        :is-expandable="isExpandable"
-        :expanded-row-id="expandedId"
-        :render-expanded-row="renderExpanded"
-        @toggle-expand="setExpandedId"
-      />
-      <Pagination :page="page" :total-pages="totalPages" @change="handlePageChange" />
-    </template>
     <template v-else>
-      <div class="ui-card overflow-x-auto">
-        <table class="w-full text-sm table-fixed">
-          <TableHeader :columns="columns" :is-expandable="isExpandable" />
-          <TableBody
-            :paged-data="pagedData"
-            :columns="columns"
-            :get-row-id="getRowId"
-            :get-row-name="getRowName"
-            :is-expandable="isExpandable"
-            :expanded-row-id="expandedId"
-            :render-expanded-row="renderExpanded"
-            @toggle-expand="setExpandedId"
-          />
-        </table>
+      <div ref="bodyEl" tabindex="-1" class="flex flex-col gap-4 min-w-0 outline-none">
+        <MobileTableBody
+          v-if="isMobile"
+          :paged-data="pagedData"
+          :columns="columns"
+          :get-row-id="getRowId"
+          :get-row-name="getRowName"
+          :is-expandable="isExpandable"
+          :expanded-row-id="expandedId"
+          :render-expanded-row="renderExpanded"
+          @toggle-expand="setExpandedId"
+        />
+        <div v-else class="ui-card overflow-x-auto">
+          <table class="w-full text-sm table-fixed">
+            <TableHeader :columns="columns" :is-expandable="isExpandable" />
+            <TableBody
+              :paged-data="pagedData"
+              :columns="columns"
+              :get-row-id="getRowId"
+              :get-row-name="getRowName"
+              :is-expandable="isExpandable"
+              :expanded-row-id="expandedId"
+              :render-expanded-row="renderExpanded"
+              @toggle-expand="setExpandedId"
+            />
+          </table>
+        </div>
       </div>
       <Pagination :page="page" :total-pages="totalPages" @change="handlePageChange" />
     </template>

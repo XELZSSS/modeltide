@@ -1,7 +1,7 @@
 import { isRecord, isUnsuitableContent, str } from "@/server/parsers/parser-primitives";
-import { extractNeedleJsonArrays, MAX_SCAN_CHARS } from "@/server/parsers/rsc-scanner";
+import { MAX_SCAN_CHARS } from "@/server/parsers/rsc-scanner";
 import type { ChangelogModelEntry } from "@/server/parsers/upstream-types";
-import { AA_MODELS_KEY, AA_SCAN_OPTS, collectReleases, type ReleaseInfo } from "@/server/parsers/aa/release-index";
+import { scanReleaseIndex, type ReleaseInfo } from "@/server/parsers/aa/release-index";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
 
 export interface ChangelogModel {
@@ -20,12 +20,12 @@ function isUsableField(value: string): boolean {
 }
 
 function collectModels(
-  html: string,
+  modelArrays: readonly unknown[],
   releases: Map<string, ReleaseInfo>,
 ): { models: ChangelogModel[]; skipped: number } {
   let best: ChangelogModel[] = [];
   let skipped = 0;
-  for (const value of extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS)) {
+  for (const value of modelArrays) {
     if (!Array.isArray(value)) continue;
     const rows = value as unknown[];
     const mapped: ChangelogModel[] = [];
@@ -59,7 +59,8 @@ function collectModels(
 export function parseChangelogModels(html: unknown): ParseResult<ChangelogModel[]> {
   if (typeof html !== "string" || !html) return parseFail("Changelog page is not a string");
   if (html.length > MAX_SCAN_CHARS) return parseFail(`Changelog page too large (${html.length} chars)`);
-  const { models, skipped } = collectModels(html, collectReleases(html));
+  const { releases, modelArrays } = scanReleaseIndex(html);
+  const { models, skipped } = collectModels(modelArrays, releases);
   if (models.length === 0) return parseFail("Changelog page yielded no model rows");
   return parseOk(models, skipped > 0 ? [`Skipped ${skipped} changelog rows without a usable release`] : []);
 }

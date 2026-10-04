@@ -4,6 +4,8 @@ export const STORAGE_KEYS = {
   cost: "cost-store",
 } as const;
 
+export const SETTINGS_STORAGE_VERSION = 1;
+
 export const MAX_MODEL_LIMIT = 500;
 
 export const UPTIME_WARN_RATIO = 0.995;

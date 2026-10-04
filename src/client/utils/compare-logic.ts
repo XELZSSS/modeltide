@@ -127,19 +127,6 @@ export function radarMaxFor(rows: RadarRow[], fallback = 100): number {
   return ceilToStep(peak);
 }
 
-interface CompareValueRow {
-  metric: string;
-  values: (number | null)[];
-}
-
-export function buildValueRows(t: TFunction, models: ArtificialAnalysisModel[]): CompareValueRow[] {
-  const keys = models.map((model) => modelId(model));
-  return buildRadarRows(t, models, keys).map((row) => ({
-    metric: row.metric,
-    values: keys.map((key) => (key ? (row.values[key] ?? null) : null)),
-  }));
-}
-
 export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
   const leg = (pick: PriceLegPick) => (m: ArtificialAnalysisModel) => pick(resolveEffectivePricing(m.pricing));
   return PRICE_LEG_IDS.map((id): CompareRow<ArtificialAnalysisModel> => ({

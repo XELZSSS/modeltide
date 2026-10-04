@@ -6,7 +6,5 @@ defineProps<{ model: ArtificialAnalysisModel }>();
 </script>
 
 <template>
-  <div class="p-4 sm:p-5">
-    <ModelDetailContent :model="model" :show-benchmarks="false" />
-  </div>
+  <ModelDetailContent :model="model" :show-benchmarks="false" />
 </template>

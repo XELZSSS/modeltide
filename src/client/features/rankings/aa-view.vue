@@ -5,7 +5,6 @@ import { useTranslation } from "@/client/i18n";
 import { useClientTab } from "@/client/hooks/use-client-tab";
 import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
 import { useEffectivePricingMap, useMonthlyCosts } from "@/client/pricing/cost-inputs";
-import CostEstimatorInputs from "@/client/pricing/cost-form.vue";
 import CompareChipBar from "@/client/components/compare-chip-bar.vue";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
@@ -30,8 +29,7 @@ const pricingMode = computed(() => viewMode.value === "pricing");
 const pricingModels = computed(() => (pricingMode.value ? props.rankings : EMPTY_MODELS));
 
 const effectivePricingMap = useEffectivePricingMap(pricingModels);
-const costState = useMonthlyCosts(pricingModels);
-const monthlyCosts = costState.monthlyCosts;
+const monthlyCosts = useMonthlyCosts(pricingModels).monthlyCosts;
 const comparedModels = useCompareModels(() => props.rankings);
 
 usePruneCompareIds(() => props.rankings);
@@ -40,11 +38,6 @@ const viewItems = computed(() => [
   { id: "rankings" as const, label: t("modelRankings") },
   { id: "pricing" as const, label: t("pricing") },
 ]);
-
-const avgCost = computed(() => {
-  const valid = [...monthlyCosts.value.values()].filter((v): v is number => v != null);
-  return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
-});
 
 const rankingColumns = computed(() => buildRankingColumns(t));
 const pricingColumns = computed(() => buildPricingColumns(t, effectivePricingMap.value));
@@ -78,10 +71,6 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
           {{ item.label }}
         </TabButton>
       </SegmentedGroup>
-    </div>
-
-    <div v-if="pricingMode" class="flex gap-4 flex-wrap items-center">
-      <CostEstimatorInputs :state="costState" layout="input-label" :avg-cost="avgCost" />
     </div>
 
     <CompareChipBar

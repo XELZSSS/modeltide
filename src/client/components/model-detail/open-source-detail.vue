@@ -12,6 +12,7 @@ import InfoRow from "@/client/components/ui/info-row.vue";
 import Badge from "@/client/components/ui/badge.vue";
 import StatCard from "@/client/components/ui/stat-card.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
+import { DETAIL_BLOCK_GAP } from "@/client/config/layout";
 import NotFound from "@/client/components/feedback/not-found.vue";
 import DetailShell from "@/client/components/model-detail/detail-views.vue";
 
@@ -36,7 +37,7 @@ const tags = computed(() => model.value?.tags ?? []);
 <template>
   <NotFound v-if="!model" />
   <DetailShell v-else source="os" :title="shortModelId(model.id)">
-    <div class="flex flex-col gap-4">
+    <div :class="DETAIL_BLOCK_GAP">
       <StatGrid :columns="2">
         <StatCard :label="t('downloads')">{{ formatShortNumber(model.downloads, t("notAvailable")) }}</StatCard>
         <StatCard :label="t('likes')">{{ formatShortNumber(model.likes, t("notAvailable")) }}</StatCard>

@@ -4,6 +4,7 @@ import { TriangleAlert } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import Button from "@/client/components/ui/button.vue";
+import PageContainer from "@/client/components/layout/page-container.vue";
 
 const props = defineProps<{ reset?: () => void }>();
 
@@ -42,7 +43,7 @@ function retry(): void {
 </script>
 
 <template>
-  <div v-if="error" class="flex flex-col items-center gap-3">
+  <PageContainer v-if="error" class="flex flex-col items-center gap-3">
     <EmptyState
       variant="error"
       :icon="TriangleAlert"
@@ -51,7 +52,7 @@ function retry(): void {
     />
     <p v-if="!online" class="ui-caption" role="status">{{ t("offlineRetry") }}</p>
     <Button variant="outline" size="sm" :disabled="!online" @click="retry">{{ t("errorBoundaryRetry") }}</Button>
-  </div>
+  </PageContainer>
   <Suspense v-else :key="attempt">
     <slot />
     <template #fallback><slot name="fallback" /></template>

@@ -13,12 +13,14 @@ import CardHeader from "@/client/components/ui/card-header.vue";
 import ChartCanvas from "@/client/components/ui/chart-canvas.vue";
 import ChartFrame from "@/client/components/ui/chart-frame.vue";
 import { CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT } from "@/client/utils/chart-metrics";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatShortNumber } from "@/client/utils/format";
 import { cn } from "@/client/utils/cn";
 import { useChartTheme, legendStyle } from "@/client/theme/chart-theme";
 import { chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import type { TFunction, TranslationKey } from "@/shared/i18n";
+import type { HomeBarStat } from "./use-home-stats";
 
 const TASK_SLICE_LIMIT = 5;
 const OTHER_TASK_KEY = "__other__";
@@ -84,7 +86,7 @@ function aggregateTaskShare(models: { task: string | null | undefined }[]): {
   return { slices, total };
 }
 
-const props = defineProps<{ models: { task: string | null | undefined }[] }>();
+const props = defineProps<{ models: { task: string | null | undefined }[]; trending: HomeBarStat[] }>();
 
 const { t } = useTranslation();
 const theme = useChartTheme();
@@ -141,20 +143,45 @@ const caption = computed(() =>
 <template>
   <Card class="h-full">
     <CardContent class="flex flex-col h-full">
-      <CardHeader :title="t('opensourceTaskShare')" :subtitle="t('openSourceDataSource')" />
-      <div v-if="slices.length === 0" :class="cn(CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT)" role="status">
-        {{ t("notAvailable") }}
+      <CardHeader :title="t('openSourceTrendingStats')" :subtitle="t('huggingFaceSource')" />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 flex-1 min-w-0">
+        <div class="flex flex-col min-w-0">
+          <p class="ui-caption mb-2">{{ t("opensourceTaskShare") }}</p>
+          <EmptyState
+            v-if="slices.length === 0"
+            variant="plain"
+            :message="t('notAvailable')"
+            :class="cn(CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT)"
+          />
+          <ChartFrame v-else :height="FLEX_CHART_HEIGHT">
+            <ChartCanvas
+              type="doughnut"
+              :data="data"
+              :options="options"
+              :aria-label="t('opensourceTaskShare')"
+              role="img"
+            />
+            <figcaption class="sr-only">{{ caption }}</figcaption>
+          </ChartFrame>
+        </div>
+        <div class="flex flex-col min-w-0">
+          <p class="ui-caption mb-2">{{ t("downloads") }}</p>
+          <EmptyState v-if="trending.length === 0" variant="plain" compact :message="t('notAvailable')" />
+          <div v-else class="flex flex-1 flex-col gap-1 justify-between">
+            <div
+              v-for="(row, i) in trending"
+              :key="`${row.label}#${i + 1}`"
+              class="flex h-9 items-center gap-3 min-w-0"
+            >
+              <span class="text-xs font-medium text-text-tertiary w-6 text-center shrink-0 tabular-nums">
+                {{ i + 1 }}
+              </span>
+              <span class="text-sm truncate min-w-0 flex-1">{{ row.label }}</span>
+              <span class="ui-mono-value shrink-0">{{ row.valueLabel }}</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <ChartFrame v-else :height="FLEX_CHART_HEIGHT">
-        <ChartCanvas
-          type="doughnut"
-          :data="data"
-          :options="options"
-          :aria-label="t('opensourceTaskShare')"
-          role="img"
-        />
-        <figcaption class="sr-only">{{ caption }}</figcaption>
-      </ChartFrame>
     </CardContent>
   </Card>
 </template>

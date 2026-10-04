@@ -1,3 +1,6 @@
+import { errMsg } from "@/server/infra/errors";
+import { logger } from "@/server/infra/logger";
+
 function abortError(): Error {
   return new Error("Aborted");
 }
@@ -12,7 +15,9 @@ export function raceAbort<T>(
     const handleAbort = (): void => {
       try {
         onAbort?.();
-      } catch {}
+      } catch (err) {
+        logger("warn", `[abort] onAbort callback failed: ${errMsg(err)}`);
+      }
       reject(makeError());
     };
     signal.addEventListener("abort", handleAbort, { once: true });

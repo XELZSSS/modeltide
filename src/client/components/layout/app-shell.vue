@@ -9,6 +9,9 @@ import MobileNav from "@/client/components/layout/mobile-nav.vue";
 import ErrorBoundary from "@/client/components/error-boundary.vue";
 import SettingsSheet from "@/client/components/layout/settings-sheet.vue";
 import MobileMoreSheet from "@/client/components/layout/mobile-more-sheet.vue";
+import ContractSkewNotice from "@/client/components/feedback/contract-skew-notice.vue";
+import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/config/layout";
+import { THEME_COLORS } from "@/shared/config";
 
 const scrollOffsets = new Map<number, number>();
 
@@ -77,7 +80,7 @@ function applyTheme(): void {
   document.documentElement.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
   const metas = document.querySelectorAll("meta[name='theme-color']");
-  for (const meta of metas) meta.setAttribute("content", dark ? "#1a1a1a" : "#fafbfc");
+  for (const meta of metas) meta.setAttribute("content", dark ? THEME_COLORS.dark : THEME_COLORS.light);
 }
 
 watch(() => settings.themeMode, applyTheme, { immediate: true, flush: "post" });
@@ -118,6 +121,9 @@ onUnmounted(() => {
       :aria-label="t('mainContent')"
       class="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] overscroll-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-4 focus:outline-none"
     >
+      <div :class="[PAGE_WIDTH, PAGE_GUTTER]">
+        <ContractSkewNotice />
+      </div>
       <slot />
     </main>
     <MobileNav @more-open="openSheet = 'more'" @settings-open="openSheet = 'settings'" />

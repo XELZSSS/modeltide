@@ -6,7 +6,6 @@ import { isPartialPayload, unwrapList } from "@/client/api/payload-normalize";
 import { MODEL_SOURCES, type ModelSource } from "@/client/config/nav-config";
 import NotFound from "@/client/components/feedback/not-found.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
-import PageContainer from "@/client/components/layout/page-container.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import DetailShell, { findModel } from "@/client/components/model-detail/detail-views.vue";
 import AaContent from "@/client/components/model-detail/aa-detail.vue";
@@ -88,11 +87,9 @@ const decodedId = computed(() => {
 <template>
   <SuspenseQuery>
     <NotFound v-if="!source || !decodedId" />
-    <PageContainer v-else>
-      <AaDetailView v-if="source === 'aa'" :key="decodedId" :decoded-id="decodedId" />
-      <OrDetailView v-else-if="source === 'or'" :key="decodedId" :decoded-id="decodedId" />
-      <OpenSourceDetail v-else-if="source === 'os'" :key="decodedId" :decoded-id="decodedId" />
-      <HallucinationDetail v-else :key="decodedId" :decoded-id="decodedId" />
-    </PageContainer>
+    <AaDetailView v-if="source === 'aa'" :key="decodedId" :decoded-id="decodedId" />
+    <OrDetailView v-else-if="source === 'or'" :key="decodedId" :decoded-id="decodedId" />
+    <OpenSourceDetail v-else-if="source === 'os'" :key="decodedId" :decoded-id="decodedId" />
+    <HallucinationDetail v-else :key="decodedId" :decoded-id="decodedId" />
   </SuspenseQuery>
 </template>

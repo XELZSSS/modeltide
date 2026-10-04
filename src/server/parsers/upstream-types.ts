@@ -27,13 +27,16 @@ export interface ModelRow {
 export interface ModelMetaEntry {
   intelligenceIndex?: number;
   agenticIndex?: number;
+  codingIndex?: number;
 }
 
 export interface PricingRow {
   id: string;
   canonical_slug?: string;
   name?: string;
-  benchmarks?: { artificial_analysis?: { intelligence_index?: unknown; agentic_index?: unknown } };
+  benchmarks?: {
+    artificial_analysis?: { intelligence_index?: unknown; coding_index?: unknown; agentic_index?: unknown };
+  };
   pricing?: {
     prompt?: string | number | null;
     completion?: string | number | null;

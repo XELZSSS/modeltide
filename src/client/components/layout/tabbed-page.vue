@@ -3,6 +3,7 @@ import PageContainer from "@/client/components/layout/page-container.vue";
 import PageHeader from "@/client/components/layout/page-header.vue";
 import TabContainer from "@/client/components/ui/tab-container.vue";
 import type { TabItem } from "@/client/components/ui/tabs";
+import { PAGE_BLOCK_GAP } from "@/client/config/layout";
 
 withDefaults(
   defineProps<{
@@ -26,19 +27,21 @@ function forwardTabIntent(tabId: string, active: boolean): void {
 
 <template>
   <PageContainer>
-    <PageHeader :compact="compact" :title="title" :description="description">
-      <template v-if="$slots.actions" #actions><slot name="actions" /></template>
-    </PageHeader>
-    <TabContainer
-      :tabs="tabs"
-      :active-tab="activeTab"
-      :tab-size="tabSize"
-      :fill="tabFill"
-      :aria-label="title"
-      @tab-intent="forwardTabIntent"
-      @tab-change="emit('tabChange', $event)"
-    >
-      <slot />
-    </TabContainer>
+    <div :class="PAGE_BLOCK_GAP">
+      <PageHeader :compact="compact" :title="title" :description="description">
+        <template v-if="$slots.actions" #actions><slot name="actions" /></template>
+      </PageHeader>
+      <TabContainer
+        :tabs="tabs"
+        :active-tab="activeTab"
+        :tab-size="tabSize"
+        :fill="tabFill"
+        :aria-label="title"
+        @tab-intent="forwardTabIntent"
+        @tab-change="emit('tabChange', $event)"
+      >
+        <slot />
+      </TabContainer>
+    </div>
   </PageContainer>
 </template>

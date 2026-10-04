@@ -5,6 +5,7 @@ import { REPO_URL } from "@/client/config/nav-config";
 import { usePathname } from "@/client/router";
 import { isNavActive, useNavigation, usePrefetch } from "@/client/components/layout/navigation";
 import SafeLink from "@/client/components/safe-link.vue";
+import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/config/layout";
 
 const emit = defineEmits<{ settingsOpen: [] }>();
 
@@ -15,6 +16,8 @@ const { hover, cancel } = usePrefetch();
 
 const ICON_BUTTON =
   "p-1.5 text-text-secondary hoverable:hover:text-text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
+
+const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
 </script>
 
 <template>
@@ -22,7 +25,7 @@ const ICON_BUTTON =
     class="hidden md:flex h-12 shrink-0 items-center border-b border-border bg-bg-primary sticky top-0 z-30"
     :aria-label="t('navPrimary')"
   >
-    <div class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex items-center gap-1">
+    <div :class="INNER">
       <div class="flex items-center gap-0.5">
         <SafeLink
           v-for="item in all"

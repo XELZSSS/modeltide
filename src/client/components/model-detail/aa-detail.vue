@@ -2,34 +2,25 @@
 import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
-import { MODALITY_KEYS, ABSOLUTE_SCORE_BENCHMARKS, type BenchmarkKey, type ModalityKey } from "@/shared/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import {
-  benchmarkLabel,
   formatBoolean,
   formatPricePerMillion,
   formatScore,
   formatTokens,
   orNA,
 } from "@/client/utils/format";
-import { computeBlendPrice, unclampedPercent } from "@/shared/utils";
+import { computeBlendPrice } from "@/shared/utils";
 import { getOutputSpeed } from "@/shared/utils/models";
 import { resolveEffectivePricing, PRICE_LEGS } from "@/shared/utils/pricing";
-import { cn } from "@/client/utils/cn";
 import StatGrid from "@/client/components/ui/stat-grid.vue";
 import InfoGrid from "@/client/components/ui/info-grid.vue";
 import InfoCard from "@/client/components/ui/info-card.vue";
 import InfoRow from "@/client/components/ui/info-row.vue";
-import Badge from "@/client/components/ui/badge.vue";
 import StatCard from "@/client/components/ui/stat-card.vue";
-import PageSection from "@/client/components/layout/page-section.vue";
-
-const MODALITY_STYLES: Record<ModalityKey, { className: string; labelKey: TranslationKey }> = {
-  text: { className: "border-accent/30 bg-accent-light text-accent", labelKey: "modalityText" },
-  image: { className: "border-info/30 bg-info-light text-info", labelKey: "modalityImage" },
-  speech: { className: "border-success/30 bg-success-light text-success", labelKey: "modalitySpeech" },
-  video: { className: "border-warning/30 bg-warning-light text-warning", labelKey: "modalityVideo" },
-};
+import AaModalities from "@/client/components/model-detail/aa-modalities.vue";
+import AaBenchmarks from "@/client/components/model-detail/aa-benchmarks.vue";
+import { DETAIL_BLOCK_GAP } from "@/client/config/layout";
 
 const props = withDefaults(defineProps<{ model: ArtificialAnalysisModel; showBenchmarks?: boolean }>(), {
   showBenchmarks: true,
@@ -41,24 +32,6 @@ const pricing = computed(() => resolveEffectivePricing(props.model.pricing));
 const blended = computed(() => computeBlendPrice(pricing.value));
 const cacheWrite = computed(() => PRICE_LEGS.cacheWritePrice(pricing.value));
 
-function modalitiesFor(prefix: "input" | "output"): ModalityKey[] {
-  return MODALITY_KEYS.filter((key) =>
-    Boolean(props.model[`${prefix}_modality_${key}` as keyof ArtificialAnalysisModel]),
-  );
-}
-
-const inputModalities = computed(() => modalitiesFor("input"));
-const outputModalities = computed(() => modalitiesFor("output"));
-
-const hasAnyModality = computed(() =>
-  MODALITY_KEYS.some((key) =>
-    Boolean(
-      props.model[`input_modality_${key}` as keyof ArtificialAnalysisModel] ||
-      props.model[`output_modality_${key}` as keyof ArtificialAnalysisModel],
-    ),
-  ),
-);
-
 const scoreStats = computed<[TranslationKey, number | null | undefined][]>(() => [
   ["intelligenceIndex", props.model.intelligence_index],
   ["coding", props.model.coding_index],
@@ -66,35 +39,13 @@ const scoreStats = computed<[TranslationKey, number | null | undefined][]>(() =>
   ["outputSpeed", getOutputSpeed(props.model)],
 ]);
 
-const showBenchmarksSection = computed(
-  () =>
-    props.showBenchmarks &&
-    props.model.benchmarks != null &&
-    Object.values(props.model.benchmarks).some((v) => v != null),
-);
-
-const benchmarkStats = computed(() => {
-  const benchmarks = props.model.benchmarks;
-  if (!benchmarks) return [];
-  return Object.entries(benchmarks)
-    .map(([key, value]) => ({
-      key,
-      display: ABSOLUTE_SCORE_BENCHMARKS.has(key as BenchmarkKey)
-        ? typeof value === "number" && Number.isFinite(value)
-          ? value
-          : null
-        : unclampedPercent(value),
-    }))
-    .filter((entry) => entry.display != null);
-});
-
 function titleCaseSizeClass(s: string): string {
   return s.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
+  <div :class="DETAIL_BLOCK_GAP">
     <StatGrid :columns="4">
       <StatCard v-for="[labelKey, value] in scoreStats" :key="labelKey" :label="t(labelKey)">
         {{ formatScore(value, t) }}
@@ -125,40 +76,7 @@ function titleCaseSizeClass(s: string): string {
         <InfoRow :label="t('blendedPrice')">{{ formatPricePerMillion(blended, t) }}</InfoRow>
       </InfoCard>
     </InfoGrid>
-    <PageSection v-if="showBenchmarksSection" :title="t('benchmarks')">
-      <StatGrid :columns="4">
-        <StatCard v-for="entry in benchmarkStats" :key="entry.key" :label="benchmarkLabel(entry.key, t)">
-          {{ formatScore(entry.display, t) }}
-        </StatCard>
-      </StatGrid>
-    </PageSection>
-    <PageSection v-if="hasAnyModality" :title="t('modalities')">
-      <div class="flex flex-col gap-4 md:flex-row md:gap-12">
-        <div>
-          <div class="ui-caption font-medium mb-2.5">{{ t("inputModality") }}</div>
-          <div class="flex gap-2 flex-wrap">
-            <Badge
-              v-for="key in inputModalities"
-              :key="key"
-              :class="cn('px-2.5 py-1 normal-case tracking-normal', MODALITY_STYLES[key].className)"
-            >
-              {{ t(MODALITY_STYLES[key].labelKey) }}
-            </Badge>
-          </div>
-        </div>
-        <div>
-          <div class="ui-caption font-medium mb-2.5">{{ t("outputModality") }}</div>
-          <div class="flex gap-2 flex-wrap">
-            <Badge
-              v-for="key in outputModalities"
-              :key="key"
-              :class="cn('px-2.5 py-1 normal-case tracking-normal', MODALITY_STYLES[key].className)"
-            >
-              {{ t(MODALITY_STYLES[key].labelKey) }}
-            </Badge>
-          </div>
-        </div>
-      </div>
-    </PageSection>
+    <AaBenchmarks v-if="showBenchmarks" :model="model" />
+    <AaModalities :model="model" />
   </div>
 </template>
