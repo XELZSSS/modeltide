@@ -10,7 +10,7 @@ import type {
 } from "@/shared/types";
 import { dedupeBy } from "@/shared/utils";
 import { buildHallucinationRankings } from "@/shared/utils/hallucination";
-import { EMPTY_ARRAY } from "@/client/utils/empty";
+import { emptyArray } from "@/client/utils/empty";
 import {
   normalizeHomeDashboard,
   unwrapList,
@@ -93,6 +93,9 @@ export async function useSuspenseOpenRouterRankings(): Promise<QueryResult<"open
 export const useSuspenseOpenSourceModelsState = () =>
   suspenseState<OpenSourceModelEntry>(qOpenSourceModelsRaw.use(), "openSourceModels");
 
+export const useSuspenseOpenRouterRankingsState = () =>
+  suspenseState<import("@/shared/types").OpenRouterRankEntry>(qOpenRouter.use(), "openRouterRankings");
+
 export async function useSuspenseOpenSourceModel(id: string): Promise<ComputedRef<OpenSourceModelEntry | null>> {
   const query = qOpenSourceModel(id).use();
   await query.suspense();
@@ -150,7 +153,7 @@ export function useHallucinationRankings(
     const models = toValue(data);
     return toValue(enabled) && models.length > 0
       ? buildHallucinationRankings(models)
-      : (EMPTY_ARRAY as HallucinationRankingEntry[]);
+      : emptyArray<HallucinationRankingEntry>();
   });
 }
 

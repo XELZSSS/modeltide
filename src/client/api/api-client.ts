@@ -90,7 +90,11 @@ async function apiFetch<T>(path: string, signal?: AbortSignal): Promise<SourcePa
   if (!ct.includes("application/json")) {
     throw new ApiClientError(`Expected JSON but got ${ct || "unknown content-type"}`, res.status);
   }
-  return (await res.json()) as SourcePayload<T>;
+  const body = await res.json();
+  if (body == null || typeof body !== "object" || !("data" in body)) {
+    throw new ApiClientError("Malformed payload: missing data field", res.status);
+  }
+  return body as SourcePayload<T>;
 }
 
 export const fetcher =

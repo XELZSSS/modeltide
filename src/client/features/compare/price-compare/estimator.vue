@@ -23,15 +23,15 @@ const theme = useChartTheme();
 const costState = useMonthlyCosts(() => props.models);
 const monthlyCosts = costState.monthlyCosts;
 
-const bestMonthlyCost = computed(() => {
+const costSummary = computed(() => {
   const valid = [...monthlyCosts.value.values()].filter((v): v is number => v !== null);
-  return valid.length > 0 ? Math.min(...valid) : null;
+  if (valid.length === 0) return { best: null as number | null, avg: null as number | null };
+  return { best: Math.min(...valid), avg: valid.reduce((a, b) => a + b, 0) / valid.length };
 });
 
-const avgMonthlyCost = computed(() => {
-  const valid = [...monthlyCosts.value.values()].filter((v): v is number => v !== null);
-  return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
-});
+const bestMonthlyCost = computed(() => costSummary.value.best);
+
+const avgMonthlyCost = computed(() => costSummary.value.avg);
 
 function costOf(model: ArtificialAnalysisModel): number | null {
   return monthlyCosts.value.get(modelId(model)) ?? null;
@@ -56,7 +56,7 @@ function isBestCost(model: ArtificialAnalysisModel): boolean {
           :key="modelKeyOf(model, index)"
           class="flex items-center justify-between gap-2"
         >
-          <span class="text-sm truncate" :style="{ color: seriesColor(theme, index) }">
+          <span class="text-sm truncate" :style="{ color: seriesColor(theme, index) }" :title="modelDisplayName(model)">
             {{ modelDisplayName(model) }}
           </span>
           <span

@@ -3,14 +3,8 @@ import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import {
-  formatBoolean,
-  formatPricePerMillion,
-  formatScore,
-  formatTokens,
-  orNA,
-} from "@/client/utils/format";
-import { computeBlendPrice } from "@/shared/utils";
+import { formatBoolean, formatPricePerMillion, formatScore, formatTokens, orNA } from "@/client/utils/format";
+import { computeBlendPrice, titleCase } from "@/shared/utils";
 import { getOutputSpeed } from "@/shared/utils/models";
 import { resolveEffectivePricing, PRICE_LEGS } from "@/shared/utils/pricing";
 import StatGrid from "@/client/components/ui/stat-grid.vue";
@@ -40,7 +34,7 @@ const scoreStats = computed<[TranslationKey, number | null | undefined][]>(() =>
 ]);
 
 function titleCaseSizeClass(s: string): string {
-  return s.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return titleCase(s);
 }
 </script>
 

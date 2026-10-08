@@ -45,7 +45,10 @@ describe("warmRoundOutcome", () => {
   });
 
   it("counts a resolved call that cached a partial payload as degraded, not as a failure", () => {
-    const partial = (): PromiseSettledResult<unknown> => ({ status: "fulfilled", value: { partial: true } });
+    const partial = (): PromiseSettledResult<unknown> => ({
+      status: "fulfilled",
+      value: { data: [], fetchedAt: new Date(0).toISOString(), partial: true },
+    });
     const outcome = warmRoundOutcome([ok(), partial(), partial()]);
     expect(outcome).toEqual({ notRun: 0, failed: 0, degraded: 2, total: 3 });
     expect(cronHealthy(true, outcome.failed + outcome.notRun, outcome.total)).toBe(true);
@@ -79,6 +82,12 @@ describe("failTarget", () => {
     ["a hash", "https://hc-ping.com/abc#frag", "https://hc-ping.com/abc/fail#frag"],
   ])("appends /fail to %s", (_label, input, expected) => {
     expect(failTarget(input)).toBe(expected);
+  });
+
+  it("is idempotent for an already-marked failure url", () => {
+    expect(failTarget("https://hc-ping.com/abc/fail")).toBe("https://hc-ping.com/abc/fail");
+    expect(failTarget("https://hc-ping.com/abc/fail?x=1")).toBe("https://hc-ping.com/abc/fail?x=1");
+    expect(failTarget("https://hc-ping.com/abc/fail#frag")).toBe("https://hc-ping.com/abc/fail#frag");
   });
 });
 

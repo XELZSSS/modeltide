@@ -50,6 +50,9 @@ export function useTranslation(): Translation {
   const settings = useSettingsStore();
   return {
     lang: computed(() => settings.lang),
+    // NOTE: t() must be called inside computed/render so settings.lang is tracked.
+    // Do not hoist `const label = t('x')` outside a computed — it won't update on language switch.
+    // For a reactive label, use `computed(() => t('x'))`.
     t: (key, params) => tFor(settings.lang)(key, params),
     setLang: (lang) => settings.setLang(lang),
   };

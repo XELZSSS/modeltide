@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { h } from "vue";
 import { useSuspenseAgentRankingsState } from "@/client/api/api-queries";
+import { assertPayloadShape } from "@/client/api/payload-normalize";
 import type { AgentRankEntry } from "@/shared/types";
 import RankedTableView, { modelNameCol } from "@/client/components/data/table/ranked-table-view.vue";
-import PartialNotice from "@/client/components/feedback/partial-notice.vue";
+import TabStateShell from "@/client/components/data/tab-state-shell.vue";
 import { orNA } from "@/client/utils/format";
 import { rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.ts";
 import type { TFunction } from "@/shared/i18n";
@@ -46,14 +47,16 @@ const getAgentRowId = (entry: AgentRankEntry) => `${entry.rank}|${entry.id}`;
 const getAgentSearchFields = (entry: AgentRankEntry) => [entry.name, entry.id, entry.creator];
 
 const state = await useSuspenseAgentRankingsState();
+assertPayloadShape(state.value.malformed, "agentRankings");
 </script>
 
 <template>
-  <PartialNotice v-if="state.partial" />
-  <RankedTableView
-    :rows="state.items"
-    :get-row-id="getAgentRowId"
-    :get-search-fields="getAgentSearchFields"
-    :build-body-columns="buildAgentColumns"
-  />
+  <TabStateShell :state="state">
+    <RankedTableView
+      :rows="state.items"
+      :get-row-id="getAgentRowId"
+      :get-search-fields="getAgentSearchFields"
+      :build-body-columns="buildAgentColumns"
+    />
+  </TabStateShell>
 </template>

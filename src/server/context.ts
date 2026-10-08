@@ -18,6 +18,8 @@ export interface AppContext {
   kv: KvStore | undefined;
   log: Logger;
   onDetach?: (work: Promise<unknown>) => void;
+  clock?: () => number;
+  random?: () => number;
 }
 
 let warnedMissingKv = false;
@@ -28,6 +30,9 @@ export function buildContext(
     workSignal?: AbortSignal;
     callerSignal?: AbortSignal;
     onDetach?: (work: Promise<unknown>) => void;
+    fetchImpl?: typeof fetch;
+    clock?: () => number;
+    random?: () => number;
   },
 ): AppContext {
   const background = init?.workSignal != null;
@@ -43,10 +48,16 @@ export function buildContext(
   });
   const base: AppContext = {
     cache,
-    http: new HttpClient(init?.workSignal ? { signal: init.workSignal, background } : { background }),
+    http: new HttpClient(
+      init?.workSignal
+        ? { signal: init.workSignal, background, fetchImpl: init.fetchImpl, now: init.clock }
+        : { background, fetchImpl: init?.fetchImpl, now: init?.clock },
+    ),
     kv,
     log: logger,
     onDetach: init?.onDetach,
+    clock: init?.clock,
+    random: init?.random,
   };
   if (!init?.callerSignal) return base;
   let refresh: AppContext | undefined;
@@ -56,7 +67,9 @@ export function buildContext(
       refresh ??= {
         ...base,
         cache: new CacheService(kv, CACHE_VERSION, { onDetach: init?.onDetach, log: logger }),
-        http: new HttpClient({ signal: AbortSignal.timeout(SHARED_REFRESH_TIMEOUT_MS) }),
+        // Share the base pools: the platform budget is per invocation, so the
+        // foreground client and its background refreshes must draw from one pool.
+        http: new HttpClient({ signal: AbortSignal.timeout(SHARED_REFRESH_TIMEOUT_MS), pools: base.http.pools }),
       };
       return refresh;
     },

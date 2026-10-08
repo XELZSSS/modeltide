@@ -2,6 +2,7 @@ import { computed, onMounted, onUnmounted, ref, toValue, useId, watch, type Mayb
 
 interface ComboboxOptions {
   initialValue: string;
+  externalValue?: MaybeRefOrGetter<string>;
   minQuery: number;
   itemCount: MaybeRefOrGetter<number>;
   isOpen: Ref<boolean>;
@@ -9,7 +10,15 @@ interface ComboboxOptions {
   onSelect: (index: number) => void;
 }
 
-export function useCombobox({ initialValue, minQuery, itemCount, isOpen, isFocused, onSelect }: ComboboxOptions) {
+export function useCombobox({
+  initialValue,
+  externalValue,
+  minQuery,
+  itemCount,
+  isOpen,
+  isFocused,
+  onSelect,
+}: ComboboxOptions) {
   const containerRef = ref<HTMLDivElement | null>(null);
   const inputRef = ref<HTMLInputElement | null>(null);
   const listRef = ref<HTMLDivElement | null>(null);
@@ -17,6 +26,17 @@ export function useCombobox({ initialValue, minQuery, itemCount, isOpen, isFocus
   const listboxId = useId();
   const statusId = useId();
   const { inputValue, debounced, setDebouncedDirect, composing } = useDebouncedTerm(initialValue, 200);
+  // Controlled mode: sync external term changes (e.g. history navigation) back into the input.
+  if (externalValue !== undefined) {
+    watch(
+      () => toValue(externalValue),
+      (next) => {
+        if (typeof next === "string" && next !== debounced.value && next !== inputValue.value) {
+          setDebouncedDirect(next);
+        }
+      },
+    );
+  }
   const canSearch = computed(() => !composing.value && inputValue.value.trim().length >= minQuery);
 
   const select = (index: number) => {

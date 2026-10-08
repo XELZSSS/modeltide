@@ -69,7 +69,7 @@ const renderExpanded = (row: T): VNodeChild => props.renderExpandedRow?.(row);
             <CellView :render="layout.primaryCol.cell" :row="item.row" />
           </div>
           <div v-if="layout.mainStatCol" class="shrink-0 text-right min-w-0 max-w-[40%]">
-            <span v-if="layout.mainStatCol.header" class="ui-meta mr-1.5 truncate">{{
+            <span v-if="layout.mainStatCol.header" class="ui-meta mr-1.5 truncate" :title="layout.mainStatCol.header">{{
               layout.mainStatCol.header
             }}</span>
             <div class="ui-mono-value font-semibold">

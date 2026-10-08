@@ -1,7 +1,8 @@
 import type { AppContext } from "@/server/context";
 import { PROVIDER_CONCURRENCY, PROVIDER_STATUS_FETCH_OPTS, providerStatusEndpoints } from "@/server/config";
 import { errMsg, UpstreamError } from "@/server/infra/errors";
-import { runCapped } from "@/server/infra/task-pool";
+import { logPartial } from "@/server/infra/logger";
+import { runLegs } from "@/server/sources/join-legs";
 import { sourceAggregate, type SourceAggregate } from "@/server/sources/status/aggregate";
 import { parseGoogleCloudIncidents, parseStatuspageSummary } from "@/server/parsers/incident-parser";
 import { parseOk, type ParseResult } from "@/server/parsers/parse-result";
@@ -35,6 +36,14 @@ function upstreamStatusOf(err: unknown): number | null {
   return err instanceof UpstreamError && typeof err.statusCode === "number" ? err.statusCode : null;
 }
 
+// A 4xx (other than timeout/rate-limit) from a status API means the check itself
+// was rejected — e.g. the AWS WAF CAPTCHA challenge statuspage hosts serve to
+// datacenter egress as HTTP 405 — not evidence of a provider outage. Report it as
+// unknown (warn) instead of down (error).
+function isCheckRejection(status: number | null): boolean {
+  return status != null && status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
 async function fetchProviderHealth(
   ctx: AppContext,
   url: string,
@@ -47,13 +56,24 @@ async function fetchProviderHealth(
     response = await ctx.http.jsonWithStatus<unknown>(url, PROVIDER_STATUS_FETCH_OPTS);
   } catch (err) {
     const message = errMsg(err);
+    const status = upstreamStatusOf(err);
+    if (isCheckRejection(status)) {
+      ctx.log("warn", `[provider-status] ${label} check rejected (HTTP ${status}), marking unknown instead of down`);
+      return sourceAggregate({
+        ok: true,
+        degraded: true,
+        status,
+        latencyMs: null,
+        detail: `status check rejected by upstream (HTTP ${status})`,
+      });
+    }
     ctx.log("warn", `[provider-status] ${label} fetch failed: ${message}`);
-    return sourceAggregate({ ok: false, status: upstreamStatusOf(err), latencyMs: null, detail: message });
+    return sourceAggregate({ ok: false, status, latencyMs: null, detail: message });
   }
   const latencyMs = Date.now() - started;
   const parsed = parse(response.body);
   if (!parsed.ok) {
-    ctx.log("warn", `[provider-status] ${label} parse failed: ${parsed.error}`);
+    logPartial(ctx.log, "provider-status", { label, reason: "parse-failed" });
     return sourceAggregate({ ok: false, status: response.status, latencyMs: null, detail: parsed.error });
   }
   const { level, detail } = parsed.data;
@@ -92,12 +112,15 @@ const PROVIDER_STATUS_TARGETS: readonly {
 export const PROVIDER_STATUS_TARGET_COUNT = PROVIDER_STATUS_TARGETS.length;
 
 export async function fetchProviderStatuses(ctx: AppContext): Promise<Map<SourceId, SourceAggregate>> {
-  const settled = await runCapped(
-    PROVIDER_STATUS_TARGETS.map((target) => async (): Promise<readonly [SourceId, SourceAggregate]> => [
-      target.id,
-      await fetchProviderHealth(ctx, target.url, target.label, target.parse),
-    ]),
-    PROVIDER_CONCURRENCY,
+  const { values } = await runLegs(
+    PROVIDER_STATUS_TARGETS.map((target) => ({
+      label: target.label,
+      run: async (): Promise<readonly [SourceId, SourceAggregate]> => [
+        target.id,
+        await fetchProviderHealth(ctx, target.url, target.label, target.parse),
+      ],
+    })),
+    { concurrency: PROVIDER_CONCURRENCY },
   );
-  return new Map(settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : [])));
+  return new Map(values.filter((v): v is readonly [SourceId, SourceAggregate] => v !== undefined));
 }

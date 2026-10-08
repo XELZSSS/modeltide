@@ -50,10 +50,11 @@ function handleCompare(): void {
   navigate(pricingMode.value ? "/price-compare" : "/compare");
 }
 
+const modelRowName = (m: ArtificialAnalysisModel) => m.name || m.slug || modelId(m);
 const getAARowId = (model: ArtificialAnalysisModel) => modelId(model);
-const getAARowName = (model: ArtificialAnalysisModel) => model.name || model.slug || modelId(model);
+const getAARowName = (model: ArtificialAnalysisModel) => modelRowName(model);
 const getPricingRowId = (row: PricingRow) => modelId(row.model);
-const getPricingRowName = (row: PricingRow) => row.model.name || row.model.slug || modelId(row.model);
+const getPricingRowName = (row: PricingRow) => modelRowName(row.model);
 const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
 </script>
 
@@ -75,6 +76,7 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
 
     <CompareChipBar
       :models="comparedModels"
+      :show-compare="true"
       @remove="store.removeCompareModel"
       @clear="store.clearCompare"
       @compare="handleCompare"

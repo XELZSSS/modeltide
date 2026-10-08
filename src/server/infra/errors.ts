@@ -1,3 +1,7 @@
+import { errMsg } from "@/shared/utils";
+
+export { errMsg };
+
 export function isTimeoutLike(err: unknown): boolean {
   if (err instanceof UpstreamError) return err.causedByTimeout;
   if (err instanceof Error) return err.name === "TimeoutError" || err.name === "AbortError";
@@ -62,7 +66,7 @@ export function zeroUpstream(label: string, unit: string, detail?: string): Upst
 }
 
 export function wrapUpstream(prefix: string, err: unknown): UpstreamError {
-  const msg = err instanceof Error ? err.message : String(err);
+  const msg = errMsg(err);
   const cause = err instanceof UpstreamError ? err : undefined;
   return new UpstreamError(`${prefix}: ${msg}`, {
     ...(isTimeoutLike(err) ? { timeout: true } : {}),
@@ -72,5 +76,3 @@ export function wrapUpstream(prefix: string, err: unknown): UpstreamError {
     ...(cause?.watchdog ? { watchdog: true } : {}),
   });
 }
-
-export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));

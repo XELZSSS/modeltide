@@ -1,7 +1,7 @@
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
 import { UNKNOWN_QUERY_WARN_MAX_PATHS, UNKNOWN_QUERY_WARN_THROTTLE_MS } from "@/server/config/status";
-import { ApiError, ClientAbortError, UpstreamError, isTimeoutLike } from "@/server/infra/errors";
+import { ApiError, ClientAbortError, UpstreamError, isTimeoutLike, errMsg } from "@/server/infra/errors";
 import { keyedThrottleGate } from "@/server/infra/throttle";
 import { logger, type Logger } from "@/server/infra/logger";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
@@ -92,7 +92,7 @@ function mapApiError(err: unknown, method: string, path: string): Response {
     return errorJson(499, "Client closed request");
   }
   if (isTimeoutLike(err)) {
-    logger("warn", `[upstream-timeout] ${method} ${path} ${err instanceof Error ? err.message : String(err)}`);
+    logger("warn", `[upstream-timeout] ${method} ${path} ${errMsg(err)}`);
     return timeoutResponse();
   }
   if (err instanceof ApiError) {
@@ -104,7 +104,7 @@ function mapApiError(err: unknown, method: string, path: string): Response {
     }
     return errorJson(status, err.message);
   }
-  logger("error", `[unhandled] ${method} ${path} ${err instanceof Error ? err.message : String(err)}`);
+  logger("error", `[unhandled] ${method} ${path} ${errMsg(err)}`);
   return errorJson(500, "Internal server error");
 }
 

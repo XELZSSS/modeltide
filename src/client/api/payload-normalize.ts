@@ -1,4 +1,5 @@
 import type { HomeDashboardData, HomeOpenSourceEntry } from "@/shared/types";
+import { isPartialPayload } from "@/shared/types/payload";
 
 function payloadData(payload: unknown, label: string): unknown {
   if (payload == null) throw new Error(`${label}: payload is null`);
@@ -34,9 +35,7 @@ export function normalizeHomeDashboard(payload: unknown, label = "homeDashboard"
   };
 }
 
-export function isPartialPayload(payload: unknown): boolean {
-  return (payload as { partial?: boolean } | null | undefined)?.partial === true;
-}
+export { isPartialPayload };
 
 export function unwrapListPartial<T>(
   payload: unknown,

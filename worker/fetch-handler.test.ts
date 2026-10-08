@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fetchHandler } from "./index";
+import { resolveRoute } from "./api-router";
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen";
 import { apiPaths } from "@/shared/config";
 import type { Env } from "@/server/context";
@@ -12,6 +13,11 @@ const env = {
 const UNKNOWN_API_PATH = "https://example.com/api/no-such-route";
 
 describe("fetchHandler dispatch", () => {
+  it("resolves a registered pathname to its route entry", () => {
+    expect(resolveRoute(apiPaths.news)?.path).toBe(apiPaths.news);
+    expect(resolveRoute("/api/does-not-exist")).toBeUndefined();
+  });
+
   it("answers OPTIONS on an existing route with 204 and the API headers", async () => {
     const res = await fetchHandler(new Request(`https://example.com${apiPaths.news}`, { method: "OPTIONS" }), env);
     expect(res.status).toBe(204);

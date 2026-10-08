@@ -32,12 +32,7 @@ function collectNeedlePositions(
   return positions;
 }
 
-function parseBalancedMarkerValue(
-  line: string,
-  idx: number,
-  marker: string,
-  budgetChars: number,
-): string | null {
+function parseBalancedMarkerValue(line: string, idx: number, marker: string, budgetChars: number): string | null {
   if (budgetChars <= 0) return null;
   const needle = `"${marker}"`;
   const colonAt = line.indexOf(":", idx + needle.length);

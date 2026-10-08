@@ -17,9 +17,8 @@ export function matchFolded(folded: string[], needle: string): { matched: boolea
   return { matched: best > 0, score: best };
 }
 
-// Folded fields are pure per item object; cache them so repeated keystrokes
-// (each running filterByTerm over the same data) don't re-fold every field.
-const foldedFieldsCache = new WeakMap<object, string[]>();
+// Per-item cache: folding is pure, so repeated keystrokes reuse it.
+const foldedFieldsCache = new WeakMap<object, PreparedFields>();
 
 export function filterByTerm<T extends object>(
   items: T[],
@@ -29,12 +28,12 @@ export function filterByTerm<T extends object>(
   const needle = foldSearchStr(term);
   if (!needle) return items;
   return items.filter((item) => {
-    let folded = foldedFieldsCache.get(item);
-    if (folded == null) {
-      folded = usableFields(getFields(item)).map(foldSearchStr);
-      foldedFieldsCache.set(item, folded);
+    let prepared = foldedFieldsCache.get(item);
+    if (prepared == null) {
+      prepared = prepareFields(getFields(item));
+      foldedFieldsCache.set(item, prepared);
     }
-    return matchFolded(folded, needle).matched;
+    return matchFolded(prepared.folded, needle).matched;
   });
 }
 

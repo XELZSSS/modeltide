@@ -1,3 +1,4 @@
+import { MAX_ID_CHARS } from "@/shared/config";
 import { ValidationError } from "@/server/infra/errors";
 
 interface NumberSpec {
@@ -41,7 +42,7 @@ type SpecValue<S extends QuerySpec> = S extends EnumSpec<infer V> ? V : S extend
 export type ValidatedQuery<S extends QuerySchema> = { [K in keyof S]: SpecValue<S[K]> };
 
 function parseSingle(name: string, v: string, spec: QuerySpec): string | number {
-  if (v.length > 500) throw new ValidationError(`Query param "${name}" is too long`);
+  if (v.length > MAX_ID_CHARS) throw new ValidationError(`Query param "${name}" is too long`);
   if (spec.type === "string") {
     if (spec.maxLength != null && v.length > spec.maxLength) {
       throw new ValidationError(`Query param "${name}" must be <= ${spec.maxLength} chars`);

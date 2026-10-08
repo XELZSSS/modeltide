@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import type { ThemeMode } from "@/shared/types";
 import type { Lang } from "@/shared/i18n";
 import { SETTINGS_STORAGE_VERSION, STORAGE_KEYS } from "@/shared/config";
-import { readPersisted, safeStorage, writePersisted } from "@/client/stores/persist";
+import { initStorageSync, readPersisted, safeStorage } from "@/client/stores/persist";
 
 const VERSION = SETTINGS_STORAGE_VERSION;
 
@@ -47,28 +47,18 @@ export const useSettingsStore = defineStore("settings", {
   },
 });
 
-let syncing = false;
-
 export function initSettingsStorageSync(): void {
-  if (syncing) return;
-  syncing = true;
-  const storage = safeStorage("local");
-  const store = useSettingsStore();
-  store.$subscribe(
-    (_mutation, state) =>
-      writePersisted(storage, STORAGE_KEYS.settings, VERSION, { themeMode: state.themeMode, lang: state.lang }),
-    { detached: true },
-  );
-  window.addEventListener("storage", (event) => {
-    if (event.key !== STORAGE_KEYS.settings || event.newValue == null) return;
-    try {
-      const parsed = JSON.parse(event.newValue) as { state?: PersistedSettings };
-      const themeMode = parsed.state?.themeMode;
-      const lang = parsed.state?.lang;
+  initStorageSync(useSettingsStore(), {
+    storage: safeStorage("local"),
+    key: STORAGE_KEYS.settings,
+    version: VERSION,
+    snapshot: (store) => ({ themeMode: store.themeMode, lang: store.lang }),
+    onStorageEvent: (store, parsed) => {
+      const state = (parsed as { state?: PersistedSettings }).state;
+      const themeMode = state?.themeMode;
+      const lang = state?.lang;
       if (isThemeMode(themeMode) && themeMode !== store.themeMode) store.themeMode = themeMode;
       if (isLang(lang) && lang !== store.lang) store.lang = lang;
-    } catch (err) {
-      console.warn(`[settings] ignoring malformed storage event: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    },
   });
 }

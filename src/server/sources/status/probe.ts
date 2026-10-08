@@ -18,13 +18,29 @@ function buildTargets(): ProbeTarget[] {
   const newsTargets = (Object.keys(rssFeeds) as (keyof typeof rssFeeds)[]).flatMap((category) =>
     rssFeeds[category].map((feed) => ({ id: feed.id, url: feed.url })),
   );
-  // One URL per host: probing both endpoints of a host doubles subrequests without adding liveness signal.
+  // Multiple URLs per SourceId are aggregated: ok if any probe succeeds,
+  // degraded if any fails. AA enrich (/models, /omniscience) and OpenRouter
+  // directory can fail independently of their leaderboard/rankings pages,
+  // so each leg gets its own liveness signal.
   return [
     {
       id: "artificialAnalysis",
       url: upstreamUrl(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaLeaderboard),
     },
+    {
+      id: "artificialAnalysis",
+      url: upstreamUrl(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaModels),
+    },
+    {
+      id: "artificialAnalysis",
+      url: upstreamUrl(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaOmniscience),
+    },
+    {
+      id: "artificialAnalysis",
+      url: upstreamUrl(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaTextToImage),
+    },
     { id: "openrouter", url: upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterRankings) },
+    { id: "openrouter", url: upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterDirectory) },
     { id: "huggingface", url: `${upstreamConfig.huggingface}?limit=1` },
     { id: "arena", url: upstreamUrl(upstreamConfig.arena, upstreamEndpoints.agentBoard) },
     ...newsTargets,

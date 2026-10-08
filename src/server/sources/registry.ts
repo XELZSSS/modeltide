@@ -3,7 +3,13 @@ import { buildContext, type Env } from "@/server/context";
 import { qEnum, qNum, qStr, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
 import { SHORT_CACHE_HEADERS } from "@/server/http/headers";
 import type { ApiDomain, DomainPayload } from "@/shared/contract";
-import { apiPaths, MAX_MODEL_LIMIT, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
+import {
+  apiPaths,
+  MAX_MODEL_LIMIT,
+  MAX_NAME_CHARS,
+  NEWS_CATEGORIES,
+  OPEN_SOURCE_MODELS_DEFAULTS,
+} from "@/shared/config";
 import { getAgentRankings } from "@/server/sources/agent-arena-source";
 import { getIntelligenceIndex } from "@/server/sources/aa";
 import { getClosedReleases } from "@/server/sources/closed-releases-source";
@@ -20,7 +26,7 @@ interface SourceDefinition<D extends ApiDomain, Q extends QuerySchema> {
   warm?: boolean;
 }
 
-interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends SourceDefinition<
+export interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends SourceDefinition<
   D,
   Q
 > {
@@ -71,7 +77,7 @@ const ENTRIES = {
     handler: (ctx) => getClosedReleases(ctx),
   }),
   openSourceModel: defineSource("openSourceModel", {
-    query: { id: qStr({ maxLength: 200 }) },
+    query: { id: qStr({ maxLength: MAX_NAME_CHARS }) },
     cache: SHORT_CACHE_HEADERS,
     handler: (ctx, params) => getModelById(ctx, params.id),
   }),
@@ -88,11 +94,15 @@ const ENTRIES = {
 export const SOURCES: readonly SourceEntry[] = Object.values(ENTRIES);
 
 export function warmTasks(env: Env, taskTimeoutMs: number): (() => Promise<unknown>)[] {
+  // One shared context for the whole warmup phase: warm tasks fan out internally
+  // (up to 4 concurrent fetches each), so per-task pools could burst past the
+  // 6-connection platform budget. A shared pool queues fairly instead.
+  const ctx = buildContext(env, { workSignal: AbortSignal.timeout(taskTimeoutMs) });
   const tasks: (() => Promise<unknown>)[] = [];
   for (const source of SOURCES) {
     if (!source.warm) continue;
     const params = {} as ValidatedQuery<QuerySchema>;
-    tasks.push(() => source.handler(buildContext(env, { workSignal: AbortSignal.timeout(taskTimeoutMs) }), params));
+    tasks.push(() => source.handler(ctx, params));
   }
   return tasks;
 }

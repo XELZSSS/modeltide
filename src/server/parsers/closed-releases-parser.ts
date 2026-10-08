@@ -1,5 +1,6 @@
 import { isoDate, sortByDateDesc, isRecord, str } from "@/server/parsers/parser-primitives";
 import { upstreamConfig } from "@/server/config";
+import { MAX_ID_CHARS, MAX_NAME_CHARS } from "@/shared/config";
 import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 
@@ -12,7 +13,8 @@ function toClosedEntry(id: unknown, model: unknown, provider: unknown, rawDate: 
   const cleanModel = model.trim();
   const cleanProvider = provider.trim();
   if (!cleanId || !cleanModel || !cleanProvider) return null;
-  if (cleanId.length > 500 || cleanModel.length > 500 || cleanProvider.length > 200) return null;
+  if (cleanId.length > MAX_ID_CHARS || cleanModel.length > MAX_ID_CHARS || cleanProvider.length > MAX_NAME_CHARS)
+    return null;
   if (typeof rawDate !== "string") return null;
   const date = rawDate.slice(0, 10);
   if (!isoDate(date)) return null;

@@ -19,13 +19,13 @@
 
 ## 功能
 
-| 模块 | 说明 |
-| ---- | ---- |
-| 模型排行 | 多维度排行与基准评测 |
-| 发布追踪 | 最新与开源发布 |
-| 资讯聚合 | 分类行业资讯 |
-| 模型对比 | 模型与价格对比 |
-| 数据源状态 | 可用性与延迟监测 |
+| 模块       | 说明                 |
+| ---------- | -------------------- |
+| 模型排行   | 多维度排行与基准评测 |
+| 发布追踪   | 最新与开源发布       |
+| 资讯聚合   | 分类行业资讯         |
+| 模型对比   | 模型与价格对比       |
+| 数据源状态 | 可用性与延迟监测     |
 
 ## 架构
 
@@ -55,21 +55,19 @@ npm run dev    # http://localhost:5173
 
 ## 命令
 
-| 命令 | 说明 |
-| ---- | ---- |
-| `npm run dev` | 开发服务器 |
-| `npm run build` | 生产构建 |
-| `npm run test` | 运行测试 |
-| `npm run lint` | 静态检查 |
-| `npm run format` | 代码格式化 |
+| 命令             | 说明                 |
+| ---------------- | -------------------- |
+| `npm run dev`    | 开发服务器           |
+| `npm run build`  | 生产构建             |
+| `npm run test`   | 运行测试             |
+| `npm run lint`   | 静态检查             |
+| `npm run format` | 代码格式化           |
 | `npm run deploy` | 构建并部署到 Workers |
 
 ## 部署
 
-1. Fork 本仓库
-2.（推荐）创建 KV 命名空间并替换 `wrangler.jsonc` 中的 ID——未配置时回退到内存缓存，状态历史不持久化
-3.（可选）`npx wrangler secret put STATUS_PING_URL` 设置 [Healthchecks.io](https://healthchecks.io/docs/monitoring_cron_jobs/)  ping URL，cron 异常时收到告警
-4. `npx wrangler login` 后执行 `npm run deploy`
+1. Fork 本仓库 2.（推荐）创建 KV 命名空间并替换 `wrangler.jsonc` 中的 ID——未配置时回退到内存缓存，状态历史不持久化3.（可选）`npx wrangler secret put STATUS_PING_URL` 设置 [Healthchecks.io](https://healthchecks.io/docs/monitoring_cron_jobs/) ping URL，cron 异常时收到告警
+2. `npx wrangler login` 后执行 `npm run deploy`
 
 `CACHE_VERSION` 由数据层代码内容哈希自动生成，无需手动维护。
 

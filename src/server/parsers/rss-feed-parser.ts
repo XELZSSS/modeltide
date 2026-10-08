@@ -4,7 +4,7 @@ import type { NewsItem } from "@/shared/types";
 import { MAX_FEED_BYTES } from "@/server/config";
 import { fnv1aHash, utf8ByteLength } from "@/server/infra/hash";
 import { sourceNameFromUrl as channelHost } from "@/server/parsers/url";
-import { zeroUpstreamMessage } from "@/server/infra/errors";
+import { zeroUpstreamMessage, errMsg } from "@/server/infra/errors";
 
 import { decodeEntities } from "@/server/parsers/html-entities";
 import { stripHtml } from "@/server/parsers/html-to-text";
@@ -107,7 +107,7 @@ export function parseFeed(xml: unknown, sourceUrl: unknown): ParseResult<NewsIte
   try {
     parsed = parser.parse(xml);
   } catch (err) {
-    return parseFail(`Unparseable feed at ${sourceUrlStr}: ${err instanceof Error ? err.message : String(err)}`);
+    return parseFail(`Unparseable feed at ${sourceUrlStr}: ${errMsg(err)}`);
   }
   return parseChannel(parsed, sourceUrlStr);
 }

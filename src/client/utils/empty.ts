@@ -5,4 +5,6 @@ export const EMPTY_BUCKETS: DayBucket[] = [];
 export const EMPTY_EVENTS: StatusEvent[] = [];
 export const EMPTY_SOURCES: SourceHistorySummary[] = [];
 export const EMPTY_MODELS: ArtificialAnalysisModel[] = [];
-export const EMPTY_ARRAY: never[] = [];
+export function emptyArray<T>(): T[] {
+  return [];
+}

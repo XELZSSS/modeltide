@@ -14,9 +14,7 @@ const props = defineProps<{ model: ArtificialAnalysisModel }>();
 const { t } = useTranslation();
 
 const showBenchmarksSection = computed(
-  () =>
-    props.model.benchmarks != null &&
-    Object.values(props.model.benchmarks).some((v) => v != null),
+  () => props.model.benchmarks != null && Object.values(props.model.benchmarks).some((v) => v != null),
 );
 
 const benchmarkStats = computed(() => {

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { DEFAULT_COST_SCENARIO, STORAGE_KEYS } from "@/shared/config";
-import { readPersisted, safeStorage, writePersisted } from "@/client/stores/persist";
+import { initStorageSync, readPersisted, safeStorage } from "@/client/stores/persist";
 import type { CostFieldId } from "@/client/pricing/cost-inputs";
 
 const VERSION = 1;
@@ -41,27 +41,20 @@ export const useCostStore = defineStore("cost", {
   },
 });
 
-let syncing = false;
-
 export function initCostStorageSync(): void {
-  if (syncing) return;
-  syncing = true;
-  const storage = safeStorage("local");
-  const store = useCostStore();
-  store.$subscribe(
-    (_mutation, state) => writePersisted(storage, STORAGE_KEYS.cost, VERSION, { values: state.values }),
-    {
-      detached: true,
+  initStorageSync(useCostStore(), {
+    storage: safeStorage("local"),
+    key: STORAGE_KEYS.cost,
+    version: VERSION,
+    snapshot: (store) => ({ values: store.values }),
+    onStorageEvent: (store, parsed) => {
+      const values = cleanValues((parsed as { state?: { values?: unknown } }).state?.values);
+      for (const id of COST_FIELD_IDS) {
+        if (values[id] !== store.values[id]) {
+          store.values = values;
+          break;
+        }
+      }
     },
-  );
-  window.addEventListener("storage", (event) => {
-    if (event.key !== STORAGE_KEYS.cost || event.newValue == null) return;
-    try {
-      const parsed = JSON.parse(event.newValue) as { state?: { values?: unknown } };
-      const values = cleanValues(parsed.state?.values);
-      if (JSON.stringify(values) !== JSON.stringify(store.values)) store.values = values;
-    } catch (err) {
-      console.warn(`[cost] ignoring malformed storage event: ${err instanceof Error ? err.message : String(err)}`);
-    }
   });
 }

@@ -1,16 +1,18 @@
 import { isValidRowId } from "@/server/parsers/parser-primitives";
-import { ONE_MINUTE, SLOW_TTL_MS } from "@/shared/config";
+import { MAX_NAME_CHARS, ONE_MINUTE, SLOW_TTL_MS } from "@/shared/config";
 import { normalizeModelLimit, sliceToLimit } from "@/server/config/limits";
 import { upstreamConfig, UPSTREAM_FETCH_OPTS, cacheKeys } from "@/server/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError } from "@/server/infra/errors";
 import { dedupeBy } from "@/shared/utils";
+import { encodeModelIdPath } from "@/shared/utils/models";
 import { LicenseDropTally, keepOpenSourceRanking, mapListModel, mapModel } from "@/server/parsers/hf-parser";
 import type { HFModel } from "@/server/parsers/upstream-types";
 
 import type { SourcePayload } from "@/shared/types";
-import { cachedPayload, requireRows } from "@/server/sources/pipeline";
+import { cachedPayload, requireArrayBody, requireRows } from "@/server/sources/pipeline";
+import { logPartial } from "@/server/infra/logger";
 
 interface ModelQuery {
   sort: string;
@@ -21,7 +23,7 @@ interface ModelQuery {
 const HF_API = upstreamConfig.huggingface;
 const HF_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,96}(?:\/[A-Za-z0-9][A-Za-z0-9._-]{0,96})?$/;
 function isValidHFModelId(value: string): boolean {
-  return value.length <= 200 && isValidRowId(value) && HF_MODEL_ID_RE.test(value);
+  return value.length <= MAX_NAME_CHARS && isValidRowId(value) && HF_MODEL_ID_RE.test(value);
 }
 
 const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", "createdAt", "lastModified"];
@@ -30,12 +32,8 @@ async function fetchHFModels(ctx: AppContext, sort: string, direction: string, l
   const params = new URLSearchParams({ sort, direction, limit: String(limit) });
   for (const field of HF_LIST_FIELDS) params.append("expand[]", field);
   const url = `${HF_API}?${params.toString()}`;
-  const items = await ctx.http.json<HFModel[]>(url, UPSTREAM_FETCH_OPTS);
-  if (!Array.isArray(items))
-    throw new UpstreamError(
-      `HuggingFace API returned non-array response (got ${items === null ? "null" : typeof items})`,
-    );
-  return items;
+  const items = await ctx.http.json<unknown>(url, UPSTREAM_FETCH_OPTS);
+  return requireArrayBody(url, items, "HuggingFace") as HFModel[];
 }
 
 function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTally): void {
@@ -71,8 +69,10 @@ export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourceP
       const bucket = dedupeBy(kept, (m) => m.id);
       requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
       const dropped = items.length - kept.length;
-      if (dropped > 0) ctx.log("info", `[huggingface] filtered ${dropped}/${items.length} rows`);
-      return { rows: bucket, partial: items.length < bucketLimit };
+      if (dropped > 0) logPartial(ctx.log, "huggingface", { dropped, total: items.length });
+      const partial = items.length < bucketLimit;
+      if (partial) logPartial(ctx.log, "huggingface", { got: items.length, want: bucketLimit });
+      return { rows: bucket, partial };
     },
   );
   const rows = sliceToLimit(payload.data, p.limit);
@@ -80,11 +80,7 @@ export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourceP
 };
 
 async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
-  // `id` arrives already trimmed from getModelById.
-  const encoded = id
-    .split("/")
-    .map((seg) => encodeURIComponent(seg))
-    .join("/");
+  const encoded = encodeModelIdPath(id);
   let raw: HFModel;
   try {
     raw = await ctx.http.json<HFModel>(`${HF_API}/${encoded}`, UPSTREAM_FETCH_OPTS);

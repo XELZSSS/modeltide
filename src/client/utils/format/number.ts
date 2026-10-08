@@ -34,13 +34,18 @@ function formatScaled(abs: number, sign: string, value: number, scales: ScaleEnt
   return null;
 }
 
-export function formatShortNumber(n: number | null | undefined, fallback = "—") {
+export function formatCompact(n: number | null | undefined, decimals = 2, fallback = "—"): string {
   if (!isFiniteNumber(n)) return fallback;
   const { abs, sign } = compactParts(n);
-  const scaled = formatScaled(abs, sign, abs, SHORT_SCALES, 2);
+  const scales = decimals === 1 ? TOKEN_SCALES : SHORT_SCALES;
+  const scaled = formatScaled(abs, sign, abs, scales, decimals);
   if (scaled) return scaled;
   if (Number.isInteger(abs)) return `${sign}${abs}`;
-  return `${sign}${parseFloat(abs.toFixed(2))}`;
+  return `${sign}${parseFloat(abs.toFixed(decimals))}`;
+}
+
+export function formatShortNumber(n: number | null | undefined, fallback = "—"): string {
+  return formatCompact(n, 2, fallback);
 }
 
 export function formatTokens(n: number | null | undefined, t?: TFunction): string {
@@ -55,8 +60,9 @@ export function formatTokens(n: number | null | undefined, t?: TFunction): strin
   return String(parseFloat(n.toFixed(1)));
 }
 
-export function formatScore(n: number | null | undefined, t: TFunction) {
+export function formatScore(n: number | null | undefined, t: TFunction): string {
   if (!isFiniteNumber(n)) return t("notAvailable");
+  // Scores above 1M are upstream anomalies, not displayable values (caller shows N/A).
   if (Math.abs(n) > 1_000_000) return t("notAvailable");
   return n.toFixed(2);
 }

@@ -1,7 +1,6 @@
 import { BENCHMARK_LABELS } from "@/shared/config";
 import type { TFunction, TranslationKey } from "@/shared/i18n";
-import { isHttpUrl } from "@/shared/utils/url";
-import { isProtocolRelative } from "@/shared/utils/url";
+import { isHttpUrl, isProtocolRelative } from "@/shared/utils/url";
 
 export function formatBoolean(value: boolean | null | undefined, t: TFunction) {
   if (value === true) return t("yes");

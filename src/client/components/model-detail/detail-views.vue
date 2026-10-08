@@ -1,7 +1,9 @@
 <script lang="ts">
-export function findModel<T>(data: T[], id: string, ...keys: (keyof T & string)[]): T | undefined {
+type StringKey<T> = { [K in keyof T]: T[K] extends string | undefined ? K & string : never }[keyof T];
+
+export function findModel<T>(data: T[], id: string, ...keys: StringKey<T>[]): T | undefined {
   for (const key of keys) {
-    const hit = data.find((item) => (item[key] as unknown) === id);
+    const hit = data.find((item) => item[key] === id);
     if (hit) return hit;
   }
   return undefined;
@@ -18,10 +20,11 @@ import DetailPageLayout from "@/client/components/layout/detail-page-layout.vue"
 const props = defineProps<{ source: ModelSource; title: string }>();
 
 const { t } = useTranslation();
+const setTitle = useDocumentTitle();
 
 const config = computed(() => MODEL_SOURCES[props.source]);
 
-watch(() => props.title, useDocumentTitle(), { immediate: true });
+watch(() => props.title, setTitle, { immediate: true });
 </script>
 
 <template>

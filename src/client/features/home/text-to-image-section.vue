@@ -23,7 +23,6 @@ function ratingText(entry: TextToImageModel): string {
   return entry.elo != null ? `${entry.elo.toFixed(0)}${formatRatingInterval(entry)}` : t("notAvailable");
 }
 
-// Derive the row view models once instead of on every render.
 const rows = computed(() =>
   props.models.slice(0, TOP_T2I).map((entry) => ({
     id: entry.id,
@@ -46,7 +45,7 @@ const rows = computed(() =>
             {{ i + 1 }}
           </span>
           <div class="min-w-0 flex-1">
-            <p class="text-sm truncate">
+            <p class="text-sm truncate" :title="row.creatorName ? `${row.name} (${row.creatorName})` : row.name">
               {{ row.name }}
               <span v-if="row.creatorName" class="ui-caption">({{ row.creatorName }})</span>
             </p>

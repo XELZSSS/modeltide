@@ -49,5 +49,13 @@
     "vitest": "~5.0.1",
     "vue-tsc": "^3.3.11",
     "wrangler": "^4.128.0"
+  },
+  "allowScripts": {
+    "vue-demi@0.14.10": true,
+    "esbuild@0.28.1": true,
+    "workerd@1.20261006.1": true
+  },
+  "overrides": {
+    "sharp": "0.35.5"
   }
 }

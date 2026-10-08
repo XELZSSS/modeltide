@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, getCurrentInstance, watch } from "vue";
+import { computed, watch } from "vue";
 import { ArrowLeftRight, Trash2, X } from "@lucide/vue";
 import Button from "@/client/components/ui/button.vue";
 import Badge from "@/client/components/ui/badge.vue";
@@ -11,7 +11,7 @@ import { modelKeyOf } from "@/client/utils/compare-logic";
 
 const LIMIT_NOTICE_MS = 2500;
 
-const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
+const props = defineProps<{ models: ArtificialAnalysisModel[]; showCompare?: boolean }>();
 
 const emit = defineEmits<{
   remove: [model: ArtificialAnalysisModel];
@@ -22,7 +22,7 @@ const emit = defineEmits<{
 const { t } = useTranslation();
 const store = useCompareStore();
 
-const hasCompare = getCurrentInstance()?.vnode.props?.onCompare != null;
+const hasCompare = computed(() => props.showCompare === true);
 const showLimit = computed(() => store.exceedAt != null);
 const canCompare = computed(() => props.models.length >= 2);
 
@@ -46,7 +46,7 @@ watch(
         :key="modelKeyOf(model, index)"
         class="pl-3 pr-1 py-1 text-sm normal-case tracking-normal text-text-primary hoverable:hover:border-text-tertiary/40"
       >
-        <span class="font-medium truncate max-w-36">{{ modelDisplayName(model) }}</span>
+        <span class="font-medium truncate max-w-36" :title="modelDisplayName(model)">{{ modelDisplayName(model) }}</span>
         <button
           type="button"
           :aria-label="t('removeModel', { name: modelDisplayName(model) })"

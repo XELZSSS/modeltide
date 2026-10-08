@@ -40,7 +40,7 @@ export const queryKeys = {
   agentRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.agentRankings],
   statusHistory: [...QUERY_KEY_PREFIX, API_DOMAINS.statusHistory],
   homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],
-} as const;
+} as const satisfies Record<ApiDomain, unknown>;
 
 export const apiPaths = {
   artificialIndex: `${API_PREFIX}/${API_DOMAINS.artificialIndex}`,
@@ -53,3 +53,6 @@ export const apiPaths = {
   statusHistory: `${API_PREFIX}/${API_DOMAINS.statusHistory}`,
   homeDashboard: `${API_PREFIX}/${API_DOMAINS.homeDashboard}`,
 } as const satisfies Record<ApiDomain, string>;
+
+export const STATIC_FILE_RE =
+  /\.(?:js|mjs|css|map|json|webmanifest|txt|xml|wasm|png|jpe?g|gif|svg|webp|avif|ico|bmp|woff2?|ttf|otf|eot)$/i;

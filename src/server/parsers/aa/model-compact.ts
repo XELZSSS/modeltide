@@ -68,6 +68,13 @@ function compactOmniscience(
 
 const MODALITY_FIELD_SUFFIXES = MODALITY_KEYS.map((mo) => mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase());
 
+export const benchmarkWireNames = BENCHMARK_KEYS.map((key) => BENCHMARK_FIELD_OVERRIDES[key] ?? key);
+
+export const modalityWireNames = MODALITY_KEYS.flatMap((mo) => {
+  const suffix = mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase();
+  return [`inputModality${suffix}`, `outputModality${suffix}`];
+});
+
 function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unknown>): void {
   for (let i = 0; i < MODALITY_KEYS.length; i++) {
     const mo = MODALITY_KEYS[i]!;

@@ -4,7 +4,7 @@ import { useSuspenseArtificialRankingsState } from "@/client/api/api-queries";
 import { assertPayloadShape } from "@/client/api/payload-normalize";
 import SearchableDataTable from "@/client/components/data/table/data-table.vue";
 import { col, monoCol, rightCol, type DataTableColumn } from "@/client/components/data/table/table-columns.ts";
-import PartialNotice from "@/client/components/feedback/partial-notice.vue";
+import TabStateShell from "@/client/components/data/tab-state-shell.vue";
 import LabeledDot from "@/client/components/ui/labeled-dot.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatPricePerMillion, formatScore, formatSpeed } from "@/client/utils/format";
@@ -18,7 +18,7 @@ const { t } = useTranslation();
 const providerStats = computed(() => computeProviderStats(state.value.items, t("unknown")));
 
 const columns = computed<DataTableColumn<ProviderStats>[]>(() => [
-  col("name", t("provider"), (p) => h(LabeledDot, { color: p.color }, () => p.name)),
+  col("name", t("provider"), (p) => h(LabeledDot, { color: p.color, title: p.name }, () => p.name)),
   monoCol("count", t("modelCount"), (p) => p.count),
   monoCol("avgIntelligence", t("avgIntelligence"), (p) => formatScore(p.avgIntelligence, t), {
     mobilePrimary: true,
@@ -42,11 +42,12 @@ const getProviderSearchFields = (p: ProviderStats) => [p.name];
 </script>
 
 <template>
-  <PartialNotice v-if="state.partial" />
-  <SearchableDataTable
-    :columns="columns"
-    :data="providerStats"
-    :get-row-id="getProviderRowId"
-    :get-search-fields="getProviderSearchFields"
-  />
+  <TabStateShell :state="state">
+    <SearchableDataTable
+      :columns="columns"
+      :data="providerStats"
+      :get-row-id="getProviderRowId"
+      :get-search-fields="getProviderSearchFields"
+    />
+  </TabStateShell>
 </template>

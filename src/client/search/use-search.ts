@@ -10,14 +10,9 @@ import type { SearchResult } from "@/client/search/types";
 import type { OpenRouterRankEntry } from "@/shared/types";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { foldSearchStr } from "@/client/search/match";
-import { EMPTY_ARRAY } from "@/client/utils/empty";
-import {
-  defineSource,
-  collect,
-  detailLink,
-  rankSearchHits,
-  type SourceConfig,
-} from "@/client/search/search-rank";
+import { emptyArray } from "@/client/utils/empty";
+import type { ArtificialAnalysisModel, OpenSourceModelEntry } from "@/shared/types";
+import { defineSource, collect, detailLink, rankSearchHits, type SourceConfig } from "@/client/search/search-rank";
 
 export const MIN_QUERY = 2;
 
@@ -39,8 +34,8 @@ export function useSearchAllRankings(
   const openSourceQ = useAllOpenSourceModels(enabled);
   const orQ = useOpenRouterRankings(enabled);
 
-  const artificialData = computed(() => artificialQ.data.value ?? EMPTY_ARRAY);
-  const openSourceRankings = computed(() => openSourceQ.data.value ?? EMPTY_ARRAY);
+  const artificialData = computed(() => artificialQ.data.value ?? emptyArray<ArtificialAnalysisModel>());
+  const openSourceRankings = computed(() => openSourceQ.data.value ?? emptyArray<OpenSourceModelEntry>());
   const openRouterUnwrapped = computed(() =>
     unwrapListPartial<OpenRouterRankEntry>(orQ.data.value, "openRouterRankings"),
   );
@@ -59,45 +54,59 @@ export function useSearchAllRankings(
       ) ?? null,
   );
 
-  const sources = computed<SourceConfig[]>(() => [
-    defineSource(artificialData.value, SEARCH_FIELDS.aa, (m) => ({
-      id: m.id,
-      name: m.name,
-      source: "modelRankings",
-      score: m.intelligence_index,
-      provider: m.model_creators?.name || null,
-      link: detailLink("modelRankings", m.slug || m.id),
-    })),
-    defineSource(openRouterData.value, SEARCH_FIELDS.or, (e) => ({
-      id: e.id,
-      name: e.name,
-      source: "openRouterRankings",
-      score: null,
-      provider: e.creator || null,
-      link: detailLink("openRouterRankings", e.id),
-    })),
-    defineSource(openSourceRankings.value, SEARCH_FIELDS.os, (e) => ({
-      id: e.id,
-      name: e.id,
-      source: "openSourceRankings",
-      score: null,
-      provider: e.author || null,
-      link: detailLink("openSourceRankings", e.id),
-    })),
-    defineSource(hallucinationRankings.value, SEARCH_FIELDS.hall, (e) => ({
-      id: e.id,
-      name: e.model,
-      source: "hallucinationRankings",
-      score: e.omniscienceIndex,
-      provider: null,
-      link: detailLink("hallucinationRankings", e.slug || e.id),
-    })),
-  ]);
+  const sources = {
+    aa: computed<SourceConfig>(() =>
+      defineSource(artificialData.value, SEARCH_FIELDS.aa, (m) => ({
+        id: m.id,
+        name: m.name,
+        source: "modelRankings",
+        score: m.intelligence_index,
+        provider: m.model_creators?.name || null,
+        link: detailLink("modelRankings", m.slug || m.id),
+      })),
+    ),
+    or: computed<SourceConfig>(() =>
+      defineSource(openRouterData.value, SEARCH_FIELDS.or, (e) => ({
+        id: e.id,
+        name: e.name,
+        source: "openRouterRankings",
+        score: null,
+        provider: e.creator || null,
+        link: detailLink("openRouterRankings", e.id),
+      })),
+    ),
+    os: computed<SourceConfig>(() =>
+      defineSource(openSourceRankings.value, SEARCH_FIELDS.os, (e) => ({
+        id: e.id,
+        name: e.id,
+        source: "openSourceRankings",
+        score: null,
+        provider: e.author || null,
+        link: detailLink("openSourceRankings", e.id),
+      })),
+    ),
+    hall: computed<SourceConfig>(() =>
+      defineSource(hallucinationRankings.value, SEARCH_FIELDS.hall, (e) => ({
+        id: e.id,
+        name: e.model,
+        source: "hallucinationRankings",
+        score: e.omniscienceIndex,
+        provider: null,
+        link: detailLink("hallucinationRankings", e.slug || e.id),
+      })),
+    ),
+  };
 
   const results = computed(() => {
     const needle = foldSearchStr(toValue(searchTerm));
     if (!enabled.value || !baseEnabled.value || !needle) return [];
-    return rankSearchHits(sources.value.flatMap((source) => collect(source, needle)));
+    // Independent per-source computeds: one dataset update rebuilds only its entries.
+    return rankSearchHits([
+      ...collect(sources.aa.value, needle),
+      ...collect(sources.or.value, needle),
+      ...collect(sources.os.value, needle),
+      ...collect(sources.hall.value, needle),
+    ]);
   });
 
   return {

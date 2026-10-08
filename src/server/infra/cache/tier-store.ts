@@ -13,8 +13,6 @@ import { fnv1aHashUint32, utf8ByteLength } from "@/server/infra/hash";
 import { ONE_DAY } from "@/shared/config";
 import type { KvStore } from "./kv";
 
-// ---------- stale envelope ----------
-
 const STALE_WINDOW_MS = ONE_DAY;
 const MAX_STALE_EXTRA_MS = 60 * 60_000;
 
@@ -58,8 +56,6 @@ function decodeEnvelope<T>(raw: string, k: string, log: Logger): { env: StaleEnv
   if (!isEnvelope<T>(env)) return undefined;
   return { env, bytes: utf8ByteLength(raw) };
 }
-
-// ---------- in-memory L1 ----------
 
 interface MemoryEntry<T> {
   d: T;
@@ -113,14 +109,9 @@ export function l1TtlFor(effective: number): number {
 
 export const sharedL1 = new MemoryL1();
 
-// ---------- tier store ----------
-
 function warnKvReadFailure(log: Logger, err: unknown): void {
   if (!kvReadWarnGate.open()) return;
-  log(
-    "warn",
-    `[cache] KV read failed, degrading to refresh/stale path: ${err instanceof Error ? err.message : String(err)}`,
-  );
+  log("warn", `[cache] KV read failed, degrading to refresh/stale path: ${errMsg(err)}`);
 }
 
 export class TierStore {
@@ -157,14 +148,14 @@ export class TierStore {
     try {
       serialized = encodeEnvelope(data, effective);
     } catch (err) {
-      this.log("warn", `[cache] serialize failed for ${vk}: ${err instanceof Error ? err.message : String(err)}`);
+      this.log("warn", `[cache] serialize failed for ${vk}: ${errMsg(err)}`);
     }
     if (serialized === undefined) return;
     const cached = this.l1.set(vk, data, kv ? l1TtlFor(effective) : effective, utf8ByteLength(serialized), effective);
     if (!cached) this.log("warn", `[cache] L1 skipped oversized entry for ${vk}`);
     if (!kv) return;
     const put = this.setSerialized(kv, vk, serialized, effective).catch((err: unknown) => {
-      this.log("warn", `[cache] KV write failed for ${vk}: ${err instanceof Error ? err.message : String(err)}`);
+      this.log("warn", `[cache] KV write failed for ${vk}: ${errMsg(err)}`);
     });
     if (this.onDetach) this.onDetach(put);
     else await put;

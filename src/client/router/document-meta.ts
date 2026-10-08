@@ -17,7 +17,7 @@ export function useDocumentMeta(): void {
   const { t } = useTranslation();
   const setDocumentTitle = useDocumentTitle();
   watch(
-    () => [route.name, route.fullPath],
+    () => [route.name, route.meta.titleKey],
     () => {
       if (route.name == null) return;
       const known = route.name !== "notFound";

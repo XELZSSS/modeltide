@@ -9,7 +9,6 @@ import { MODEL_SOURCES } from "@/client/config/nav-config";
 import ComparePageLayout from "./compare-layout.vue";
 import { buildPriceRows, type CompareRow, type Winner } from "@/client/utils/compare-logic";
 
-
 const { t } = useTranslation();
 
 const priceRows = computed(() => buildPriceRows(t));

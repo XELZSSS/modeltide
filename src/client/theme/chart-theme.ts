@@ -1,6 +1,7 @@
-import { onScopeDispose, ref, type Ref } from "vue";
+import { type Ref } from "vue";
 import type { LegendOptions, ScaleOptions, TooltipCallbacks, TooltipItem, TooltipModel } from "chart.js";
 import { axisDashedBorderStyle, axisGridStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
+import { createSharedRef } from "@/client/utils/shared-ref";
 
 export interface ChartTheme {
   grid: string;
@@ -53,8 +54,8 @@ function resolveChartTheme(): ChartTheme {
 
 let sharedTheme: ChartTheme | null = null;
 let sharedSignature = "";
-const listeners = new Set<(theme: ChartTheme) => void>();
 let observing = false;
+let notifyShared: (() => void) | null = null;
 
 function currentTheme(): ChartTheme {
   if (sharedTheme) return sharedTheme;
@@ -80,41 +81,45 @@ function publish(next: ChartTheme): void {
   if (signature === sharedSignature) return;
   sharedSignature = signature;
   sharedTheme = next;
-  for (const listener of listeners) listener(next);
 }
 
-function ensureObserver(): void {
+export function refreshChartTheme(): void {
+  if (!sharedTheme) return;
+  publish(resolveChartTheme());
+  notifyShared?.();
+}
+
+function ensureObserver(notify: () => void): () => void {
   currentTheme();
-  if (observing) return;
+  notifyShared = notify;
+  if (observing) return () => {};
   observing = true;
-  // Coalesce bursts of class mutations (e.g. theme toggles) into one recompute.
+  // Coalesce bursts of class/style mutations (e.g. theme toggles) into one recompute.
   let scheduled = false;
-  const notify = (): void => {
+  const onMutate = (): void => {
     if (scheduled) return;
     scheduled = true;
     queueMicrotask(() => {
       scheduled = false;
-      publish(resolveChartTheme());
+      const next = resolveChartTheme();
+      const signature = themeSignature(next);
+      if (signature === sharedSignature) return;
+      sharedSignature = signature;
+      sharedTheme = next;
+      notify();
     });
   };
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-  const observer = new MutationObserver(notify);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-  media?.addEventListener?.("change", notify);
+  const observer = new MutationObserver(onMutate);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
+  media?.addEventListener?.("change", onMutate);
+  return () => {
+    observer.disconnect();
+    media?.removeEventListener?.("change", onMutate);
+  };
 }
 
-export function useChartTheme(): Ref<ChartTheme> {
-  const theme = ref(currentTheme());
-  ensureObserver();
-  const listener = (next: ChartTheme) => {
-    theme.value = next;
-  };
-  listeners.add(listener);
-  onScopeDispose(() => {
-    listeners.delete(listener);
-  });
-  return theme;
-}
+export const useChartTheme: () => Ref<ChartTheme> = createSharedRef(currentTheme, ensureObserver);
 
 export const AXIS_MAX = 100;
 export const AXIS_STEP = 20;

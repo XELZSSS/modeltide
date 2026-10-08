@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useSuspenseOpenSourceModelsState } from "@/client/api/api-queries";
 import { assertPayloadShape } from "@/client/api/payload-normalize";
-import PartialNotice from "@/client/components/feedback/partial-notice.vue";
+import TabStateShell from "@/client/components/data/tab-state-shell.vue";
 import OpenSourceRankingsView from "./open-source-view.vue";
 
 const state = await useSuspenseOpenSourceModelsState();
@@ -9,6 +9,7 @@ assertPayloadShape(state.value.malformed, "openSourceModels");
 </script>
 
 <template>
-  <PartialNotice v-if="state.partial" />
-  <OpenSourceRankingsView :rankings="state.items" />
+  <TabStateShell :state="state">
+    <OpenSourceRankingsView :rankings="state.items" />
+  </TabStateShell>
 </template>

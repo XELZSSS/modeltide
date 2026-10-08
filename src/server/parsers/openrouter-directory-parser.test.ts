@@ -26,13 +26,13 @@ describe("parseDirectoryRows", () => {
         },
       },
     ]);
-    expect(entry.pricing["acme/dynamic-model"]).toEqual({
+    expect(entry.entry.pricing["acme/dynamic-model"]).toEqual({
       input: 1,
       output: 2,
       cacheHit: null,
       cacheWrite: null,
     });
-    expect(entry.pricing["acme/cached-model"]).toEqual({
+    expect(entry.entry.pricing["acme/cached-model"]).toEqual({
       input: 3,
       output: 15,
       cacheHit: 0.3,
@@ -41,7 +41,9 @@ describe("parseDirectoryRows", () => {
   });
 
   it("mirrors a variant id onto its canonical slug", () => {
-    const { pricing: record } = parseDirectoryRows([
+    const {
+      entry: { pricing: record },
+    } = parseDirectoryRows([
       {
         id: "acme/model-2:free",
         canonical_slug: "acme/model-2-20260910",

@@ -1,5 +1,5 @@
 import { utf8ByteLength } from "@/server/infra/hash";
-import { UpstreamError } from "@/server/infra/errors";
+import { UpstreamError, errMsg } from "@/server/infra/errors";
 
 const UTF8_DECODER = new TextDecoder();
 const CONTENT_LENGTH_DIGITS_RE = /^\d+$/;
@@ -27,12 +27,7 @@ export interface JsonResponse<T> {
   body: T;
 }
 
-export async function parseJsonBody<T>(
-  url: string,
-  res: Response,
-  maxBytes: number,
-  signal: AbortSignal,
-): Promise<T> {
+export async function parseJsonBody<T>(url: string, res: Response, maxBytes: number, signal: AbortSignal): Promise<T> {
   const body = await fetchBodyText(url, res, maxBytes, signal);
   try {
     return JSON.parse(body) as T;
@@ -54,7 +49,7 @@ async function readBodyText(
       return { text, bytes: utf8ByteLength(text) };
     } catch (e) {
       throw new UpstreamError(
-        `Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+        `Upstream body read failed for ${url}: ${errMsg(e)}`,
         signal.aborted ? { timeout: true } : { retryable: true },
       );
     }
@@ -79,7 +74,7 @@ async function readBodyText(
     if (e instanceof UpstreamError) throw e;
     await reader.cancel().catch(() => {});
     throw new UpstreamError(
-      `Upstream body read failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+      `Upstream body read failed for ${url}: ${errMsg(e)}`,
       signal.aborted ? { timeout: true } : { retryable: true },
     );
   } finally {

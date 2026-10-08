@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineComponent, effectScope, onUnmounted, ref, watch } from "vue";
+import { defineComponent, effectScope, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useTranslation } from "@/client/i18n";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
@@ -9,7 +9,6 @@ import PageContainer from "@/client/components/layout/page-container.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { useSuspenseArtificialRankings } from "@/client/api/api-queries";
 import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
-import { modelId } from "@/shared/utils/models";
 import CompareChipBar from "@/client/components/compare-chip-bar.vue";
 
 const PRUNE_NOTICE_MS = 8000;
@@ -29,24 +28,13 @@ const CompareModels = defineComponent({
     const rankings = await useSuspenseArtificialRankings();
     const vm = scope.run(() => {
       const models = useCompareModels(rankings);
-      usePruneCompareIds(rankings);
-      const modelIds = computed(() => new Set(models.value.map(modelId).filter(Boolean)));
-      const hasStaleId = computed(
-        () => modelIds.value.size > 0 && loaderStore.compareIds.some((id) => !modelIds.value.has(id)),
-      );
       const pruned = ref(false);
-      watch(
-        hasStaleId,
-        (stale, _previous, onCleanup) => {
-          if (!stale) return;
-          pruned.value = true;
-          const hide = setTimeout(() => {
-            pruned.value = false;
-          }, PRUNE_NOTICE_MS);
-          onCleanup(() => clearTimeout(hide));
-        },
-        { immediate: true },
-      );
+      usePruneCompareIds(rankings, () => {
+        pruned.value = true;
+        setTimeout(() => {
+          pruned.value = false;
+        }, PRUNE_NOTICE_MS);
+      });
       return { models, pruned };
     })!;
     function clearAndBack(): void {

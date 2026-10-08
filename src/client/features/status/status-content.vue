@@ -8,7 +8,8 @@ import { cn } from "@/client/utils/cn";
 import { formatUptime, formatUptimePct } from "@/client/utils/format";
 import { sourceLabel } from "@/shared/config";
 import type { DayBucket, SourceHistorySummary, StatusHistoryPayload } from "@/shared/types";
-import { LEVEL_STYLES, recentlyDegradedIds, resolveLevel } from "@/shared/utils/status-level";
+import { recentlyDegradedIds, resolveLevel } from "@/shared/utils/status-level";
+import { LEVEL_STYLES } from "@/client/utils/status-theme";
 import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SOURCES } from "@/client/utils/empty";
 import SafeLink from "@/client/components/safe-link.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
@@ -61,12 +62,20 @@ const counts = computed(() => {
   let warning = 0;
   let unprobed = 0;
   let hasData = false;
-  for (const source of sources.value) {
-    const level = resolveLevel(source);
-    if (level === "error") erroring++;
-    else if (level === "warn") warning++;
-    else if (level === "unknown") unprobed++;
-    if (source.checkedAt != null) hasData = true;
+  // Single resolveLevel pass: derive from cards instead of re-traversing sources.
+  for (const card of cards.value) {
+    if (card.level === "error") erroring++;
+    else if (card.level === "warn") warning++;
+    else if (card.level === "unknown") unprobed++;
+    if (card.uptime24h != null || card.uptime7d != null) hasData = true;
+  }
+  if (!hasData) {
+    for (const source of sources.value) {
+      if (source.checkedAt != null) {
+        hasData = true;
+        break;
+      }
+    }
   }
   return { erroring, warning, unprobed, hasData };
 });
@@ -107,7 +116,7 @@ const overall = computed(() => {
       class="group block ui-card p-4 transition-colors duration-fast hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
     >
       <div class="flex items-center justify-between gap-3 mb-3">
-        <LabeledDot size="sm" :color="card.style.dot" text-class="ui-body" class="flex-1">
+        <LabeledDot size="sm" :color="card.style.dot" text-class="ui-body" class="flex-1" :title="card.label">
           {{ card.label }}
         </LabeledDot>
         <div class="shrink-0 text-right">

@@ -21,6 +21,7 @@ export {
   useSuspenseHomeDashboard,
   useSuspenseNewsState,
   useSuspenseOpenRouterRankings,
+  useSuspenseOpenRouterRankingsState,
   useSuspenseOpenSourceModel,
   useSuspenseOpenSourceModelsState,
   useSuspenseStatusHistory,

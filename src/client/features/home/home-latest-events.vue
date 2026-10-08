@@ -10,7 +10,8 @@ import { eventDurationLabel, resolveEventStyle } from "@/client/utils/status-eve
 import { sourceLabel } from "@/shared/config";
 import type { StatusEvent, StatusHistoryPayload } from "@/shared/types";
 import { formatLatencySec, formatRelativeTime, formatUptimePct } from "@/client/utils/format";
-import { LEVEL_STYLES, resolveLevel } from "@/shared/utils/status-level";
+import { resolveLevel } from "@/shared/utils/status-level";
+import { LEVEL_STYLES } from "@/client/utils/status-theme";
 
 const EVENT_LINK_CLASS =
   "flex h-9 items-center gap-2 min-w-0 w-full ui-card px-3.5 transition-colors duration-fast hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";

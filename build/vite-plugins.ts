@@ -142,7 +142,9 @@ export function consistencyGuard(): Plugin {
       const html = fs.readFileSync(path.join(rootDir, "index.html"), "utf8");
       const key = SETTINGS_KEY_READ.exec(html)?.[1];
       if (key !== STORAGE_KEYS.settings) {
-        throw new Error(`index.html: reads localStorage "${key ?? "no key"}", but the settings key is "${STORAGE_KEYS.settings}"`);
+        throw new Error(
+          `index.html: reads localStorage "${key ?? "no key"}", but the settings key is "${STORAGE_KEYS.settings}"`,
+        );
       }
       const version = SETTINGS_VERSION_CHECK.exec(html)?.[1];
       if (version !== String(SETTINGS_STORAGE_VERSION)) {

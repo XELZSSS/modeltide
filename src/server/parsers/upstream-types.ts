@@ -3,6 +3,7 @@ export interface HFModel {
   author?: string;
   downloads?: number;
   likes?: number;
+  trendingScore?: number;
   pipeline_tag?: string | null;
   createdAt?: string | null;
   lastModified?: string | null;
@@ -22,6 +23,12 @@ export interface ModelRow {
   total_tool_calls: number;
   change: number | null;
   rankingMetricValue?: number;
+  total_usage?: number;
+  total_byok_prompt_tokens?: number;
+  total_byok_completion_tokens?: number;
+  num_media_prompt?: number;
+  num_media_completion?: number;
+  image_output_requests?: number;
 }
 
 export interface ModelMetaEntry {
@@ -42,6 +49,10 @@ export interface PricingRow {
     completion?: string | number | null;
     input_cache_read?: string | number | null;
     input_cache_write?: string | number | null;
+    input_cache_write_1h?: string | number | null;
+    web_search?: string | number | null;
+    image_output?: string | number | null;
+    overrides?: unknown;
   } | null;
 }
 

@@ -4,11 +4,8 @@ import {
   scanReleaseIndex,
   type ReleaseInfo,
 } from "@/server/parsers/aa/release-index";
-import { BENCHMARK_FIELD_OVERRIDES } from "@/server/parsers/aa/model-compact";
-import { BENCHMARK_KEYS } from "@/shared/config";
+import { benchmarkWireNames } from "@/server/parsers/aa/model-compact";
 import { parseFail, parseOk, type ParseResult } from "@/server/parsers/parse-result";
-
-const BENCHMARK_WIRE_NAMES = BENCHMARK_KEYS.map((key) => BENCHMARK_FIELD_OVERRIDES[key] ?? key);
 
 function hallucinationRate(nonHallucination: unknown): number | null {
   const value = numCoerce(nonHallucination);
@@ -49,7 +46,7 @@ function normalizeRow(
   const sizeClass = str(row.paramClass).trim();
   if (sizeClass) normalized.sizeClass = sizeClass;
   if (release) normalized.releaseDate = release.releaseDate;
-  for (const wire of BENCHMARK_WIRE_NAMES) {
+  for (const wire of benchmarkWireNames) {
     if (wire in row) normalized[wire] = row[wire];
   }
   return normalized;

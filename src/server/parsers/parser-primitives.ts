@@ -1,3 +1,4 @@
+import { MAX_ID_CHARS } from "@/shared/config";
 import { isHttpUrl } from "@/shared/utils/url";
 
 export const numCoerce = (v: unknown): number | null => {
@@ -143,7 +144,7 @@ export function isUnsuitableContent(t: string): boolean {
 export function isValidRowId(id: unknown): boolean {
   if (typeof id !== "string") return false;
   const t = id.trim();
-  if (!t || t.length > 500) return false;
+  if (!t || t.length > MAX_ID_CHARS) return false;
   if (isPlaceholderText(t) || hasGarbageChars(t)) return false;
   if (ID_BAD_RE.test(t)) return false;
   return true;

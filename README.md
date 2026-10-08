@@ -19,13 +19,13 @@
 
 ## Features
 
-| Module | Description |
-| ------ | ----------- |
-| Model Rankings | Multi-dimensional rankings and benchmarks |
-| Release Tracking | Latest and open-source releases |
-| News Aggregation | Industry news across categories |
-| Model Comparison | Side-by-side model and price comparison |
-| Source Status | Availability and latency monitoring |
+| Module           | Description                               |
+| ---------------- | ----------------------------------------- |
+| Model Rankings   | Multi-dimensional rankings and benchmarks |
+| Release Tracking | Latest and open-source releases           |
+| News Aggregation | Industry news across categories           |
+| Model Comparison | Side-by-side model and price comparison   |
+| Source Status    | Availability and latency monitoring       |
 
 ## Architecture
 
@@ -55,20 +55,20 @@ npm run dev    # http://localhost:5173
 
 ## Commands
 
-| Command | Description |
-| ------- | ----------- |
-| `npm run dev` | Dev server |
-| `npm run build` | Production build |
-| `npm run test` | Run tests |
-| `npm run lint` | Lint |
-| `npm run format` | Format |
+| Command          | Description                 |
+| ---------------- | --------------------------- |
+| `npm run dev`    | Dev server                  |
+| `npm run build`  | Production build            |
+| `npm run test`   | Run tests                   |
+| `npm run lint`   | Lint                        |
+| `npm run format` | Format                      |
 | `npm run deploy` | Build and deploy to Workers |
 
 ## Deployment
 
 1. Fork the repository
-2. *(Recommended)* Create a KV namespace and replace the ID in `wrangler.jsonc` — without KV, data falls back to in-memory cache and status history is not persisted
-3. *(Optional)* `npx wrangler secret put STATUS_PING_URL` with a [Healthchecks.io](https://healthchecks.io/docs/monitoring_cron_jobs/) ping URL for cron-failure alerts
+2. _(Recommended)_ Create a KV namespace and replace the ID in `wrangler.jsonc` — without KV, data falls back to in-memory cache and status history is not persisted
+3. _(Optional)_ `npx wrangler secret put STATUS_PING_URL` with a [Healthchecks.io](https://healthchecks.io/docs/monitoring_cron_jobs/) ping URL for cron-failure alerts
 4. `npx wrangler login` once, then `npm run deploy`
 
 `CACHE_VERSION` is content-hashed from the data-shaping code — no manual bump needed.

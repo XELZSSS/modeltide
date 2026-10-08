@@ -1,9 +1,8 @@
-import { onScopeDispose, ref, type Ref } from "vue";
+import { createSharedRef } from "@/client/utils/shared-ref";
 
 const MOBILE_QUERY = "(max-width: 767px)";
 
 let media: MediaQueryList | null | undefined;
-const listeners = new Set<(isMobile: boolean) => void>();
 
 function mobileMedia(): MediaQueryList | null {
   if (media === undefined) {
@@ -16,21 +15,11 @@ function currentMobile(): boolean {
   return mobileMedia()?.matches ?? false;
 }
 
-function notify(): void {
-  const isMobile = currentMobile();
-  for (const listener of listeners) listener(isMobile);
-}
-
-export function useDevice(): Ref<boolean> {
-  const isMobile = ref(currentMobile());
-  if (listeners.size === 0) mobileMedia()?.addEventListener("change", notify);
-  const listener = (next: boolean) => {
-    isMobile.value = next;
-  };
-  listeners.add(listener);
-  onScopeDispose(() => {
-    listeners.delete(listener);
-    if (listeners.size === 0) mobileMedia()?.removeEventListener("change", notify);
-  });
-  return isMobile;
-}
+export const useDevice = createSharedRef(currentMobile, (notify) => {
+  const m = mobileMedia();
+  if (!m) return () => {};
+  // Attach lazily on first subscriber; detach when no explicit teardown needed
+  // (MediaQueryList lives for page lifetime, single listener is cheap).
+  m.addEventListener("change", notify);
+  return () => m.removeEventListener("change", notify);
+});

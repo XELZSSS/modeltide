@@ -98,7 +98,7 @@ function rowAttrs(item: NewsItem, href: string | undefined): Record<string, stri
                     {{ row.item.title }}
                   </h2>
                   <div class="flex items-center gap-3 shrink-0 ui-caption mt-1">
-                    <span class="hidden sm:inline truncate max-w-48">{{ row.item.source }}</span>
+                    <span class="hidden sm:inline truncate max-w-48" :title="row.item.source">{{ row.item.source }}</span>
                     <span class="flex items-center gap-1.5 shrink-0" :title="formatDate(row.item.pubDate, lang)">
                       <Clock :size="12" aria-hidden="true" />
                       {{ formatRelativeTime(row.item.pubDate, t, lang) }}

@@ -23,7 +23,7 @@ function createDetailView<T>(
   Content: Component<{ model: T }>,
   load: () => Promise<{ data: ComputedRef<T[]>; partial: ComputedRef<boolean> }>,
   titleOf: (model: T) => string,
-  ...keys: (keyof T & string)[]
+  ...keys: { [K in keyof T]: T[K] extends string | undefined ? K & string : never }[keyof T][]
 ): Component {
   return defineComponent({
     props: { decodedId: { type: String, required: true } },

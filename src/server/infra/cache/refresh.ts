@@ -4,8 +4,6 @@ import { pruneBounded } from "@/server/infra/throttle";
 import type { KvStore } from "./kv";
 import type { TierStore } from "./tier-store";
 
-// ---------- failure cooldown ----------
-
 export const FAILURE_COOLDOWN_MS = 45_000;
 const FAILURE_COOLDOWN_MAX_KEYS = 512;
 
@@ -38,8 +36,6 @@ class FailureCooldown {
 
 export const refreshFailureCooldown = new FailureCooldown();
 
-// ---------- inflight registry ----------
-
 export class InflightRegistry {
   private map = new Map<string, Promise<unknown>>();
 
@@ -62,8 +58,6 @@ export class InflightRegistry {
 }
 
 export const sharedInflight = new InflightRegistry();
-
-// ---------- refresh runner ----------
 
 function shouldCoolDown(err: unknown): boolean {
   if (err instanceof ClientAbortError || (err instanceof UpstreamError && err.watchdog)) return false;

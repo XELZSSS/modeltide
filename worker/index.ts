@@ -1,25 +1,24 @@
-import { buildContext, type Env } from "@/server/context";
-import { recordStatusSamples } from "@/server/sources/status";
-import { warmTasks } from "@/server/sources/registry";
-import { runCapped, TaskNotRunError } from "@/server/infra/task-pool";
-import {
-  SAMPLE_TIMEOUT_MS,
-  WARM_TASK_TIMEOUT_MS,
-  WARM_CONCURRENCY,
-  PING_TIMEOUT_MS,
-  warmBatchTimeoutMs,
-} from "@/server/config";
-import { applyApiHeaders } from "@/server/http/headers";
+import type { Env } from "@/server/context";
+import { PING_TIMEOUT_MS } from "@/server/config";
 import { API_PREFIX } from "@/shared/config";
+import { STATIC_FILE_RE } from "@/shared/config/paths";
+import { errMsg } from "@/shared/utils";
 import { logger } from "@/server/infra/logger";
 import { methodNotAllowedResponse, notFoundResponse, stripBodyForHead } from "@/server/routes/define-route";
+import { scheduledTask } from "@/server/cron/scheduled-task";
 import { handleApi, resolveRoute } from "./api-router";
+
+export { cronHealthy, warmRoundOutcome, type ScheduledResult } from "@/server/cron/scheduled-task";
 
 export function failTarget(url: string): string {
   const cut = [url.indexOf("?"), url.indexOf("#")].filter((i) => i >= 0);
-  if (cut.length === 0) return url.endsWith("/") ? `${url}fail` : `${url}/fail`;
-  const at = Math.min(...cut);
-  return `${url.slice(0, at).replace(/\/$/, "")}/fail${url.slice(at)}`;
+  const at = cut.length === 0 ? url.length : Math.min(...cut);
+  const path = url.slice(0, at);
+  const suffix = cut.length === 0 ? "" : url.slice(at);
+  // Idempotent: an already-marked failure URL is returned unchanged instead of
+  // appending a second "/fail" segment.
+  if (path.endsWith("/fail")) return url;
+  return `${path.replace(/\/$/, "")}/fail${suffix}`;
 }
 
 export async function pingCronMonitor(env: Env, healthy: boolean): Promise<void> {
@@ -30,70 +29,8 @@ export async function pingCronMonitor(env: Env, healthy: boolean): Promise<void>
     const res = await fetch(target, { cache: "no-store", signal: AbortSignal.timeout(PING_TIMEOUT_MS) });
     if (!res.ok) logger("warn", `[cron-monitor] ping responded ${res.status} (healthy=${healthy})`);
   } catch (err) {
-    logger("warn", `[cron-monitor] ping failed: ${err instanceof Error ? err.message : String(err)}`);
+    logger("warn", `[cron-monitor] ping failed: ${errMsg(err)}`);
   }
-}
-
-interface ScheduledResult {
-  sampled: boolean | null;
-  warmFailed: number;
-  warmTotal: number;
-  healthy: boolean;
-}
-
-function isPartialPayload(value: unknown): boolean {
-  return typeof value === "object" && value !== null && (value as { partial?: unknown }).partial === true;
-}
-
-export function warmRoundOutcome(results: readonly PromiseSettledResult<unknown>[]): {
-  notRun: number;
-  failed: number;
-  degraded: number;
-  total: number;
-} {
-  const notRun = results.filter((r) => r.status === "rejected" && r.reason instanceof TaskNotRunError).length;
-  const failed = results.filter((r) => r.status === "rejected").length - notRun;
-  const degraded = results.filter((r) => r.status === "fulfilled" && isPartialPayload(r.value)).length;
-  return { notRun, failed, degraded, total: results.length };
-}
-
-export function cronHealthy(sampled: boolean | null, warmFailed: number, warmTotal: number): boolean {
-  return sampled !== false && warmTotal > 0 && warmFailed === 0;
-}
-
-async function scheduledTask(env: Env): Promise<ScheduledResult> {
-  const runSampling = async (): Promise<boolean | null> => {
-    try {
-      return await recordStatusSamples(buildContext(env, { workSignal: AbortSignal.timeout(SAMPLE_TIMEOUT_MS) }));
-    } catch (err) {
-      logger("warn", `[status-history] sampling failed: ${err instanceof Error ? err.message : String(err)}`);
-      return false;
-    }
-  };
-  const runWarmup = async (): Promise<{ failed: number; total: number }> => {
-    try {
-      const tasks = warmTasks(env, WARM_TASK_TIMEOUT_MS);
-      const batchSignal = AbortSignal.timeout(warmBatchTimeoutMs(tasks.length));
-      const results = await runCapped(tasks, WARM_CONCURRENCY, { signal: batchSignal });
-      const { notRun, failed, degraded, total } = warmRoundOutcome(results);
-      if (notRun > 0) logger("warn", `[warm] ${notRun}/${total} warmup calls never ran before the deadline`);
-      if (failed > 0) logger("warn", `[warm] ${failed}/${total} warmup calls failed`);
-      if (degraded > 0) logger("warn", `[warm] ${degraded}/${total} warmup calls cached a partial payload`);
-      return { failed: failed + notRun, total };
-    } catch (err) {
-      logger("warn", `[warm] warmup failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { failed: Number.MAX_SAFE_INTEGER, total: Number.MAX_SAFE_INTEGER };
-    }
-  };
-  // Sequential, not parallel: parallel rounds would contend for the 6 connections and burst the subrequest budget.
-  const sampled = await runSampling();
-  const warm = await runWarmup();
-  return {
-    sampled,
-    warmFailed: warm.failed,
-    warmTotal: warm.total,
-    healthy: cronHealthy(sampled, warm.failed, warm.total),
-  };
 }
 
 function isApiRequest(url: URL): boolean {
@@ -104,8 +41,6 @@ function detachHook(ctx?: ExecutionContext): ((work: Promise<unknown>) => void) 
   return ctx ? (work) => ctx.waitUntil(work) : undefined;
 }
 
-const STATIC_FILE_RE =
-  /\.(?:js|mjs|css|map|json|webmanifest|txt|xml|wasm|png|jpe?g|gif|svg|webp|avif|ico|bmp|woff2?|ttf|otf|eot)$/i;
 export async function fetchHandler(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const url = new URL(req.url);
   if (!isApiRequest(url)) {
@@ -122,6 +57,7 @@ export async function fetchHandler(req: Request, env: Env, ctx?: ExecutionContex
   if (req.method === "OPTIONS") {
     const res = new Response(null, { status: 204 });
     res.headers.set("Allow", "GET, HEAD, OPTIONS");
+    const { applyApiHeaders } = await import("@/server/http/headers");
     applyApiHeaders(res.headers);
     return res;
   }
@@ -140,7 +76,7 @@ export default {
       scheduledTask(env)
         .then((result) => pingCronMonitor(env, result.healthy))
         .catch(async (err) => {
-          logger("error", `[scheduled] ${err instanceof Error ? err.message : String(err)}`);
+          logger("error", `[scheduled] ${errMsg(err)}`);
           await pingCronMonitor(env, false);
           throw err;
         }),

@@ -11,20 +11,28 @@ export interface SlotPool {
   max: number;
 }
 
-const interactivePool: SlotPool = { active: 0, waiters: [], max: UPSTREAM_MAX_CONNECTIONS };
-const backgroundPool: SlotPool = { active: 0, waiters: [], max: UPSTREAM_BACKGROUND_SLOTS };
-
-export function poolFor(background: boolean): SlotPool {
-  return background ? backgroundPool : interactivePool;
+export interface SlotPools {
+  interactive: SlotPool;
+  background: SlotPool;
 }
 
-function poolLimit(pool: SlotPool): number {
-  const other = pool === backgroundPool ? interactivePool : backgroundPool;
-  return Math.max(0, Math.min(pool.max, UPSTREAM_MAX_CONNECTIONS - other.active));
+// Pools are per HttpClient (i.e. per invocation), not global singletons: the
+// platform budget is 6 simultaneous connections *per invocation*, so independent
+// invocations sharing one pool starve each other while each stays under budget.
+export function createSlotPools(): SlotPools {
+  return {
+    interactive: { active: 0, waiters: [], max: UPSTREAM_MAX_CONNECTIONS },
+    background: { active: 0, waiters: [], max: UPSTREAM_BACKGROUND_SLOTS },
+  };
 }
 
-function wakeWaiters(pool: SlotPool): void {
-  while (pool.waiters.length > 0 && pool.active < poolLimit(pool)) {
+function poolLimit(pool: SlotPool, sibling: SlotPool): number {
+  return Math.max(0, Math.min(pool.max, UPSTREAM_MAX_CONNECTIONS - sibling.active));
+}
+
+function wakeWaiters(pools: SlotPools, pool: SlotPool): void {
+  const sibling = pool === pools.background ? pools.interactive : pools.background;
+  while (pool.waiters.length > 0 && pool.active < poolLimit(pool, sibling)) {
     const next = pool.waiters.shift()!;
     next.detach();
     pool.active += 1;
@@ -32,9 +40,14 @@ function wakeWaiters(pool: SlotPool): void {
   }
 }
 
-export async function acquireSlot(signal: AbortSignal | undefined, pool: SlotPool): Promise<void> {
+export async function acquireSlot(
+  signal: AbortSignal | undefined,
+  pools: SlotPools,
+  pool: SlotPool,
+): Promise<void> {
+  const sibling = pool === pools.background ? pools.interactive : pools.background;
   if (signal?.aborted) return Promise.reject(signal.reason);
-  if (pool.active < poolLimit(pool)) {
+  if (pool.active < poolLimit(pool, sibling)) {
     pool.active += 1;
     return Promise.resolve();
   }
@@ -53,8 +66,8 @@ export async function acquireSlot(signal: AbortSignal | undefined, pool: SlotPoo
   });
 }
 
-export function releaseSlot(pool: SlotPool): void {
+export function releaseSlot(pools: SlotPools, pool: SlotPool): void {
   pool.active -= 1;
-  wakeWaiters(pool);
-  wakeWaiters(pool === backgroundPool ? interactivePool : backgroundPool);
+  wakeWaiters(pools, pool);
+  wakeWaiters(pools, pool === pools.background ? pools.interactive : pools.background);
 }

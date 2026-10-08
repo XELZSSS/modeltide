@@ -11,7 +11,6 @@ import {
   type DataTableColumn,
 } from "@/client/components/data/table/table-columns.ts";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
-import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import OpenRouterModelDetail from "@/client/components/model-detail/openrouter-detail.vue";
 import { useTranslation } from "@/client/i18n";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
@@ -74,7 +73,6 @@ const state = computed(() => {
 <template>
   <EmptyState v-if="!state" :icon="ShieldAlert" :message="t('noRankingsData')" />
   <template v-else>
-    <PartialNotice v-if="state.partial" />
     <RankedTableView
       :rows="state.data"
       :get-row-id="getModelRowId"

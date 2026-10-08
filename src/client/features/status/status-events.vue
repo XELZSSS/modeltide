@@ -33,8 +33,6 @@ function detailOf(event: StatusEvent): string | null {
   return event.type === "up" ? null : (event.detail ?? null);
 }
 
-// Precompute per-row view models instead of calling resolveEventStyle/detailOf
-// three times per row inside the template.
 const rows = computed(() =>
   visible.value.map((event) => ({
     event,

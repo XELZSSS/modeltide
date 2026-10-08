@@ -10,3 +10,11 @@ function write(level: LogLevel, msg: string, meta?: Record<string, unknown>): vo
 }
 
 export const logger: Logger = write;
+
+export function logPartial(
+  log: Logger,
+  source: string,
+  fields: Record<string, number | boolean | string>,
+): void {
+  log("warn", `[${source}] partial`, fields);
+}

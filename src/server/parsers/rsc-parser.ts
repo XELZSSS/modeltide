@@ -62,6 +62,55 @@ export function findLongestData<T>(root: unknown, key: string): T[] | null {
   return best;
 }
 
+function resolveMarkersInLine<T>(
+  line: string,
+  markers: readonly string[],
+  needles: readonly string[],
+  results: (T[] | null)[],
+  extract: RscExtractor<T>,
+): ParseResult<number> {
+  const boundaries: boolean[] = [];
+  let unresolvedHit = false;
+  for (let mi = 0; mi < markers.length; mi++) {
+    const hit = !results[mi] && isMarkerBoundaryAt(line, needles[mi]!);
+    boundaries.push(hit);
+    if (hit) unresolvedHit = true;
+  }
+  if (!unresolvedHit) return parseOk(0);
+  const raws: string[] = [];
+  const prefixed = STREAM_LINE_RE.exec(line)?.[1];
+  if (prefixed && prefixed.length <= MAX_RSC_BYTES) raws.push(prefixed);
+  if (line.length <= MAX_RSC_BYTES) raws.push(line);
+  const trees = new Map<string, unknown>();
+  const treeOf = (raw: string): unknown | undefined => {
+    if (!trees.has(raw)) {
+      try {
+        trees.set(raw, JSON.parse(raw));
+      } catch {
+        trees.set(raw, undefined);
+      }
+    }
+    return trees.get(raw);
+  };
+  let resolved = 0;
+  for (let mi = 0; mi < markers.length; mi++) {
+    if (results[mi] || !boundaries[mi]) continue;
+    for (const raw of raws) {
+      const tree = treeOf(raw);
+      if (tree === undefined) continue;
+      const scanned = scanStep(() => extract(tree, markers[mi]!));
+      if (!scanned.ok) return scanned;
+      const res = scanned.data;
+      if (res && res.length > 0) {
+        results[mi] = res;
+        resolved++;
+        break;
+      }
+    }
+  }
+  return parseOk(resolved);
+}
+
 export function parseRscPayloads<T>(
   body: unknown,
   markers: readonly string[],
@@ -89,44 +138,9 @@ export function parseRscPayloads<T>(
       unresolved -= oversize.data;
       continue;
     }
-    const boundaries: boolean[] = [];
-    let unresolvedHit = false;
-    for (let mi = 0; mi < markers.length; mi++) {
-      const hit = !results[mi] && isMarkerBoundaryAt(line, needles[mi]!);
-      boundaries.push(hit);
-      if (hit) unresolvedHit = true;
-    }
-    if (!unresolvedHit) continue;
-    const raws: string[] = [];
-    const prefixed = STREAM_LINE_RE.exec(line)?.[1];
-    if (prefixed && prefixed.length <= MAX_RSC_BYTES) raws.push(prefixed);
-    if (line.length <= MAX_RSC_BYTES) raws.push(line);
-    const trees = new Map<string, unknown>();
-    const treeOf = (raw: string): unknown | undefined => {
-      if (!trees.has(raw)) {
-        try {
-          trees.set(raw, JSON.parse(raw));
-        } catch {
-          trees.set(raw, undefined);
-        }
-      }
-      return trees.get(raw);
-    };
-    for (let mi = 0; mi < markers.length; mi++) {
-      if (results[mi] || !boundaries[mi]) continue;
-      for (const raw of raws) {
-        const tree = treeOf(raw);
-        if (tree === undefined) continue;
-        const scanned = scanStep(() => extract(tree, markers[mi]!));
-        if (!scanned.ok) return scanned;
-        const res = scanned.data;
-        if (res && res.length > 0) {
-          results[mi] = res;
-          unresolved--;
-          break;
-        }
-      }
-    }
+    const resolved = resolveMarkersInLine(line, markers, needles, results, extract);
+    if (!resolved.ok) return resolved;
+    unresolved -= resolved.data;
   }
   for (let mi = 0; mi < markers.length; mi++) {
     if (!results[mi]) return parseFail(rscNotFoundMessage(markers[mi]!, body, maxLineLen));

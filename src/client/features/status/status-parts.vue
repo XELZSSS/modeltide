@@ -4,7 +4,8 @@ import type { DayBucket } from "@/shared/types";
 import { cn } from "@/client/utils/cn";
 import { ONE_DAY } from "@/shared/config";
 import { useTranslation } from "@/client/i18n";
-import { DAY_BAR_CLASSES, dayBarLevel } from "@/shared/utils/status-level";
+import { DAY_BAR_CLASSES } from "@/client/utils/status-theme";
+import { dayBarLevel } from "@/shared/utils/status-level";
 import { formatDate } from "@/client/utils/format";
 
 const props = defineProps<{ buckets: DayBucket[] }>();
@@ -40,8 +41,6 @@ onUnmounted(() => {
 
 const days = computed(() => getLast30Days(dayKey.value * ONE_DAY));
 
-// Precompute each day's level class and label instead of re-deriving them
-// (Map lookup + level + formatDate) inside the template.
 const dayCells = computed(() =>
   days.value.map((day) => {
     const bucket = byDay.value.get(day);

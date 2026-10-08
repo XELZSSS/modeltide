@@ -15,6 +15,7 @@ interface RunLegsOptions {
   concurrency?: number;
   signal?: AbortSignal;
   onFailure?: (failure: LegFailure) => void;
+  filter?: (failure: LegFailure) => boolean;
 }
 
 type LegValue<L> = L extends Leg<infer T> ? T : never;
@@ -36,6 +37,7 @@ export async function runLegs<L extends readonly Leg<unknown>[]>(
   settled.forEach((result, i) => {
     if (result.status !== "rejected") return;
     const failure: LegFailure = { label: legs[i]?.label ?? String(i), reason: result.reason };
+    if (opts.filter && !opts.filter(failure)) return;
     failures.push(failure);
     opts.onFailure?.(failure);
   });

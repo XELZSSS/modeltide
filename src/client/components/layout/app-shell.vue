@@ -3,7 +3,6 @@ import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useSettingsStore } from "@/client/stores";
 import { useTranslation } from "@/client/i18n";
-import { historyIndex, isPopstateNavigation } from "@/client/router";
 import DesktopNav from "@/client/components/layout/desktop-nav.vue";
 import MobileNav from "@/client/components/layout/mobile-nav.vue";
 import ErrorBoundary from "@/client/components/error-boundary.vue";
@@ -12,10 +11,7 @@ import MobileMoreSheet from "@/client/components/layout/mobile-more-sheet.vue";
 import ContractSkewNotice from "@/client/components/feedback/contract-skew-notice.vue";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/config/layout";
 import { THEME_COLORS } from "@/shared/config";
-
-const scrollOffsets = new Map<number, number>();
-
-const SCROLL_RESTORE_WINDOW_MS = 5_000;
+import { useScrollRestoreMain } from "@/client/hooks/use-scroll-restore";
 
 const route = useRoute();
 const settings = useSettingsStore();
@@ -23,56 +19,10 @@ const { t } = useTranslation();
 
 const openSheet = ref<"settings" | "more" | null>(null);
 const mainRef = ref<HTMLElement | null>(null);
-
-let stopRestore: (() => void) | null = null;
+const { recordScroll, restoreScroll } = useScrollRestoreMain(mainRef);
 
 function closeSheet(): void {
   openSheet.value = null;
-}
-
-function recordScroll(): void {
-  const main = mainRef.value;
-  if (!main) return;
-  scrollOffsets.set(historyIndex(), main.scrollTop);
-}
-
-function restoreScroll(): void {
-  const main = mainRef.value;
-  if (!main) return;
-  stopRestore?.();
-  stopRestore = null;
-  const idx = historyIndex();
-  if (!isPopstateNavigation()) {
-    for (const key of scrollOffsets.keys()) if (key >= idx) scrollOffsets.delete(key);
-    main.scrollTo({ top: 0 });
-    return;
-  }
-  const target = scrollOffsets.get(idx) ?? 0;
-  if (target === 0 || main.scrollHeight - main.clientHeight >= target) {
-    main.scrollTo({ top: target });
-    return;
-  }
-  const initial = main.scrollTop;
-  let cancelled = false;
-  const stop = () => {
-    cancelled = true;
-    clearTimeout(deadline);
-    observer.disconnect();
-    main.removeEventListener("scroll", onUserScroll);
-  };
-  const restore = () => {
-    if (cancelled || main.scrollHeight - main.clientHeight < target) return;
-    stop();
-    main.scrollTo({ top: target });
-  };
-  const onUserScroll = () => {
-    if (main.scrollTop !== initial) stop();
-  };
-  const observer = new MutationObserver(restore);
-  const deadline = setTimeout(stop, SCROLL_RESTORE_WINDOW_MS);
-  observer.observe(main, { childList: true, subtree: true });
-  main.addEventListener("scroll", onUserScroll, { passive: true });
-  stopRestore = stop;
 }
 
 function applyTheme(): void {
@@ -86,10 +36,19 @@ function applyTheme(): void {
 watch(() => settings.themeMode, applyTheme, { immediate: true, flush: "post" });
 
 watch(
-  () => route.fullPath,
+  () => route.path,
   () => {
     openSheet.value = null;
     restoreScroll();
+  },
+  { flush: "post" },
+);
+
+watch(
+  () => route.fullPath,
+  () => {
+    // Query-only navigation (e.g. ?tab=) keeps scroll position.
+    openSheet.value = null;
   },
   { flush: "post" },
 );
@@ -101,7 +60,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   mainRef.value?.removeEventListener("scroll", recordScroll);
-  stopRestore?.();
 });
 </script>
 

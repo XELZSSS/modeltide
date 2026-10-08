@@ -23,6 +23,12 @@ export interface DirectoryCacheEntry {
   meta: Record<string, ModelMetaEntry>;
 }
 
+export interface DirectoryParseResult {
+  entry: DirectoryCacheEntry;
+  totalRows: number;
+  missingPricing: number;
+}
+
 function buildPricingEntry(
   input: number | null,
   output: number | null,
@@ -38,24 +44,36 @@ function buildPricingEntry(
   };
 }
 
-export function directoryRowPricing(raw: unknown): PricingEntry | null {
-  if (!isValidOpenRouterDirectoryRow(raw)) return null;
-  const m = raw as unknown as PricingRow;
-  const pricing = m.pricing as NonNullable<PricingRow["pricing"]>;
+function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
+  const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
+  // Live directory omits input_cache_write on many rows but provides
+  // input_cache_write_1h; fall back so cache-write isn't needlessly null.
+  // web_search / image_output / overrides are intentionally ignored:
+  // ModelPricing tracks per-token text pricing only.
+  const cacheWriteRaw = pricing.input_cache_write ?? pricing.input_cache_write_1h;
   return buildPricingEntry(
     numCoerceNonNegative(pricing.prompt),
     numCoerceNonNegative(pricing.completion),
     numCoerceNonNegative(pricing.input_cache_read),
-    numCoerceNonNegative(pricing.input_cache_write),
+    numCoerceNonNegative(cacheWriteRaw),
   );
+}
+
+export function directoryRowPricing(raw: unknown): PricingEntry | null {
+  if (!isValidOpenRouterDirectoryRow(raw)) return null;
+  return pricingOfValidRow(raw as unknown as PricingRow);
 }
 
 const DYNAMIC_PRICING = -1;
 
+function dynamicPricingOfValidRow(raw: PricingRow): boolean {
+  const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
+  return numCoerce(pricing.prompt) === DYNAMIC_PRICING && numCoerce(pricing.completion) === DYNAMIC_PRICING;
+}
+
 export function hasDynamicPricing(raw: unknown): boolean {
   if (!isValidOpenRouterDirectoryRow(raw)) return false;
-  const pricing = (raw as unknown as PricingRow).pricing as NonNullable<PricingRow["pricing"]>;
-  return numCoerce(pricing.prompt) === DYNAMIC_PRICING && numCoerce(pricing.completion) === DYNAMIC_PRICING;
+  return dynamicPricingOfValidRow(raw as unknown as PricingRow);
 }
 
 function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
@@ -66,16 +84,23 @@ function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMe
   };
 }
 
-export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
+export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
   const pricingRecord: PricingRecord = Object.create(null);
   const metaRecord: Record<string, ModelMetaEntry> = Object.create(null);
-  if (!Array.isArray(rows)) return { pricing: pricingRecord, meta: metaRecord };
-  const count = Math.min(rows.length, MAX_DIRECTORY_ROWS);
+  if (!Array.isArray(rows)) {
+    return { entry: { pricing: pricingRecord, meta: metaRecord }, totalRows: 0, missingPricing: 0 };
+  }
+  const totalRows = rows.length;
+  const count = Math.min(totalRows, MAX_DIRECTORY_ROWS);
+  let missingPricing = 0;
   for (let i = 0; i < count; i++) {
     const raw: unknown = rows[i];
-    if (!isValidOpenRouterDirectoryRow(raw)) continue;
+    if (!isValidOpenRouterDirectoryRow(raw)) {
+      missingPricing++;
+      continue;
+    }
     const m = raw as unknown as PricingRow;
-    const pricingEntry = directoryRowPricing(raw);
+    const pricingEntry = pricingOfValidRow(m);
     if (pricingEntry) {
       const idKey = toStringOrNull(m.id);
       const slugKey = toStringOrNull(m.canonical_slug);
@@ -93,6 +118,10 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
           if (pricingRecord[index] === undefined) pricingRecord[index] = pricingEntry;
         }
       }
+    } else if (dynamicPricingOfValidRow(m)) {
+      // Dynamic pricing is intentional and not a pricing gap.
+    } else {
+      missingPricing++;
     }
     const benchmarks = obj(m.benchmarks);
     const aaBenchmarks = obj(benchmarks?.artificial_analysis);
@@ -116,5 +145,5 @@ export function parseDirectoryRows(rows: unknown): DirectoryCacheEntry {
       metaRecord[key] = cur ? mergeMetaRecord(cur, metaEntry) : metaEntry;
     }
   }
-  return { pricing: pricingRecord, meta: metaRecord };
+  return { entry: { pricing: pricingRecord, meta: metaRecord }, totalRows, missingPricing };
 }

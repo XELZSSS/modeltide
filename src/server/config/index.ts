@@ -19,6 +19,7 @@ export {
   INFLIGHT_HANG_GUARD_MS,
   SHARED_REFRESH_TIMEOUT_MS,
 } from "./timeouts";
+export { fetchPolicy, type FetchPolicyName } from "./fetch-policies";
 export {
   MEMORY_CACHE_MAX_KEYS,
   MEMORY_CACHE_MAX_BYTES,

@@ -25,6 +25,7 @@ const { results, isPending, isError } = useSearchAllRankings(searchTerm, {
 
 const combobox = useCombobox({
   initialValue: searchTerm.value,
+  externalValue: searchTerm,
   minQuery: MIN_QUERY,
   itemCount: computed(() => results.value.length),
   isOpen,
@@ -39,6 +40,13 @@ const { listboxId, activeIndex, inputValue, debounced, onHover, onSelectIndex } 
 
 watch([debounced, searchTerm], () => {
   if (debounced.value !== searchTerm.value) setSearchTerm(debounced.value);
+});
+
+// History navigation updates the store term; mirror it into the unfocused input.
+watch(searchTerm, (next) => {
+  if (next !== debounced.value && next !== inputValue.value && document.activeElement?.tagName !== "INPUT") {
+    inputValue.value = next;
+  }
 });
 
 const pending = computed(() => isPending.value || inputValue.value !== searchTerm.value);
@@ -81,7 +89,7 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
         @click="onSelectIndex(index)"
       >
         <span class="flex items-center justify-between gap-2">
-          <span class="text-sm font-medium text-text-primary truncate">{{ result.name }}</span>
+          <span class="text-sm font-medium text-text-primary truncate" :title="result.name">{{ result.name }}</span>
           <span
             v-if="typeof result.score === 'number' && Number.isFinite(result.score)"
             class="text-xs text-text-secondary ml-2 shrink-0 font-mono"

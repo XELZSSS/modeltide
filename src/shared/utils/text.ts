@@ -23,3 +23,16 @@ export function normalizeModelKey(raw: string): string {
     .filter((t) => t && !QUALIFIER_TOKENS.has(t))
     .join("");
 }
+
+export function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+export function titleCase(raw: string): string {
+  return raw
+    .replace(/[-_]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}

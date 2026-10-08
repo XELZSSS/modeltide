@@ -32,7 +32,7 @@ const hasAnyModality = computed(() =>
   MODALITY_KEYS.some((key) =>
     Boolean(
       props.model[`input_modality_${key}` as keyof ArtificialAnalysisModel] ||
-        props.model[`output_modality_${key}` as keyof ArtificialAnalysisModel],
+      props.model[`output_modality_${key}` as keyof ArtificialAnalysisModel],
     ),
   ),
 );

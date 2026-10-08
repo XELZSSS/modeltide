@@ -1,3 +1,4 @@
+// Byte ceilings mirror the upstream JSON/feed caps in config/upstream.ts.
 export const MAX_RSC_BYTES = 5 * 1024 * 1024;
 export const MAX_RSC_LINE_CHARS = 2 * 1024 * 1024;
 export const MAX_SCAN_CHARS = 8_000_000;

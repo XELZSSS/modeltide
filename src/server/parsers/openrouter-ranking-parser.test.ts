@@ -266,7 +266,9 @@ describe("mapModels", () => {
   });
 
   it("prices a dated variant permaslug through the mirrored key", () => {
-    const { pricing: record } = parseDirectoryRows([
+    const {
+      entry: { pricing: record },
+    } = parseDirectoryRows([
       {
         id: "acme/m",
         canonical_slug: "acme/m-20260910",

@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { STORAGE_KEYS } from "@/shared/config";
 import { modelId } from "@/shared/utils/models";
-import { readPersisted, safeStorage, writePersisted } from "@/client/stores/persist";
+import { initStorageSync, readPersisted, safeStorage } from "@/client/stores/persist";
 
 const MAX_COMPARE = 2;
 const VERSION = 0;
@@ -46,9 +46,11 @@ export const useCompareStore = defineStore("compare", {
       if (!key) return;
       this.compareIds = this.compareIds.filter((id) => id !== key);
     },
-    pruneCompare(validIds: ReadonlySet<string>): void {
+    pruneCompare(validIds: ReadonlySet<string>): string[] {
+      const removed = this.compareIds.filter((id) => !validIds.has(id));
       const kept = this.compareIds.filter((id) => validIds.has(id));
       if (kept.length !== this.compareIds.length) this.compareIds = kept;
+      return removed;
     },
     clearCompare() {
       this.compareIds = [];
@@ -59,18 +61,17 @@ export const useCompareStore = defineStore("compare", {
   },
 });
 
-let syncing = false;
-
 export function initCompareStorageSync(): void {
-  if (syncing) return;
-  syncing = true;
-  const storage = safeStorage("session");
-  useCompareStore().$subscribe(
-    (_mutation, state) => writePersisted(storage, STORAGE_KEYS.compare, VERSION, { compareIds: state.compareIds }),
-    {
-      detached: true,
+  initStorageSync(useCompareStore(), {
+    storage: safeStorage("session"),
+    key: STORAGE_KEYS.compare,
+    version: VERSION,
+    snapshot: (store) => ({ compareIds: store.compareIds }),
+    onStorageEvent: (store, parsed) => {
+      const ids = cleanIds((parsed as { state?: { compareIds?: unknown } }).state?.compareIds);
+      if (ids.join("\0") !== store.compareIds.join("\0")) store.compareIds = ids;
     },
-  );
+  });
 }
 
 export function useCompareModels(
@@ -92,14 +93,17 @@ export function useCompareModels(
   );
 }
 
-export function usePruneCompareIds(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>): void {
+export function usePruneCompareIds(
+  models: MaybeRefOrGetter<ArtificialAnalysisModel[]>,
+  onPruned?: (removed: string[]) => void,
+): void {
   const store = useCompareStore();
   const validIds = computed(() => new Set(toValue(models).map(modelId).filter(Boolean)));
   watch(
     validIds,
     (ids) => {
-      if (ids.size === 0) return;
-      store.pruneCompare(ids);
+      const removed = store.pruneCompare(ids);
+      if (removed.length > 0) onPruned?.(removed);
     },
     { immediate: true },
   );

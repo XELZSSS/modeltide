@@ -28,16 +28,19 @@ function create(): void {
 
 function update(): void {
   if (!chart) return;
+  if (props.plugins) {
+    // Theme-only changes flow through update(), not destroy()+recreate.
+    (chart.config as { plugins?: Plugin[] }).plugins = props.plugins;
+  }
   chart.data = props.data;
   if (props.options) chart.options = props.options;
   chart.update();
 }
 
-watch([() => props.type, () => props.plugins], create, { flush: "post" });
+watch(() => props.type, create, { flush: "post" });
 
-// Callers pass freshly-built computed objects; shallow reference watching is
-// sufficient and avoids deep-traversing the chart data on every update.
-watch([() => props.data, () => props.options], update, { flush: "post" });
+// Shallow watching avoids deep-traversing chart data; plugins update in place.
+watch([() => props.data, () => props.options, () => props.plugins], update, { flush: "post" });
 
 watch(canvasRef, (canvas) => {
   if (canvas) create();

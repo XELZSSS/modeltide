@@ -1,13 +1,13 @@
 import { byNumberDesc, isValidModelIdentity } from "@/server/parsers/parser-primitives";
 import type { AppContext } from "@/server/context";
-import { BENCHMARK_KEYS, DEFAULT_TTL_MS, MODALITY_KEYS } from "@/shared/config";
+import { BENCHMARK_KEYS, DEFAULT_TTL_MS } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
 import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { findNextData } from "@/server/parsers/rsc-parser";
 
 import { getModelDirectoryMeta } from "@/server/sources/openrouter-directory";
-import { compact } from "@/server/parsers/aa/model-compact";
+import { benchmarkWireNames, compact, modalityWireNames } from "@/server/parsers/aa/model-compact";
 import { parseLeaderboardModels } from "@/server/parsers/aa/leaderboard-parser";
 import { backfillFromMeta, mergeBySlug, type IntelligenceIndexResult } from "@/server/parsers/aa/model-enrich";
 import { fetchAaRsc, getAndParseEnrich } from "./aa-fetch";
@@ -24,23 +24,7 @@ export function getAaLeaderboardBody(ctx: AppContext): Promise<CacheResult<strin
   );
 }
 
-const BENCHMARK_WIRE_NAMES = [
-  "itbenchSre",
-  "tauBanking",
-  "terminalBench21",
-  "terminalbenchHard",
-  "terminalBench40",
-  "apexAgents",
-  "mmmuPro",
-  "automationBenchPartialScore",
-];
-
-const MODALITY_WIRE_NAMES = MODALITY_KEYS.flatMap((mo) => {
-  const suffix = mo.charAt(0).toUpperCase() + mo.slice(1);
-  return [`inputModality${suffix}`, `outputModality${suffix}`];
-});
-
-const MODELS_ENRICH_FIELDS = [
+const MODELS_ENRICH_BASE_FIELDS = [
   "id",
   "slug",
   "name",
@@ -56,43 +40,58 @@ const MODELS_ENRICH_FIELDS = [
   "price1mOutputTokens",
   "cacheHitPrice",
   "cacheWritePrice",
-  "medianCanonicalAnswerOutputSpeed",
-  "omniscienceBreakdown",
-  "omniscienceHallucinationRate",
   "creator",
   ...BENCHMARK_KEYS,
-  ...BENCHMARK_WIRE_NAMES,
-  ...MODALITY_WIRE_NAMES,
+  ...benchmarkWireNames,
+  ...modalityWireNames,
 ];
 
-function compactModelsEnrich(m: Record<string, unknown>): Record<string, unknown> {
-  const row: Record<string, unknown> = {};
-  for (const field of MODELS_ENRICH_FIELDS) {
-    if (field in m) row[field] = m[field];
-  }
-  return row;
+// Live RSC shapes (verified 2026-10): /models carries
+// omniscienceHallucinationRate but not medianCanonicalAnswerOutputSpeed /
+// omniscienceBreakdown / itbenchSre; /evaluations/omniscience is the reverse
+// (itbenchSre is covered there and on the leaderboard body).
+const MODELS_PATH_FIELDS = [
+  ...MODELS_ENRICH_BASE_FIELDS.filter((f) => f !== "itbenchSre"),
+  "omniscienceHallucinationRate",
+];
+
+const OMNISCIENCE_PATH_FIELDS = [
+  ...MODELS_ENRICH_BASE_FIELDS,
+  "medianCanonicalAnswerOutputSpeed",
+  "omniscienceBreakdown",
+];
+
+function compactWithFields(fields: readonly string[]) {
+  return (m: Record<string, unknown>): Record<string, unknown> => {
+    const row: Record<string, unknown> = {};
+    for (const field of fields) {
+      if (field in m) row[field] = m[field];
+    }
+    return row;
+  };
 }
 
 async function fetchIntelligenceIndex(
   ctx: AppContext,
 ): Promise<{ models: ArtificialAnalysisModel[]; partial: boolean }> {
+  const enrichLeg = (cacheKey: string, label: string, path: string, fields: readonly string[]) =>
+    getAndParseEnrich<Record<string, unknown>>(ctx, cacheKey, {
+      label,
+      path,
+      marker: "initialModels",
+      extract: (tree) => findNextData(tree, "initialModels"),
+      map: (arr) => arr.map(compactWithFields(fields)),
+    });
   const [indexBody, [modelsEnrich, omniscienceEnrich], openRouterMeta] = await Promise.all([
     getAaLeaderboardBody(ctx),
     Promise.all([
-      getAndParseEnrich<Record<string, unknown>>(ctx, cacheKeys.aaModelsEnrich, {
-        label: "/models",
-        path: upstreamEndpoints.aaModels,
-        marker: "initialModels",
-        extract: (tree) => findNextData(tree, "initialModels"),
-        map: (arr) => arr.map(compactModelsEnrich),
-      }),
-      getAndParseEnrich<Record<string, unknown>>(ctx, cacheKeys.aaOmniscienceEnrich, {
-        label: "/omniscience",
-        path: upstreamEndpoints.aaOmniscience,
-        marker: "initialModels",
-        extract: (tree) => findNextData(tree, "initialModels"),
-        map: (arr) => arr.map(compactModelsEnrich),
-      }),
+      enrichLeg(cacheKeys.aaModelsEnrich, "/models", upstreamEndpoints.aaModels, MODELS_PATH_FIELDS),
+      enrichLeg(
+        cacheKeys.aaOmniscienceEnrich,
+        "/omniscience",
+        upstreamEndpoints.aaOmniscience,
+        OMNISCIENCE_PATH_FIELDS,
+      ),
     ]),
     getModelDirectoryMeta(ctx).catch((err: unknown): Record<string, ModelMetaEntry> | null => {
       ctx.log("warn", `[artificial] OpenRouter directory metadata leg failed: ${errMsg(err)}`);

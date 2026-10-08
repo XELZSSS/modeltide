@@ -1,23 +1,11 @@
-import { isFiniteNumber } from "@/shared/utils";
+import { isFiniteNumber } from "@/shared/utils/numbers";
 import type { ModelPricing } from "@/shared/types";
 
-export interface EffectivePricing {
-  input: number | null;
-  output: number | null;
-  cacheHit: number | null;
-  cacheWrite: number | null;
-}
-
-interface PriceLegFields {
-  input: number | null;
-  output: number | null;
-  cacheHit?: number | null;
-  cacheWrite?: number | null;
-}
+export type EffectivePricing = { [K in keyof ModelPricing]: number | null };
 
 export type PriceLegId = "promptPrice" | "completionPrice" | "cacheHitPrice" | "cacheWritePrice";
 
-export type PriceLegPick = (pricing: PriceLegFields) => number | null | undefined;
+export type PriceLegPick = (pricing: ModelPricing) => number | null | undefined;
 
 export const PRICE_LEGS = {
   promptPrice: (p) => p.input,

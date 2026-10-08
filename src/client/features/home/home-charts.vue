@@ -56,7 +56,7 @@ const AREA_FILL_ALPHA = 0.2;
 
 const tickLabel = (value: string | number): string => formatIndexValue(Number(value));
 
-function bottomRule(color: string): Plugin<"line"> {
+function bottomRule(getColor: () => string): Plugin<"line"> {
   return {
     id: "indexAreaBottomRule",
     afterDatasetsDraw(chart) {
@@ -65,7 +65,7 @@ function bottomRule(color: string): Plugin<"line"> {
       ctx.save();
       ctx.beginPath();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = getColor();
       ctx.moveTo(chartArea.left, y);
       ctx.lineTo(chartArea.right, y);
       ctx.stroke();
@@ -78,8 +78,10 @@ const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
 
 const { t } = useTranslation();
 const theme = useChartTheme();
+// Stable plugin: color is read lazily so theme switches use update(), not recreate.
+const bottomRulePlugin = bottomRule(() => theme.value.grid);
+const plugins: Plugin<"line">[] = [bottomRulePlugin];
 const rows = computed(() => buildIndexRows(props.models));
-const plugins = computed<Plugin<"line">[]>(() => [bottomRule(theme.value.grid)]);
 const labels = computed(() => rows.value.map((m) => m.short_name || shortModelId(m.name) || m.id || "—"));
 
 const data = computed<ChartData<"line">>(() => ({

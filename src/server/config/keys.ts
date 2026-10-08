@@ -25,7 +25,6 @@ export const cacheKeys = {
   news: (category: NewsCategory) => cacheKey("news", category),
   openRouterRankings: cacheKey("openRouterRankings"),
   openRouterPricing: cacheKey("openRouterRankings", "pricing-map", "per-million"),
-  openRouterMeta: cacheKey("openRouterRankings", "meta-map"),
   closedReleases: cacheKey("closedReleases"),
   agentRankings: cacheKey("agentRankings"),
   statusHistoryPayload: cacheKey("statusHistory", "payload"),

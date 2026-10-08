@@ -1,6 +1,7 @@
 import type { AppContext } from "@/server/context";
 import { FAST_FETCH_OPTS, UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
-import { ClientAbortError, errMsg, UpstreamError } from "@/server/infra/errors";
+import { ClientAbortError, UpstreamError } from "@/server/infra/errors";
+import { logPartial } from "@/server/infra/logger";
 import { parseRscPayload } from "@/server/parsers/rsc-parser";
 import { fetchRscText } from "@/server/sources/rsc-fetcher";
 import { cachedRaw } from "@/server/sources/pipeline";
@@ -48,7 +49,7 @@ export async function getAndParseEnrich<T>(
     return { rows: value, failed: degraded };
   } catch (err) {
     if (err instanceof ClientAbortError) throw err;
-    ctx.log("warn", `[artificial] ${spec.label} enrichment failed: ${errMsg(err)}`);
+    logPartial(ctx.log, "artificial", { label: spec.label, failed: true });
     return { rows: [], failed: true };
   }
 }

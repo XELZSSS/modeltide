@@ -4,7 +4,7 @@ import type { ArtificialAnalysisModel, HallucinationRankingEntry, TextToImageMod
 import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
 import { computeProviderStats, shortModelId } from "@/shared/utils/models";
 import { formatShortNumber } from "@/client/utils/format";
-import { EMPTY_ARRAY } from "@/client/utils/empty";
+import { emptyArray } from "@/client/utils/empty";
 
 export interface HomeBarStat {
   label: string;
@@ -33,7 +33,7 @@ export function useHomeStats(
   dashboardData: MaybeRefOrGetter<NormalizedHomeDashboard>,
   t: TFunction,
 ): HomeStats {
-  const t2iModels = computed(() => toValue(dashboardData).textToImage ?? EMPTY_ARRAY);
+  const t2iModels = computed(() => toValue(dashboardData).textToImage ?? emptyArray<TextToImageModel>());
 
   const trendingStats = computed<HomeBarStat[]>(() =>
     top7(toValue(dashboardData).opensource, (model) => ({

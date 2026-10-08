@@ -48,7 +48,8 @@ function onTabIntent(tabId: string, active: boolean): void {
 }
 
 function preloadTabs(): void {
-  for (const id of RANKING_TABS) preloadChunk(RANKING_TAB_LOADS[id]);
+  // Preload only the most-visited neighbor; the rest stay on hover-prefetch.
+  preloadChunk(RANKING_TAB_LOADS.openRouterRankings ?? RANKING_TAB_LOADS[DEFAULT_RANKING_TAB]);
 }
 
 if (typeof requestIdleCallback === "function") requestIdleCallback(preloadTabs, { timeout: 2000 });

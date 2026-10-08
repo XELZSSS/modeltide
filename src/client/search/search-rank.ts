@@ -1,11 +1,6 @@
 import { modelDetailPath } from "@/shared/utils/models";
 import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
-import {
-  matchFolded,
-  fuzzyHit,
-  prepareFields,
-  type PreparedFields,
-} from "@/client/search/match";
+import { matchFolded, fuzzyHit, prepareFields, type PreparedFields } from "@/client/search/match";
 import { normalizeModelKey } from "@/shared/utils";
 import type { SearchResult, SearchResultSource } from "@/client/search/types";
 import type {
@@ -26,9 +21,7 @@ interface PreparedEntry {
   fields: PreparedFields;
 }
 
-// Field preparation is pure per item object; TanStack Query structural sharing
-// keeps item identity across refetches, so a WeakMap avoids recomputing
-// (toLowerCase + tokenize + CJK bigrams) for every item on each data refresh.
+// Per-item cache: preparation is pure and query data keeps object identity.
 const preparedCache = new WeakMap<object, PreparedFields>();
 
 export interface SourceConfig {
@@ -54,18 +47,31 @@ export function defineSource<T extends SearchItem>(
   };
 }
 
-export function collect(config: SourceConfig, needle: string): { result: SearchResult; match: number }[] {
+export function collect(
+  config: SourceConfig,
+  needle: string,
+  limit = MAX_PER_SOURCE,
+): { result: SearchResult; match: number }[] {
   const out: { result: SearchResult; match: number }[] = [];
   const missed: PreparedEntry[] = [];
   for (const entry of config.entries) {
     const { matched, score } = matchFolded(entry.fields.folded, needle);
-    if (matched) out.push({ result: config.map(entry.item), match: score });
-    else missed.push(entry);
+    if (matched) {
+      out.push({ result: config.map(entry.item), match: score });
+      // Skip the fuzzy pass once exact/prefix hits fill the per-source budget.
+      if (out.length >= limit) return topPerSource(out, limit);
+    } else missed.push(entry);
   }
   for (const entry of missed) {
+    if (out.length >= limit) break;
     if (fuzzyHit(entry.fields, needle)) out.push({ result: config.map(entry.item), match: 1 });
   }
-  return out;
+  return topPerSource(out, limit);
+}
+
+function topPerSource<T extends { match: number }>(hits: T[], limit: number): T[] {
+  if (hits.length <= limit) return hits;
+  return [...hits].sort((a, b) => b.match - a.match).slice(0, limit);
 }
 
 export function detailLink(source: SearchResultSource, id: string): string {
@@ -73,6 +79,7 @@ export function detailLink(source: SearchResultSource, id: string): string {
 }
 
 const MAX_RESULTS = 20;
+const MAX_PER_SOURCE = 50;
 
 const SOURCE_PRIORITY: Record<SearchResultSource, number> = {
   modelRankings: 0,

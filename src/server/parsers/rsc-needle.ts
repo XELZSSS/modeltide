@@ -1,10 +1,6 @@
 import { balancedJsonSlice, type ScanSpend } from "@/server/parsers/json-balance";
 import { isTrimWhitespace } from "@/server/parsers/rsc-text";
-import {
-  MAX_NEEDLE_CANDIDATES,
-  MAX_NEEDLE_WORK_CHARS,
-  MAX_SCAN_CHARS,
-} from "@/server/parsers/rsc-limits";
+import { MAX_NEEDLE_CANDIDATES, MAX_NEEDLE_WORK_CHARS, MAX_SCAN_CHARS } from "@/server/parsers/rsc-limits";
 
 interface NeedleScanOptions {
   prefixChars: number;
@@ -95,11 +91,7 @@ function scanNeedleWindow(
   return scanNeedleRange(segment, 0, segment.length, needle, found, spend);
 }
 
-export function extractNeedleJsonArrays(
-  text: string,
-  needle: string,
-  opts: NeedleScanOptions,
-): unknown[] {
+export function extractNeedleJsonArrays(text: string, needle: string, opts: NeedleScanOptions): unknown[] {
   const found: unknown[] = [];
   const escaped = needle.replace(/"/g, '\\"');
   const locators = escaped === needle ? [needle] : [needle, escaped];
