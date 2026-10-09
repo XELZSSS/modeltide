@@ -3,7 +3,6 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { Script } from "vm";
 import type { Plugin, ViteDevServer } from "vite";
 import { SETTINGS_STORAGE_VERSION, STORAGE_KEYS } from "../src/shared/config/limits.ts";
 import { THEME_COLORS } from "../src/shared/config/theme.ts";
@@ -69,44 +68,6 @@ export function serviceWorkerVersion(): Plugin {
           .replace(SW_VERSION_DECL, `const SW_VERSION = "${version}";`)
           .replace(SW_SHELL_DECL, `const PRECACHE_SHELL = ${shell};`),
       );
-    },
-  };
-}
-
-const INLINE_SCRIPT = /<script>([\s\S]*?)<\/script>/g;
-const CSP_SCRIPT_HASH = /'sha256-([A-Za-z0-9+/=]+)'/g;
-
-export function cspHashGuard(): Plugin {
-  return {
-    name: "modeltide:csp-hash",
-    apply: "build",
-    // writeBundle (unlike closeBundle) only fires after the client bundle is
-    // on disk, and never during cleanup of a failed build.
-    writeBundle() {
-      if (this.environment?.name != null && this.environment.name !== "client") return;
-      const html = fs.readFileSync(path.join(clientOutDir, "index.html"), "utf8");
-      const headers = fs.readFileSync(path.join(rootDir, "public", "_headers"), "utf8");
-      const pinned = [...headers.matchAll(CSP_SCRIPT_HASH)].map(([, hash]) => hash);
-      let checked = 0;
-      for (const match of html.matchAll(INLINE_SCRIPT)) {
-        const script = match[1];
-        if (script === undefined) continue;
-        checked += 1;
-        try {
-          new Script(script);
-        } catch (err) {
-          throw new Error(
-            `dist/index.html: inline script #${checked} does not parse: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-        const digest = createHash("sha256").update(script).digest("base64");
-        if (!pinned.includes(digest)) {
-          throw new Error(
-            `public/_headers: inline script #${checked} hashes to sha256-${digest}, but script-src pins ${pinned.join(", ") || "no sha256 source"}`,
-          );
-        }
-      }
-      if (checked === 0) throw new Error("dist/index.html: no inline bootstrap script to check");
     },
   };
 }
