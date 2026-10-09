@@ -258,8 +258,6 @@ export const en = {
   statusProbing: "{probed} of {total} sources reporting",
   uptime24h: "24h uptime",
   uptime7d: "7d uptime",
-  latencyAvg24h: "Avg latency (24h)",
-  latencyHistory: "Response latency — last 24h",
   last30Days: "Last 30 days",
   historyAccumulating: "History is building up",
   recentEvents: "Recent events",

@@ -9,7 +9,7 @@ import { unwrapObject } from "@/client/api/payload-normalize";
 import { eventDurationLabel, resolveEventStyle } from "@/client/utils/status-events";
 import { sourceLabel } from "@/shared/config";
 import type { StatusEvent, StatusHistoryPayload } from "@/shared/types";
-import { formatLatencySec, formatRelativeTime, formatUptimePct } from "@/client/utils/format";
+import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { resolveLevel } from "@/shared/utils/status-level";
 import { LEVEL_STYLES } from "@/client/utils/status-theme";
 
@@ -41,7 +41,6 @@ const vm = computed(() => {
   const lastSample = samples.length > 0 ? samples.reduce((a, b) => (b.t > a.t ? b : a)) : undefined;
   const level = resolveLevel(summary);
   const eventStyle = resolveEventStyle(event.type);
-  const latencyMs = summary?.avgLatency24h ?? summary?.latencyMs ?? lastSample?.latencyMs ?? null;
   const errorText = lastSample?.error ?? null;
   const statusCode = lastSample?.status ?? null;
   const detailText = errorText ?? (statusCode != null && level === "error" ? `HTTP ${statusCode}` : null);
@@ -54,12 +53,6 @@ const vm = computed(() => {
       className: "text-text-secondary font-mono",
       title: t("uptime24h"),
       text: formatUptimePct(summary?.uptime24h ?? null, t),
-    },
-    {
-      key: "latency",
-      className: "text-text-secondary font-mono",
-      title: `${t("latencyAvg24h")}${summary?.checkedAt ? ` · ${t("lastUpdated")} ${formatRelativeTime(summary.checkedAt, t, lang.value)}` : ""}`,
-      text: formatLatencySec(latencyMs, t),
     },
     ...(detailText
       ? [{ key: "detail", className: "text-text-tertiary font-mono", title: detailText, text: detailText }]

@@ -259,8 +259,6 @@ export const zh = {
   statusProbing: "数据源上报中（{probed}/{total}）",
   uptime24h: "24 小时可用率",
   uptime7d: "7 天可用率",
-  latencyAvg24h: "平均延迟（24 小时）",
-  latencyHistory: "响应延迟 — 近 24 小时",
   last30Days: "近 30 天",
   historyAccumulating: "历史数据积累中",
   recentEvents: "最近事件",

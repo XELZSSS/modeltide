@@ -1,6 +1,5 @@
 export {
   formatIndex,
-  formatLatencySec,
   formatPercent,
   formatScore,
   formatShortNumber,

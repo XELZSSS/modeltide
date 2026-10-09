@@ -75,10 +75,6 @@ export function formatUptimePct(v: number | null | undefined, t: TFunction): str
   return isFiniteNumber(v) ? `${(v * 100).toFixed(2)}%` : t("uptimeNoData");
 }
 
-export function formatLatencySec(ms: number | null | undefined, t: TFunction): string {
-  return isFiniteNumber(ms) ? `${(ms / 1000).toFixed(2)}s` : t("uptimeNoData");
-}
-
 const INDEX_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 export function formatIndex(v: number, fallback = "—"): string {

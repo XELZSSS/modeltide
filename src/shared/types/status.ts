@@ -70,7 +70,6 @@ export interface SourceHistorySummary {
   uptime24h: number | null;
   uptime7d: number | null;
   warn24h: number | null;
-  avgLatency24h: number | null;
   detail: string | null;
 }
 

@@ -132,18 +132,10 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
   let windowTotal = 0;
   let windowOk = 0;
   let windowWarn = 0;
-  let latencySum = 0;
-  let latencyCount = 0;
   for (const sample of entry.recent) {
     if (sample.t < windowStartMs) continue;
     windowTotal += 1;
-    if (sample.ok) {
-      windowOk += 1;
-      if (sample.latencyMs != null) {
-        latencySum += sample.latencyMs;
-        latencyCount += 1;
-      }
-    }
+    if (sample.ok) windowOk += 1;
     if (sample.warn) windowWarn += 1;
   }
   const buckets = entry.daily.slice(-7);
@@ -168,7 +160,6 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
     uptime24h,
     uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
     warn24h: windowTotal > 0 ? windowWarn / windowTotal : null,
-    avgLatency24h: latencyCount > 0 ? latencySum / latencyCount : null,
     detail: last ? sampleReason(last) : null,
   };
 }
