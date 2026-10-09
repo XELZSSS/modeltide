@@ -9,9 +9,9 @@ afterEach(() => {
 });
 
 describe("HttpClient global fetch binding", () => {
-  it("does not detach the global fetch (Workers throws Illegal invocation otherwise)", async () => {
+  it("does not detach the global fetch (the runtime throws Illegal invocation otherwise)", async () => {
     const stub = vi.fn(function (this: unknown, _input: unknown, _init?: unknown) {
-      // Mimics the Workers runtime: fetch called with the wrong receiver throws.
+      // Mimics the Pages Functions runtime: fetch called with the wrong receiver throws.
       if (this !== undefined) throw new TypeError("Illegal invocation");
       return Promise.resolve(new Response("hello"));
     });

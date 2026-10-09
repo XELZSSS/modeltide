@@ -1,0 +1,3 @@
+# Cloudflare Pages: Functions (/api/*) run before redirects, so the SPA
+# fallback below does not swallow API responses.
+/* /index.html 200

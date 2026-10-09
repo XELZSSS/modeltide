@@ -15,7 +15,7 @@ import { en } from "@/shared/i18n/en";
 import { zh } from "@/shared/i18n/zh";
 
 describe("shared/config limits", () => {
-  it("shortens TTL on partial failure, floored at a fraction of the cron cadence", () => {
+  it("shortens TTL on partial failure, floored at a fraction of the base TTL", () => {
     expect(ttlFor(true)).toBe(PARTIAL_FAIL_TTL_MS);
     expect(ttlFor(true, NEWS_TTL_MS)).toBe(PARTIAL_FAIL_TTL_MS);
     expect(ttlFor(true, SLOW_TTL_MS)).toBe(SLOW_TTL_MS / 6);

@@ -15,7 +15,7 @@ export async function runCapped<T>(
   const results: PromiseSettledResult<T>[] = [];
   const total = tasks.length;
   let cursor = 0;
-  const worker = async (): Promise<void> => {
+  const runner = async (): Promise<void> => {
     while (cursor < total) {
       if (opts?.signal?.aborted) {
         while (cursor < total) {
@@ -41,9 +41,9 @@ export async function runCapped<T>(
       }
     }
   };
-  const workerCount = Math.max(1, Math.min(concurrency, total));
+  const runnerCount = Math.max(1, Math.min(concurrency, total));
   const runners: Promise<void>[] = [];
-  for (let i = 0; i < workerCount; i++) runners.push(worker());
+  for (let i = 0; i < runnerCount; i++) runners.push(runner());
   await Promise.all(runners);
   return results;
 }

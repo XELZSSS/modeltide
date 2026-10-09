@@ -83,9 +83,9 @@ export class HttpClient {
   }) {
     this.defaultSignal = opts?.signal;
     this.background = opts?.background === true;
-    // Never store the global fetch by reference: in the Workers runtime it
-    // throws "Illegal invocation" when called with the wrong `this`. The
-    // wrapper keeps the receiver correct and resolves fetch lazily per call.
+    // Never store the global fetch by reference: in the Pages Functions
+    // runtime it throws "Illegal invocation" when called with the wrong
+    // `this`. The wrapper keeps the receiver correct and resolves fetch lazily per call.
     this.fetchImpl = opts?.fetchImpl ?? ((input, init) => fetch(input, init));
     this.now = opts?.now ?? Date.now;
     this.pools = opts?.pools ?? createSlotPools();

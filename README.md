@@ -11,7 +11,7 @@
   <a href="https://vite.dev"><img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" /></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/Tailwind-4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" /></a>
-  <a href="https://workers.cloudflare.com"><img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers" /></a>
+  <a href="https://pages.cloudflare.com"><img src="https://img.shields.io/badge/Cloudflare-Pages-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Pages" /></a>
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT" />
 </p>
 
@@ -29,9 +29,9 @@
 
 ## Architecture
 
-- **Client**: Vite SPA — page navigations served as static assets
-- **API**: `/api/*` runs in the Worker, cached in KV / memory
-- **Cron**: hourly — status sampling + cache warmup
+- **Client**: Vite SPA — static output in `dist`, SPA fallback via `public/_redirects`
+- **API**: `/api/*` runs as Pages Functions (`functions/api/[[route]].ts`), cached in KV / memory
+- **Status**: on-demand self-heal on request
 
 ## Structure
 
@@ -39,14 +39,14 @@
 src/client/   SPA: views, router, components, queries
 src/server/   Data sources, parsers, cache
 src/shared/   Shared types, config, contract, i18n
-worker/       Worker entry: API routes + cron
-public/       Static assets + service worker
+functions/    Pages Functions entry: /api/* routes
+public/       Static assets + PWA
 scripts/      Build scripts
 ```
 
 ## Quick Start
 
-Requires Node.js ≥ 22.22.2
+Requires Node.js ≥ 20.19.0
 
 ```bash
 npm install
@@ -55,23 +55,17 @@ npm run dev    # http://localhost:5173
 
 ## Commands
 
-| Command          | Description                 |
-| ---------------- | --------------------------- |
-| `npm run dev`    | Dev server                  |
-| `npm run build`  | Production build            |
-| `npm run test`   | Run tests                   |
-| `npm run lint`   | Lint                        |
-| `npm run format` | Format                      |
-| `npm run deploy` | Build and deploy to Workers |
+| Command          | Description        |
+| ---------------- | ------------------ |
+| `npm run dev`    | Dev server         |
+| `npm run build`  | Production build   |
+| `npm run test`   | Run tests          |
+| `npm run lint`   | Lint               |
+| `npm run format` | Format             |
 
 ## Deployment
 
-1. Fork the repository
-2. _(Recommended)_ Create a KV namespace and replace the ID in `wrangler.jsonc` — without KV, data falls back to in-memory cache and status history is not persisted
-3. _(Optional)_ `npx wrangler secret put STATUS_PING_URL` with a [Healthchecks.io](https://healthchecks.io/docs/monitoring_cron_jobs/) ping URL for cron-failure alerts
-4. `npx wrangler login` once, then `npm run deploy`
-
-`CACHE_VERSION` is content-hashed from the data-shaping code — no manual bump needed.
+Connect the repository to Cloudflare Pages with Framework `Vite`, Build command `npm run build` and Output directory `dist`, `functions/` deploys automatically, optionally bind a KV namespace named `CACHE` for persistent caching
 
 ## License
 

@@ -8,7 +8,7 @@ import { SETTINGS_STORAGE_VERSION, STORAGE_KEYS } from "../src/shared/config/lim
 import { THEME_COLORS } from "../src/shared/config/theme.ts";
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const clientOutDir = path.join(rootDir, "dist", "client");
+const clientOutDir = path.join(rootDir, "dist");
 const SW_VERSION_DECL = /const SW_VERSION = "[^"]*";/;
 const SW_SHELL_DECL = /const PRECACHE_SHELL = \[[\s\S]*?\];/;
 const SHELL_ASSET = /<(?:script|link)\b[^>]*\s(?:src|href)="(\/assets\/[^"]+)"/g;
@@ -38,7 +38,7 @@ function shellAssets(): string[] {
   for (const [, url] of html.matchAll(SHELL_ASSET)) {
     if (url) urls.add(url);
   }
-  if (urls.size === 0) throw new Error("dist/client/index.html: no /assets/ entry, preload or stylesheet found");
+  if (urls.size === 0) throw new Error("dist/index.html: no /assets/ entry, preload or stylesheet found");
   return [...urls];
 }
 
@@ -49,7 +49,7 @@ export function serviceWorkerVersion(): Plugin {
     // writeBundle (unlike closeBundle) only fires after the client bundle is
     // on disk, and never during cleanup of a failed build.
     writeBundle() {
-      if (this.environment.name !== "client") return;
+      if (this.environment?.name != null && this.environment.name !== "client") return;
       const file = path.join(clientOutDir, "sw.js");
       const source = fs.readFileSync(file, "utf8");
       if (!SW_VERSION_DECL.test(source)) {
@@ -82,7 +82,7 @@ export function cspHashGuard(): Plugin {
     // writeBundle (unlike closeBundle) only fires after the client bundle is
     // on disk, and never during cleanup of a failed build.
     writeBundle() {
-      if (this.environment.name !== "client") return;
+      if (this.environment?.name != null && this.environment.name !== "client") return;
       const html = fs.readFileSync(path.join(clientOutDir, "index.html"), "utf8");
       const headers = fs.readFileSync(path.join(rootDir, "public", "_headers"), "utf8");
       const pinned = [...headers.matchAll(CSP_SCRIPT_HASH)].map(([, hash]) => hash);
@@ -95,7 +95,7 @@ export function cspHashGuard(): Plugin {
           new Script(script);
         } catch (err) {
           throw new Error(
-            `dist/client/index.html: inline script #${checked} does not parse: ${err instanceof Error ? err.message : String(err)}`,
+            `dist/index.html: inline script #${checked} does not parse: ${err instanceof Error ? err.message : String(err)}`,
           );
         }
         const digest = createHash("sha256").update(script).digest("base64");
@@ -105,7 +105,7 @@ export function cspHashGuard(): Plugin {
           );
         }
       }
-      if (checked === 0) throw new Error("dist/client/index.html: no inline bootstrap script to check");
+      if (checked === 0) throw new Error("dist/index.html: no inline bootstrap script to check");
     },
   };
 }
@@ -138,7 +138,7 @@ export function consistencyGuard(): Plugin {
     name: "modeltide:consistency",
     apply: "build",
     buildStart() {
-      if (this.environment.name !== "client") return;
+      if (this.environment?.name != null && this.environment.name !== "client") return;
       const html = fs.readFileSync(path.join(rootDir, "index.html"), "utf8");
       const key = SETTINGS_KEY_READ.exec(html)?.[1];
       if (key !== STORAGE_KEYS.settings) {

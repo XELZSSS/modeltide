@@ -1,5 +1,4 @@
 import type { AppContext } from "@/server/context";
-import { buildContext, type Env } from "@/server/context";
 import { qEnum, qNum, qStr, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
 import { SHORT_CACHE_HEADERS } from "@/server/http/headers";
 import type { ApiDomain, DomainPayload } from "@/shared/contract";
@@ -23,7 +22,6 @@ interface SourceDefinition<D extends ApiDomain, Q extends QuerySchema> {
   query?: Q;
   cache?: { browser: string; cdn: string };
   handler(ctx: AppContext, params: ValidatedQuery<Q>): Promise<DomainPayload<D>>;
-  warm?: boolean;
 }
 
 export interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends SourceDefinition<
@@ -47,11 +45,9 @@ function defineSource<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
 const ENTRIES = {
   artificialIndex: defineSource("artificialIndex", {
     handler: (ctx) => getIntelligenceIndex(ctx),
-    warm: true,
   }),
   homeDashboard: defineSource("homeDashboard", {
     handler: (ctx) => getHomeDashboard(ctx),
-    warm: true,
   }),
   news: defineSource("news", {
     query: { category: qEnum(NEWS_CATEGORIES, NEWS_CATEGORIES[0]) },
@@ -83,7 +79,6 @@ const ENTRIES = {
   }),
   openRouterRankings: defineSource("openRouterRankings", {
     handler: (ctx) => getOpenRouterRankings(ctx),
-    warm: true,
   }),
   statusHistory: defineSource("statusHistory", {
     cache: SHORT_CACHE_HEADERS,
@@ -92,17 +87,3 @@ const ENTRIES = {
 } satisfies Record<ApiDomain, unknown>;
 
 export const SOURCES: readonly SourceEntry[] = Object.values(ENTRIES);
-
-export function warmTasks(env: Env, taskTimeoutMs: number): (() => Promise<unknown>)[] {
-  // One shared context for the whole warmup phase: warm tasks fan out internally
-  // (up to 4 concurrent fetches each), so per-task pools could burst past the
-  // 6-connection platform budget. A shared pool queues fairly instead.
-  const ctx = buildContext(env, { workSignal: AbortSignal.timeout(taskTimeoutMs) });
-  const tasks: (() => Promise<unknown>)[] = [];
-  for (const source of SOURCES) {
-    if (!source.warm) continue;
-    const params = {} as ValidatedQuery<QuerySchema>;
-    tasks.push(() => source.handler(ctx, params));
-  }
-  return tasks;
-}

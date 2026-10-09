@@ -1,7 +1,5 @@
-import { WARM_TASK_TIMEOUT_MS } from "@/server/config/cron-budget";
-
 // Free plan: 50 external subrequests and 6 simultaneous connections per invocation.
-// Per-call timeouts stay short so one slow upstream cannot wedge the slot pool and trip the sampling deadline.
+// Per-call timeouts stay short so one slow upstream cannot wedge the slot pool.
 const UPSTREAM_TIMEOUT_MS = 12_000;
 
 export const BACKOFF_MAX_MS = 2_000;
@@ -25,9 +23,4 @@ export const RETRY_AFTER_MAX_MS = 5 * 60_000;
 
 export const SHARED_REFRESH_TIMEOUT_MS = WORST_CASE_UPSTREAM_CALL_MS;
 
-const INFLIGHT_GUARD_MARGIN_MS = 5_000;
-
-export const INFLIGHT_HANG_GUARD_MS = Math.max(
-  WORST_CASE_UPSTREAM_CALL_MS * 2,
-  WARM_TASK_TIMEOUT_MS + INFLIGHT_GUARD_MARGIN_MS,
-);
+export const INFLIGHT_HANG_GUARD_MS = WORST_CASE_UPSTREAM_CALL_MS * 2;

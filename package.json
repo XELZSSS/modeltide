@@ -5,13 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:worker": "wrangler dev --config wrangler.jsonc",
     "gen:cache-version": "node scripts/gen-cache-version.cjs",
     "build": "node scripts/gen-cache-version.cjs && vite build",
     "preview": "npm run build && vite preview",
-    "deploy": "npm run build && wrangler deploy",
-    "deploy:dry-run": "npm run build && wrangler deploy --dry-run",
-    "type-check": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.worker.json",
+    "type-check": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",
     "lint": "oxlint --vue-plugin --deny-warnings",
     "format": "oxfmt --write .",
     "test": "vitest run",
@@ -20,7 +17,7 @@
     "audit": "npm audit --registry=https://registry.npmjs.org"
   },
   "engines": {
-    "node": ">=22.22.2"
+    "node": ">=20.19.0"
   },
   "packageManager": "npm@11.19.0",
   "dependencies": {
@@ -36,7 +33,6 @@
     "vue-router": "^5.3.1"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.54.6",
     "@cloudflare/workers-types": "^5.20260908.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.19.0",
@@ -47,13 +43,11 @@
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.2.2",
     "vitest": "~5.0.1",
-    "vue-tsc": "^3.3.11",
-    "wrangler": "^4.128.0"
+    "vue-tsc": "^3.3.11"
   },
   "allowScripts": {
     "vue-demi@0.14.10": true,
-    "esbuild@0.28.1": true,
-    "workerd@1.20261006.1": true
+    "esbuild@0.28.1": true
   },
   "overrides": {
     "sharp": "0.35.5"

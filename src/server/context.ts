@@ -7,8 +7,6 @@ import { SHARED_REFRESH_TIMEOUT_MS } from "@/server/config";
 
 export interface Env {
   CACHE?: KVNamespace;
-  ASSETS?: Fetcher;
-  STATUS_PING_URL?: string;
 }
 
 export interface AppContext {

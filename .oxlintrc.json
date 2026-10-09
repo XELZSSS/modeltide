@@ -12,8 +12,8 @@
           {
             "patterns": [
               {
-                "group": ["@/server", "@/server/*", "**/server/**", "@/worker", "@/worker/*", "**/worker/**"],
-                "message": "Client code must not import server or worker code. Move the shared piece into src/shared."
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
+                "message": "Client code must not import server or functions code. Move the shared piece into src/shared."
               }
             ]
           }
@@ -21,7 +21,7 @@
       }
     },
     {
-      "files": ["src/server/**/*.ts", "worker/**/*.ts"],
+      "files": ["src/server/**/*.ts", "functions/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -29,7 +29,7 @@
             "patterns": [
               {
                 "group": ["@/client", "@/client/*", "**/client/**"],
-                "message": "Server and worker code must not import the client bundle. Move the shared piece into src/shared."
+                "message": "Server and functions code must not import the client bundle. Move the shared piece into src/shared."
               }
             ]
           }
@@ -48,7 +48,7 @@
                 "message": "src/shared must stay platform-neutral. Move the client piece into src/client."
               },
               {
-                "group": ["@/server", "@/server/*", "**/server/**", "@/worker", "@/worker/*", "**/worker/**"],
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
                 "message": "src/shared must stay platform-neutral. Move the server piece into src/server."
               }
             ]

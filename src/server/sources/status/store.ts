@@ -149,7 +149,7 @@ function warnStaleSamples(ctx: AppContext, latest: number): void {
   const now = Date.now();
   if (latest === 0 || now - latest <= STALE_SAMPLE_WARN_MS) return;
   if (!staleWarnGate.open()) return;
-  ctx.log("warn", "[status-history] samples are stale: sampling cron may be dead", {
+  ctx.log("warn", "[status-history] samples are stale: background sampling may be delayed", {
     latestSampleAt: new Date(latest).toISOString(),
     ageHours: Math.round((now - latest) / 3_600_000),
   });

@@ -23,8 +23,8 @@ export default defineConfig({
       },
       {
         test: {
-          name: "worker",
-          include: ["worker/**/*.{test,spec}.ts"],
+          name: "functions",
+          include: ["functions/**/*.{test,spec}.ts"],
         },
       },
     ],

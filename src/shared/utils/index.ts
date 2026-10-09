@@ -1,5 +1,5 @@
 // Barrel: prefer deep imports inside shared/ to avoid cycles; this barrel is for
-// external (client/server/worker) consumers.
+// external (client/server/functions) consumers.
 export { computeBlendPrice, monthlyCostFor, type CostScenario } from "@/shared/utils/cost";
 export { isFiniteNumber, clampedPercent, unclampedPercent, approxEq } from "@/shared/utils/numbers";
 export { dedupeBy, toStringOrNull, normalizeModelKey, errMsg, titleCase } from "@/shared/utils/text";
