@@ -65,7 +65,7 @@ npm run dev    # http://localhost:5173
 
 ## 部署
 
-连接仓库到 Cloudflare Pages：Framework 选 `Vite`，构建命令 `npm run build`，输出目录 `dist`，`functions/` 自动部署，可选绑定名为 `CACHE` 的 KV 实现持久化缓存
+连接仓库到 Cloudflare Pages：Framework 选 `Vue`，构建命令 `npm run build`，输出目录 `dist`，`functions/` 自动部署，可选绑定名为 `CACHE` 的 KV 实现持久化缓存
 
 ## 许可证
 

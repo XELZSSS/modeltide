@@ -65,7 +65,7 @@ npm run dev    # http://localhost:5173
 
 ## Deployment
 
-Connect the repository to Cloudflare Pages with Framework `Vite`, Build command `npm run build` and Output directory `dist`, `functions/` deploys automatically, optionally bind a KV namespace named `CACHE` for persistent caching
+Connect the repository to Cloudflare Pages with Framework `Vue`, Build command `npm run build` and Output directory `dist`, `functions/` deploys automatically, optionally bind a KV namespace named `CACHE` for persistent caching
 
 ## License
 
