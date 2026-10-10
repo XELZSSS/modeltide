@@ -9,6 +9,7 @@ export const API_DOMAINS = {
   closedReleases: "closed-releases",
   agentRankings: "agent-rankings",
   statusHistory: "status-history",
+  sourceIncidents: "source-incidents",
   homeDashboard: "home-dashboard",
 } as const;
 
@@ -39,6 +40,7 @@ export const queryKeys = {
   closedReleases: [...QUERY_KEY_PREFIX, API_DOMAINS.closedReleases],
   agentRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.agentRankings],
   statusHistory: [...QUERY_KEY_PREFIX, API_DOMAINS.statusHistory],
+  sourceIncidents: (id: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.sourceIncidents, id],
   homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],
 } as const satisfies Record<ApiDomain, unknown>;
 
@@ -51,6 +53,7 @@ export const apiPaths = {
   closedReleases: `${API_PREFIX}/${API_DOMAINS.closedReleases}`,
   agentRankings: `${API_PREFIX}/${API_DOMAINS.agentRankings}`,
   statusHistory: `${API_PREFIX}/${API_DOMAINS.statusHistory}`,
+  sourceIncidents: `${API_PREFIX}/${API_DOMAINS.sourceIncidents}`,
   homeDashboard: `${API_PREFIX}/${API_DOMAINS.homeDashboard}`,
 } as const satisfies Record<ApiDomain, string>;
 

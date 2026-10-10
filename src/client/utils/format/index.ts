@@ -6,7 +6,6 @@ export {
   formatSpeed,
   formatTokens,
   formatTrend,
-  formatUptimePct,
 } from "./number";
 export { formatDollar, formatPricePerMillion } from "./money";
 export { formatDate, formatDurationMin, formatRelativeTime, formatTime, formatUptime } from "./time";

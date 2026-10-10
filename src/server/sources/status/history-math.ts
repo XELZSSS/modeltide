@@ -1,18 +1,8 @@
-import { ONE_DAY, ONE_MINUTE, UPTIME_ERROR_RATIO, UPTIME_WARN_RATIO } from "@/shared/config";
-import type {
-  DayBucket,
-  SourceHealthLevel,
-  SourceHistorySummary,
-  SourceId,
-  StatusEvent,
-  UptimeSample,
-} from "@/shared/types";
+import { ONE_DAY, ONE_MINUTE } from "@/shared/config";
+import type { SourceHealthLevel, SourceHistorySummary, SourceId, StatusEvent, UptimeSample } from "@/shared/types";
 import { emptyEntry, type HistorySourceEntry } from "./schema";
 
 const RECENT_WINDOW_MS = ONE_DAY;
-const RETAINED_DAYS = 30;
-
-const utcDay = (t: number): string => new Date(t).toISOString().slice(0, 10);
 
 type IncidentType = "down" | "degraded";
 
@@ -67,17 +57,9 @@ export function deriveEvents(id: SourceId, samples: UptimeSample[], openSince: n
   return events;
 }
 
-function applySampleDelta(bucket: DayBucket, sample: UptimeSample): void {
-  bucket.total += 1;
-  if (sample.ok) bucket.ok += 1;
-  if (sample.warn) bucket.warn += 1;
-}
-
-function pruneWindows(entry: HistorySourceEntry, now: number): HistorySourceEntry {
-  const cutoffDay = utcDay(now - RETAINED_DAYS * ONE_DAY);
+function pruneRecent(entry: HistorySourceEntry, now: number): HistorySourceEntry {
   return {
     recent: entry.recent.filter((s) => s.t > now - RECENT_WINDOW_MS),
-    daily: entry.daily.filter((b) => b.day >= cutoffDay).slice(-RETAINED_DAYS),
     openSince: entry.openSince,
   };
 }
@@ -105,51 +87,15 @@ export function mergeSample(
   if (last != null && sample.t <= last.t) return prevEntry;
   recent.push(sample);
 
-  const day = utcDay(sample.t);
-  // Copy only the bucket being mutated instead of every daily bucket.
-  const daily: DayBucket[] = [];
-  let bucket: DayBucket | undefined;
-  for (const b of prevEntry.daily) {
-    if (b.day === day) {
-      bucket = { ...b };
-      daily.push(bucket);
-    } else {
-      daily.push(b);
-    }
-  }
-  if (!bucket) {
-    bucket = { day, total: 0, ok: 0, warn: 0 };
-    daily.push(bucket);
-  }
-  applySampleDelta(bucket, sample);
-
-  return pruneWindows({ recent, daily, openSince: nextOpenSince(prevEntry, last, sample, now) }, now);
+  return pruneRecent({ recent, openSince: nextOpenSince(prevEntry, last, sample, now) }, now);
 }
 
-export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now: number): SourceHistorySummary {
+export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry): SourceHistorySummary {
   const last = entry.recent[entry.recent.length - 1];
-  const windowStartMs = now - RECENT_WINDOW_MS;
-  let windowTotal = 0;
-  let windowOk = 0;
-  let windowWarn = 0;
-  for (const sample of entry.recent) {
-    if (sample.t < windowStartMs) continue;
-    windowTotal += 1;
-    if (sample.ok) windowOk += 1;
-    if (sample.warn) windowWarn += 1;
-  }
-  const buckets = entry.daily.slice(-7);
-  let sumOk = 0;
-  let sumTotal = 0;
-  for (const bucket of buckets) {
-    sumOk += bucket.ok;
-    sumTotal += bucket.total;
-  }
-  const uptime24h = windowTotal > 0 ? windowOk / windowTotal : null;
   let level: SourceHealthLevel;
   if (!last) level = "unknown";
-  else if (!last.ok || (uptime24h != null && uptime24h < UPTIME_ERROR_RATIO)) level = "error";
-  else if (last.warn || (uptime24h != null && uptime24h < UPTIME_WARN_RATIO)) level = "warn";
+  else if (!last.ok) level = "error";
+  else if (last.warn) level = "warn";
   else level = "ok";
   return {
     id,
@@ -157,9 +103,6 @@ export function buildSourceSummary(id: SourceId, entry: HistorySourceEntry, now:
     level,
     latencyMs: last ? last.latencyMs : null,
     checkedAt: last ? new Date(last.t).toISOString() : null,
-    uptime24h,
-    uptime7d: sumTotal > 0 ? sumOk / sumTotal : null,
-    warn24h: windowTotal > 0 ? windowWarn / windowTotal : null,
     detail: last ? sampleReason(last) : null,
   };
 }

@@ -2,7 +2,6 @@
 import { computed } from "vue";
 import type { StatusEvent } from "@/shared/types";
 import { cn } from "@/client/utils/cn";
-import { formatRelativeTime } from "@/client/utils/format";
 import { sourceLabel } from "@/shared/config";
 import { useTranslation } from "@/client/i18n";
 import Dot from "@/client/components/ui/dot.vue";
@@ -17,12 +16,11 @@ const props = withDefaults(
     sourceId?: string;
     limit?: number;
     showSource?: boolean;
-    showTime?: boolean;
   }>(),
-  { showSource: false, showTime: false },
+  { showSource: false },
 );
 
-const { t, lang } = useTranslation();
+const { t } = useTranslation();
 
 const visible = computed(() => {
   const filtered = props.sourceId ? props.events.filter((event) => event.id === props.sourceId) : props.events;
@@ -71,7 +69,6 @@ const rows = computed(() =>
       </div>
       <div class="flex items-center gap-2 shrink-0 text-xs text-text-secondary">
         <span v-if="row.event.type !== 'up'" class="font-mono">{{ eventDurationLabel(t, row.event.durationMin) }}</span>
-        <span v-if="showTime">{{ formatRelativeTime(row.event.at, t, lang) }}</span>
       </div>
     </div>
   </div>

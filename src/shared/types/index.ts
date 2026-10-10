@@ -20,10 +20,12 @@ export type {
   SourceLevel,
   SourceHealthLevel,
   UptimeSample,
-  DayBucket,
   StatusEvent,
   SourceHistorySummary,
   StatusHistoryPayload,
+  SourceIncident,
+  SourceIncidentLog,
+  SourceIncidentUpdate,
 } from "@/shared/types/status";
 
 export type { ThemeMode, HomeOpenSourceEntry, HomeDashboardData, ModelSource } from "@/shared/types/app";

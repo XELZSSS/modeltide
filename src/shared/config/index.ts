@@ -5,8 +5,6 @@ export {
   MAX_MODEL_LIMIT,
   MAX_ID_CHARS,
   MAX_NAME_CHARS,
-  UPTIME_WARN_RATIO,
-  UPTIME_ERROR_RATIO,
   OPEN_SOURCE_MODELS_DEFAULTS,
 } from "@/shared/config/limits";
 export { MODALITY_KEYS, type ModalityKey } from "@/shared/config/modality";

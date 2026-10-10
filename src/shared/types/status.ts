@@ -46,13 +46,6 @@ export interface UptimeSample {
   warnReason: string | null;
 }
 
-export interface DayBucket {
-  day: string;
-  total: number;
-  ok: number;
-  warn: number;
-}
-
 export interface StatusEvent {
   id: SourceId;
   type: "down" | "up" | "degraded";
@@ -67,9 +60,6 @@ export interface SourceHistorySummary {
   level: SourceHealthLevel;
   latencyMs: number | null;
   checkedAt: string | null;
-  uptime24h: number | null;
-  uptime7d: number | null;
-  warn24h: number | null;
   detail: string | null;
 }
 
@@ -78,7 +68,29 @@ export interface StatusHistoryPayload {
   uptimeMs: number;
   sources: SourceHistorySummary[];
   recent: Partial<Record<SourceId, UptimeSample[]>>;
-  daily: Partial<Record<SourceId, DayBucket[]>>;
   events: StatusEvent[];
   storeMode: StatusStoreMode;
+}
+
+export interface SourceIncidentUpdate {
+  body: string;
+  status: string;
+  createdAt: string | null;
+}
+
+export interface SourceIncident {
+  id: string;
+  name: string;
+  status: string;
+  impact: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  shortlink: string | null;
+  updates: SourceIncidentUpdate[];
+}
+
+export interface SourceIncidentLog {
+  source: SourceId;
+  pageUrl: string | null;
+  incidents: SourceIncident[];
 }

@@ -31,7 +31,7 @@
 
 - **Client**: Vite SPA — static output in `dist`, SPA fallback via `public/_redirects`
 - **API**: `/api/*` runs as Pages Functions (`functions/api/[[route]].ts`), cached in KV / memory
-- **Status**: on-demand self-heal on request
+- **Status**: Real-time detection upon request
 
 ## Structure
 

@@ -7,6 +7,7 @@ import type {
   NewsCategory,
   NewsItem,
   OpenSourceModelEntry,
+  SourceIncidentLog,
 } from "@/shared/types";
 import { dedupeBy } from "@/shared/utils";
 import { buildHallucinationRankings } from "@/shared/utils/hallucination";
@@ -27,6 +28,7 @@ import {
   qOpenSourceModel,
   qOpenSourceModelsRaw,
   qOpenRouter,
+  qSourceIncidents,
   qStatusHistory,
 } from "./catalog";
 import type { QueryResult } from "./factory";
@@ -112,6 +114,19 @@ export async function useSuspenseStatusHistory(): Promise<QueryResult<"statusHis
   const query = qStatusHistory.use();
   await query.suspense();
   return query;
+}
+
+export async function useSuspenseSourceIncidents(id: string): Promise<ComputedRef<SourceIncidentLog>> {
+  const query = qSourceIncidents(id).use();
+  await query.suspense();
+  return computed(
+    () =>
+      unwrapObject<SourceIncidentLog>(query.data.value, "sourceIncidents") ?? {
+        source: id as SourceIncidentLog["source"],
+        pageUrl: null,
+        incidents: [],
+      },
+  );
 }
 
 export const useSuspenseAgentRankingsState = () => suspenseState<AgentRankEntry>(qAgent.use(), "agentRankings");

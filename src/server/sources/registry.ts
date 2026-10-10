@@ -16,6 +16,7 @@ import { getHomeDashboard } from "@/server/sources/home-source";
 import { getNews } from "@/server/sources/news-source";
 import { getModelById, getModels } from "@/server/sources/hf-source";
 import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
+import { getSourceIncidentLog } from "@/server/sources/incident-log-source";
 import { getStatusHistory } from "@/server/sources/status-history";
 
 interface SourceDefinition<D extends ApiDomain, Q extends QuerySchema> {
@@ -24,10 +25,10 @@ interface SourceDefinition<D extends ApiDomain, Q extends QuerySchema> {
   handler(ctx: AppContext, params: ValidatedQuery<Q>): Promise<DomainPayload<D>>;
 }
 
-export interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends SourceDefinition<
-  D,
-  Q
-> {
+export interface SourceEntry<
+  D extends ApiDomain = ApiDomain,
+  Q extends QuerySchema = QuerySchema,
+> extends SourceDefinition<D, Q> {
   readonly domain: D;
   readonly path: string;
 }
@@ -83,6 +84,10 @@ const ENTRIES = {
   statusHistory: defineSource("statusHistory", {
     cache: SHORT_CACHE_HEADERS,
     handler: (ctx) => getStatusHistory(ctx),
+  }),
+  sourceIncidents: defineSource("sourceIncidents", {
+    query: { id: qStr({ maxLength: MAX_NAME_CHARS }) },
+    handler: (ctx, params) => getSourceIncidentLog(ctx, params.id),
   }),
 } satisfies Record<ApiDomain, unknown>;
 

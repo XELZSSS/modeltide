@@ -10,20 +10,17 @@ export function buildHistoryPayload(
   store: HistoryStore,
   uptime: UptimePayload,
   storeMode: StatusStoreMode,
-  now = Date.now(),
 ): StatusHistoryPayload {
   const recent: StatusHistoryPayload["recent"] = {};
-  const daily: StatusHistoryPayload["daily"] = {};
   const sources: StatusHistoryPayload["sources"] = [];
   const events: StatusEvent[] = [];
 
   for (const id of SOURCE_IDS) {
     const entry = store.sources[id];
-    if (!entry || (entry.recent.length === 0 && entry.daily.length === 0)) continue;
+    if (!entry || entry.recent.length === 0) continue;
     recent[id] = [...entry.recent];
-    daily[id] = [...entry.daily];
     events.push(...deriveEvents(id, entry.recent, entry.openSince));
-    sources.push(buildSourceSummary(id, entry, now));
+    sources.push(buildSourceSummary(id, entry));
   }
 
   // Parse timestamps once instead of inside the comparator (O(n log n) Date.parse calls).
@@ -34,7 +31,6 @@ export function buildHistoryPayload(
     uptimeMs: uptime.uptimeMs,
     sources,
     recent,
-    daily,
     events: stamped.slice(0, MAX_EVENTS).map((s) => s.event),
     storeMode,
   };

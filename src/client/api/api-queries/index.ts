@@ -24,5 +24,6 @@ export {
   useSuspenseOpenRouterRankingsState,
   useSuspenseOpenSourceModel,
   useSuspenseOpenSourceModelsState,
+  useSuspenseSourceIncidents,
   useSuspenseStatusHistory,
 } from "./hooks";

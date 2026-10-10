@@ -99,3 +99,28 @@ export function qOpenSourceModel(id: string): OpenSourceModelQuery {
   }
   return created;
 }
+
+type SourceIncidentsQuery = ReturnType<typeof createApiQuery<"sourceIncidents">>;
+
+const MAX_INCIDENT_QUERIES = 32;
+
+const sourceIncidentsQueries = new Map<string, SourceIncidentsQuery>();
+
+export function qSourceIncidents(id: string): SourceIncidentsQuery {
+  const existing = sourceIncidentsQueries.get(id);
+  if (existing) {
+    sourceIncidentsQueries.delete(id);
+    sourceIncidentsQueries.set(id, existing);
+    return existing;
+  }
+  const created = createApiQuery("sourceIncidents", queryKeys.sourceIncidents(id), {
+    ttl: FIVE_MINUTES,
+    query: { id },
+  });
+  sourceIncidentsQueries.set(id, created);
+  if (sourceIncidentsQueries.size > MAX_INCIDENT_QUERIES) {
+    const oldest = sourceIncidentsQueries.keys().next().value;
+    if (oldest !== undefined) sourceIncidentsQueries.delete(oldest);
+  }
+  return created;
+}

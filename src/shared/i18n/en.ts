@@ -256,16 +256,10 @@ export const en = {
   statusDegraded: "{down} of {total} data sources failing",
   statusWarnBanner: "{warn} of {total} data sources degraded",
   statusProbing: "{probed} of {total} sources reporting",
-  uptime24h: "24h uptime",
-  uptime7d: "7d uptime",
-  last30Days: "Last 30 days",
   historyAccumulating: "History is building up",
   recentEvents: "Recent events",
   eventDown: "Failure",
   eventDegraded: "Degraded",
-  degradedRecently: "Degraded in last 24h",
-  warn24h: "Degraded (24h)",
-  dayDegraded: "{count} degraded",
   eventUp: "Recovered",
   eventOngoing: "ongoing",
   eventDurationMin: "{value} min",
@@ -274,12 +268,14 @@ export const en = {
   noRecentEvents: "No events in the last 24 hours",
   uptimeNoData: "No data",
   backToStatus: "Back to status",
+  incidentLog: "Incident log",
+  noIncidentLog: "No incident records",
+  viewOfficialStatus: "View official status page",
 
   agentRankings: "Agent",
   agentSource: "Data Source: Arena",
 
   score: "Score",
-  memoryModeNotice: "Memory mode: history is temporary without KV storage",
   compareStale: "Some selected models are no longer listed and were removed.",
 } as const;
 

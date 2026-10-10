@@ -71,10 +71,6 @@ export function formatPercent(v: number | null | undefined, t: TFunction): strin
   return isFiniteNumber(v) ? `${v.toFixed(1)}%` : t("notAvailable");
 }
 
-export function formatUptimePct(v: number | null | undefined, t: TFunction): string {
-  return isFiniteNumber(v) ? `${(v * 100).toFixed(2)}%` : t("uptimeNoData");
-}
-
 const INDEX_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 export function formatIndex(v: number, fallback = "—"): string {

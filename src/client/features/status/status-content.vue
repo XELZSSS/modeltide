@@ -1,24 +1,21 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { ChevronRight } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { useSuspenseStatusHistory } from "@/client/api/api-queries";
 import { unwrapObject } from "@/client/api/payload-normalize";
 import { cn } from "@/client/utils/cn";
-import { formatUptime, formatUptimePct } from "@/client/utils/format";
+import { formatUptime } from "@/client/utils/format";
 import { sourceLabel } from "@/shared/config";
-import type { DayBucket, SourceHistorySummary, StatusHistoryPayload } from "@/shared/types";
-import { recentlyDegradedIds, resolveLevel } from "@/shared/utils/status-level";
+import type { SourceHistorySummary, StatusHistoryPayload } from "@/shared/types";
+import { resolveLevel } from "@/shared/utils/status-level";
 import { LEVEL_STYLES } from "@/client/utils/status-theme";
-import { EMPTY_BUCKETS, EMPTY_EVENTS, EMPTY_SOURCES } from "@/client/utils/empty";
+import { EMPTY_EVENTS, EMPTY_SOURCES } from "@/client/utils/empty";
 import SafeLink from "@/client/components/safe-link.vue";
-import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
 import Card from "@/client/components/ui/card.vue";
 import CardContent from "@/client/components/ui/card-content.vue";
 import Dot from "@/client/components/ui/dot.vue";
 import LabeledDot from "@/client/components/ui/labeled-dot.vue";
-import UptimeStrip from "@/client/features/status/status-parts.vue";
 import StatusEventList from "@/client/features/status/status-events.vue";
 
 interface SourceCard {
@@ -26,10 +23,7 @@ interface SourceCard {
   label: string;
   level: ReturnType<typeof resolveLevel>;
   style: (typeof LEVEL_STYLES)[keyof typeof LEVEL_STYLES];
-  buckets: DayBucket[];
-  recentlyDegraded: boolean;
-  uptime24h: number | null;
-  uptime7d: number | null;
+  detail: string | null;
 }
 
 const { t } = useTranslation();
@@ -39,8 +33,6 @@ const history = computed(() => unwrapObject<StatusHistoryPayload>(query.data.val
 
 const sources = computed(() => history.value.sources ?? EMPTY_SOURCES);
 
-const degradedIds = computed(() => recentlyDegradedIds(history.value.recent));
-
 const cards = computed<SourceCard[]>(() =>
   sources.value.map((summary: SourceHistorySummary) => {
     const level = resolveLevel(summary);
@@ -49,10 +41,7 @@ const cards = computed<SourceCard[]>(() =>
       label: sourceLabel(summary.id, t),
       level,
       style: LEVEL_STYLES[level],
-      buckets: history.value.daily[summary.id] ?? EMPTY_BUCKETS,
-      recentlyDegraded: degradedIds.value.has(summary.id),
-      uptime24h: summary.uptime24h,
-      uptime7d: summary.uptime7d,
+      detail: summary.detail,
     };
   }),
 );
@@ -67,7 +56,6 @@ const counts = computed(() => {
     if (card.level === "error") erroring++;
     else if (card.level === "warn") warning++;
     else if (card.level === "unknown") unprobed++;
-    if (card.uptime24h != null || card.uptime7d != null) hasData = true;
   }
   if (!hasData) {
     for (const source of sources.value) {
@@ -93,8 +81,6 @@ const overall = computed(() => {
 </script>
 
 <template>
-  <PartialNotice v-if="history.storeMode === 'memory'" :message="t('memoryModeNotice')" />
-
   <Card>
     <CardContent class="flex items-center justify-between gap-3 flex-wrap py-4">
       <div class="flex items-center gap-3 min-w-0">
@@ -115,32 +101,20 @@ const overall = computed(() => {
       :href="`/status/${card.id}`"
       class="group block ui-card p-4 transition-colors duration-fast hoverable:hover:border-text-tertiary/40 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
     >
-      <div class="flex items-center justify-between gap-3 mb-3">
+      <div class="flex items-center justify-between gap-3">
         <LabeledDot size="sm" :color="card.style.dot" text-class="ui-body" class="flex-1" :title="card.label">
           {{ card.label }}
         </LabeledDot>
-        <div class="shrink-0 text-right">
-          <span :class="cn('ui-caption font-medium', card.style.text)">{{ t(card.style.labelKey) }}</span>
-          <div v-if="card.recentlyDegraded && card.level === 'ok'" class="ui-caption text-warning mt-0.5">
-            {{ t("degradedRecently") }}
-          </div>
-        </div>
+        <span :class="cn('ui-caption font-medium shrink-0', card.style.text)">{{ t(card.style.labelKey) }}</span>
       </div>
-      <div aria-hidden="true"><UptimeStrip :buckets="card.buckets" /></div>
-      <div class="flex items-center justify-between gap-3 mt-3 ui-caption">
-        <span>
-          {{ t("uptime24h") }}
-          <span class="ui-mono-value text-xs text-text-primary ml-1.5">{{ formatUptimePct(card.uptime24h, t) }}</span>
-        </span>
-        <span>
-          {{ t("uptime7d") }}
-          <span class="ui-mono-value text-xs text-text-primary ml-1.5">{{ formatUptimePct(card.uptime7d, t) }}</span>
-        </span>
-        <ChevronRight
-          :size="16"
-          class="shrink-0 text-text-tertiary transition-transform duration-fast group-hover:translate-x-0.5"
-        />
-      </div>
+      <p
+        v-if="card.detail"
+        :class="
+          cn('ui-caption mt-3 line-clamp-2 break-words', card.level === 'error' ? 'text-destructive' : 'text-warning')
+        "
+      >
+        {{ card.detail }}
+      </p>
     </SafeLink>
   </div>
 
@@ -150,7 +124,6 @@ const overall = computed(() => {
       :limit="15"
       :empty-message="t('noRecentEvents')"
       show-source
-      show-time
     />
   </PageSection>
 </template>

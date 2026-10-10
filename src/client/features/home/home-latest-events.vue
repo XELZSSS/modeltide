@@ -2,14 +2,12 @@
 import { computed } from "vue";
 import SafeLink from "@/client/components/safe-link.vue";
 import Dot from "@/client/components/ui/dot.vue";
-import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import { useTranslation } from "@/client/i18n";
 import { useSuspenseStatusHistory } from "@/client/api/api-queries";
 import { unwrapObject } from "@/client/api/payload-normalize";
 import { eventDurationLabel, resolveEventStyle } from "@/client/utils/status-events";
 import { sourceLabel } from "@/shared/config";
 import type { StatusEvent, StatusHistoryPayload } from "@/shared/types";
-import { formatRelativeTime, formatUptimePct } from "@/client/utils/format";
 import { resolveLevel } from "@/shared/utils/status-level";
 import { LEVEL_STYLES } from "@/client/utils/status-theme";
 
@@ -23,7 +21,7 @@ interface EventSegment {
   title?: string;
 }
 
-const { t, lang } = useTranslation();
+const { t } = useTranslation();
 const query = await useSuspenseStatusHistory();
 
 const history = computed(() => unwrapObject<StatusHistoryPayload>(query.data.value, "statusHistory"));
@@ -48,12 +46,6 @@ const vm = computed(() => {
     { key: "event", className: `font-medium ${eventStyle.text}`, text: t(eventStyle.labelKey) },
     { key: "source", className: "text-text-secondary", text: sourceLabel(event.id, t) },
     { key: "level", className: `font-medium ${LEVEL_STYLES[level].text}`, text: t(LEVEL_STYLES[level].labelKey) },
-    {
-      key: "uptime",
-      className: "text-text-secondary font-mono",
-      title: t("uptime24h"),
-      text: formatUptimePct(summary?.uptime24h ?? null, t),
-    },
     ...(detailText
       ? [{ key: "detail", className: "text-text-tertiary font-mono", title: detailText, text: detailText }]
       : []),
@@ -63,7 +55,6 @@ const vm = computed(() => {
     eventStyle,
     meta,
     durationLabel: eventDurationLabel(t, event.durationMin),
-    atLabel: formatRelativeTime(event.at, t, lang.value),
   };
 });
 </script>
@@ -82,8 +73,6 @@ const vm = computed(() => {
     </span>
     <span class="flex items-center gap-2 text-xs text-text-secondary shrink-0">
       <span v-if="vm.event.type !== 'up'" class="font-mono whitespace-nowrap">{{ vm.durationLabel }}</span>
-      <span class="whitespace-nowrap">{{ vm.atLabel }}</span>
     </span>
   </SafeLink>
-  <PartialNotice v-if="history.storeMode === 'memory'" :message="t('memoryModeNotice')" />
 </template>
