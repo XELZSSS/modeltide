@@ -27,7 +27,5 @@ export const cacheKeys = {
   openRouterPricing: cacheKey("openRouterRankings", "pricing-map", "per-million"),
   closedReleases: cacheKey("closedReleases"),
   agentRankings: cacheKey("agentRankings"),
-  statusHistoryPayload: cacheKey("statusHistory", "payload"),
-  sourceIncidents: (id: string) => cacheKey("sourceIncidents", id.trim().toLowerCase()),
   textToImage: cacheKey("artificialIndex", "text-to-image"),
 } as const;

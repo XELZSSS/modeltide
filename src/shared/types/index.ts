@@ -15,19 +15,6 @@ export type {
 
 export type { NewsCategory, NewsItem } from "@/shared/types/news";
 
-export type {
-  SourceId,
-  SourceLevel,
-  SourceHealthLevel,
-  UptimeSample,
-  StatusEvent,
-  SourceHistorySummary,
-  StatusHistoryPayload,
-  SourceIncident,
-  SourceIncidentLog,
-  SourceIncidentUpdate,
-} from "@/shared/types/status";
-
 export type { ThemeMode, HomeOpenSourceEntry, HomeDashboardData, ModelSource } from "@/shared/types/app";
 
 export type { SourcePayload } from "@/shared/types/payload";

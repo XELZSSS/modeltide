@@ -2,7 +2,7 @@
 
 # ModelTide
 
-**AI model data dashboard** — rankings, releases, news, comparison, status
+**AI model data dashboard** — rankings, releases, news, comparison
 
 [中文](./README_CN.md) · English
 
@@ -25,13 +25,11 @@
 | Release Tracking | Latest and open-source releases           |
 | News Aggregation | Industry news across categories           |
 | Model Comparison | Side-by-side model and price comparison   |
-| Source Status    | Availability and latency monitoring       |
 
 ## Architecture
 
 - **Client**: Vite SPA — static output in `dist`, SPA fallback via `public/_redirects`
 - **API**: `/api/*` runs as Pages Functions (`functions/api/[[route]].ts`), cached in KV / memory
-- **Status**: Real-time detection upon request
 
 ## Structure
 

@@ -7,7 +7,6 @@ import {
   PARTIAL_FAIL_TTL_MS,
   SLOW_TTL_MS,
   STATIC_TTL_MS,
-  STATUS_TTL_MS,
   queryKeys,
 } from "@/shared/config";
 import type { NewsCategory } from "@/shared/types";
@@ -60,11 +59,6 @@ export function qNewsRaw(category: NewsCategory): NewsQuery {
   return created;
 }
 
-export const qStatusHistory = createApiQuery("statusHistory", queryKeys.statusHistory, {
-  ttl: STATUS_TTL_MS,
-  refetchMs: ONE_MINUTE,
-});
-
 export const qAgent = createApiQuery("agentRankings", queryKeys.agentRankings, {
   ttl: SLOW_TTL_MS,
 });
@@ -76,8 +70,6 @@ export const qClosedReleasesRaw = createApiQuery("closedReleases", queryKeys.clo
 });
 
 type OpenSourceModelQuery = ReturnType<typeof createApiQuery<"openSourceModel">>;
-
-type SourceIncidentsQuery = ReturnType<typeof createApiQuery<"sourceIncidents">>;
 
 function lruQueryCache<T>(max: number, create: (id: string) => T): (id: string) => T {
   const entries = new Map<string, T>();
@@ -103,15 +95,6 @@ export const qOpenSourceModel: (id: string) => OpenSourceModelQuery = lruQueryCa
   (id: string): OpenSourceModelQuery =>
     createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
       ttl: ONE_MINUTE,
-      query: { id },
-    }),
-);
-
-export const qSourceIncidents: (id: string) => SourceIncidentsQuery = lruQueryCache(
-  32,
-  (id: string): SourceIncidentsQuery =>
-    createApiQuery("sourceIncidents", queryKeys.sourceIncidents(id), {
-      ttl: FIVE_MINUTES,
       query: { id },
     }),
 );

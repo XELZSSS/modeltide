@@ -7,9 +7,7 @@ import type {
   NewsItem,
   OpenSourceModelEntry,
   OpenRouterRankEntry,
-  SourceIncidentLog,
   SourcePayload,
-  StatusHistoryPayload,
 } from "@/shared/types";
 export type { ApiDomain };
 
@@ -22,8 +20,6 @@ interface ApiContract extends Record<ApiDomain, unknown> {
   closedReleases: ClosedReleaseEntry[];
   openSourceModel: OpenSourceModelEntry | null;
   openRouterRankings: OpenRouterRankEntry[];
-  statusHistory: StatusHistoryPayload;
-  sourceIncidents: SourceIncidentLog;
 }
 
 export type PayloadOf<D extends ApiDomain> = ApiContract[D];

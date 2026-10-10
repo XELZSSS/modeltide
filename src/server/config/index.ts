@@ -1,7 +1,6 @@
 export {
   upstreamConfig,
   upstreamEndpoints,
-  providerStatusEndpoints,
   USER_AGENT,
   MAX_JSON_BYTES,
   MAX_FEED_BYTES,
@@ -14,7 +13,6 @@ export {
   RETRY_AFTER_MAX_MS,
   UPSTREAM_FETCH_OPTS,
   FAST_FETCH_OPTS,
-  PROVIDER_STATUS_FETCH_OPTS,
   BACKOFF_MAX_MS,
   INFLIGHT_HANG_GUARD_MS,
   SHARED_REFRESH_TIMEOUT_MS,
@@ -29,4 +27,4 @@ export {
   CACHE_ENTRY_KV_TTL_S,
 } from "./cache";
 export { cacheKeys } from "./keys";
-export { PROBE_CONCURRENCY, PROVIDER_CONCURRENCY, NEWS_LEG_CONCURRENCY } from "./concurrency";
+export { NEWS_LEG_CONCURRENCY } from "./concurrency";

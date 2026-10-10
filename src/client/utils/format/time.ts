@@ -1,6 +1,5 @@
-import { ONE_DAY, ONE_HOUR, ONE_MINUTE } from "@/shared/config";
+import { ONE_MINUTE } from "@/shared/config";
 import type { Lang, TFunction } from "@/shared/i18n";
-import { isFiniteNumber } from "@/shared/utils";
 
 export function formatRelativeTime(isoString: string, t: TFunction, lang: Lang = "en", nowMs = Date.now()): string {
   const date = new Date(isoString);
@@ -56,25 +55,4 @@ export function formatTime(value: number | string | Date, lang: string): string 
     minute: "2-digit",
   });
   return formatter.format(new Date(value));
-}
-
-export function formatUptime(ms: number, t: TFunction): string {
-  if (!isFiniteNumber(ms) || ms < 0) return t("uptimeNoData");
-  const days = Math.floor(ms / ONE_DAY);
-  const hours = Math.floor((ms % ONE_DAY) / ONE_HOUR);
-  const mins = Math.floor((ms % ONE_HOUR) / ONE_MINUTE);
-  if (days > 0) return t("uptimeDays", { days, hours });
-  if (hours > 0) return t("uptimeHours", { hours, mins });
-  return t("uptimeMins", { mins });
-}
-
-const MINUTES_PER_HOUR = 60;
-const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
-
-export function formatDurationMin(minutes: number, t: TFunction): string {
-  const days = Math.floor(minutes / MINUTES_PER_DAY);
-  const hours = Math.floor((minutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR);
-  if (days > 0) return t("eventDurationDays", { days, hours });
-  if (hours > 0) return t("eventDurationHours", { hours, mins: Math.floor(minutes % MINUTES_PER_HOUR) });
-  return t("eventDurationMin", { value: minutes });
 }

@@ -1,6 +1,7 @@
 import { buildContext } from "@/server/context";
 import type { Env } from "@/server/context";
-import { UNKNOWN_QUERY_WARN_MAX_PATHS, UNKNOWN_QUERY_WARN_THROTTLE_MS } from "@/server/config/status";
+const UNKNOWN_QUERY_WARN_THROTTLE_MS = 30 * 60 * 1000;
+const UNKNOWN_QUERY_WARN_MAX_PATHS = 64;
 import { ApiError, ClientAbortError, UpstreamError, isTimeoutLike, errMsg } from "@/server/infra/errors";
 import { keyedThrottleGate } from "@/server/infra/throttle";
 import { logger, type Logger } from "@/server/infra/logger";

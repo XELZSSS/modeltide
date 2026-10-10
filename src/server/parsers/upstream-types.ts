@@ -82,15 +82,3 @@ export interface ChangelogModelEntry {
   name?: unknown;
   releaseSlug?: unknown;
 }
-
-export interface StatuspageSummaryRaw {
-  status?: { indicator?: unknown; description?: unknown };
-  components?: unknown;
-  incidents?: unknown;
-}
-
-export interface GcpIncidentRaw {
-  external_desc?: unknown;
-  end?: unknown;
-  severity?: unknown;
-}

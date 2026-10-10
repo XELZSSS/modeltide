@@ -3,7 +3,7 @@
   "lang": "en",
   "name": "ModelTide",
   "short_name": "Tide",
-  "description": "ModelTide - AI model data dashboard: rankings, benchmarks, pricing, releases and provider status",
+  "description": "ModelTide - AI model data dashboard: rankings, benchmarks, pricing and releases",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

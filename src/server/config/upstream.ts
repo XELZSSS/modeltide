@@ -15,18 +15,6 @@ export const upstreamEndpoints = {
   openRouterDirectory: "/api/v1/models",
 } as const;
 
-export const providerStatusEndpoints = {
-  openaiApi: "https://status.openai.com/api/v2/summary.json",
-  anthropicApi: "https://status.claude.com/api/v2/summary.json",
-  googleCloudApi: "https://status.cloud.google.com/incidents.json",
-  groqApi: "https://groqstatus.com/api/v2/summary.json",
-  cohereApi: "https://status.cohere.com/api/v2/summary.json",
-  fireworksApi: "https://status.fireworks.ai/api/v2/summary.json",
-  cerebrasApi: "https://status.cerebras.ai/api/v2/summary.json",
-  deepseekApi: "https://deepseek.statuspage.io/api/v2/summary.json",
-  moonshotApi: "https://status.moonshot.cn/api/v2/summary.json",
-} as const;
-
 export const MAX_JSON_BYTES = 5 * 1024 * 1024;
 export const MAX_FEED_BYTES = 2 * 1024 * 1024;
 

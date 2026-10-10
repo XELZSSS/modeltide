@@ -10,8 +10,6 @@ export const SLOW_TTL_MS = 2 * ONE_HOUR;
 export const STATIC_TTL_MS = 6 * ONE_HOUR;
 export const PARTIAL_FAIL_TTL_MS = 10 * ONE_MINUTE;
 
-export const STATUS_TTL_MS = 30_000;
-
 export function ttlFor(partial: boolean, normalTtl: number = DEFAULT_TTL_MS): number {
   if (!partial) return normalTtl;
   return Math.min(normalTtl, Math.max(PARTIAL_FAIL_TTL_MS, Math.floor(normalTtl / 6)));

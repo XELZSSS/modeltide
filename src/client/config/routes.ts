@@ -1,12 +1,11 @@
 import type { RouteRecordRaw } from "vue-router";
-import { Activity, Award, Home, Megaphone, Newspaper } from "@lucide/vue";
+import { Award, Home, Megaphone, Newspaper } from "@lucide/vue";
 import {
   qArtificialRaw,
   qClosedReleasesRaw,
   qHomeDashboardRaw,
   qNewsRaw,
   qOpenRouter,
-  qStatusHistory,
 } from "@/client/api/api-queries";
 import NotFoundView from "@/client/components/feedback/not-found.vue";
 import { DEFAULT_RANKING_TAB } from "@/client/config/nav-config";
@@ -26,8 +25,6 @@ const loadCompareView = () => import("@/client/features/compare/compare-view.vue
 const loadPriceCompareView = () => import("@/client/features/compare/price-compare-view.vue");
 const loadReleasesView = () => import("@/client/features/releases/releases-view.vue");
 const loadNewsView = () => import("@/client/features/news/news-view.vue");
-const loadStatusView = () => import("@/client/features/status/status-view.vue");
-const loadSourceView = () => import("@/client/features/status/source-view.vue");
 
 const RankingsHubView = loadableView(loadRankingsHubView);
 const ModelDetailView = loadableView(loadModelView);
@@ -35,8 +32,6 @@ const CompareView = loadableView(loadCompareView);
 const PriceCompareView = loadableView(loadPriceCompareView);
 const ReleasesView = loadableView(loadReleasesView);
 const NewsView = loadableView(loadNewsView);
-const StatusView = loadableView(loadStatusView);
-const SourceDetailView = loadableView(loadSourceView);
 
 const newsPrefetch: readonly Prefetchable[] = [qNewsRaw(NEWS_CATEGORIES[0])];
 
@@ -102,23 +97,6 @@ export const ROUTES: RouteRecordRaw[] = [
       prefetch: newsPrefetch,
       nav: { group: "secondary", labelKey: "aiNews", icon: Newspaper },
     },
-  },
-  {
-    path: "/status",
-    name: "status",
-    component: StatusView,
-    meta: {
-      titleKey: "statusPageTitle",
-      load: loadStatusView,
-      prefetch: [qStatusHistory],
-      nav: { group: "secondary", labelKey: "navStatus", icon: Activity, activePrefixes: ["/status"] },
-    },
-  },
-  {
-    path: "/status/:source",
-    name: "source",
-    component: SourceDetailView,
-    meta: { titleKey: "sourceStatus", load: loadSourceView, prefetch: [qStatusHistory] },
   },
   {
     path: "/model/:id(.*)",

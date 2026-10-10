@@ -1,4 +1,4 @@
-import { KV_READ_WARN_THROTTLE_MS } from "@/server/config/status";
+const KV_READ_WARN_THROTTLE_MS = 30 * 60 * 1000;
 
 export function pruneBounded<K, V>(map: Map<K, V>, maxKeys: number, isExpired: (value: V) => boolean): void {
   if (map.size <= maxKeys) return;

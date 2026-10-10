@@ -8,4 +8,3 @@ export * from "@/shared/utils/models";
 export * from "@/shared/utils/hallucination";
 export * from "@/shared/utils/url";
 export * from "@/shared/utils/release-feed";
-export { resolveLevel } from "@/shared/utils/status-level";

@@ -1,5 +1,4 @@
 import type { NewsCategory } from "@/shared/types/news";
-import type { SourceId } from "@/shared/types";
 
 const TECHCRUNCH_AI = "https://techcrunch.com/category/artificial-intelligence/feed/";
 const ARS_TECHNICA_AI = "https://arstechnica.com/ai/feed/";
@@ -21,7 +20,7 @@ const BAIR_BLOG = "https://bair.berkeley.edu/blog/feed.xml";
 const MIT_NEWS_AI = "https://news.mit.edu/rss/topic/artificial-intelligence2";
 
 interface NewsFeed {
-  id: SourceId;
+  id: string;
   url: string;
 }
 

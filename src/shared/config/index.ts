@@ -19,12 +19,11 @@ export {
   SLOW_TTL_MS,
   STATIC_TTL_MS,
   PARTIAL_FAIL_TTL_MS,
-  STATUS_TTL_MS,
   ttlFor,
   ttlForRatio,
 } from "@/shared/config/time";
 export { DEFAULT_COST_SCENARIO } from "@/shared/config/cost";
-export { NEWS_CATEGORIES, SOURCE_LABELS, SOURCE_IDS, sourceLabel, sourceLabelKey } from "@/shared/config/sources";
+export { NEWS_CATEGORIES } from "@/shared/config/sources";
 export {
   BENCHMARK_KEYS,
   type BenchmarkKey,

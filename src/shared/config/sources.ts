@@ -1,5 +1,3 @@
-import type { SourceId } from "@/shared/types";
-import type { TFunction, TranslationKey } from "@/shared/i18n";
 import type { NewsCategory } from "@/shared/types/news";
 
 export const NEWS_CATEGORIES = [
@@ -9,48 +7,3 @@ export const NEWS_CATEGORIES = [
   "funding",
   "research",
 ] as const satisfies readonly NewsCategory[];
-
-export const SOURCE_LABELS: Record<SourceId, TranslationKey> = {
-  artificialAnalysis: "sourceNameArtificial",
-  huggingface: "sourceNameHuggingFace",
-  openrouter: "sourceNameOpenRouter",
-  newsTechCrunch: "sourceNameNewsTechCrunch",
-  newsArsTechnica: "sourceNameNewsArsTechnica",
-  newsMitTechReview: "sourceNameNewsMitTechReview",
-  newsVerge: "sourceNameNewsVerge",
-  newsGoogleAi: "sourceNameNewsGoogleAi",
-  newsQbitai: "sourceNameNewsQbitai",
-  newsHfBlog: "sourceNameNewsHfBlog",
-  newsPytorch: "sourceNameNewsPytorch",
-  newsSimonWillison: "sourceNameNewsSimonWillison",
-  newsOllama: "sourceNameNewsOllama",
-  newsTomsHardware: "sourceNameNewsTomsHardware",
-  newsNvidia: "sourceNameNewsNvidia",
-  newsServeTheHome: "sourceNameNewsServeTheHome",
-  newsCrunchbase: "sourceNameNewsCrunchbase",
-  newsTechCrunchVenture: "sourceNameNewsTechCrunchVenture",
-  newsGoogleResearch: "sourceNameNewsGoogleResearch",
-  newsBair: "sourceNameNewsBair",
-  newsMitNewsAi: "sourceNameNewsMitNewsAi",
-  arena: "sourceNameArena",
-  openaiApi: "sourceNameOpenAIApi",
-  anthropicApi: "sourceNameAnthropicApi",
-  googleCloudApi: "sourceNameGoogleCloudApi",
-  groqApi: "sourceNameGroqApi",
-  cohereApi: "sourceNameCohereApi",
-  fireworksApi: "sourceNameFireworksApi",
-  cerebrasApi: "sourceNameCerebrasApi",
-  deepseekApi: "sourceNameDeepSeekApi",
-  moonshotApi: "sourceNameMoonshotApi",
-};
-
-export const SOURCE_IDS: readonly SourceId[] = Object.keys(SOURCE_LABELS) as SourceId[];
-
-export function sourceLabelKey(id: string): TranslationKey | undefined {
-  return Object.hasOwn(SOURCE_LABELS, id) ? SOURCE_LABELS[id as SourceId] : undefined;
-}
-
-export function sourceLabel(id: string, t: TFunction): string {
-  const key = sourceLabelKey(id);
-  return key ? t(key) : id;
-}

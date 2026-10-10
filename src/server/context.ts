@@ -36,7 +36,7 @@ export function buildContext(
   const background = init?.workSignal != null;
   if (!env.CACHE && !warnedMissingKv) {
     warnedMissingKv = true;
-    logger("warn", "[context] CACHE KV not configured: status history is per-isolate memory only");
+    logger("warn", "[context] CACHE KV not configured: cache is per-isolate memory only");
   }
   const kv = env.CACHE ? new KvStore(env.CACHE) : undefined;
   const cache = new CacheService(kv, CACHE_VERSION, {
