@@ -28,10 +28,9 @@ function create(): void {
 
 function update(): void {
   if (!chart) return;
-  if (props.plugins) {
-    // Theme-only changes flow through update(), not destroy()+recreate.
-    (chart.config as { plugins?: Plugin[] }).plugins = props.plugins;
-  }
+  // NOTE: chart.config.plugins is getter-only in Chart.js v4 (no setter).
+  // Inline plugins are fixed at construction; a plugins identity change
+  // must go through create() below, while data/options update in place.
   chart.data = props.data;
   if (props.options) chart.options = props.options;
   chart.update();
@@ -39,8 +38,11 @@ function update(): void {
 
 watch(() => props.type, create, { flush: "post" });
 
-// Shallow watching avoids deep-traversing chart data; plugins update in place.
-watch([() => props.data, () => props.options, () => props.plugins], update, { flush: "post" });
+// Inline plugins can't be reassigned via chart.config — recreate instead.
+watch(() => props.plugins, create, { flush: "post" });
+
+// Shallow watching avoids deep-traversing chart data.
+watch([() => props.data, () => props.options], update, { flush: "post" });
 
 watch(canvasRef, (canvas) => {
   if (canvas) create();

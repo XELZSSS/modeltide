@@ -28,9 +28,9 @@ export function normalizeHomeDashboard(payload: unknown, label = "homeDashboard"
   const raw = unwrapObject<HomeDashboardData>(payload, label);
   if (!raw || typeof raw !== "object") throw new Error(`${label}: invalid dashboard`);
   return {
-    orRankings: raw.orRankings,
-    textToImage: raw.textToImage,
-    opensource: raw.opensource,
+    orRankings: Array.isArray(raw.orRankings) ? raw.orRankings : [],
+    textToImage: Array.isArray(raw.textToImage) ? raw.textToImage : [],
+    opensource: Array.isArray(raw.opensource) ? raw.opensource : [],
     partial: isPartialPayload(payload),
   };
 }

@@ -33,14 +33,26 @@ export function canGoBack(): boolean {
 }
 
 export function navigate(to: string, replace = false): void {
-  const url = new URL(to, window.location.href);
+  let url: URL;
+  try {
+    url = new URL(to, window.location.href);
+  } catch {
+    console.warn(`[router] ignoring malformed navigation target: ${to}`);
+    return;
+  }
   if (url.origin !== window.location.origin) {
     window.location.assign(url.href);
     return;
   }
   popstateNavigation = false;
   const target = `${url.pathname}${url.search}${url.hash}`;
-  void (replace ? router.replace(target) : router.push(target));
+  const task = replace ? router.replace(target) : router.push(target);
+  // Router navigation failures (e.g. aborted) shouldn't crash callers.
+  if (task && typeof (task as Promise<unknown>).catch === "function") {
+    (task as Promise<unknown>).catch((err: unknown) => {
+      console.warn("[router] navigation failed:", err);
+    });
+  }
 }
 
 export function usePathname(): ComputedRef<string> {

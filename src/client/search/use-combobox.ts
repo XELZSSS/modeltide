@@ -59,9 +59,13 @@ export function useCombobox({
     [activeIndex, isOpen],
     () => {
       if (!isOpen.value || activeIndex.value < 0) return;
-      listRef.value
-        ?.querySelector(`#${CSS.escape(`${listboxId}-option-${activeIndex.value}`)}`)
-        ?.scrollIntoView({ block: "nearest" });
+      try {
+        listRef.value
+          ?.querySelector(`#${escapeSelectorId(`${listboxId}-option-${activeIndex.value}`)}`)
+          ?.scrollIntoView({ block: "nearest" });
+      } catch {
+        // selector edge-case: skip scroll, selection still works
+      }
     },
     { flush: "post" },
   );
@@ -178,6 +182,15 @@ function useDebouncedTerm(initial: string, delayMs = 200) {
   }
 
   return { inputValue, debounced, setDebouncedDirect, composing };
+}
+
+function escapeSelectorId(id: string): string {
+  try {
+    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(id);
+  } catch {
+    // fall through to manual escape
+  }
+  return id.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
 }
 
 function useClickOutside(target: Ref<HTMLElement | null>, onOutside: () => void): void {

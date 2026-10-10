@@ -28,6 +28,7 @@ const emit = defineEmits<{ close: [] }>();
 const panelRef = ref<HTMLDivElement | null>(null);
 let trigger: HTMLElement | null = null;
 let locked = false;
+let openToken = 0;
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === "Escape") emit("close");
@@ -85,11 +86,15 @@ function unlock(): void {
 watch(
   () => props.open,
   async (open) => {
+    openToken += 1;
+    const token = openToken;
     if (!open) {
       unlock();
       return;
     }
     await nextTick();
+    // open may have flipped to false while awaiting tick; skip stale lock().
+    if (token !== openToken || !props.open) return;
     lock();
   },
   { immediate: true, flush: "post" },

@@ -1,5 +1,5 @@
 import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, UPSTREAM_FETCH_OPTS, USER_AGENT } from "@/server/config";
-import { UpstreamError, errMsg } from "@/server/infra/errors";
+import { ClientAbortError, UpstreamError, errMsg } from "@/server/infra/errors";
 import { acquireSlot, createSlotPools, releaseSlot, type SlotPool, type SlotPools } from "@/server/infra/connection-pool";
 import { fetchBodyText, parseJsonBody, type JsonResponse } from "@/server/infra/body-readers";
 import { parseRetryAfterMs, computeBackoff, sleepAbortable } from "@/server/infra/retry";
@@ -23,7 +23,7 @@ function buildHeaders(userAgent: string, accept: string, extra?: Record<string, 
 
 function isSubrequestLimit(err: unknown): boolean {
   const msg = errMsg(err);
-  return msg.includes("Too many subrequests") || msg.includes("subrequest");
+  return msg.includes("Too many subrequests");
 }
 
 // fetch() rejections carry the real reason (DNS, TCP reset, TLS) on `message`/`cause`.
@@ -126,7 +126,8 @@ export class HttpClient {
           res = await this.fetchImpl(url, { headers, signal, ...rest });
         } catch (err) {
           if (isSubrequestLimit(err)) throw new UpstreamError(`Subrequest limit hit for ${url}`, { retryable: false });
-          timedOut = signal.aborted;
+          if (initSignal?.aborted) throw new ClientAbortError(`Client aborted fetch for ${url}`);
+          timedOut = deadline.aborted;
           failCause = err;
           failMsg = timedOut
             ? `Upstream timeout for ${url}: ${describeFetchError(err)}`
@@ -155,7 +156,7 @@ export class HttpClient {
       }
       if (attempt === retries) {
         const finalErr = new UpstreamError(
-          failMsg!,
+          failMsg ?? `HTTP failed for ${url}`,
           timedOut ? { timeout: true } : failStatus != null ? { status: failStatus } : { retryable: true },
         );
         if (failCause !== undefined) finalErr.cause = failCause;

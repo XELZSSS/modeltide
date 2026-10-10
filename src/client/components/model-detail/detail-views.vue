@@ -3,7 +3,7 @@ type StringKey<T> = { [K in keyof T]: T[K] extends string | undefined ? K & stri
 
 export function findModel<T>(data: T[], id: string, ...keys: StringKey<T>[]): T | undefined {
   for (const key of keys) {
-    const hit = data.find((item) => item[key] === id);
+    const hit = data.find((item) => item != null && (item as Record<string, unknown>)[key] === id);
     if (hit) return hit;
   }
   return undefined;

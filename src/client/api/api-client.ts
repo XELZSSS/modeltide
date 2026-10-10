@@ -58,7 +58,23 @@ function buildApiUrl(path: string): string {
 
 function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
   const timeout = AbortSignal.timeout(ms);
-  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+  if (!signal) return timeout;
+  if (typeof AbortSignal.any === "function") return AbortSignal.any([signal, timeout]);
+  // Fallback for browsers without AbortSignal.any (older Safari): forward both.
+  if (signal.aborted) return signal;
+  if (timeout.aborted) return timeout;
+  const ctrl = new AbortController();
+  const onSignalAbort = (): void => {
+    timeout.removeEventListener("abort", onTimeoutAbort);
+    ctrl.abort(signal.reason);
+  };
+  const onTimeoutAbort = (): void => {
+    signal.removeEventListener("abort", onSignalAbort);
+    ctrl.abort(timeout.reason);
+  };
+  signal.addEventListener("abort", onSignalAbort, { once: true });
+  timeout.addEventListener("abort", onTimeoutAbort, { once: true });
+  return ctrl.signal;
 }
 
 async function parseErrorMessage(res: Response): Promise<string> {

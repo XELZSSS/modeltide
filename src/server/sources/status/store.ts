@@ -69,6 +69,22 @@ async function mergeSamplesIntoStore(
   token: string,
 ): Promise<boolean> {
   const { store, canWriteToKv } = await readStoreResult(ctx);
+  // Verify the sample lock before touching shared memory: if the lock was
+  // lost, another invocation owns the round and our in-memory update would
+  // diverge from KV. Check first, mutate after.
+  if (ctx.kv && canWriteToKv) {
+    let held: string | null = null;
+    try {
+      held = await ctx.kv.get(SAMPLE_LOCK_KEY);
+    } catch (err) {
+      ctx.log("warn", `[status-history] sample lock verify failed, discarding round: ${errMsg(err)}`);
+      return false;
+    }
+    if (!held || !held.startsWith(`${token}:`)) {
+      ctx.log("warn", "[status-history] sample lock lost before persist, discarding round");
+      return false;
+    }
+  }
   for (const [id, agg] of aggregates) {
     store.sources[id] = mergeSample(
       store.sources[id],
@@ -87,11 +103,6 @@ async function mergeSamplesIntoStore(
   setMemoryStore(store);
   if (!ctx.kv) return true;
   if (!canWriteToKv) return false;
-  const held = await ctx.kv.get(SAMPLE_LOCK_KEY);
-  if (!held || !held.startsWith(`${token}:`)) {
-    ctx.log("warn", "[status-history] sample lock lost before persist, discarding round");
-    return false;
-  }
   try {
     await ctx.kv.put(HISTORY_KEY, JSON.stringify({ v: HISTORY_SCHEMA_VERSION, ...store }), {
       expirationTtl: HISTORY_KV_RETENTION_TTL_S,
@@ -119,11 +130,15 @@ export async function ensureFreshSamplesWithHealth(ctx: AppContext): Promise<Fre
   const reason = ageMs === null ? "no samples recorded yet" : `${Math.round(ageMs / ONE_MINUTE)} min without samples`;
   ctx.log("info", `[status-history] ${reason}, running self-heal round`);
   if (ctx.onDetach) {
-    ctx.onDetach(
-      recordStatusSamples(ctx, now).then(undefined, (err: unknown) => {
-        ctx.log("warn", `[status-history] detached self-heal round failed: ${errMsg(err)}`);
-      }),
-    );
+    try {
+      ctx.onDetach(
+        recordStatusSamples(ctx, now).then(undefined, (err: unknown) => {
+          ctx.log("warn", `[status-history] detached self-heal round failed: ${errMsg(err)}`);
+        }),
+      );
+    } catch (err) {
+      ctx.log("warn", `[status-history] detached self-heal scheduling failed: ${errMsg(err)}`);
+    }
     return { store };
   }
   try {

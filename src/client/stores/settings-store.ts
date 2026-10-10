@@ -20,11 +20,23 @@ function isLang(value: unknown): value is Lang {
 }
 
 function initialThemeMode(): ThemeMode {
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  try {
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+  } catch {
+    // ignore - fall through to default
+  }
+  return "light";
 }
 
 function initialLang(): Lang {
-  return (navigator.language ?? "").toLowerCase().startsWith("en") ? "en" : "zh";
+  try {
+    const navLang = typeof navigator !== "undefined" ? (navigator.language ?? "") : "";
+    return navLang.toLowerCase().startsWith("en") ? "en" : "zh";
+  } catch {
+    return "zh";
+  }
 }
 
 function readSettings(): { themeMode: ThemeMode; lang: Lang } {

@@ -24,19 +24,26 @@ const CompareModels = defineComponent({
     const router = useRouter();
     const loaderStore = useCompareStore();
     const scope = effectScope(true);
-    onUnmounted(() => scope.stop());
+    let pruneTimer: ReturnType<typeof setTimeout> | null = null;
+    onUnmounted(() => {
+      if (pruneTimer !== null) clearTimeout(pruneTimer);
+      scope.stop();
+    });
     const rankings = await useSuspenseArtificialRankings();
     const vm = scope.run(() => {
       const models = useCompareModels(rankings);
       const pruned = ref(false);
       usePruneCompareIds(rankings, () => {
         pruned.value = true;
-        setTimeout(() => {
+        if (pruneTimer !== null) clearTimeout(pruneTimer);
+        pruneTimer = setTimeout(() => {
           pruned.value = false;
+          pruneTimer = null;
         }, PRUNE_NOTICE_MS);
       });
       return { models, pruned };
-    })!;
+    });
+    if (!vm) return () => null;
     function clearAndBack(): void {
       loaderStore.clearCompare();
       void router.replace(loaderProps.backTo);

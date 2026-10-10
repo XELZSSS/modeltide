@@ -67,7 +67,7 @@ export async function acquireSlot(
 }
 
 export function releaseSlot(pools: SlotPools, pool: SlotPool): void {
-  pool.active -= 1;
+  if (pool.active > 0) pool.active -= 1;
   wakeWaiters(pools, pool);
   wakeWaiters(pools, pool === pools.background ? pools.interactive : pools.background);
 }

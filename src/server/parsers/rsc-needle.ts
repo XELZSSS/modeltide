@@ -41,10 +41,19 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
       if (at === -1) break;
       from = at + 1;
       const valueAt = valuePosAfterColon(text, at + locator.length);
-      if (valueAt !== null) candidates.push({ start: at, valueAt });
+      if (valueAt !== null) {
+        candidates.push({ start: at, valueAt });
+        // Bound upfront: high-frequency needles on multi-MB bodies could
+        // otherwise materialize ~1M candidates before the 256 cap applies.
+        if (candidates.length >= MAX_NEEDLE_CANDIDATES * 4) break;
+      }
+      // Defensive: avoid pathological loops on huge inputs.
+      if (candidates.length > 4096) break;
     }
+    if (candidates.length >= MAX_NEEDLE_CANDIDATES * 4) break;
   }
-  return candidates.sort((a, b) => a.start - b.start);
+  candidates.sort((a, b) => a.start - b.start);
+  return candidates.slice(0, MAX_NEEDLE_CANDIDATES * 4);
 }
 
 function scanNeedleRange(

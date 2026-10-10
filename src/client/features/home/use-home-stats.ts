@@ -36,7 +36,7 @@ export function useHomeStats(
   const t2iModels = computed(() => toValue(dashboardData).textToImage ?? emptyArray<TextToImageModel>());
 
   const trendingStats = computed<HomeBarStat[]>(() =>
-    top7(toValue(dashboardData).opensource, (model) => ({
+    top7(toValue(dashboardData).opensource ?? [], (model) => ({
       label: shortModelId(model.id),
       value: model.downloads,
       valueLabel: formatShortNumber(model.downloads, t("notAvailable")),

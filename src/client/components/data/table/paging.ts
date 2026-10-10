@@ -10,9 +10,13 @@ export function usePagedData<T>(
   pageSize: MaybeRefOrGetter<number> = DEFAULT_PAGE_SIZE,
   resetKey?: MaybeRefOrGetter<string | number | undefined>,
 ) {
-  const dedupedData = computed(() => dedupeBy(toValue(data), getRowId));
+  const dedupedData = computed(() => dedupeBy(toValue(data) ?? [], getRowId));
   const page = ref(1);
-  const totalPages = computed(() => Math.ceil(dedupedData.value.length / toValue(pageSize)));
+  const safePageSize = computed(() => {
+    const size = toValue(pageSize);
+    return Number.isFinite(size) && size > 0 ? Math.floor(size) : DEFAULT_PAGE_SIZE;
+  });
+  const totalPages = computed(() => Math.ceil(dedupedData.value.length / safePageSize.value));
   const safeTotal = computed(() => Math.max(1, totalPages.value));
 
   watch([() => toValue(resetKey), () => toValue(pageSize)], () => {
@@ -26,7 +30,7 @@ export function usePagedData<T>(
   const currentPage = computed(() => (totalPages.value === 0 ? 1 : Math.min(page.value, totalPages.value)));
 
   const pagedData = computed(() => {
-    const size = toValue(pageSize);
+    const size = safePageSize.value;
     const rows = dedupedData.value;
     return rows.length > size ? rows.slice((currentPage.value - 1) * size, currentPage.value * size) : rows;
   });

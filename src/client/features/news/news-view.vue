@@ -29,7 +29,10 @@ const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
 
 const ROW_CLASS = `group flex items-start justify-between gap-4 ${ROW_PADDING} transition-colors duration-fast hoverable:hover:bg-hover focus-visible:outline-none focus-visible:bg-hover`;
 
-const getNewsRowId = (item: NewsItem): string => item.link || `${item.source}::${item.title}::${item.pubDate}`;
+const getNewsRowId = (item: NewsItem): string => {
+  if (item == null) return "";
+  return item.link || `${item.source}::${item.title}::${item.pubDate}`;
+};
 
 const NewsCategoryData = defineComponent({
   props: { categoryId: { type: String as PropType<NewsCategory>, required: true } },
@@ -45,7 +48,8 @@ const NewsCategoryData = defineComponent({
         getNewsRowId,
         () => (isMobile.value ? MOBILE_PAGE_SIZE : DEFAULT_PAGE_SIZE),
       ),
-    )!;
+    );
+    if (!paged) return () => null;
     // safeHref rebuilds the link string per call; derive once per row.
     const rows = computed(() =>
       paged.pagedData.value.map((item) => ({ item, id: getNewsRowId(item), href: safeHref(item.link) })),

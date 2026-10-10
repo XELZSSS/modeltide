@@ -61,6 +61,7 @@ function bottomRule(getColor: () => string): Plugin<"line"> {
     id: "indexAreaBottomRule",
     afterDatasetsDraw(chart) {
       const { ctx, chartArea } = chart;
+      if (!chartArea) return;
       const y = Math.round(chartArea.bottom) + 0.5;
       ctx.save();
       ctx.beginPath();

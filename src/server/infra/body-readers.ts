@@ -59,7 +59,27 @@ async function readBodyText(
   let total = 0;
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      if (signal.aborted) throw signal.reason;
+      const readPromise = reader.read();
+      // Race the read against abort so a stalled upstream can't outlive timeoutMs.
+      const { done, value } = await new Promise<Awaited<ReturnType<typeof reader.read>>>((resolve, reject) => {
+        const onAbort = (): void => reject(signal.reason);
+        if (signal.aborted) {
+          reject(signal.reason);
+          return;
+        }
+        signal.addEventListener("abort", onAbort, { once: true });
+        readPromise.then(
+          (r) => {
+            signal.removeEventListener("abort", onAbort);
+            resolve(r);
+          },
+          (e) => {
+            signal.removeEventListener("abort", onAbort);
+            reject(e);
+          },
+        );
+      });
       if (done) break;
       if (value) {
         total += value.byteLength;
@@ -78,7 +98,11 @@ async function readBodyText(
       signal.aborted ? { timeout: true } : { retryable: true },
     );
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch {
+      // reader may already be closed after cancel() - ignore
+    }
   }
   const merged = new Uint8Array(total);
   let offset = 0;

@@ -80,7 +80,8 @@ export function useCompareModels(
   const store = useCompareStore();
   const rankingMap = computed(() => {
     const map = new Map<string, ArtificialAnalysisModel>();
-    for (const model of toValue(rankings)) {
+    for (const model of toValue(rankings) ?? []) {
+      if (model == null) continue;
       const id = modelId(model);
       if (id) map.set(id, model);
     }
@@ -98,7 +99,7 @@ export function usePruneCompareIds(
   onPruned?: (removed: string[]) => void,
 ): void {
   const store = useCompareStore();
-  const validIds = computed(() => new Set(toValue(models).map(modelId).filter(Boolean)));
+  const validIds = computed(() => new Set((toValue(models) ?? []).map(modelId).filter(Boolean)));
   watch(
     validIds,
     (ids) => {
