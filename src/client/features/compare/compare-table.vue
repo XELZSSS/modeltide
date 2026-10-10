@@ -38,8 +38,10 @@ import Dot from "@/client/components/ui/dot.vue";
 import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "@/client/utils/compare-logic";
-import { ROW_PADDING } from "@/client/config/layout";
 import { RenderView } from "@/client/components/data/table/cell-view";
+
+// Denser than ROW_PADDING: compare tables carry 4+ rows and must fit one screen.
+const CELL = "px-4 py-2.5";
 
 const props = defineProps<{
   rows: CompareRow<ArtificialAnalysisModel>[];
@@ -93,7 +95,7 @@ function getWinner(
                 scope="col"
                 :class="
                   cn(
-                    ROW_PADDING,
+                    CELL,
                     'text-xs font-medium text-text-tertiary',
                     'text-left',
                     'font-semibold text-text-secondary sticky left-0 z-10 bg-bg-card',
@@ -106,7 +108,7 @@ function getWinner(
                 v-for="(model, index) in models"
                 :key="modelKeyOf(model, index)"
                 scope="col"
-                :class="cn(ROW_PADDING, 'text-xs font-medium text-text-tertiary', 'text-right', 'font-semibold')"
+                :class="cn(CELL, 'text-xs font-medium text-text-tertiary', 'text-right', 'font-semibold')"
                 :style="{ color: seriesColor(theme, index) }"
                 :title="modelDisplayName(model)"
               >
@@ -120,7 +122,7 @@ function getWinner(
                 scope="row"
                 :class="
                   cn(
-                    ROW_PADDING,
+                    CELL,
                     'text-xs font-medium text-text-tertiary',
                     'text-left',
                     'text-text-secondary sticky left-0 bg-bg-card z-10',
@@ -132,7 +134,7 @@ function getWinner(
               <td
                 v-for="(model, index) in models"
                 :key="modelKeyOf(model, index)"
-                :class="cn(ROW_PADDING, 'text-sm', 'text-right')"
+                :class="cn(CELL, 'text-sm', 'text-right')"
               >
                 <RenderView :render="() => renderValue(row, model, getWinner(row, model, index))" />
               </td>

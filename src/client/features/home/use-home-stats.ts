@@ -18,7 +18,10 @@ export interface HomeProviderStat {
   avgSpeed: number;
 }
 
-const top7 = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, 7).map(map);
+const TOP_ROWS = 5;
+
+const topRows = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] =>
+  items.slice(0, TOP_ROWS).map(map);
 
 export interface HomeStats {
   trendingStats: ComputedRef<HomeBarStat[]>;
@@ -36,7 +39,7 @@ export function useHomeStats(
   const t2iModels = computed(() => toValue(dashboardData).textToImage ?? emptyArray<TextToImageModel>());
 
   const trendingStats = computed<HomeBarStat[]>(() =>
-    top7(toValue(dashboardData).opensource ?? [], (model) => ({
+    topRows(toValue(dashboardData).opensource ?? [], (model) => ({
       label: shortModelId(model.id),
       value: model.downloads,
       valueLabel: formatShortNumber(model.downloads, t("notAvailable")),
@@ -44,7 +47,7 @@ export function useHomeStats(
   );
 
   const hallucinationStats = computed<HomeBarStat[]>(() =>
-    top7(
+    topRows(
       toValue(hallucinationRankings).filter(
         (entry): entry is HallucinationRankingEntry & { accuracy: number } => entry.accuracy != null,
       ),

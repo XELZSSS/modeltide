@@ -51,19 +51,15 @@ const counts = computed(() => {
   let warning = 0;
   let unprobed = 0;
   let hasData = false;
-  // Single resolveLevel pass: derive from cards instead of re-traversing sources.
-  for (const card of cards.value) {
-    if (card.level === "error") erroring++;
-    else if (card.level === "warn") warning++;
-    else if (card.level === "unknown") unprobed++;
-  }
-  if (!hasData) {
-    for (const source of sources.value) {
-      if (source.checkedAt != null) {
-        hasData = true;
-        break;
-      }
-    }
+  // cards derives 1:1 from sources, so one pass covers levels and freshness.
+  const list = cards.value;
+  const summaries = sources.value;
+  for (let i = 0; i < list.length; i++) {
+    const level = list[i]!.level;
+    if (level === "error") erroring++;
+    else if (level === "warn") warning++;
+    else if (level === "unknown") unprobed++;
+    if (!hasData && summaries[i]?.checkedAt != null) hasData = true;
   }
   return { erroring, warning, unprobed, hasData };
 });

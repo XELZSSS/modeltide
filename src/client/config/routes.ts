@@ -1,21 +1,19 @@
 import type { RouteRecordRaw } from "vue-router";
 import { Activity, Award, Home, Megaphone, Newspaper } from "@lucide/vue";
 import {
-  qAgent,
   qArtificialRaw,
   qClosedReleasesRaw,
   qHomeDashboardRaw,
   qNewsRaw,
   qOpenRouter,
-  qOpenSourceModelsRaw,
   qStatusHistory,
 } from "@/client/api/api-queries";
 import NotFoundView from "@/client/components/feedback/not-found.vue";
-import { DEFAULT_RANKING_TAB, type RankingTabId } from "@/client/config/nav-config";
+import { DEFAULT_RANKING_TAB } from "@/client/config/nav-config";
 import { NEWS_CATEGORIES } from "@/shared/config";
 import { loadableView } from "@/client/router/lazy-view";
 import { preloadChunk } from "@/client/router/prefetch";
-import { RANKING_TAB_LOADS } from "@/client/features/rankings/tab-loaders";
+import { RANKING_TAB_LOADS, RANKING_TAB_QUERIES } from "@/client/features/rankings/tab-loaders";
 import HomeView from "@/client/features/home/home-view.vue";
 import type { Prefetchable } from "@/client/config/route-meta";
 
@@ -42,14 +40,7 @@ const SourceDetailView = loadableView(loadSourceView);
 
 const newsPrefetch: readonly Prefetchable[] = [qNewsRaw(NEWS_CATEGORIES[0])];
 
-export const RANKING_TAB_QUERIES: Record<RankingTabId, readonly Prefetchable[]> = {
-  modelRankings: [qArtificialRaw],
-  openRouterRankings: [qOpenRouter],
-  openSourceRankings: [qOpenSourceModelsRaw],
-  hallucinationRankings: [qArtificialRaw],
-  agentRankings: [qAgent],
-  providerCompare: [qArtificialRaw],
-};
+export { RANKING_TAB_QUERIES };
 
 export const ROUTES: RouteRecordRaw[] = [
   {
@@ -58,7 +49,7 @@ export const ROUTES: RouteRecordRaw[] = [
     component: HomeView,
     meta: {
       titleKey: "home",
-      prefetch: [qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw, qStatusHistory],
+      prefetch: [qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw],
       nav: { group: "primary", labelKey: "home", icon: Home },
     },
   },

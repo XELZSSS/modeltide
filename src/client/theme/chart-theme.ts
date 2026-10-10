@@ -1,7 +1,6 @@
-import { type Ref } from "vue";
+import { ref, type Ref } from "vue";
 import type { LegendOptions, ScaleOptions, TooltipCallbacks, TooltipItem, TooltipModel } from "chart.js";
 import { axisDashedBorderStyle, axisGridStyle, chartBase, defaultTooltipOptions } from "@/client/utils/charts";
-import { createSharedRef } from "@/client/utils/shared-ref";
 
 export interface ChartTheme {
   grid: string;
@@ -55,7 +54,6 @@ function resolveChartTheme(): ChartTheme {
 let sharedTheme: ChartTheme | null = null;
 let sharedSignature = "";
 let observing = false;
-let notifyShared: (() => void) | null = null;
 
 function currentTheme(): ChartTheme {
   if (sharedTheme) return sharedTheme;
@@ -86,13 +84,13 @@ function publish(next: ChartTheme): void {
 export function refreshChartTheme(): void {
   if (!sharedTheme) return;
   publish(resolveChartTheme());
-  notifyShared?.();
+  theme.value = sharedTheme;
 }
 
-function ensureObserver(notify: () => void): () => void {
-  currentTheme();
-  notifyShared = notify;
-  if (observing) return () => {};
+const theme = ref<ChartTheme>(currentTheme());
+
+function ensureObserver(): void {
+  if (observing) return;
   observing = true;
   // Coalesce bursts of class/style mutations (e.g. theme toggles) into one recompute.
   let scheduled = false;
@@ -106,20 +104,19 @@ function ensureObserver(notify: () => void): () => void {
       if (signature === sharedSignature) return;
       sharedSignature = signature;
       sharedTheme = next;
-      notify();
+      theme.value = next;
     });
   };
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
   const observer = new MutationObserver(onMutate);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] });
   media?.addEventListener?.("change", onMutate);
-  return () => {
-    observer.disconnect();
-    media?.removeEventListener?.("change", onMutate);
-  };
 }
 
-export const useChartTheme: () => Ref<ChartTheme> = createSharedRef(currentTheme, ensureObserver);
+export function useChartTheme(): Ref<ChartTheme> {
+  ensureObserver();
+  return theme;
+}
 
 export const AXIS_MAX = 100;
 export const AXIS_STEP = 20;

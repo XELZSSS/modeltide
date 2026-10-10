@@ -50,14 +50,12 @@ function lookupPricing(pricing: PricingLookup, key: string): PricingEntry | unde
 
 function resolvePricing(pricing: PricingLookup, id: string, variantKey: string | undefined): PricingEntry | undefined {
   const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
-  for (const key of keys) {
-    const hit = lookupPricing(pricing, key.toLowerCase());
-    if (hit) return hit;
-  }
-  for (const key of keys) {
-    const normalized = normalizeModelKey(key);
-    if (!normalized) continue;
-    const hit = lookupPricing(pricing, normalized);
+  const candidates = [
+    ...keys.map((key) => key.toLowerCase()),
+    ...keys.map((key) => normalizeModelKey(key)).filter((key): key is string => key !== ""),
+  ];
+  for (const key of candidates) {
+    const hit = lookupPricing(pricing, key);
     if (hit) return hit;
   }
   return undefined;

@@ -77,50 +77,41 @@ export const qClosedReleasesRaw = createApiQuery("closedReleases", queryKeys.clo
 
 type OpenSourceModelQuery = ReturnType<typeof createApiQuery<"openSourceModel">>;
 
-const MAX_MODEL_QUERIES = 64;
-
-const openSourceModelQueries = new Map<string, OpenSourceModelQuery>();
-
-export function qOpenSourceModel(id: string): OpenSourceModelQuery {
-  const existing = openSourceModelQueries.get(id);
-  if (existing) {
-    openSourceModelQueries.delete(id);
-    openSourceModelQueries.set(id, existing);
-    return existing;
-  }
-  const created = createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
-    ttl: ONE_MINUTE,
-    query: { id },
-  });
-  openSourceModelQueries.set(id, created);
-  if (openSourceModelQueries.size > MAX_MODEL_QUERIES) {
-    const oldest = openSourceModelQueries.keys().next().value;
-    if (oldest !== undefined) openSourceModelQueries.delete(oldest);
-  }
-  return created;
-}
-
 type SourceIncidentsQuery = ReturnType<typeof createApiQuery<"sourceIncidents">>;
 
-const MAX_INCIDENT_QUERIES = 32;
-
-const sourceIncidentsQueries = new Map<string, SourceIncidentsQuery>();
-
-export function qSourceIncidents(id: string): SourceIncidentsQuery {
-  const existing = sourceIncidentsQueries.get(id);
-  if (existing) {
-    sourceIncidentsQueries.delete(id);
-    sourceIncidentsQueries.set(id, existing);
-    return existing;
-  }
-  const created = createApiQuery("sourceIncidents", queryKeys.sourceIncidents(id), {
-    ttl: FIVE_MINUTES,
-    query: { id },
-  });
-  sourceIncidentsQueries.set(id, created);
-  if (sourceIncidentsQueries.size > MAX_INCIDENT_QUERIES) {
-    const oldest = sourceIncidentsQueries.keys().next().value;
-    if (oldest !== undefined) sourceIncidentsQueries.delete(oldest);
-  }
-  return created;
+function lruQueryCache<T>(max: number, create: (id: string) => T): (id: string) => T {
+  const entries = new Map<string, T>();
+  return (id: string) => {
+    const existing = entries.get(id);
+    if (existing !== undefined) {
+      entries.delete(id);
+      entries.set(id, existing);
+      return existing;
+    }
+    const created = create(id);
+    entries.set(id, created);
+    if (entries.size > max) {
+      const oldest = entries.keys().next().value;
+      if (oldest !== undefined) entries.delete(oldest);
+    }
+    return created;
+  };
 }
+
+export const qOpenSourceModel: (id: string) => OpenSourceModelQuery = lruQueryCache(
+  64,
+  (id: string): OpenSourceModelQuery =>
+    createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
+      ttl: ONE_MINUTE,
+      query: { id },
+    }),
+);
+
+export const qSourceIncidents: (id: string) => SourceIncidentsQuery = lruQueryCache(
+  32,
+  (id: string): SourceIncidentsQuery =>
+    createApiQuery("sourceIncidents", queryKeys.sourceIncidents(id), {
+      ttl: FIVE_MINUTES,
+      query: { id },
+    }),
+);

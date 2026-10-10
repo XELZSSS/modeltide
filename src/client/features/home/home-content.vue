@@ -8,10 +8,8 @@ import {
 } from "@/client/api/api-queries";
 import { assertPayloadShape } from "@/client/api/payload-normalize";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
-import ChartCard from "@/client/components/ui/chart-card.vue";
-import { FLEX_CHART_HEIGHT } from "@/client/utils/chart-metrics";
-import { useTranslation } from "@/client/i18n";
 import { loadableView } from "@/client/router/lazy-view";
+import { useTranslation } from "@/client/i18n";
 import { useHomeStats } from "./use-home-stats";
 import ProviderSpeedCard from "./provider-speed-card.vue";
 import HallucinationCard from "./hallucination-card.vue";
@@ -47,33 +45,10 @@ const partial = computed(
 
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-stretch">
     <div class="md:col-span-2 lg:col-span-6">
-      <Suspense>
-        <IndexAreaChart :models="artificialData" />
-        <template #fallback>
-          <ChartCard
-            loading
-            class="h-full"
-            :title="t('intelligenceIndex')"
-            :subtitle="t('artificialSource')"
-            :skeleton-height="FLEX_CHART_HEIGHT"
-          />
-        </template>
-      </Suspense>
+      <IndexAreaChart :models="artificialData" />
     </div>
     <div class="md:col-span-2 lg:col-span-6">
-      <Suspense>
-        <OpenSourceCard :models="dashboardData.opensource" :trending="trendingStats" />
-        <template #fallback>
-          <ChartCard
-            loading
-            class="h-full"
-            content-class="flex flex-col h-full"
-            :title="t('openSourceTrendingStats')"
-            :subtitle="t('huggingFaceSource')"
-            :skeleton-height="FLEX_CHART_HEIGHT"
-          />
-        </template>
-      </Suspense>
+      <OpenSourceCard :models="dashboardData.opensource" :trending="trendingStats" />
     </div>
     <div class="lg:col-span-4">
       <ProviderSpeedCard :provider-stats="providerStats" />

@@ -132,21 +132,32 @@ function incidentTimestamp(value: unknown): string | null {
   return Number.isNaN(Date.parse(trimmed)) ? null : trimmed;
 }
 
-function readStatuspageUpdates(raw: unknown): SourceIncidentUpdate[] {
+function readUpdateList(
+  raw: unknown,
+  pick: (update: Record<string, unknown>) => { body: string; status: string; createdAt: string | null } | null,
+): SourceIncidentUpdate[] {
   if (!Array.isArray(raw)) return [];
   const updates: SourceIncidentUpdate[] = [];
   for (const entry of raw.slice(0, INCIDENT_LOG_MAX_UPDATES)) {
     const update = obj(entry);
     if (!update) continue;
-    const body = plainText(str(update.body)).trim();
-    if (!body) continue;
+    const picked = pick(update);
+    if (!picked || !picked.body) continue;
     updates.push({
-      body: truncateSafe(body, INCIDENT_LOG_MAX_BODY_CHARS),
-      status: str(update.status).trim() || "update",
-      createdAt: incidentTimestamp(update.created_at ?? update.display_at),
+      body: truncateSafe(picked.body, INCIDENT_LOG_MAX_BODY_CHARS),
+      status: picked.status || "update",
+      createdAt: picked.createdAt,
     });
   }
   return updates;
+}
+
+function readStatuspageUpdates(raw: unknown): SourceIncidentUpdate[] {
+  return readUpdateList(raw, (update) => ({
+    body: plainText(str(update.body)).trim(),
+    status: str(update.status).trim(),
+    createdAt: incidentTimestamp(update.created_at ?? update.display_at),
+  }));
 }
 
 export function parseStatuspageIncidents(raw: unknown): ParseResult<SourceIncident[]> {
@@ -175,20 +186,11 @@ export function parseStatuspageIncidents(raw: unknown): ParseResult<SourceIncide
 }
 
 function readGcpUpdates(raw: unknown): SourceIncidentUpdate[] {
-  if (!Array.isArray(raw)) return [];
-  const updates: SourceIncidentUpdate[] = [];
-  for (const entry of raw.slice(0, INCIDENT_LOG_MAX_UPDATES)) {
-    const update = obj(entry);
-    if (!update) continue;
-    const body = str(update.text).trim();
-    if (!body) continue;
-    updates.push({
-      body: truncateSafe(body, INCIDENT_LOG_MAX_BODY_CHARS),
-      status: str(update.status).trim() || "update",
-      createdAt: incidentTimestamp(update.when ?? update.created),
-    });
-  }
-  return updates;
+  return readUpdateList(raw, (update) => ({
+    body: str(update.text).trim(),
+    status: str(update.status).trim(),
+    createdAt: incidentTimestamp(update.when ?? update.created),
+  }));
 }
 
 export function parseGoogleCloudIncidentLog(raw: unknown): ParseResult<SourceIncident[]> {

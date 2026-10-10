@@ -1,4 +1,7 @@
-import { computed, onMounted, onUnmounted, ref, toValue, useId, watch, type MaybeRefOrGetter, type Ref } from "vue";
+import { computed, ref, toValue, useId, watch, type MaybeRefOrGetter, type Ref } from "vue";
+import { useClickOutside } from "@/client/search/use-click-outside";
+import { useDebouncedTerm } from "@/client/search/use-debounced-term";
+import { useListKeyboard } from "@/client/search/use-list-keyboard";
 
 interface ComboboxOptions {
   initialValue: string;
@@ -147,43 +150,6 @@ export function useCombobox({
 
 export type ComboboxController = ReturnType<typeof useCombobox>;
 
-function useDebouncedTerm(initial: string, delayMs = 200) {
-  const inputValue = ref(initial);
-  const debounced = ref(initial);
-  const composing = ref(false);
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  function clearTimer(): void {
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-  }
-
-  watch(
-    [inputValue, composing],
-    () => {
-      clearTimer();
-      if (composing.value) return;
-      timer = setTimeout(() => {
-        timer = null;
-        debounced.value = inputValue.value;
-      }, delayMs);
-    },
-    { immediate: true },
-  );
-
-  onUnmounted(clearTimer);
-
-  function setDebouncedDirect(v: string): void {
-    clearTimer();
-    debounced.value = v;
-    inputValue.value = v;
-  }
-
-  return { inputValue, debounced, setDebouncedDirect, composing };
-}
-
 function escapeSelectorId(id: string): string {
   try {
     if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(id);
@@ -191,59 +157,4 @@ function escapeSelectorId(id: string): string {
     // fall through to manual escape
   }
   return id.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
-}
-
-function useClickOutside(target: Ref<HTMLElement | null>, onOutside: () => void): void {
-  function handle(e: Event): void {
-    if (target.value && !target.value.contains(e.target as Node)) onOutside();
-  }
-
-  onMounted(() => {
-    document.addEventListener("pointerdown", handle);
-    document.addEventListener("focusin", handle);
-  });
-
-  onUnmounted(() => {
-    document.removeEventListener("pointerdown", handle);
-    document.removeEventListener("focusin", handle);
-  });
-}
-
-function useListKeyboard(itemCount: MaybeRefOrGetter<number>, onSelect: (index: number) => void, onClose?: () => void) {
-  const index = ref(-1);
-  const count = computed(() => toValue(itemCount));
-  const activeIndex = computed(() => (index.value < 0 ? -1 : Math.min(index.value, count.value - 1)));
-
-  watch(count, () => {
-    index.value = -1;
-  });
-
-  function setActiveIndex(value: number): void {
-    index.value = value;
-  }
-
-  function handleKeyDown(e: KeyboardEvent): void {
-    if (e.key === "Escape") {
-      index.value = -1;
-      onClose?.();
-      return;
-    }
-    if (count.value === 0) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") e.preventDefault();
-      return;
-    }
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      index.value = (index.value + 1) % count.value;
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      index.value = index.value <= 0 ? count.value - 1 : index.value - 1;
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (activeIndex.value >= 0) onSelect(activeIndex.value);
-      index.value = -1;
-    }
-  }
-
-  return { activeIndex, setActiveIndex, handleKeyDown };
 }

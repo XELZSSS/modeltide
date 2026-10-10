@@ -1,6 +1,6 @@
 import { modelDetailPath } from "@/shared/utils/models";
 import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
-import { matchFolded, fuzzyHit, prepareFields, type PreparedFields } from "@/client/search/match";
+import { matchFolded, fuzzyHit, preparedFieldsFor, type PreparedFields } from "@/client/search/match";
 import { normalizeModelKey } from "@/shared/utils";
 import type { SearchResult, SearchResultSource } from "@/client/search/types";
 import type {
@@ -21,9 +21,6 @@ interface PreparedEntry {
   fields: PreparedFields;
 }
 
-// Per-item cache: preparation is pure and query data keeps object identity.
-const preparedCache = new WeakMap<object, PreparedFields>();
-
 export interface SourceConfig {
   entries: readonly PreparedEntry[];
   map(item: SearchItem): SearchResult;
@@ -35,14 +32,7 @@ export function defineSource<T extends SearchItem>(
   map: (item: T) => SearchResult,
 ): SourceConfig {
   return {
-    entries: items.map((item) => {
-      let fields = preparedCache.get(item);
-      if (fields == null) {
-        fields = prepareFields(getFields(item));
-        preparedCache.set(item, fields);
-      }
-      return { item, fields };
-    }),
+    entries: items.map((item) => ({ item, fields: preparedFieldsFor(item, getFields) })),
     map,
   };
 }

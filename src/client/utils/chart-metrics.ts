@@ -1,6 +1,6 @@
-export const CHART_HEIGHT = "h-[200px] sm:h-[240px]";
+export const CHART_HEIGHT = "h-[160px] sm:h-[180px]";
 
-export const FLEX_CHART_HEIGHT = `flex-1 min-h-[200px] ${CHART_HEIGHT}`;
+export const FLEX_CHART_HEIGHT = `flex-1 min-h-[160px] ${CHART_HEIGHT}`;
 
 export const RADAR_CHART_HEIGHT = "h-[280px] sm:h-[400px]";
 

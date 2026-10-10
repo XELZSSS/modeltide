@@ -1,73 +1,17 @@
 <script setup lang="ts">
-import { computed, defineComponent, h, type Component, type ComputedRef } from "vue";
+import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { useSuspenseArtificialRankingsState, useSuspenseOpenRouterRankings } from "@/client/api/api-queries";
-import { isPartialPayload, unwrapList } from "@/client/api/payload-normalize";
 import { MODEL_SOURCES, type ModelSource } from "@/client/config/nav-config";
 import NotFound from "@/client/components/feedback/not-found.vue";
-import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
-import DetailShell, { findModel } from "@/client/components/model-detail/detail-views.vue";
-import AaContent from "@/client/components/model-detail/aa-detail.vue";
-import OrContent from "@/client/components/model-detail/openrouter-detail.vue";
 import OpenSourceDetail from "@/client/components/model-detail/open-source-detail.vue";
 import HallucinationDetail from "@/client/components/model-detail/hallucination-detail.vue";
-import type { ArtificialAnalysisModel, OpenRouterRankEntry } from "@/shared/types";
+import AaDetailView from "./aa-detail-view.vue";
+import OrDetailView from "./or-detail-view.vue";
 
 function isModelSource(value: string): value is ModelSource {
   return Object.hasOwn(MODEL_SOURCES, value);
 }
-
-function createDetailView<T>(
-  source: ModelSource,
-  Content: Component<{ model: T }>,
-  load: () => Promise<{ data: ComputedRef<T[]>; partial: ComputedRef<boolean> }>,
-  titleOf: (model: T) => string,
-  ...keys: { [K in keyof T]: T[K] extends string | undefined ? K & string : never }[keyof T][]
-): Component {
-  return defineComponent({
-    props: { decodedId: { type: String, required: true } },
-    async setup(props) {
-      const { data, partial } = await load();
-      const model = computed(() => findModel(data.value, props.decodedId, ...keys));
-      return () => {
-        const found = model.value;
-        if (!found) return h(NotFound);
-        return h(
-          DetailShell,
-          { source, title: titleOf(found) },
-          { default: () => [partial.value ? h(PartialNotice) : null, h(Content, { model: found })] },
-        );
-      };
-    },
-  });
-}
-
-const AaDetailView = createDetailView<ArtificialAnalysisModel>(
-  "aa",
-  AaContent,
-  async () => {
-    const state = await useSuspenseArtificialRankingsState();
-    return { data: computed(() => state.value.items), partial: computed(() => state.value.partial) };
-  },
-  (model) => model.name,
-  "id",
-  "slug",
-);
-
-const OrDetailView = createDetailView<OpenRouterRankEntry>(
-  "or",
-  OrContent,
-  async () => {
-    const query = await useSuspenseOpenRouterRankings();
-    return {
-      data: computed(() => unwrapList<OpenRouterRankEntry>(query.data.value, "openRouterRankings")),
-      partial: computed(() => isPartialPayload(query.data.value)),
-    };
-  },
-  (model) => model.name,
-  "id",
-);
 
 const route = useRoute();
 
@@ -87,7 +31,7 @@ const decodedId = computed(() => {
 <template>
   <SuspenseQuery>
     <NotFound v-if="!source || !decodedId" />
-    <AaDetailView v-if="source === 'aa'" :key="decodedId" :decoded-id="decodedId" />
+    <AaDetailView v-else-if="source === 'aa'" :key="decodedId" :decoded-id="decodedId" />
     <OrDetailView v-else-if="source === 'or'" :key="decodedId" :decoded-id="decodedId" />
     <OpenSourceDetail v-else-if="source === 'os'" :key="decodedId" :decoded-id="decodedId" />
     <HallucinationDetail v-else :key="decodedId" :decoded-id="decodedId" />

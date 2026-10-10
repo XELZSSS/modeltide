@@ -1,4 +1,4 @@
-import { createSharedRef } from "@/client/utils/shared-ref";
+import { ref, type Ref } from "vue";
 
 const MOBILE_QUERY = "(max-width: 767px)";
 
@@ -15,11 +15,18 @@ function currentMobile(): boolean {
   return mobileMedia()?.matches ?? false;
 }
 
-export const useDevice = createSharedRef(currentMobile, (notify) => {
-  const m = mobileMedia();
-  if (!m) return () => {};
-  // Attach lazily on first subscriber; detach when no explicit teardown needed
-  // (MediaQueryList lives for page lifetime, single listener is cheap).
-  m.addEventListener("change", notify);
-  return () => m.removeEventListener("change", notify);
-});
+const mobile = ref(currentMobile());
+let subscribed = false;
+
+function ensureSubscribed(): void {
+  if (subscribed) return;
+  subscribed = true;
+  mobileMedia()?.addEventListener("change", () => {
+    mobile.value = currentMobile();
+  });
+}
+
+export function useDevice(): Ref<boolean> {
+  ensureSubscribed();
+  return mobile;
+}

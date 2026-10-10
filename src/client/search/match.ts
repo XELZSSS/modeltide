@@ -18,7 +18,19 @@ export function matchFolded(folded: string[], needle: string): { matched: boolea
 }
 
 // Per-item cache: folding is pure, so repeated keystrokes reuse it.
-const foldedFieldsCache = new WeakMap<object, PreparedFields>();
+const preparedFieldsCache = new WeakMap<object, PreparedFields>();
+
+export function preparedFieldsFor<T extends object>(
+  item: T,
+  getFields: (item: T) => (string | null | undefined)[],
+): PreparedFields {
+  let prepared = preparedFieldsCache.get(item);
+  if (prepared == null) {
+    prepared = prepareFields(getFields(item));
+    preparedFieldsCache.set(item, prepared);
+  }
+  return prepared;
+}
 
 export function filterByTerm<T extends object>(
   items: T[],
@@ -27,14 +39,7 @@ export function filterByTerm<T extends object>(
 ): T[] {
   const needle = foldSearchStr(term);
   if (!needle) return items;
-  return items.filter((item) => {
-    let prepared = foldedFieldsCache.get(item);
-    if (prepared == null) {
-      prepared = prepareFields(getFields(item));
-      foldedFieldsCache.set(item, prepared);
-    }
-    return matchFolded(prepared.folded, needle).matched;
-  });
+  return items.filter((item) => matchFolded(preparedFieldsFor(item, getFields).folded, needle).matched);
 }
 
 const FUZZY_MIN_TERM = 3;

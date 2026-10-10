@@ -36,14 +36,14 @@ export function useSearchAllRankings(
 
   const artificialData = computed(() => artificialQ.data.value ?? emptyArray<ArtificialAnalysisModel>());
   const openSourceRankings = computed(() => openSourceQ.data.value ?? emptyArray<OpenSourceModelEntry>());
-  const openRouterUnwrapped = computed(() =>
-    unwrapListPartial<OpenRouterRankEntry>(orQ.data.value, "openRouterRankings"),
-  );
-  const openRouterData = computed(() => openRouterUnwrapped.value.data);
+  const openRouter = computed(() => {
+    const unwrapped = unwrapListPartial<OpenRouterRankEntry>(orQ.data.value, "openRouterRankings");
+    return { data: unwrapped.data, malformed: unwrapped.malformed };
+  });
   const hallucinationRankings = useHallucinationRankings(artificialData, enabled);
 
   const orMalformedError = computed(() =>
-    openRouterUnwrapped.value.malformed && openRouterData.value.length === 0
+    openRouter.value.malformed && openRouter.value.data.length === 0
       ? new Error("Malformed openRouterRankings payload")
       : null,
   );
@@ -66,7 +66,7 @@ export function useSearchAllRankings(
       })),
     ),
     or: computed<SourceConfig>(() =>
-      defineSource(openRouterData.value, SEARCH_FIELDS.or, (e) => ({
+      defineSource(openRouter.value.data, SEARCH_FIELDS.or, (e) => ({
         id: e.id,
         name: e.name,
         source: "openRouterRankings",

@@ -10,7 +10,7 @@ import EmptyState from "@/client/components/feedback/empty-state.vue";
 import RankedListRows from "./ranked-list-rows.vue";
 import type { HomeProviderStat } from "./use-home-stats";
 
-const TOP_PROVIDERS = 7;
+const TOP_PROVIDERS = 5;
 
 const props = defineProps<{ providerStats: HomeProviderStat[] }>();
 

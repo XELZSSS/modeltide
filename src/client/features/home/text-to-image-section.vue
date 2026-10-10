@@ -8,7 +8,7 @@ import { formatDollar } from "@/client/utils/format";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import type { TextToImageModel } from "@/shared/types";
 
-const TOP_T2I = 6;
+const TOP_T2I = 5;
 
 const props = defineProps<{ models: TextToImageModel[] }>();
 
@@ -40,7 +40,7 @@ const rows = computed(() =>
       <CardHeader :title="t('textToImage')" :subtitle="t('artificialSource')" />
       <EmptyState v-if="rows.length === 0" variant="plain" compact :message="t('notAvailable')" />
       <div v-else class="flex flex-1 flex-col gap-1 justify-between">
-        <div v-for="(row, i) in rows" :key="row.id" class="flex h-11 items-center gap-3 min-w-0">
+        <div v-for="(row, i) in rows" :key="row.id" class="flex h-10 items-center gap-3 min-w-0">
           <span class="text-xs font-medium text-text-tertiary w-6 text-center shrink-0 tabular-nums">
             {{ i + 1 }}
           </span>

@@ -42,6 +42,10 @@ function sourcePayload<T>(rows: T, partial: boolean): SourcePayload<T> {
   return { data: rows, fetchedAt: new Date().toISOString(), partial };
 }
 
+function refreshContextOf(ctx: AppContext): AppContext {
+  return ctx.refreshContext ?? ctx;
+}
+
 export function cachedRaw<T>(
   ctx: AppContext,
   key: string,
@@ -49,7 +53,7 @@ export function cachedRaw<T>(
   fetch: (ctx: AppContext) => Promise<T>,
   scope?: CacheScope,
 ): Promise<CacheResult<T>> {
-  const refreshCtx = ctx.refreshContext ?? ctx;
+  const refreshCtx = refreshContextOf(ctx);
   return ctx.cache.withTtlResult<T>(key, ttl, async () => ({ data: await fetch(refreshCtx) }), scope);
 }
 
@@ -60,7 +64,7 @@ export function cachedPayload<T>(
   build: (ctx: AppContext) => Promise<PayloadBuild<T>>,
   scope?: CacheScope,
 ): Promise<SourcePayload<T>> {
-  const refreshCtx = ctx.refreshContext ?? ctx;
+  const refreshCtx = refreshContextOf(ctx);
   return ctx.cache
     .withTtlResult<SourcePayload<T>>(
       key,

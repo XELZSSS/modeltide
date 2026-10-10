@@ -208,10 +208,6 @@ main,
   animation: enter var(--duration-base) var(--ease-out) both;
 }
 
-@utility ui-skeleton {
-  background-color: var(--bg-secondary);
-}
-
 @utility ui-card {
   border: 1px solid var(--border);
   background-color: var(--bg-card);

@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import { SOURCE_IDS } from "@/shared/config";
 import type { SourceId } from "@/shared/types";
 import NotFound from "@/client/components/feedback/not-found.vue";
+import SuspenseQuery from "@/client/router/suspense-query.vue";
 import SourceDetail from "@/client/features/status/source-detail.vue";
 
 const route = useRoute();
@@ -17,5 +18,7 @@ const id = computed<SourceId | null>(() => {
 
 <template>
   <NotFound v-if="id === null" />
-  <SourceDetail v-else :key="id" :id="id" />
+  <SuspenseQuery v-else>
+    <SourceDetail :key="id" :id="id" />
+  </SuspenseQuery>
 </template>

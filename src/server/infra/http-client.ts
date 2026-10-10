@@ -45,11 +45,22 @@ function describeFetchError(err: unknown): string {
 // fetch() never mutates the headers object it is given, so a shared probe header set is safe.
 const PROBE_HEADERS: Record<string, string> = { "user-agent": USER_AGENT, accept: "*/*" };
 
-type ResponseOutcome =
-  | { kind: "throw"; error: UpstreamError }
-  | { kind: "retry"; message: string; status: number | null };
+type AttemptOutcome<T> =
+  | { kind: "return"; value: T }
+  | { kind: "throw"; error: unknown }
+  | { kind: "abort" }
+  | { kind: "fail"; message: string | null; cause: unknown; status: number | null; timedOut: boolean };
 
-function classifyResponse(res: Response, url: string): ResponseOutcome {
+function finalError<T>(url: string, fail: Extract<AttemptOutcome<T>, { kind: "fail" }>): UpstreamError {
+  const err = new UpstreamError(
+    fail.message ?? `HTTP failed for ${url}`,
+    fail.timedOut ? { timeout: true } : fail.status != null ? { status: fail.status } : { retryable: true },
+  );
+  if (fail.cause !== undefined) err.cause = fail.cause;
+  return err;
+}
+
+function classifyResponse(res: Response, url: string): AttemptOutcome<never> {
   void res.body?.cancel()?.catch(() => {});
   if (res.status === 429) {
     const retryAfterMs = parseRetryAfterMs(res);
@@ -65,7 +76,7 @@ function classifyResponse(res: Response, url: string): ResponseOutcome {
   if (res.status >= 400 && res.status < 500 && res.status !== 408) {
     return { kind: "throw", error: new UpstreamError(`HTTP ${res.status} for ${url}`, { status: res.status }) };
   }
-  return { kind: "retry", message: `HTTP ${res.status} for ${url}`, status: res.status };
+  return { kind: "fail", message: `HTTP ${res.status} for ${url}`, cause: undefined, status: res.status, timedOut: false };
 }
 
 export class HttpClient {
@@ -95,6 +106,64 @@ export class HttpClient {
     return this.background ? this.pools.background : this.pools.interactive;
   }
 
+  private async withSlot<T>(signal: AbortSignal, run: () => Promise<T>, onAbort: () => T): Promise<T> {
+    const pool = this.pool();
+    try {
+      await acquireSlot(signal, this.pools, pool);
+    } catch {
+      return onAbort();
+    }
+    try {
+      return await run();
+    } finally {
+      releaseSlot(this.pools, pool);
+    }
+  }
+
+  private async attemptFetch<T>(
+    url: string,
+    headers: Record<string, string>,
+    read: (res: Response, signal: AbortSignal) => Promise<T>,
+    signal: AbortSignal,
+    deadline: AbortSignal,
+    initSignal: AbortSignal | undefined,
+    rest: Omit<FetchOptions, "timeoutMs" | "retries" | "headers" | "signal">,
+  ): Promise<AttemptOutcome<T>> {
+    let res: Response | null = null;
+    try {
+      res = await this.fetchImpl(url, { headers, signal, ...rest });
+    } catch (err) {
+      if (isSubrequestLimit(err)) {
+        return {
+          kind: "throw",
+          error: new UpstreamError(`Subrequest limit hit for ${url}`, { retryable: false }),
+        };
+      }
+      if (initSignal?.aborted) return { kind: "throw", error: new ClientAbortError(`Client aborted fetch for ${url}`) };
+      const timedOut = deadline.aborted;
+      return {
+        kind: "fail",
+        message: timedOut
+          ? `Upstream timeout for ${url}: ${describeFetchError(err)}`
+          : `Upstream network error for ${url}: ${describeFetchError(err)}`,
+        cause: err,
+        status: null,
+        timedOut,
+      };
+    }
+    if (res.ok) {
+      try {
+        return { kind: "return", value: await read(res, signal) };
+      } catch (err) {
+        if (!(err instanceof UpstreamError) || !err.retryable || signal.aborted || initSignal?.aborted) {
+          return { kind: "throw", error: err };
+        }
+        return { kind: "fail", message: err.message, cause: undefined, status: null, timedOut: false };
+      }
+    }
+    return classifyResponse(res, url);
+  }
+
   private async doFetch<T>(
     url: string,
     init: FetchOptions,
@@ -107,61 +176,20 @@ export class HttpClient {
     }
     const initSignal = initSignalOpt ?? this.defaultSignal;
     const headers = buildHeaders(USER_AGENT, accept, initHeaders);
-    const pool = this.pool();
     for (let attempt = 0; attempt <= retries; attempt++) {
       const deadline = AbortSignal.timeout(timeoutMs);
       const signal = initSignal ? AbortSignal.any([initSignal, deadline]) : deadline;
-      try {
-        await acquireSlot(signal, this.pools, pool);
-      } catch {
+      const outcome = await this.withSlot(
+        signal,
+        () => this.attemptFetch(url, headers, read, signal, deadline, initSignal, rest),
+        (): AttemptOutcome<T> => ({ kind: "abort" }),
+      );
+      if (outcome.kind === "return") return outcome.value;
+      if (outcome.kind === "throw") throw outcome.error;
+      if (outcome.kind === "abort") {
         throw new UpstreamError(`Upstream deadline exceeded for ${url}`, { timeout: true });
       }
-      let res: Response | null = null;
-      let failMsg: string | null = null;
-      let failCause: unknown;
-      let failStatus: number | null = null;
-      let timedOut = false;
-      try {
-        try {
-          res = await this.fetchImpl(url, { headers, signal, ...rest });
-        } catch (err) {
-          if (isSubrequestLimit(err)) throw new UpstreamError(`Subrequest limit hit for ${url}`, { retryable: false });
-          if (initSignal?.aborted) throw new ClientAbortError(`Client aborted fetch for ${url}`);
-          timedOut = deadline.aborted;
-          failCause = err;
-          failMsg = timedOut
-            ? `Upstream timeout for ${url}: ${describeFetchError(err)}`
-            : `Upstream network error for ${url}: ${describeFetchError(err)}`;
-        }
-        if (res) {
-          if (res.ok) {
-            try {
-              return await read(res, signal);
-            } catch (err) {
-              if (!(err instanceof UpstreamError) || !err.retryable || signal.aborted || initSignal?.aborted) throw err;
-              failMsg = err.message;
-              failStatus = null;
-              timedOut = false;
-            }
-          } else {
-            const outcome = classifyResponse(res, url);
-            if (outcome.kind === "throw") throw outcome.error;
-            failMsg = outcome.message;
-            failStatus = outcome.status;
-            timedOut = false;
-          }
-        }
-      } finally {
-        releaseSlot(this.pools, pool);
-      }
-      if (attempt === retries) {
-        const finalErr = new UpstreamError(
-          failMsg ?? `HTTP failed for ${url}`,
-          timedOut ? { timeout: true } : failStatus != null ? { status: failStatus } : { retryable: true },
-        );
-        if (failCause !== undefined) finalErr.cause = failCause;
-        throw finalErr;
-      }
+      if (attempt === retries) throw finalError(url, outcome);
       await sleepAbortable(computeBackoff(attempt), initSignal);
       if (initSignal?.aborted) {
         throw new UpstreamError(`Upstream deadline exceeded for ${url}`, { timeout: true });
@@ -210,44 +238,40 @@ export class HttpClient {
 
   async probe(url: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<ProbeResult> {
     const queuedAt = this.now();
-    const pool = this.pool();
     const timeout = AbortSignal.timeout(timeoutMs);
     const signal = this.defaultSignal ? AbortSignal.any([this.defaultSignal, timeout]) : timeout;
-    try {
-      await acquireSlot(signal, this.pools, pool);
-    } catch {
-      return { ok: false, status: null, latencyMs: Date.now() - queuedAt, error: "aborted" };
-    }
-    try {
-      const attemptStart = this.now();
-      try {
-        const res = await this.fetchImpl(url, {
-          method: "HEAD",
-          headers: PROBE_HEADERS,
-          signal,
-          cache: "no-store",
-        });
-        const latencyMs = this.now() - attemptStart;
-        void res.body?.cancel()?.catch(() => {});
-        // 405/501 means the host is alive but rejects HEAD; a fallback GET would cost another subrequest.
-        if (res.status === 405 || res.status === 501) {
-          return { ok: true, status: res.status, latencyMs, error: null };
+    return this.withSlot(
+      signal,
+      async () => {
+        const attemptStart = this.now();
+        try {
+          const res = await this.fetchImpl(url, {
+            method: "HEAD",
+            headers: PROBE_HEADERS,
+            signal,
+            cache: "no-store",
+          });
+          const latencyMs = this.now() - attemptStart;
+          void res.body?.cancel()?.catch(() => {});
+          // 405/501 means the host is alive but rejects HEAD; a fallback GET would cost another subrequest.
+          if (res.status === 405 || res.status === 501) {
+            return { ok: true, status: res.status, latencyMs, error: null };
+          }
+          return { ok: res.ok, status: res.status, latencyMs, error: res.ok ? null : `HTTP ${res.status}` };
+        } catch (err) {
+          const latencyMs = this.now() - attemptStart;
+          if (isSubrequestLimit(err)) return { ok: false, status: null, latencyMs, error: "subrequest-limit" };
+          if (this.defaultSignal?.aborted) return { ok: false, status: null, latencyMs, error: "aborted" };
+          const detail = describeFetchError(err);
+          return {
+            ok: false,
+            status: null,
+            latencyMs,
+            error: timeout.aborted ? `timeout: ${detail}` : `network error: ${detail}`,
+          };
         }
-        return { ok: res.ok, status: res.status, latencyMs, error: res.ok ? null : `HTTP ${res.status}` };
-      } catch (err) {
-        const latencyMs = this.now() - attemptStart;
-        if (isSubrequestLimit(err)) return { ok: false, status: null, latencyMs, error: "subrequest-limit" };
-        if (this.defaultSignal?.aborted) return { ok: false, status: null, latencyMs, error: "aborted" };
-        const detail = describeFetchError(err);
-        return {
-          ok: false,
-          status: null,
-          latencyMs,
-          error: timeout.aborted ? `timeout: ${detail}` : `network error: ${detail}`,
-        };
-      }
-    } finally {
-      releaseSlot(this.pools, pool);
-    }
+      },
+      () => ({ ok: false, status: null, latencyMs: Date.now() - queuedAt, error: "aborted" }),
+    );
   }
 }

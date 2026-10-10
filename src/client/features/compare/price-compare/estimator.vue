@@ -47,10 +47,10 @@ function isBestCost(model: ArtificialAnalysisModel): boolean {
   <Card>
     <CardContent>
       <CardHeader :title="t('estimatedMonthlyCost')" />
-      <div class="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-5">
+      <div class="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 mb-4">
         <CostEstimatorInputs :state="costState" :avg-cost="avgMonthlyCost" />
       </div>
-      <div class="flex flex-col gap-3">
+      <div class="flex flex-col gap-2">
         <div
           v-for="(model, index) in props.models"
           :key="modelKeyOf(model, index)"
