@@ -1,6 +1,7 @@
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type { TranslationKey } from "@/shared/i18n";
-import { monthlyCostFor, type CostScenario } from "@/shared/utils";
+import { monthlyCostFor } from "@/shared/utils";
+import { parseCostFields, type CostFieldValues } from "@/shared/pricing/scenario";
 import { modelId } from "@/shared/utils/models";
 import { resolveEffectivePricing } from "@/shared/utils/pricing";
 import { useCostStore } from "@/client/stores";
@@ -33,17 +34,7 @@ function useCostEstimator() {
   const values = computed(() => store.values);
   const setField = (id: CostFieldId, v: string): void => store.setField(id, v);
 
-  const calc = computed<CostScenario>(() => {
-    const current = values.value;
-    return {
-      dailyInputM: Math.max(0, Number(current.dailyInput) || 0),
-      dailyOutputM: Math.max(0, Number(current.dailyOutput) || 0),
-      dailyReasoningM: Math.max(0, Number(current.dailyReasoning) || 0),
-      cacheHitRate: Math.max(0, Math.min(100, Number(current.cacheHitRate) || 0)) / 100,
-      cacheWriteRate: Math.max(0, Math.min(100, Number(current.cacheWriteRate) || 0)) / 100,
-      daysPerMonth: Math.max(1, Number(current.daysPerMonth) || 0),
-    };
-  });
+  const calc = computed(() => parseCostFields(values.value as CostFieldValues));
 
   return { values, setField, calc };
 }

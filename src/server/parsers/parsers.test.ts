@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { SOURCE_LIMITS } from "@/server/config/limits";
 import { toClosedReleases, toClosedReleasesFromIndex } from "@/server/parsers/closed-releases-parser";
 import type { ChangelogModel } from "@/server/parsers/aa/changelog-parser";
 import { decodeEntities } from "@/server/parsers/html-entities";
@@ -352,12 +351,12 @@ describe("feed guard", () => {
   });
 });
 
-describe("closed releases cap", () => {
-  const overflow = 10;
+describe("closed releases full fetch", () => {
+  const total = 510;
   const releaseDate = (i: number) => `2026-01-${String((i % 28) + 1).padStart(2, "0")}`;
 
-  it("caps the changelog rows, keeping the newest", () => {
-    const changelog: ChangelogModel[] = Array.from({ length: SOURCE_LIMITS.closedReleases + overflow }, (_, i) => ({
+  it("returns all changelog rows, keeping the newest first", () => {
+    const changelog: ChangelogModel[] = Array.from({ length: total }, (_, i) => ({
       slug: `model-${i}`,
       name: `Model ${i}`,
       releaseSlug: `model-${i}`,
@@ -365,20 +364,21 @@ describe("closed releases cap", () => {
       releaseDate: releaseDate(i),
       creatorName: "Anthropic",
     }));
-    const entries = toClosedReleases(changelog);
-    expect(entries).toHaveLength(SOURCE_LIMITS.closedReleases);
+    const entries = toClosedReleases(changelog, "https://example.com");
+    expect(entries).toHaveLength(total);
     expect(entries[0]!.releaseDate).toBe("2026-01-28");
   });
 
-  it("caps the index fallback the same way", () => {
-    const models = Array.from({ length: SOURCE_LIMITS.closedReleases + overflow }, (_, i) => ({
+  it("returns all index fallback rows the same way", () => {
+    const models = Array.from({ length: total }, (_, i) => ({
       slug: `model-${i}`,
       name: `Model ${i}`,
       model_creators: { name: "Anthropic" },
       release_date: releaseDate(i),
     }));
-    const entries = toClosedReleasesFromIndex(models);
-    expect(entries).toHaveLength(SOURCE_LIMITS.closedReleases);
+    const entries = toClosedReleasesFromIndex(models, "https://example.com");
+    expect(entries).toHaveLength(total);
     expect(entries[0]!.releaseDate).toBe("2026-01-28");
   });
 });
+

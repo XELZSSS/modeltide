@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import PageShell from "@/client/components/layout/page-shell.vue";
+import PageContainer from "@/client/components/layout/page-container.vue";
+import PageHeader from "@/client/components/layout/page-header.vue";
+import { PAGE_BLOCK_GAP } from "@/client/config/layout";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import SearchInput from "@/client/search/search-input.vue";
 import { useTranslation } from "@/client/i18n";
@@ -9,12 +11,16 @@ const { t } = useTranslation();
 </script>
 
 <template>
-  <PageShell :title="t('releases')" :description="t('releaseDataSources')">
-    <template #actions>
-      <SearchInput />
-    </template>
-    <SuspenseQuery>
-      <ReleasesData />
-    </SuspenseQuery>
-  </PageShell>
+  <PageContainer>
+    <div :class="PAGE_BLOCK_GAP">
+      <PageHeader :title="t('releases')" :description="t('releaseDataSources')">
+        <template #actions>
+          <SearchInput />
+        </template>
+      </PageHeader>
+      <SuspenseQuery>
+        <ReleasesData />
+      </SuspenseQuery>
+    </div>
+  </PageContainer>
 </template>

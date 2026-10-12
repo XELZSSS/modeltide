@@ -1,5 +1,8 @@
 import { MAX_ID_CHARS } from "@/shared/config";
 import { isHttpUrl } from "@/shared/utils/url";
+import { titleCase as titleCaseWords } from "@/shared/utils/text";
+
+export { titleCaseWords };
 
 export const numCoerce = (v: unknown): number | null => {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -53,6 +56,8 @@ export const numIntCoerceNonNegative = (v: unknown): number | null => {
 };
 
 export const titleCase = (s: string): string =>
+  // Single-token legacy variant (preserves ALL-CAPS like "OPENAI").
+  // For multi-word humanization use titleCaseWords from shared/utils/text.
   s ? (s.length >= 2 && s === s.toUpperCase() ? s : s[0]!.toUpperCase() + s.slice(1).toLowerCase()) : s;
 
 export function truncateSafe(s: string, max: number): string {

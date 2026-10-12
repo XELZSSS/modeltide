@@ -1,5 +1,6 @@
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen";
-import { API_VERSION_PARAM } from "@/shared/config/paths";
+import { API_VERSION_PARAM, apiPaths, type ApiDomain } from "@/shared/config/paths";
+import type { PayloadOf } from "@/shared/contract";
 import type { SourcePayload } from "@/shared/types";
 
 const CLIENT_FETCH_TIMEOUT_MS = 35_000;
@@ -117,3 +118,8 @@ export const fetcher =
   <T>(path: string) =>
   ({ signal }: QueryCtx) =>
     apiFetch<T>(path, signal);
+
+export function fetcherFor<D extends ApiDomain>(domain: D, query?: Record<string, string>) {
+  const path = query ? `${apiPaths[domain]}?${new URLSearchParams(query)}` : apiPaths[domain];
+  return fetcher<PayloadOf<D>>(path);
+}

@@ -1,5 +1,5 @@
 import { isFiniteNumber } from "@/shared/utils/numbers";
-import type { ModelPricing } from "@/shared/types";
+import type { ModelPricing } from "@/shared/types/catalog";
 
 export interface CostScenario {
   dailyInputM: number;

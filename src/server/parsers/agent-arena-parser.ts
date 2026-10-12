@@ -1,6 +1,5 @@
 import { numCoerce, isRecord, byNumberDesc, isUnsuitableContent } from "@/server/parsers/parser-primitives";
 import { toStringOrNull } from "@/shared/utils";
-import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { AgentRankEntry } from "@/shared/types";
 import { zeroUpstreamMessage } from "@/server/infra/errors";
 
@@ -120,7 +119,7 @@ function buildAgentOverall(available: { signal: string; rows: AgentSignalRow[] }
   }));
   ranked.sort(byNumberDesc((r) => r.score));
   return {
-    rows: ranked.map((r, i) => ({ rank: i + 1, ...r })).slice(0, SOURCE_LIMITS.agentRankings),
+    rows: ranked.map((r, i) => ({ rank: i + 1, ...r })),
     dropped: acc.size - complete.length,
   };
 }

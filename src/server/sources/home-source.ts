@@ -11,7 +11,6 @@ import { cachedPayload } from "@/server/sources/pipeline";
 
 const HOME_OR_RANKING_ROWS = 5;
 const HOME_TEXT_TO_IMAGE_ROWS = 8;
-const HOME_OPEN_SOURCE_ROWS = 20;
 
 function homeOpenSourceRow({ id, downloads, task }: OpenSourceModelEntry): HomeOpenSourceEntry {
   return { id, downloads, task };
@@ -31,7 +30,9 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboar
   const data: HomeDashboardData = {
     orRankings: (orRankings?.data ?? []).slice(0, HOME_OR_RANKING_ROWS),
     textToImage: (textToImage?.data ?? []).slice(0, HOME_TEXT_TO_IMAGE_ROWS),
-    opensource: (opensource?.data ?? []).slice(0, HOME_OPEN_SOURCE_ROWS).map(homeOpenSourceRow),
+    // Full list: the doughnut aggregates task share over all rows, while the
+    // trending sidebar only takes the top entries client-side.
+    opensource: (opensource?.data ?? []).map(homeOpenSourceRow),
   };
   const partial =
     failures.length > 0 ||

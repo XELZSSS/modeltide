@@ -1,5 +1,5 @@
 import { STATIC_TTL_MS } from "@/shared/config";
-import { cacheKeys } from "@/server/config";
+import { cacheKeys, upstreamConfig } from "@/server/config";
 import type { ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { errMsg, UpstreamError } from "@/server/infra/errors";
@@ -23,7 +23,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
   if (models.length === 0 && changelogModels.length === 0) {
     throw new UpstreamError(`Releases: both index and changelog failed`, { retryable: true });
   }
-  const entries = toClosedReleases(changelogModels);
+  const entries = toClosedReleases(changelogModels, upstreamConfig.artificialAnalysis);
   ctx.log(
     "info",
     `[closed-releases] rows=${entries.length} (changelog=${changelogModels.length}, index=${models.length})`,
@@ -31,7 +31,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
   let finalEntries = entries;
   const indexFallback = finalEntries.length === 0 && models.length > 0;
   if (indexFallback) {
-    finalEntries = toClosedReleasesFromIndex(models);
+    finalEntries = toClosedReleasesFromIndex(models, upstreamConfig.artificialAnalysis);
     ctx.log("warn", `[closed-releases] changelog empty, index fallback rows=${finalEntries.length}`);
   }
   requireRows(finalEntries, "Releases", "rows", `changelog=${changelogModels.length}, index=${models.length}`);

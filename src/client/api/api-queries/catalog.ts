@@ -1,87 +1,54 @@
 import {
   FIVE_MINUTES,
-  NEWS_CATEGORIES,
   NEWS_TTL_MS,
   ONE_MINUTE,
-  OPEN_SOURCE_MODELS_DEFAULTS,
   PARTIAL_FAIL_TTL_MS,
   SLOW_TTL_MS,
   STATIC_TTL_MS,
   queryKeys,
 } from "@/shared/config";
+import { openSourceModelsQueryString } from "@/shared/api/query-schemas";
 import type { NewsCategory } from "@/shared/types";
+import { isNewsCategory } from "@/shared/types/news";
 import { isPartialPayload } from "@/client/api/payload-normalize";
 import { createApiQuery } from "./factory";
 
-export const qArtificialRaw = createApiQuery("artificialIndex", queryKeys.artificialIndex, {
+export const qArtificialList = createApiQuery("artificialIndex", queryKeys.artificialIndex, {
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
 });
 
-export const qOpenRouter = createApiQuery("openRouterRankings", queryKeys.openRouterRankings, {
+export const qOpenRouterList = createApiQuery("openRouterRankings", queryKeys.openRouterRankings, {
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
 });
 
-export const qHomeDashboardRaw = createApiQuery("homeDashboard", queryKeys.homeDashboard, {
+export const qHomeDashboard = createApiQuery("homeDashboard", queryKeys.homeDashboard, {
   ttl: FIVE_MINUTES,
   gcTime: 15 * 60_000,
   partialRefetchMs: ONE_MINUTE,
   isPartialData: isPartialPayload,
 });
 
-export const qOpenSourceModelsRaw = createApiQuery("openSourceModels", queryKeys.openSourceModels, {
+export const qOpenSourceModelsList = createApiQuery("openSourceModels", queryKeys.openSourceModels, {
   ttl: SLOW_TTL_MS,
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
-  query: {
-    sort: OPEN_SOURCE_MODELS_DEFAULTS.sort,
-    direction: OPEN_SOURCE_MODELS_DEFAULTS.direction,
-    limit: String(OPEN_SOURCE_MODELS_DEFAULTS.limit),
-  },
+  query: openSourceModelsQueryString(),
 });
 
-type NewsQuery = ReturnType<typeof createApiQuery<"news">>;
-
-const newsQueries = new Map<NewsCategory, NewsQuery>();
-
-export function qNewsRaw(category: NewsCategory): NewsQuery {
-  const resolved = (NEWS_CATEGORIES.includes(category) ? category : NEWS_CATEGORIES[0]) as NewsCategory;
-  const existing = newsQueries.get(resolved);
-  if (existing) return existing;
-  const created = createApiQuery("news", queryKeys.news(resolved), {
-    ttl: NEWS_TTL_MS,
-    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
-    isPartialData: isPartialPayload,
-    query: { category: resolved },
-  });
-  newsQueries.set(resolved, created);
-  return created;
-}
-
-export const qAgent = createApiQuery("agentRankings", queryKeys.agentRankings, {
-  ttl: SLOW_TTL_MS,
-});
-
-export const qClosedReleasesRaw = createApiQuery("closedReleases", queryKeys.closedReleases, {
-  ttl: STATIC_TTL_MS,
-  partialRefetchMs: PARTIAL_FAIL_TTL_MS,
-  isPartialData: isPartialPayload,
-});
-
-type OpenSourceModelQuery = ReturnType<typeof createApiQuery<"openSourceModel">>;
-
-function lruQueryCache<T>(max: number, create: (id: string) => T): (id: string) => T {
-  const entries = new Map<string, T>();
-  return (id: string) => {
-    const existing = entries.get(id);
+function memoQuery<K extends string, T>(max: number, resolveKey: (input: string) => K, create: (key: K) => T): (input: string) => T {
+  const entries = new Map<K, T>();
+  return (input: string) => {
+    const key = resolveKey(input);
+    const existing = entries.get(key);
     if (existing !== undefined) {
-      entries.delete(id);
-      entries.set(id, existing);
+      entries.delete(key);
+      entries.set(key, existing);
       return existing;
     }
-    const created = create(id);
-    entries.set(id, created);
+    const created = create(key);
+    entries.set(key, created);
     if (entries.size > max) {
       const oldest = entries.keys().next().value;
       if (oldest !== undefined) entries.delete(oldest);
@@ -90,11 +57,45 @@ function lruQueryCache<T>(max: number, create: (id: string) => T): (id: string) 
   };
 }
 
-export const qOpenSourceModel: (id: string) => OpenSourceModelQuery = lruQueryCache(
+type NewsQuery = ReturnType<typeof createApiQuery<"news">>;
+
+export const qNewsList = memoQuery<NewsCategory, NewsQuery>(8, (category) => (isNewsCategory(category) ? category : "industry"), (resolved) =>
+  createApiQuery("news", queryKeys.news(resolved), {
+    ttl: NEWS_TTL_MS,
+    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+    isPartialData: isPartialPayload,
+    query: { category: resolved },
+  }),
+);
+
+export const qAgentList = createApiQuery("agentRankings", queryKeys.agentRankings, {
+  ttl: SLOW_TTL_MS,
+});
+
+export const qClosedReleasesList = createApiQuery("closedReleases", queryKeys.closedReleases, {
+  ttl: STATIC_TTL_MS,
+  partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+  isPartialData: isPartialPayload,
+});
+
+type OpenSourceModelQuery = ReturnType<typeof createApiQuery<"openSourceModel">>;
+
+export const qOpenSourceModelById: (id: string) => OpenSourceModelQuery = memoQuery<string, OpenSourceModelQuery>(
   64,
+  (id) => id,
   (id: string): OpenSourceModelQuery =>
     createApiQuery("openSourceModel", queryKeys.openSourceModel(id), {
       ttl: ONE_MINUTE,
       query: { id },
     }),
 );
+
+// Legacy aliases — prefer the *List names above.
+export const qArtificialRaw = qArtificialList;
+export const qOpenRouter = qOpenRouterList;
+export const qHomeDashboardRaw = qHomeDashboard;
+export const qOpenSourceModelsRaw = qOpenSourceModelsList;
+export const qNewsRaw = qNewsList;
+export const qAgent = qAgentList;
+export const qClosedReleasesRaw = qClosedReleasesList;
+export const qOpenSourceModel = qOpenSourceModelById;

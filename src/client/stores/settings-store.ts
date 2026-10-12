@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import type { ThemeMode } from "@/shared/types";
 import type { Lang } from "@/shared/i18n";
 import { SETTINGS_STORAGE_VERSION, STORAGE_KEYS } from "@/shared/config";
-import { initStorageSync, readPersisted, safeStorage } from "@/client/stores/persist";
+import { loadPersistedState, makeStorageSync } from "@/client/stores/make-persisted-store";
 
 const VERSION = SETTINGS_STORAGE_VERSION;
 
@@ -40,7 +40,7 @@ function initialLang(): Lang {
 }
 
 function readSettings(): { themeMode: ThemeMode; lang: Lang } {
-  const stored = readPersisted<PersistedSettings>(safeStorage("local"), STORAGE_KEYS.settings, VERSION);
+  const stored = loadPersistedState<PersistedSettings>("local", STORAGE_KEYS.settings, VERSION);
   return {
     themeMode: isThemeMode(stored.themeMode) ? stored.themeMode : initialThemeMode(),
     lang: isLang(stored.lang) ? stored.lang : initialLang(),
@@ -59,18 +59,17 @@ export const useSettingsStore = defineStore("settings", {
   },
 });
 
-export function initSettingsStorageSync(): void {
-  initStorageSync(useSettingsStore(), {
-    storage: safeStorage("local"),
-    key: STORAGE_KEYS.settings,
-    version: VERSION,
-    snapshot: (store) => ({ themeMode: store.themeMode, lang: store.lang }),
-    onStorageEvent: (store, parsed) => {
-      const state = (parsed as { state?: PersistedSettings }).state;
-      const themeMode = state?.themeMode;
-      const lang = state?.lang;
-      if (isThemeMode(themeMode) && themeMode !== store.themeMode) store.themeMode = themeMode;
-      if (isLang(lang) && lang !== store.lang) store.lang = lang;
-    },
-  });
-}
+export const initSettingsStorageSync = makeStorageSync({
+  useStore: useSettingsStore,
+  kind: "local",
+  key: STORAGE_KEYS.settings,
+  version: VERSION,
+  snapshot: (store) => ({ themeMode: store.themeMode, lang: store.lang }),
+  onStorageEvent: (store, parsed) => {
+    const state = (parsed as { state?: PersistedSettings }).state;
+    const themeMode = state?.themeMode;
+    const lang = state?.lang;
+    if (isThemeMode(themeMode) && themeMode !== store.themeMode) store.themeMode = themeMode;
+    if (isLang(lang) && lang !== store.lang) store.lang = lang;
+  },
+});

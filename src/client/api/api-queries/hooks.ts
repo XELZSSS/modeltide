@@ -6,6 +6,7 @@ import type {
   HallucinationRankingEntry,
   NewsCategory,
   NewsItem,
+  OpenRouterRankEntry,
   OpenSourceModelEntry,
 } from "@/shared/types";
 import { dedupeBy } from "@/shared/utils";
@@ -93,7 +94,7 @@ export const useSuspenseOpenSourceModelsState = () =>
   suspenseState<OpenSourceModelEntry>(qOpenSourceModelsRaw.use(), "openSourceModels");
 
 export const useSuspenseOpenRouterRankingsState = () =>
-  suspenseState<import("@/shared/types").OpenRouterRankEntry>(qOpenRouter.use(), "openRouterRankings");
+  suspenseState<OpenRouterRankEntry>(qOpenRouter.use(), "openRouterRankings");
 
 export async function useSuspenseOpenSourceModel(id: string): Promise<ComputedRef<OpenSourceModelEntry | null>> {
   const query = qOpenSourceModel(id).use();
@@ -154,3 +155,12 @@ export async function useSuspenseHallucinationRankings(): Promise<ComputedRef<Ha
   const models = await useSuspenseArtificialRankings();
   return useHallucinationRankings(models);
 }
+
+// Canonical List names — prefer these over the legacy *Models/*Rankings aliases above.
+export const useOpenSourceModelsList = useAllOpenSourceModels;
+export const useSuspenseArtificialRankingsList = useSuspenseArtificialRankingsState;
+export const useSuspenseOpenRouterRankingsList = useSuspenseOpenRouterRankingsState;
+export const useSuspenseOpenSourceModelsList = useSuspenseOpenSourceModelsState;
+export const useSuspenseClosedReleasesList = useSuspenseClosedReleasesState;
+export const useSuspenseNewsList = useSuspenseNewsState;
+export const useSuspenseAgentRankingsList = useSuspenseAgentRankingsState;

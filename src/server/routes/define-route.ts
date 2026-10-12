@@ -7,7 +7,7 @@ import { keyedThrottleGate } from "@/server/infra/throttle";
 import { logger, type Logger } from "@/server/infra/logger";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
 import type { AppContext } from "@/server/context";
-import type { SourcePayload } from "@/shared/types";
+import type { ApiDomain, DomainPayload } from "@/shared/contract";
 import { API_VERSION_PARAM } from "@/shared/config/paths";
 import {
   BROWSER_CACHE_HEADER,
@@ -109,17 +109,17 @@ function mapApiError(err: unknown, method: string, path: string): Response {
   return errorJson(500, "Internal server error");
 }
 
-interface ApiRouteDef<S extends QuerySchema = QuerySchema> {
+interface ApiRouteDef<D extends ApiDomain = ApiDomain, S extends QuerySchema = QuerySchema> {
   query?: S;
   cache?: { browser: string; cdn: string };
-  handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<SourcePayload<unknown>>;
+  handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<DomainPayload<D>>;
 }
 
-export async function handleApiRoute<S extends QuerySchema>(
+export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>(
   req: Request,
   env: Env,
   url: URL,
-  def: ApiRouteDef<S>,
+  def: ApiRouteDef<D, S>,
   hooks?: { onDetach?: (work: Promise<unknown>) => void },
 ): Promise<Response> {
   const path = url.pathname;

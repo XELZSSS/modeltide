@@ -30,7 +30,6 @@ export const queryKeys = {
     API_DOMAINS.openSourceModels,
     OPEN_SOURCE_MODELS_DEFAULTS.sort,
     OPEN_SOURCE_MODELS_DEFAULTS.direction,
-    String(OPEN_SOURCE_MODELS_DEFAULTS.limit),
   ],
   openSourceModel: (id: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.openSourceModel, id],
   news: (category: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.news, category],

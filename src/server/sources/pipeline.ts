@@ -81,3 +81,67 @@ export function cachedPayload<T>(
     )
     .then(({ value, degraded }) => (degraded ? { ...value, partial: true } : value));
 }
+
+export interface SourceSpec<TRaw, TRow> {
+  key: string;
+  ttl: number;
+  scope?: CacheScope;
+  label: string;
+  fetch: (ctx: AppContext) => Promise<TRaw>;
+  parse: (raw: TRaw, ctx: AppContext) => TRow[];
+  partialWhen?: (stats: { rows: TRow[]; raw: TRaw }) => { partial: boolean; ttl?: number; log?: Record<string, unknown> };
+  dedupe?: (rows: TRow[]) => TRow[];
+  sort?: (rows: TRow[]) => TRow[];
+  cap?: number;
+}
+
+export function defineSource<TRaw, TRow>(spec: SourceSpec<TRaw, TRow>): (ctx: AppContext) => Promise<SourcePayload<TRow[]>> {
+  return (ctx: AppContext) =>
+    cachedPayload<TRow[]>(ctx, spec.key, spec.ttl, async (refreshCtx) => {
+      const raw = await spec.fetch(refreshCtx);
+      let rows = spec.parse(raw, refreshCtx);
+      if (spec.dedupe) rows = spec.dedupe(rows);
+      if (spec.sort) rows = spec.sort(rows);
+      let truncated = false;
+      if (spec.cap != null && rows.length > spec.cap) {
+        truncated = true;
+        refreshCtx.log("warn", `[${spec.label}] oversized payload (${rows.length}), truncating to ${spec.cap}`);
+        rows = rows.slice(0, spec.cap);
+      }
+      requireRows(rows, spec.label, "rows");
+      const verdict = spec.partialWhen?.({ rows, raw });
+      if (verdict?.log) refreshCtx.log("warn", `[${spec.label}] partial`, verdict.log);
+      return { rows, partial: truncated || verdict?.partial === true, ttl: verdict?.ttl };
+    }, spec.scope);
+}
+
+export interface KeyedSourceSpec<P, TRaw, TRow> extends Omit<SourceSpec<TRaw, TRow>, "key" | "fetch" | "parse" | "partialWhen"> {
+  key: (params: P) => string;
+  fetch: (ctx: AppContext, params: P) => Promise<TRaw>;
+  parse: (raw: TRaw, ctx: AppContext, params: P) => TRow[];
+  partialWhen?: (stats: { rows: TRow[]; raw: TRaw; params: P }) => { partial: boolean; ttl?: number; log?: Record<string, unknown> };
+  map?: (rows: TRow[], params: P) => TRow[];
+}
+
+export function defineKeyedSource<P, TRaw, TRow>(
+  spec: KeyedSourceSpec<P, TRaw, TRow>,
+): (ctx: AppContext, params: P) => Promise<SourcePayload<TRow[]>> {
+  return (ctx: AppContext, params: P) =>
+    cachedPayload<TRow[]>(ctx, spec.key(params), spec.ttl, async (refreshCtx) => {
+      const raw = await spec.fetch(refreshCtx, params);
+      let rows = spec.parse(raw, refreshCtx, params);
+      if (spec.dedupe) rows = spec.dedupe(rows);
+      if (spec.sort) rows = spec.sort(rows);
+      let truncated = false;
+      if (spec.cap != null && rows.length > spec.cap) {
+        truncated = true;
+        refreshCtx.log("warn", `[${spec.label}] oversized payload (${rows.length}), truncating to ${spec.cap}`);
+        rows = rows.slice(0, spec.cap);
+      }
+      requireRows(rows, spec.label, "rows");
+      const verdict = spec.partialWhen?.({ rows, raw, params });
+      if (verdict?.log) refreshCtx.log("warn", `[${spec.label}] partial`, verdict.log);
+      const mapped = spec.map ? spec.map(rows, params) : rows;
+      return { rows: mapped, partial: truncated || verdict?.partial === true, ttl: verdict?.ttl };
+    }, spec.scope);
+}

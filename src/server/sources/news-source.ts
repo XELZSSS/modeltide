@@ -1,11 +1,11 @@
 import { parseTs } from "@/server/parsers/parser-primitives";
 import { NEWS_TTL_MS, ttlForRatio } from "@/shared/config";
 import { SOURCE_LIMITS } from "@/server/config/limits";
-import { FAST_FETCH_OPTS, MAX_FEED_BYTES, NEWS_LEG_CONCURRENCY, cacheKeys } from "@/server/config";
+import { MAX_FEED_BYTES, NEWS_LEG_CONCURRENCY, cacheKeys } from "@/server/config";
 import { runLegs } from "@/server/sources/join-legs";
 import type { NewsItem, NewsCategory } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { errMsg, UpstreamError, ValidationError } from "@/server/infra/errors";
+import { errMsg } from "@/server/infra/errors";
 import { FEED_ACCEPT, parseFeed } from "@/server/parsers/rss-feed-parser";
 
 import { rssFeeds } from "@/server/sources/news-feeds";
@@ -13,7 +13,7 @@ import { dedupeBy } from "@/shared/utils";
 import { normalizeNewsLink } from "@/server/parsers/url";
 
 import type { SourcePayload } from "@/shared/types";
-import { cachedPayload, requireParsed, requireRows } from "@/server/sources/pipeline";
+import { defineKeyedSource, requireParsed, requireRows } from "@/server/sources/pipeline";
 
 function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsItem[]): NewsItem[] {
   let invalidDates = 0;
@@ -35,28 +35,33 @@ function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsIt
     .map((entry) => entry.item);
 }
 
-async function fetchNews(
-  ctx: AppContext,
-  category: NewsCategory,
-): Promise<{ items: NewsItem[]; failCount: number; total: number }> {
+interface NewsRaw {
+  items: NewsItem[];
+  failCount: number;
+  total: number;
+}
+
+async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<NewsRaw> {
+  // Category is validated at the route layer (qEnum with default); the feed
+  // table is exhaustive for NewsCategory so this is unreachable in practice.
   const feeds = rssFeeds[category];
-  if (!feeds || feeds.length === 0) throw new ValidationError(`Unknown news category "${category}"`);
   const legs: { label: string; run: () => Promise<NewsItem[]> }[] = feeds.map((feed) => ({
     label: feed.id,
     run: async () =>
       requireParsed(
-        parseFeed(
-          await ctx.http.text(feed.url, { headers: { accept: FEED_ACCEPT }, ...FAST_FETCH_OPTS }, MAX_FEED_BYTES),
-          feed.url,
-        ),
+        parseFeed(await ctx.http.getFeed(feed.url, FEED_ACCEPT, MAX_FEED_BYTES), feed.url, {
+          maxBytes: MAX_FEED_BYTES,
+          maxItems: SOURCE_LIMITS.feedItemsPerFeed,
+        }),
         ctx.log,
         feed.id,
       ),
   }));
-  const { values, failures } = await runLegs(legs, { concurrency: NEWS_LEG_CONCURRENCY });
+  const { values, failures } = await runLegs(legs, {
+    concurrency: NEWS_LEG_CONCURRENCY,
+    allFailedMessage: `All ${legs.length} feed(s) for "${category}" failed`,
+  });
   const allItems = values.flatMap((items) => items ?? []);
-  if (failures.length === values.length)
-    throw new UpstreamError(`All ${values.length} feed(s) for "${category}" failed`, { retryable: true });
   if (failures.length > 0) {
     ctx.log(
       "warn",
@@ -65,12 +70,23 @@ async function fetchNews(
         .join("; ")}`,
     );
   }
-  return { items: pickNewsItems(ctx, category, allItems), failCount: failures.length, total: values.length };
+  return { items: allItems, failCount: failures.length, total: values.length };
 }
 
+const newsSource = defineKeyedSource<NewsCategory, NewsRaw, NewsItem>({
+  key: (category) => cacheKeys.news(category),
+  ttl: NEWS_TTL_MS,
+  label: "news",
+  fetch: fetchNewsRaw,
+  parse: (raw, ctx, category) => {
+    const items = pickNewsItems(ctx, category, raw.items);
+    return requireRows(items, `news "${category}"`, "usable items", "all filtered?");
+  },
+  partialWhen: ({ raw }) => ({
+    partial: raw.failCount > 0,
+    ttl: ttlForRatio(raw.failCount, raw.total, NEWS_TTL_MS),
+  }),
+});
+
 export const getNews = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>
-  cachedPayload(ctx, cacheKeys.news(category), NEWS_TTL_MS, async (ctx) => {
-    const { items, failCount, total } = await fetchNews(ctx, category);
-    requireRows(items, `news "${category}"`, "usable items", "all filtered?");
-    return { rows: items, partial: failCount > 0, ttl: ttlForRatio(failCount, total, NEWS_TTL_MS) };
-  });
+  newsSource(ctx, category);

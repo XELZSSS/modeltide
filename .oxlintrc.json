@@ -37,6 +37,22 @@
       }
     },
     {
+      "files": ["src/server/parsers/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/server/config", "@/server/config/upstream", "@/server/config/timeouts", "@/server/config/cache", "@/server/config/keys"],
+                "message": "Parsers must stay pure: pass bytes/urls/timeouts as arguments instead of importing server config. Limits from @/server/config/limits are allowed."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/shared/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
@@ -54,6 +70,12 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "files": ["build/**/*.ts", "scripts/**/*.{ts,mjs,cjs}", "functions/**/*.ts"],
+      "rules": {
+        "no-unused-vars": "error"
       }
     }
   ]

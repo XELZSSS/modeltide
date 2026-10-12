@@ -1,8 +1,9 @@
-import type { SearchResultSource } from "@/client/search/types";
 import type { TranslationKey } from "@/shared/i18n";
 import type { ModelSource } from "@/shared/types";
+import { SEARCH_SOURCE_TO_MODEL_SOURCE, SOURCES } from "./sources";
 
 export type { ModelSource };
+export { SEARCH_SOURCE_TO_MODEL_SOURCE };
 
 export const RANKING_TABS = [
   "modelRankings",
@@ -17,39 +18,26 @@ export type RankingTabId = (typeof RANKING_TABS)[number];
 
 export const DEFAULT_RANKING_TAB: RankingTabId = RANKING_TABS[0];
 
-const RANKINGS_PATH = "/models";
-
-function rankingTabHref(tab: RankingTabId): string {
-  return `${RANKINGS_PATH}?tab=${tab}`;
-}
-
-export const SEARCH_SOURCE_TO_MODEL_SOURCE: Record<SearchResultSource, ModelSource> = {
-  modelRankings: "aa",
-  openRouterRankings: "or",
-  openSourceRankings: "os",
-  hallucinationRankings: "hall",
-};
-
 export const MODEL_SOURCES = {
   aa: {
-    sourceLabelKey: "artificialSource" as const,
-    backTo: rankingTabHref("modelRankings"),
-    backLabelKey: "backToModelRankings" as const,
+    sourceLabelKey: SOURCES.aa.labelKey,
+    backTo: SOURCES.aa.backTo,
+    backLabelKey: SOURCES.aa.backLabelKey,
   },
   or: {
-    sourceLabelKey: "openRouterSource" as const,
-    backTo: rankingTabHref("openRouterRankings"),
-    backLabelKey: "backToUsageRankings" as const,
+    sourceLabelKey: SOURCES.or.labelKey,
+    backTo: SOURCES.or.backTo,
+    backLabelKey: SOURCES.or.backLabelKey,
   },
   os: {
-    sourceLabelKey: "openSourceDataSource" as const,
-    backTo: rankingTabHref("openSourceRankings"),
-    backLabelKey: "backToOpenSourceRankings" as const,
+    sourceLabelKey: SOURCES.os.labelKey,
+    backTo: SOURCES.os.backTo,
+    backLabelKey: SOURCES.os.backLabelKey,
   },
   hall: {
-    sourceLabelKey: "hallucinationSource" as const,
-    backTo: rankingTabHref("hallucinationRankings"),
-    backLabelKey: "backToHallucinationRankings" as const,
+    sourceLabelKey: SOURCES.hall.labelKey,
+    backTo: SOURCES.hall.backTo,
+    backLabelKey: SOURCES.hall.backLabelKey,
   },
 } as const satisfies Record<
   ModelSource,

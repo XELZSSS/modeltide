@@ -1,12 +1,16 @@
 const SW_VERSION = "dev-local";
 const CACHE_NAME = `modeltide-${SW_VERSION}`;
 
+// Must match API_PREFIX in src/shared/config/paths.ts and build/constants.ts
+// (checked by build/plugins/consistency-guard.ts — sw.js cannot import TS).
 const API_PREFIX = "/api";
 
 const OTHER_CACHE_MAX = 100;
 
 const PRECACHE_SHELL = [];
 
+// Precached shell — must cover FONT_FILES + ICON_FILES in src/shared/pwa.ts
+// (checked by build/plugins/consistency-guard.ts).
 const PRECACHE_URLS = [
   "/",
   "/manifest.webmanifest",

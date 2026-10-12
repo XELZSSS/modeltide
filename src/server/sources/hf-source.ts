@@ -1,7 +1,6 @@
 import { isValidRowId } from "@/server/parsers/parser-primitives";
 import { MAX_NAME_CHARS, ONE_MINUTE, SLOW_TTL_MS } from "@/shared/config";
-import { normalizeModelLimit, sliceToLimit } from "@/server/config/limits";
-import { upstreamConfig, UPSTREAM_FETCH_OPTS, cacheKeys } from "@/server/config";
+import { upstreamConfig, cacheKeys } from "@/server/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, ValidationError } from "@/server/infra/errors";
@@ -14,10 +13,9 @@ import type { SourcePayload } from "@/shared/types";
 import { cachedPayload, requireArrayBody, requireRows } from "@/server/sources/pipeline";
 import { logPartial } from "@/server/infra/logger";
 
-interface ModelQuery {
+export interface ModelQuery {
   sort: string;
   direction: string;
-  limit: number;
 }
 
 const HF_API = upstreamConfig.huggingface;
@@ -28,12 +26,68 @@ function isValidHFModelId(value: string): boolean {
 
 const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", "createdAt", "lastModified"];
 
-async function fetchHFModels(ctx: AppContext, sort: string, direction: string, limit: number): Promise<HFModel[]> {
-  const params = new URLSearchParams({ sort, direction, limit: String(limit) });
+// HF paginates via `Link: <...cursor=...>; rel="next"`. Page size 100 keeps
+// each upstream response small; pagination stops at the safety ceiling so a
+// single invocation cannot exhaust the Workers subrequest budget.
+const HF_PAGE_LIMIT = 100;
+const HF_MAX_PAGES = 30;
+const HF_MAX_RAW_ROWS = HF_PAGE_LIMIT * HF_MAX_PAGES;
+// Homepage only needs a small slice for its cards, so it does one cheap page
+// instead of the full paginated walk used by the public list endpoint.
+const HF_TOP_PAGE_LIMIT = 200;
+
+interface HFRaw {
+  items: HFModel[];
+  pageCount: number;
+  truncated: boolean;
+}
+
+function hfListUrl(p: ModelQuery, limit: number): string {
+  const params = new URLSearchParams({ sort: p.sort, direction: p.direction, limit: String(limit) });
   for (const field of HF_LIST_FIELDS) params.append("expand[]", field);
-  const url = `${HF_API}?${params.toString()}`;
-  const items = await ctx.http.json<unknown>(url, UPSTREAM_FETCH_OPTS);
-  return requireArrayBody(url, items, "HuggingFace") as HFModel[];
+  return `${HF_API}?${params.toString()}`;
+}
+
+async function fetchHFPage(ctx: AppContext, url: string): Promise<{ items: HFModel[]; nextUrl: string | null }> {
+  const page = await ctx.http.getJsonPage<unknown>(url);
+  const items = requireArrayBody(url, page.data, "HuggingFace") as HFModel[];
+  return { items, nextUrl: page.nextUrl };
+}
+
+async function fetchHFModelsAll(ctx: AppContext, p: ModelQuery): Promise<HFRaw> {
+  const items: HFModel[] = [];
+  let url: string | null = hfListUrl(p, HF_PAGE_LIMIT);
+  let pageCount = 0;
+  let truncated = false;
+  while (url != null) {
+    const page = await fetchHFPage(ctx, url);
+    pageCount += 1;
+    for (const item of page.items) {
+      if (items.length >= HF_MAX_RAW_ROWS) break;
+      items.push(item);
+    }
+    if (items.length >= HF_MAX_RAW_ROWS) {
+      truncated = page.nextUrl != null || page.items.length >= HF_PAGE_LIMIT;
+      break;
+    }
+    if (page.items.length < HF_PAGE_LIMIT) break;
+    url = page.nextUrl;
+    if (url != null && pageCount >= HF_MAX_PAGES) {
+      truncated = true;
+      break;
+    }
+    if (pageCount >= HF_MAX_PAGES) {
+      truncated = url != null;
+      break;
+    }
+  }
+  return { items, pageCount, truncated };
+}
+
+async function fetchHFTopPage(ctx: AppContext, p: ModelQuery): Promise<HFRaw> {
+  const url = hfListUrl(p, HF_TOP_PAGE_LIMIT);
+  const { items } = await fetchHFPage(ctx, url);
+  return { items, pageCount: 1, truncated: false };
 }
 
 function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTally): void {
@@ -50,40 +104,58 @@ function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTa
   }
 }
 
-export const getModels = async (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> => {
-  const payload = await cachedPayload<OpenSourceModelEntry[]>(
+function parseHFItems(items: HFModel[], ctx: AppContext): OpenSourceModelEntry[] {
+  const tally = new LicenseDropTally();
+  const kept = items
+    .map((m) => mapListModel(m, tally))
+    .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m, tally));
+  logLicenseDrops(ctx, items.length, tally);
+  const bucket = dedupeBy(kept, (m) => m.id);
+  requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
+  const dropped = items.length - kept.length;
+  if (dropped > 0) logPartial(ctx.log, "huggingface", { dropped, total: items.length });
+  return bucket;
+}
+
+export const getModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
+  cachedPayload<OpenSourceModelEntry[]>(
     ctx,
-    cacheKeys.openSourceModels(p.sort, p.direction, p.limit),
+    cacheKeys.openSourceModels(p.sort, p.direction),
     SLOW_TTL_MS,
-    async (ctx) => {
-      const bucketLimit = normalizeModelLimit(p.limit);
-      const items = await fetchHFModels(ctx, p.sort, p.direction, bucketLimit);
-      if (items.length < bucketLimit) {
-        ctx.log("info", `[huggingface] short response: got ${items.length}/${bucketLimit} rows`);
+    async (refreshCtx) => {
+      const raw = await fetchHFModelsAll(refreshCtx, p);
+      const rows = parseHFItems(raw.items, refreshCtx);
+      if (raw.truncated) {
+        // Safety ceiling, not a source failure: upstream served every page we
+        // asked for; we simply stopped paginating. Keep partial=false so the
+        // UI doesn't report "incomplete data" for a healthy response.
+        refreshCtx.log("info", "[huggingface] pagination stopped at safety ceiling", {
+          pages: raw.pageCount,
+          raw: raw.items.length,
+          ceiling: HF_MAX_RAW_ROWS,
+        });
       }
-      const tally = new LicenseDropTally();
-      const kept = items
-        .map((m) => mapListModel(m, tally))
-        .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m, tally));
-      logLicenseDrops(ctx, items.length, tally);
-      const bucket = dedupeBy(kept, (m) => m.id);
-      requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
-      const dropped = items.length - kept.length;
-      if (dropped > 0) logPartial(ctx.log, "huggingface", { dropped, total: items.length });
-      const partial = items.length < bucketLimit;
-      if (partial) logPartial(ctx.log, "huggingface", { got: items.length, want: bucketLimit });
-      return { rows: bucket, partial };
+      return { rows };
     },
   );
-  const rows = sliceToLimit(payload.data, p.limit);
-  return { ...payload, data: rows };
-};
+
+export const getTopModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
+  cachedPayload<OpenSourceModelEntry[]>(
+    ctx,
+    cacheKeys.openSourceModelsTop(p.sort, p.direction),
+    SLOW_TTL_MS,
+    async (refreshCtx) => {
+      const raw = await fetchHFTopPage(refreshCtx, p);
+      const rows = parseHFItems(raw.items, refreshCtx);
+      return { rows };
+    },
+  );
 
 async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
   const encoded = encodeModelIdPath(id);
   let raw: HFModel;
   try {
-    raw = await ctx.http.json<HFModel>(`${HF_API}/${encoded}`, UPSTREAM_FETCH_OPTS);
+    raw = await ctx.http.getJson<HFModel>(`${HF_API}/${encoded}`);
   } catch (err) {
     if (err instanceof UpstreamError && err.statusCode === 404) return null;
     throw err;

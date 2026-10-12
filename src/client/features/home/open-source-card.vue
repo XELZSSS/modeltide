@@ -21,7 +21,7 @@ import { useChartTheme, legendStyle } from "@/client/theme/chart-theme";
 import { chartBase, defaultTooltipOptions } from "@/client/utils/charts";
 import type { HomeBarStat } from "./use-home-stats";
 import RankedListRows from "./ranked-list-rows.vue";
-import { OTHER_TASK_KEY, aggregateTaskShare, taskLabel, type TaskSlice } from "./task-share";
+import { OTHER_TASK_KEY, aggregateTaskShare, taskLabel, type TaskSlice } from "./open-source/task-share";
 
 const props = defineProps<{ models: { task: string | null | undefined }[]; trending: HomeBarStat[] }>();
 

@@ -1,4 +1,4 @@
-import type { ClosedReleaseEntry } from "@/shared/types";
+import type { ClosedReleaseEntry } from "@/shared/types/rankings";
 
 export interface ReleaseRow {
   id: string;

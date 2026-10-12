@@ -1,7 +1,6 @@
 import type { AppContext } from "@/server/context";
-import { MAX_JSON_BYTES, UPSTREAM_FETCH_OPTS, upstreamUrl } from "@/server/config";
-
-const DEFAULT_RSC_HEADERS = { RSC: "1" } as const;
+import { MAX_JSON_BYTES, upstreamUrl } from "@/server/config/upstream";
+import { fetchPolicy } from "@/server/config/fetch-policies";
 
 interface RscFetchOptions {
   headers?: Record<string, string>;
@@ -15,12 +14,16 @@ export async function fetchRscText(
   path: string,
   opts: RscFetchOptions = {},
 ): Promise<string> {
+  if (opts.headers == null && opts.retries == null) {
+    return ctx.http.getRsc(base, path, opts.maxBytes ?? MAX_JSON_BYTES);
+  }
+  const policy = fetchPolicy("rsc");
   return ctx.http.text(
     upstreamUrl(base, path),
     {
-      headers: opts.headers ?? DEFAULT_RSC_HEADERS,
-      retries: opts.retries ?? UPSTREAM_FETCH_OPTS.retries,
-      timeoutMs: UPSTREAM_FETCH_OPTS.timeoutMs,
+      headers: opts.headers ?? { RSC: "1" },
+      retries: opts.retries ?? policy.retries,
+      timeoutMs: policy.timeoutMs,
     },
     opts.maxBytes ?? MAX_JSON_BYTES,
   );

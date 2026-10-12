@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { SOURCE_LIMITS } from "@/server/config/limits";
 import { parseDirectoryRows } from "@/server/parsers/openrouter-directory-parser";
 import { categoryFrom, creatorFromSlug, mapModels, titleFromSlug } from "@/server/parsers/openrouter-ranking-parser";
 import type { PricingEntry } from "@/server/parsers/openrouter-directory-parser";
@@ -193,9 +192,9 @@ describe("mapModels", () => {
     expect(models.map((m) => m.id)).toEqual(["tie/higher", "tie/lower", "with/small-metric", "no/metric"]);
   });
 
-  it("caps the emitted entries at the configured ceiling", () => {
-    const overflow = 10;
-    const rows = Array.from({ length: SOURCE_LIMITS.openRouterRankingModels + overflow }, (_, i) =>
+  it("returns every aggregated entry without a ceiling", () => {
+    const total = 1010;
+    const rows = Array.from({ length: total }, (_, i) =>
       row({
         model_permaslug: `bulk/model-${i}`,
         variant_permaslug: `bulk/model-${i}`,
@@ -204,9 +203,9 @@ describe("mapModels", () => {
       }),
     );
     const models = mapModels(rows, new Map());
-    expect(models).toHaveLength(SOURCE_LIMITS.openRouterRankingModels);
-    expect(models[0]!.id).toBe(`bulk/model-${SOURCE_LIMITS.openRouterRankingModels + overflow - 1}`);
-    expect(models.at(-1)!.rank).toBe(SOURCE_LIMITS.openRouterRankingModels);
+    expect(models).toHaveLength(total);
+    expect(models[0]!.id).toBe(`bulk/model-${total - 1}`);
+    expect(models.at(-1)!.rank).toBe(total);
   });
 
   it("keeps multi-variant rows without token data below genuine zero usage", () => {

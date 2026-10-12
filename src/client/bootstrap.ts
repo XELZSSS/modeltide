@@ -1,12 +1,11 @@
 import { router } from "@/client/router";
 import { initCompareStorageSync, initCostStorageSync, initSettingsStorageSync } from "@/client/stores";
 import { registerServiceWorker, unregisterStaleServiceWorker } from "@/client/pwa/pwa-client";
+import { FONT_LOAD_SPECS } from "@/shared/pwa";
 
 function loadFonts(): void {
   if (!("fonts" in document)) return;
-  void document.fonts.load('400 1em "IBM Plex Sans"');
-  void document.fonts.load('600 1em "IBM Plex Sans"');
-  void document.fonts.load('400 1em "IBM Plex Mono"');
+  for (const spec of FONT_LOAD_SPECS) void document.fonts.load(spec);
 }
 
 function boot(): void {

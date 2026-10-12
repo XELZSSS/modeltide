@@ -1,28 +1,37 @@
 import { isRecord } from "@/server/parsers/parser-primitives";
 import { DEFAULT_TTL_MS } from "@/shared/config";
-import { UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig, upstreamEndpoints, upstreamUrl } from "@/server/config";
+import { cacheKeys, upstreamConfig, upstreamEndpoints } from "@/server/config";
+import { upstreamUrl } from "@/server/config/upstream";
 import type { OpenRouterRankEntry, SourcePayload } from "@/shared/types";
 import type { AppContext } from "@/server/context";
 import { UpstreamError, wrapUpstream } from "@/server/infra/errors";
-import { logPartial } from "@/server/infra/logger";
 
 import { mapModels, type RankingScanStats } from "@/server/parsers/openrouter-ranking-parser";
 import type { ModelRow } from "@/server/parsers/upstream-types";
 import { getModelDirectory, type DirectoryCacheEntryWithPartial } from "@/server/sources/openrouter-directory";
 import { runLegs } from "@/server/sources/join-legs";
-import { cachedPayload, requireArrayBody } from "@/server/sources/pipeline";
+import { defineSource, requireArrayBody } from "@/server/sources/pipeline";
 
 const RANKINGS_DRIFT_RATIO = 0.1;
 
-export const getOpenRouterRankings = (ctx: AppContext): Promise<SourcePayload<OpenRouterRankEntry[]>> =>
-  cachedPayload(ctx, cacheKeys.openRouterRankings, DEFAULT_TTL_MS, async (ctx) => {
+interface OpenRouterRaw {
+  rows: ModelRow[];
+  totalRows: number;
+  stats: RankingScanStats;
+  dirData: DirectoryCacheEntryWithPartial;
+}
+
+const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
+  key: cacheKeys.openRouterRankings,
+  ttl: DEFAULT_TTL_MS,
+  label: "OpenRouter rankings",
+  fetch: async (ctx) => {
     const { values, failures } = await runLegs([
       {
         label: "rankings",
         run: () =>
-          ctx.http.json<{ data: ModelRow[] }>(
+          ctx.http.getJson<{ data: ModelRow[] }>(
             upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterRankings),
-            UPSTREAM_FETCH_OPTS,
           ),
       },
       { label: "directory", run: () => getModelDirectory(ctx) },
@@ -43,24 +52,38 @@ export const getOpenRouterRankings = (ctx: AppContext): Promise<SourcePayload<Op
     const totalRows = rows.length;
     const dirData = values[1] ?? ({ pricing: {}, meta: {}, partial: true } as DirectoryCacheEntryWithPartial);
     const stats: RankingScanStats = { scannedRows: 0, validRows: 0 };
-    const models = mapModels(rows, dirData.pricing, stats);
-    if (stats.validRows === 0) {
-      throw new UpstreamError(`OpenRouter: all ${totalRows} ranking rows had invalid model_permaslug`);
+    return { rows, totalRows, stats, dirData };
+  },
+  parse: (raw, ctx) => {
+    const models = mapModels(raw.rows, raw.dirData.pricing, raw.stats);
+    if (raw.stats.validRows === 0) {
+      throw new UpstreamError(`OpenRouter: all ${raw.totalRows} ranking rows had invalid model_permaslug`);
     }
-    const droppedRows = totalRows - stats.validRows;
-    const drift = droppedRows >= Math.max(1, Math.ceil(totalRows * RANKINGS_DRIFT_RATIO));
-    const pricingCount = Object.keys(dirData.pricing).length;
-    const partialFailure = pricingCount === 0 || drift || dirData.partial;
-    if (partialFailure) {
-      logPartial(ctx.log, "openrouter", {
-        pricing: pricingCount,
-        dropped: droppedRows,
-        totalRows,
-        directoryPartial: dirData.partial,
-      });
+    if (models.length === 0 && raw.stats.validRows > 0) {
+      throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${raw.stats.validRows} rows`);
     }
-    if (models.length === 0 && stats.validRows > 0) {
-      throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${stats.validRows} rows`);
-    }
-    return { rows: models, partial: partialFailure };
-  });
+    void ctx;
+    return models;
+  },
+  partialWhen: ({ rows: models, raw }) => {
+    const droppedRows = raw.totalRows - raw.stats.validRows;
+    const drift = droppedRows >= Math.max(1, Math.ceil(raw.totalRows * RANKINGS_DRIFT_RATIO));
+    const pricingCount = Object.keys(raw.dirData.pricing).length;
+    const partial = pricingCount === 0 || drift || raw.dirData.partial;
+    void models;
+    return {
+      partial: partial,
+      log: partial
+        ? {
+            pricing: pricingCount,
+            dropped: droppedRows,
+            totalRows: raw.totalRows,
+            directoryPartial: raw.dirData.partial,
+          }
+        : undefined,
+    };
+  },
+});
+
+export const getOpenRouterRankings = (ctx: AppContext): Promise<SourcePayload<OpenRouterRankEntry[]>> =>
+  openRouterSource(ctx);

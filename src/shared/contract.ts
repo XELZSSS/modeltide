@@ -11,7 +11,7 @@ import type {
 } from "@/shared/types";
 export type { ApiDomain };
 
-interface ApiContract extends Record<ApiDomain, unknown> {
+export interface ApiContract {
   artificialIndex: ArtificialAnalysisModel[];
   homeDashboard: HomeDashboardData;
   news: NewsItem[];
@@ -22,6 +22,6 @@ interface ApiContract extends Record<ApiDomain, unknown> {
   openRouterRankings: OpenRouterRankEntry[];
 }
 
-export type PayloadOf<D extends ApiDomain> = ApiContract[D];
+export type PayloadOf<D extends ApiDomain> = ApiContract[D] & unknown;
 
 export type DomainPayload<D extends ApiDomain> = SourcePayload<PayloadOf<D>>;

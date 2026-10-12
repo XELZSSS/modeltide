@@ -1,0 +1,20 @@
+import { computed, toValue, type MaybeRefOrGetter } from "vue";
+import type { TFunction } from "@/shared/i18n";
+import type { ArtificialAnalysisModel } from "@/shared/types";
+import { computeProviderStats, type ProviderStats } from "@/shared/utils/models";
+
+export type ProviderSortBy = "count" | "speed";
+
+export function useProviderStats(
+  models: MaybeRefOrGetter<ArtificialAnalysisModel[]>,
+  t: TFunction,
+  sortBy: ProviderSortBy = "count",
+) {
+  return computed<ProviderStats[]>(() => {
+    const stats = computeProviderStats(toValue(models), t("unknown"));
+    if (sortBy === "speed") {
+      return [...stats].sort((a, b) => (b.avgSpeed ?? -Infinity) - (a.avgSpeed ?? -Infinity));
+    }
+    return stats;
+  });
+}

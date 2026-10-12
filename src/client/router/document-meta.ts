@@ -1,9 +1,25 @@
 import { watch } from "vue";
 import { useRoute } from "vue-router";
-import type { TranslationKey } from "@/shared/i18n";
+import { DOC_META, type Lang, type TranslationKey } from "@/shared/i18n";
 import { useTranslation } from "@/client/i18n";
 
 const ROBOTS_SELECTOR = 'meta[name="robots"]';
+
+export function syncDocumentMeta(lang: Lang): void {
+  const locale = DOC_META[lang];
+  document.documentElement.lang = locale.html;
+  const { t } = useTranslation();
+  const description = t("metaDescription");
+  for (const selector of [
+    'meta[name="description"]',
+    'meta[property="og:description"]',
+    'meta[name="twitter:description"]',
+  ]) {
+    document.querySelector(selector)?.setAttribute("content", description);
+  }
+  document.querySelector('meta[property="og:locale"]')?.setAttribute("content", locale.og);
+  document.querySelector('meta[property="og:locale:alternate"]')?.setAttribute("content", locale.ogAlternate);
+}
 
 export function useDocumentTitle(): (title: string) => void {
   const { t } = useTranslation();

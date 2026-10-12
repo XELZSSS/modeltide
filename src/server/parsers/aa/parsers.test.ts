@@ -8,7 +8,6 @@ import { mapEntry } from "@/server/parsers/aa/text-to-image-parser";
 import type { RawEntry } from "@/server/parsers/upstream-types";
 import { parseAgentBoards } from "@/server/parsers/agent-arena-parser";
 import { toClosedReleases } from "@/server/parsers/closed-releases-parser";
-import { upstreamConfig } from "@/server/config";
 import { normalizeModelKey } from "@/shared/utils";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
@@ -428,7 +427,8 @@ describe("parseLeaderboardModels", () => {
 
 describe("toClosedReleases", () => {
   it("dedupes variants by release family, newest first, keeping open-weight families", () => {
-    const entries = toClosedReleases([
+    const entries = toClosedReleases(
+      [
       clModel(),
       clModel({ slug: "claude-opus-4-5", name: "Claude Opus 4.5 (Non-reasoning)" }),
       clModel({
@@ -447,13 +447,15 @@ describe("toClosedReleases", () => {
         releaseDate: "2025-06-01",
         creatorName: "Some New Lab",
       }),
-    ]);
+      ],
+      "https://artificialanalysis.ai",
+    );
     expect(entries.map((e) => e.id)).toEqual(["claude-opus-4-5", "mystery-1", "llama-3-3"]);
     expect(entries[0]).toMatchObject({
       model: "Claude Opus 4.5",
       provider: "Anthropic",
       releaseDate: "2025-11-24",
-      link: `${upstreamConfig.artificialAnalysis}/models/claude-opus-4-5`,
+      link: "https://artificialanalysis.ai/models/claude-opus-4-5",
     });
   });
 
@@ -468,7 +470,7 @@ describe("toClosedReleases", () => {
         creatorName: "Anthropic",
       }),
     );
-    const entries = toClosedReleases(changelog);
+    const entries = toClosedReleases(changelog, "https://artificialanalysis.ai");
     expect(entries).toHaveLength(250);
     expect(entries[0]?.releaseDate).toBe("2026-01-28");
   });

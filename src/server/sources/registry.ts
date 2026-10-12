@@ -1,14 +1,9 @@
 import type { AppContext } from "@/server/context";
-import { qEnum, qNum, qStr, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
+import { qEnum, qStr, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
 import { SHORT_CACHE_HEADERS } from "@/server/http/headers";
 import type { ApiDomain, DomainPayload } from "@/shared/contract";
-import {
-  apiPaths,
-  MAX_MODEL_LIMIT,
-  MAX_NAME_CHARS,
-  NEWS_CATEGORIES,
-  OPEN_SOURCE_MODELS_DEFAULTS,
-} from "@/shared/config";
+import { apiPaths, MAX_NAME_CHARS, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
+import { OPEN_SOURCE_SORTS, SORT_DIRECTIONS } from "@/shared/api/query-schemas";
 import { getAgentRankings } from "@/server/sources/agent-arena-source";
 import { getIntelligenceIndex } from "@/server/sources/aa";
 import { getClosedReleases } from "@/server/sources/closed-releases-source";
@@ -31,8 +26,12 @@ export interface SourceEntry<
   readonly path: string;
 }
 
-const OPEN_SOURCE_SORTS = ["trendingScore", "downloads", "likes", "createdAt", "lastModified"] as const;
-const SORT_DIRECTIONS = ["-1"] as const;
+export interface RouteTableEntry {
+  readonly domain: ApiDomain;
+  readonly path: string;
+  readonly query?: QuerySchema;
+  readonly cache?: { browser: string; cdn: string };
+}
 
 function defineSource<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
   domain: D,
@@ -59,12 +58,6 @@ const ENTRIES = {
     query: {
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
       direction: qEnum(SORT_DIRECTIONS, OPEN_SOURCE_MODELS_DEFAULTS.direction),
-      limit: qNum({
-        default: String(OPEN_SOURCE_MODELS_DEFAULTS.limit),
-        min: 1,
-        max: MAX_MODEL_LIMIT,
-        integer: true,
-      }),
     },
     handler: (ctx, params) => getModels(ctx, params),
   }),
@@ -82,3 +75,10 @@ const ENTRIES = {
 } satisfies Record<ApiDomain, unknown>;
 
 export const SOURCES: readonly SourceEntry[] = Object.values(ENTRIES);
+
+export const ROUTE_TABLE: readonly RouteTableEntry[] = SOURCES.map(({ domain, path, query, cache }) => ({
+  domain,
+  path,
+  query,
+  cache,
+}));

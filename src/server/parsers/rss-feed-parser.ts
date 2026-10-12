@@ -1,7 +1,6 @@
 import { isSuitableNewsItem, isRecord, truncateSafe, MAX_NEWS_TITLE_CHARS } from "@/server/parsers/parser-primitives";
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
-import { MAX_FEED_BYTES } from "@/server/config";
 import { fnv1aHash, utf8ByteLength } from "@/server/infra/hash";
 import { sourceNameFromUrl as channelHost } from "@/server/parsers/url";
 import { zeroUpstreamMessage, errMsg } from "@/server/infra/errors";
@@ -88,14 +87,21 @@ function itemId(item: Record<string, unknown>, link: string | null, title: strin
   return guid.length > MAX_ID_CHARS ? fnv1aHash(guid) : guid;
 }
 
-export function parseFeed(xml: unknown, sourceUrl: unknown): ParseResult<NewsItem[]> {
+export const DEFAULT_MAX_FEED_BYTES = 2 * 1024 * 1024;
+
+export function parseFeed(
+  xml: unknown,
+  sourceUrl: unknown,
+  opts?: { maxBytes?: number; maxItems?: number },
+): ParseResult<NewsItem[]> {
   const urlLabel = typeof sourceUrl === "string" ? sourceUrl : "unknown";
   if (typeof xml !== "string") {
     return parseFail(`Feed with non-string body rejected at ${urlLabel}`);
   }
   const sourceUrlStr = urlLabel;
   const bytes = utf8ByteLength(xml);
-  if (bytes > MAX_FEED_BYTES) {
+  const maxBytes = opts?.maxBytes ?? DEFAULT_MAX_FEED_BYTES;
+  if (bytes > maxBytes) {
     return parseFail(`Feed too large at ${sourceUrlStr} (${bytes} bytes)`);
   }
   const head = xml.slice(0, 8192);
@@ -109,7 +115,7 @@ export function parseFeed(xml: unknown, sourceUrl: unknown): ParseResult<NewsIte
   } catch (err) {
     return parseFail(`Unparseable feed at ${sourceUrlStr}: ${errMsg(err)}`);
   }
-  return parseChannel(parsed, sourceUrlStr);
+  return parseChannel(parsed, sourceUrlStr, opts?.maxItems ?? MAX_ITEMS_PER_FEED);
 }
 
 function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
@@ -140,7 +146,7 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
   };
 }
 
-function parseChannel(feed: unknown, sourceUrl: string): ParseResult<NewsItem[]> {
+function parseChannel(feed: unknown, sourceUrl: string, maxItems: number): ParseResult<NewsItem[]> {
   const channel = resolveChannel(feed);
   if (!channel || (channel.item == null && channel.entry == null && channel.title == null)) {
     return parseFail(`Unrecognized feed format at ${sourceUrl}`);
@@ -153,7 +159,7 @@ function parseChannel(feed: unknown, sourceUrl: string): ParseResult<NewsItem[]>
   if (records.length === 0 && rawItems.length > 0) {
     return parseFail(`Unrecognized feed items at ${sourceUrl}`);
   }
-  const bounded = records.slice(0, MAX_ITEMS_PER_FEED * 4);
+  const bounded = records.slice(0, maxItems * 4);
   const parsed: NewsItem[] = [];
   let dropped = 0;
   for (const item of bounded) {
@@ -163,7 +169,7 @@ function parseChannel(feed: unknown, sourceUrl: string): ParseResult<NewsItem[]>
       continue;
     }
     parsed.push(news);
-    if (parsed.length >= MAX_ITEMS_PER_FEED) break;
+    if (parsed.length >= maxItems) break;
   }
   if (parsed.length === 0) {
     return parseFail(zeroUpstreamMessage(`Feed at ${sourceUrl}`, "usable items", `raw=${records.length}, kept=0`));

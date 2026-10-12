@@ -2,7 +2,6 @@ export { API_PREFIX, API_DOMAINS, queryKeys, apiPaths } from "@/shared/config/pa
 export {
   STORAGE_KEYS,
   SETTINGS_STORAGE_VERSION,
-  MAX_MODEL_LIMIT,
   MAX_ID_CHARS,
   MAX_NAME_CHARS,
   OPEN_SOURCE_MODELS_DEFAULTS,
@@ -23,6 +22,7 @@ export {
   ttlForRatio,
 } from "@/shared/config/time";
 export { DEFAULT_COST_SCENARIO } from "@/shared/config/cost";
+export { localeOf, FALLBACK_DASH, FALLBACK_NA, type SupportedLocale } from "@/shared/config/locale";
 export { NEWS_CATEGORIES } from "@/shared/config/sources";
 export {
   BENCHMARK_KEYS,

@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import { useSuspenseArtificialRankingsState } from "@/client/api/api-queries";
-import { assertPayloadShape } from "@/client/api/payload-normalize";
-import TabStateShell from "@/client/components/data/tab-state-shell.vue";
 import ArtificialAnalysisView from "./aa-view.vue";
+import RankingTabShell from "./ranking-tab-shell.vue";
 
 const state = await useSuspenseArtificialRankingsState();
-assertPayloadShape(state.value.malformed, "artificialIndex");
 </script>
 
 <template>
-  <TabStateShell :state="state">
+  <RankingTabShell :state="state" domain="artificialIndex">
     <ArtificialAnalysisView :rankings="state.items" />
-  </TabStateShell>
+  </RankingTabShell>
 </template>

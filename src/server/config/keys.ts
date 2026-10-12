@@ -1,4 +1,3 @@
-import { normalizeModelLimit } from "@/server/config/limits";
 import { fnv1aHash } from "@/server/infra/hash";
 import { cacheKey } from "@/shared/config/paths";
 import type { NewsCategory } from "@/shared/types/news";
@@ -16,11 +15,11 @@ export const cacheKeys = {
   aaModelsEnrich: cacheKey("artificialIndex", "models-enrich"),
   aaOmniscienceEnrich: cacheKey("artificialIndex", "omniscience-enrich"),
   homeDashboard: cacheKey("homeDashboard"),
-  openSourceModels: (sort: string, direction: string, limit: number) =>
-    cacheKey("openSourceModels", sort, direction, normalizeModelLimit(limit)),
+  openSourceModels: (sort: string, direction: string) => cacheKey("openSourceModels", sort, direction),
+  openSourceModelsTop: (sort: string, direction: string) => cacheKey("openSourceModels", sort, direction, "top"),
   openSourceModel: (id: string) => {
     const trimmed = id.trim();
-    return cacheKey("openSourceModels", "by-id", `h:${modelIdHash(trimmed)}`);
+    return cacheKey("openSourceModel", "by-id", `h:${modelIdHash(trimmed)}`);
   },
   news: (category: NewsCategory) => cacheKey("news", category),
   openRouterRankings: cacheKey("openRouterRankings"),

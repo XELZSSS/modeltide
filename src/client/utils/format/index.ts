@@ -6,7 +6,7 @@ export {
   formatSpeed,
   formatTokens,
   formatTrend,
-} from "./number";
-export { formatDollar, formatPricePerMillion } from "./money";
-export { formatDate, formatRelativeTime, formatTime } from "./time";
-export { benchmarkLabel, categoryLabel, formatBoolean, orNA, safeHref } from "./text";
+} from "@/shared/format/number";
+export { formatDollar, formatPricePerMillion } from "@/shared/format/money";
+export { formatDate, formatRelativeTime, formatTime } from "@/shared/format/time";
+export { benchmarkLabel, categoryLabel, formatBoolean, orNA, safeHref } from "@/shared/format/text";

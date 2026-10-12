@@ -3,8 +3,10 @@ import { computed } from "vue";
 import { navigate } from "@/client/router";
 import { useTranslation } from "@/client/i18n";
 import { useClientTab } from "@/client/hooks/use-client-tab";
+import { AGENT_VIEW_PARAM } from "@/client/config/tabs";
 import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
-import { useEffectivePricingMap, useMonthlyCosts } from "@/client/pricing/cost-inputs";
+import { useCostStore } from "@/client/stores";
+import { usePricingMaps } from "@/client/hooks/use-pricing-maps";
 import CompareChipBar from "@/client/components/compare-chip-bar.vue";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
@@ -23,13 +25,15 @@ const props = defineProps<{ rankings: ArtificialAnalysisModel[] }>();
 
 const { t } = useTranslation();
 const store = useCompareStore();
-const [viewMode, setViewMode] = useClientTab("view", VIEW_MODES, VIEW_MODES[0]);
+const costStore = useCostStore();
+const [viewMode, setViewMode] = useClientTab(AGENT_VIEW_PARAM, VIEW_MODES, VIEW_MODES[0]);
 
 const pricingMode = computed(() => viewMode.value === "pricing");
 const pricingModels = computed(() => (pricingMode.value ? props.rankings : EMPTY_MODELS));
 
-const effectivePricingMap = useEffectivePricingMap(pricingModels);
-const monthlyCosts = useMonthlyCosts(pricingModels).monthlyCosts;
+const pricing = usePricingMaps(pricingModels, () => costStore.values);
+const effectivePricingMap = pricing.effectivePricing;
+const monthlyCosts = pricing.monthlyCosts;
 const comparedModels = useCompareModels(() => props.rankings);
 
 usePruneCompareIds(() => props.rankings);

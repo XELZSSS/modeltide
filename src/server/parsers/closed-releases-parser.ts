@@ -1,13 +1,17 @@
 import { isoDate, sortByDateDesc, isRecord, str } from "@/server/parsers/parser-primitives";
-import { upstreamConfig } from "@/server/config";
 import { MAX_ID_CHARS, MAX_NAME_CHARS } from "@/shared/config";
-import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 
 import type { ChangelogModel } from "@/server/parsers/aa/changelog-parser";
 import { dedupeBy } from "@/shared/utils";
 
-function toClosedEntry(id: unknown, model: unknown, provider: unknown, rawDate: unknown): ClosedReleaseEntry | null {
+function toClosedEntry(
+  id: unknown,
+  model: unknown,
+  provider: unknown,
+  rawDate: unknown,
+  modelsBaseUrl: string,
+): ClosedReleaseEntry | null {
   if (typeof id !== "string" || typeof model !== "string" || typeof provider !== "string") return null;
   const cleanId = id.trim();
   const cleanModel = model.trim();
@@ -23,15 +27,15 @@ function toClosedEntry(id: unknown, model: unknown, provider: unknown, rawDate: 
     model: cleanModel,
     provider: cleanProvider,
     releaseDate: date,
-    link: `${upstreamConfig.artificialAnalysis}/models/${encodeURIComponent(cleanId)}`,
+    link: `${modelsBaseUrl}/models/${encodeURIComponent(cleanId)}`,
   };
 }
 
-function toClosedRelease(e: ChangelogModel): ClosedReleaseEntry | null {
-  return toClosedEntry(e.releaseSlug, e.releaseName, e.creatorName, e.releaseDate);
+function toClosedRelease(e: ChangelogModel, modelsBaseUrl: string): ClosedReleaseEntry | null {
+  return toClosedEntry(e.releaseSlug, e.releaseName, e.creatorName, e.releaseDate, modelsBaseUrl);
 }
 
-function toClosedReleaseFromIndex(m: unknown): ClosedReleaseEntry | null {
+function toClosedReleaseFromIndex(m: unknown, modelsBaseUrl: string): ClosedReleaseEntry | null {
   if (!isRecord(m)) return null;
   const rec = m as Partial<ArtificialAnalysisModel>;
   const slug = typeof rec.slug === "string" && rec.slug.trim() !== "" ? rec.slug : str(rec.id);
@@ -39,31 +43,30 @@ function toClosedReleaseFromIndex(m: unknown): ClosedReleaseEntry | null {
   const creator = typeof rec.model_creators?.name === "string" ? rec.model_creators.name : "";
   const date = str(rec.release_date);
   if (!slug || !name) return null;
-  return toClosedEntry(slug, name, creator, date);
+  return toClosedEntry(slug, name, creator, date, modelsBaseUrl);
 }
 
-export function toClosedReleasesFromIndex(models: unknown): ClosedReleaseEntry[] {
+export function toClosedReleasesFromIndex(models: unknown, modelsBaseUrl: string): ClosedReleaseEntry[] {
   if (!Array.isArray(models)) return [];
   const entries = (models as ArtificialAnalysisModel[])
-    .map(toClosedReleaseFromIndex)
+    .map((m) => toClosedReleaseFromIndex(m, modelsBaseUrl))
     .filter((e): e is ClosedReleaseEntry => e !== null);
   const deduped = dedupeBy(entries, (e) => e.id);
   deduped.sort((a, b) => (a.releaseDate === b.releaseDate ? 0 : a.releaseDate < b.releaseDate ? 1 : -1));
-  return deduped.slice(0, SOURCE_LIMITS.closedReleases);
+  return deduped;
 }
 
-export function toClosedReleases(changelog: unknown): ClosedReleaseEntry[] {
+export function toClosedReleases(changelog: unknown, modelsBaseUrl: string): ClosedReleaseEntry[] {
   if (!Array.isArray(changelog)) return [];
   const records = changelog.filter((e): e is ChangelogModel => isRecord(e) && typeof e.slug === "string");
   sortByDateDesc(records, (e) => e.releaseDate);
   const entries: ClosedReleaseEntry[] = [];
   const seen = new Set<string>();
   for (const record of records) {
-    const entry = toClosedRelease(record);
+    const entry = toClosedRelease(record, modelsBaseUrl);
     if (!entry || seen.has(entry.id)) continue;
     seen.add(entry.id);
     entries.push(entry);
-    if (entries.length >= SOURCE_LIMITS.closedReleases) break;
   }
   return entries;
 }

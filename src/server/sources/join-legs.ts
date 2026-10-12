@@ -1,4 +1,4 @@
-import { rethrowIfAllAborted } from "@/server/infra/errors";
+import { rethrowIfAllAborted, UpstreamError } from "@/server/infra/errors";
 import { runCapped } from "@/server/infra/task-pool";
 
 interface Leg<T> {
@@ -16,6 +16,8 @@ interface RunLegsOptions {
   signal?: AbortSignal;
   onFailure?: (failure: LegFailure) => void;
   filter?: (failure: LegFailure) => boolean;
+  allFailedMessage?: string;
+  retryable?: boolean;
 }
 
 type LegValue<L> = L extends Leg<infer T> ? T : never;
@@ -42,6 +44,10 @@ export async function runLegs<L extends readonly Leg<unknown>[]>(
     opts.onFailure?.(failure);
   });
   rethrowIfAllAborted(settled);
+
+  if (opts.allFailedMessage != null && failures.length === legs.length && legs.length > 0) {
+    throw new UpstreamError(opts.allFailedMessage, { retryable: opts.retryable ?? true });
+  }
 
   const values = settled.map((result) => (result.status === "fulfilled" ? result.value : undefined));
   return { values: values as unknown as LegValues<L>, failures };

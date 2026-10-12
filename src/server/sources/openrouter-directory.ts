@@ -1,5 +1,6 @@
 import { SLOW_TTL_MS } from "@/shared/config";
-import { UPSTREAM_FETCH_OPTS, cacheKeys, upstreamConfig, upstreamEndpoints, upstreamUrl } from "@/server/config";
+import { cacheKeys, upstreamConfig, upstreamEndpoints } from "@/server/config";
+import { upstreamUrl } from "@/server/config/upstream";
 import type { AppContext } from "@/server/context";
 import { UpstreamError } from "@/server/infra/errors";
 import { parseDirectoryRows, type DirectoryCacheEntry } from "@/server/parsers/openrouter-directory-parser";
@@ -12,9 +13,8 @@ const PRICING_GAP_RATIO = 0.3;
 export type DirectoryCacheEntryWithPartial = DirectoryCacheEntry & { partial: boolean };
 
 async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntryWithPartial> {
-  const res = (await ctx.http.json<unknown>(
+  const res = (await ctx.http.getJson<unknown>(
     upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterDirectory),
-    UPSTREAM_FETCH_OPTS,
   )) as { data?: unknown } | null;
   const rows = Array.isArray(res?.data) ? res.data : [];
   const { entry, totalRows, missingPricing: missing } = parseDirectoryRows(rows);
@@ -38,7 +38,7 @@ export async function getModelDirectory(ctx: AppContext): Promise<DirectoryCache
   return toPartial(value, degraded);
 }
 
-export async function getModelDirectoryMeta(ctx: AppContext): Promise<Record<string, ModelMetaEntry>> {
-  const { meta } = await getModelDirectory(ctx);
-  return meta;
+export async function getModelDirectoryMeta(ctx: AppContext): Promise<{ meta: Record<string, ModelMetaEntry>; partial: boolean }> {
+  const { meta, partial } = await getModelDirectory(ctx);
+  return { meta, partial };
 }

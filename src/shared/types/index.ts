@@ -14,6 +14,9 @@ export type {
 } from "@/shared/types/rankings";
 
 export type { NewsCategory, NewsItem } from "@/shared/types/news";
+export { NEWS_CATEGORIES, isNewsCategory } from "@/shared/types/news";
+export type { BenchmarkKey } from "@/shared/types/benchmark";
+export { BENCHMARK_KEYS } from "@/shared/types/benchmark";
 
 export type { ThemeMode, HomeOpenSourceEntry, HomeDashboardData, ModelSource } from "@/shared/types/app";
 

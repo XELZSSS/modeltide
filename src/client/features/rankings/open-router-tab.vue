@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useSuspenseOpenRouterRankingsState } from "@/client/api/api-queries";
-import { assertPayloadShape } from "@/client/api/payload-normalize";
-import TabStateShell from "@/client/components/data/tab-state-shell.vue";
 import OpenRouterRankingsView from "./openrouter-rankings-view.vue";
+import RankingTabShell from "./ranking-tab-shell.vue";
 
 const state = await useSuspenseOpenRouterRankingsState();
-assertPayloadShape(state.value.malformed, "openRouterRankings");
 const payload = computed(() => ({
   data: state.value.items,
   fetchedAt: new Date().toISOString(),
@@ -15,7 +13,7 @@ const payload = computed(() => ({
 </script>
 
 <template>
-  <TabStateShell :state="state">
+  <RankingTabShell :state="state" domain="openRouterRankings">
     <OpenRouterRankingsView :data="payload" />
-  </TabStateShell>
+  </RankingTabShell>
 </template>

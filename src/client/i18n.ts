@@ -1,6 +1,8 @@
 import { computed, type ComputedRef } from "vue";
-import { createT, type Lang, type TFunction } from "@/shared/i18n";
+import { createT, DOC_META, type Lang, type TFunction } from "@/shared/i18n";
 import { useSettingsStore } from "@/client/stores/settings-store";
+
+export { syncDocumentMeta } from "@/client/router/document-meta";
 
 const translators = new Map<Lang, TFunction>();
 
@@ -20,25 +22,7 @@ function tFor(lang: Lang): TFunction {
   return translator;
 }
 
-const DOC_META: Record<Lang, { html: string; og: string; ogAlternate: string }> = {
-  zh: { html: "zh-CN", og: "zh_CN", ogAlternate: "en_US" },
-  en: { html: "en", og: "en_US", ogAlternate: "zh_CN" },
-};
-
-export function syncDocumentMeta(lang: Lang): void {
-  const locale = DOC_META[lang];
-  document.documentElement.lang = locale.html;
-  const description = tFor(lang)("metaDescription");
-  for (const selector of [
-    'meta[name="description"]',
-    'meta[property="og:description"]',
-    'meta[name="twitter:description"]',
-  ]) {
-    document.querySelector(selector)?.setAttribute("content", description);
-  }
-  document.querySelector('meta[property="og:locale"]')?.setAttribute("content", locale.og);
-  document.querySelector('meta[property="og:locale:alternate"]')?.setAttribute("content", locale.ogAlternate);
-}
+export { DOC_META };
 
 export interface Translation {
   lang: ComputedRef<Lang>;
@@ -50,9 +34,6 @@ export function useTranslation(): Translation {
   const settings = useSettingsStore();
   return {
     lang: computed(() => settings.lang),
-    // NOTE: t() must be called inside computed/render so settings.lang is tracked.
-    // Do not hoist `const label = t('x')` outside a computed — it won't update on language switch.
-    // For a reactive label, use `computed(() => t('x'))`.
     t: (key, params) => tFor(settings.lang)(key, params),
     setLang: (lang) => settings.setLang(lang),
   };

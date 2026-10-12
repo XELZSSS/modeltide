@@ -1,9 +1,9 @@
 import { computed, type Component, type ComputedRef } from "vue";
 import { useTranslation } from "@/client/i18n";
 import { ROUTES } from "@/client/config/routes";
-import { routePrefetchTarget } from "@/client/router/prefetch";
-import { usePrefetchIntent, type PrefetchIntent } from "@/client/hooks/use-prefetch-intent";
 import type { NavGroup } from "@/client/config/route-meta";
+
+export { usePrefetch } from "@/client/hooks/use-prefetch";
 
 export interface NavItem {
   path: string;
@@ -47,8 +47,4 @@ export function isNavActive(pathname: string, item: NavItem): boolean {
   if (pathname === item.path) return true;
   if (item.activePrefixes) return item.activePrefixes.some((prefix) => pathname.startsWith(prefix));
   return false;
-}
-
-export function usePrefetch(): PrefetchIntent<string> {
-  return usePrefetchIntent<string>(routePrefetchTarget);
 }

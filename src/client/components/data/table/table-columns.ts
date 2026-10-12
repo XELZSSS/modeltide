@@ -1,5 +1,6 @@
 import { h, type FunctionalComponent, type VNodeChild } from "vue";
 import { cn } from "@/client/utils/cn";
+import RankingNameCell from "./ranking-name-cell.vue";
 
 export interface DataTableColumn<T> {
   id: string;
@@ -74,3 +75,21 @@ export function monoCol<T>(
 
 export const RightAlignedText: FunctionalComponent<{ class?: string }> = (props, { slots }) =>
   h("p", { class: cn("overflow-hidden text-ellipsis whitespace-nowrap text-right", props.class) }, slots.default?.());
+
+export function modelNameCol<T>(
+  header: string,
+  titleOf: (row: T) => string,
+  textOf: (row: T) => string,
+  width = "40%",
+): DataTableColumn<T> {
+  return {
+    id: "model",
+    header,
+    width,
+    cell: (row) => {
+      const title = titleOf(row);
+      const text = textOf(row);
+      return h(RankingNameCell, { name: text, title });
+    },
+  };
+}

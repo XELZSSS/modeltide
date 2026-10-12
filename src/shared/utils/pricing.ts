@@ -1,5 +1,6 @@
 import { isFiniteNumber } from "@/shared/utils/numbers";
-import type { ModelPricing } from "@/shared/types";
+import type { ModelPricing } from "@/shared/types/catalog";
+import type { TranslationKey } from "@/shared/i18n";
 
 export type EffectivePricing = { [K in keyof ModelPricing]: number | null };
 
@@ -14,12 +15,12 @@ export const PRICE_LEGS = {
   cacheWritePrice: (p) => p.cacheWrite,
 } as const satisfies Record<PriceLegId, PriceLegPick>;
 
-export const PRICE_LEG_IDS: readonly PriceLegId[] = [
+export const PRICE_LEG_IDS = [
   "promptPrice",
   "completionPrice",
   "cacheHitPrice",
   "cacheWritePrice",
-];
+] as const satisfies readonly TranslationKey[];
 
 const finiteOrNull = (v: unknown): number | null => (isFiniteNumber(v) ? v : null);
 

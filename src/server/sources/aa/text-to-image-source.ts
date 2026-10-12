@@ -1,34 +1,28 @@
 import { byNumberDesc } from "@/server/parsers/parser-primitives";
 import type { AppContext } from "@/server/context";
 import { DEFAULT_TTL_MS } from "@/shared/config";
-import { cacheKeys, upstreamEndpoints } from "@/server/config";
+import { cacheKeys, upstreamConfig, upstreamEndpoints } from "@/server/config";
 import { MAX_LEADERBOARD_ROWS } from "@/server/config/limits";
 import type { TextToImageModel } from "@/shared/types";
-import type { SourcePayload } from "@/shared/types";
 import { dedupeBy } from "@/shared/utils";
 
 import { parseTextToImageRows } from "@/server/parsers/aa/text-to-image-parser";
-import { fetchAaRsc } from "./aa-fetch";
-import { cachedPayload, requireParsed, requireRows } from "@/server/sources/pipeline";
+import { defineSource, requireParsed, requireRows } from "@/server/sources/pipeline";
 
-export const getTextToImageLeaderboard = (ctx: AppContext): Promise<SourcePayload<TextToImageModel[]>> =>
-  cachedPayload<TextToImageModel[]>(ctx, cacheKeys.textToImage, DEFAULT_TTL_MS, async (ctx) => {
-    const body = await fetchAaRsc(ctx, upstreamEndpoints.aaTextToImage);
-    let mapped = requireRows(
+export const getTextToImageLeaderboard = defineSource<string, TextToImageModel>({
+  key: cacheKeys.textToImage,
+  ttl: DEFAULT_TTL_MS,
+  label: "Text-to-image",
+  fetch: (ctx: AppContext) => ctx.http.getRsc(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaTextToImage),
+  parse: (body, ctx) => {
+    const mapped = requireRows(
       requireParsed(parseTextToImageRows(body), ctx.log, "text-to-image"),
       "Text-to-image",
       "rows",
       `raw=0, kept=0, body=${body.length}B`,
     );
-    const truncated = mapped.length > MAX_LEADERBOARD_ROWS;
-    if (truncated) {
-      ctx.log("warn", `[text-to-image] oversized payload (${mapped.length}), truncating`);
-      mapped = mapped.slice(0, MAX_LEADERBOARD_ROWS);
-    }
     const ranked = dedupeBy(mapped.sort(byNumberDesc((m) => m.elo)), (m) => m.slug);
-    const models: TextToImageModel[] = ranked.map((m, i) => ({ ...m, rank: i + 1 }));
-    return {
-      rows: requireRows(models, "Text-to-image", "models", `raw=${mapped.length}, kept=0`),
-      partial: truncated,
-    };
-  });
+    return ranked.map((m, i) => ({ ...m, rank: i + 1 }));
+  },
+  cap: MAX_LEADERBOARD_ROWS,
+});

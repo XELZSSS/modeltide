@@ -39,9 +39,10 @@ import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "@/client/utils/compare-logic";
 import { RenderView } from "@/client/components/data/table/cell-view";
+import { ROW_PADDING_COMPACT } from "@/client/config/layout";
 
 // Denser than ROW_PADDING: compare tables carry 4+ rows and must fit one screen.
-const CELL = "px-4 py-2.5";
+const CELL = ROW_PADDING_COMPACT;
 
 const props = defineProps<{
   rows: CompareRow<ArtificialAnalysisModel>[];

@@ -15,6 +15,12 @@ type PollFn<D extends ApiDomain> = (
   query: Query<RawPayload<D>, Error, RawPayload<D>, readonly unknown[]>,
 ) => number | false;
 
+export const QUERY_DEFAULTS = {
+  ttlMs: THIRTY_MINUTES,
+  gcTimeMs: THIRTY_MINUTES,
+  maxGcTimeMs: STATIC_TTL_MS,
+} as const;
+
 interface ApiQueryOptions<T> {
   ttl?: number;
   gcTime?: number;
@@ -32,13 +38,13 @@ export function createApiQuery<D extends ApiDomain>(
   const { ttl, gcTime, partialRefetchMs, refetchMs, isPartialData, query } = opts ?? {};
   const path = query ? `${apiPaths[domain]}?${new URLSearchParams(query)}` : apiPaths[domain];
   const queryFn = fetcher<PayloadOf<D>>(path);
-  const ttlMs = ttl ?? THIRTY_MINUTES;
+  const ttlMs = ttl ?? QUERY_DEFAULTS.ttlMs;
   const refetchInterval: number | false | PollFn<D> =
     isPartialData != null && partialRefetchMs != null
       ? (query) => partialPollInterval(query, isPartialData as (data: unknown) => boolean, partialRefetchMs)
       : (refetchMs ?? false);
   const timing = {
-    gcTime: gcTime ?? Math.min(Math.max(ttlMs, THIRTY_MINUTES), STATIC_TTL_MS),
+    gcTime: gcTime ?? Math.min(Math.max(ttlMs, QUERY_DEFAULTS.gcTimeMs), QUERY_DEFAULTS.maxGcTimeMs),
     refetchInterval,
     staleTime: ttlMs,
   };

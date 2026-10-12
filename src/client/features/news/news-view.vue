@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
-import { qNewsRaw } from "@/client/api/api-queries";
+import { qNewsList } from "@/client/api/api-queries";
 import TabbedPage from "@/client/components/layout/tabbed-page.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { useClientTab } from "@/client/hooks/use-client-tab";
-import { usePrefetchIntent } from "@/client/hooks/use-prefetch-intent";
+import { usePrefetchIntent } from "@/client/hooks/use-prefetch";
 import type { TabItem } from "@/client/components/ui/tabs";
 import type { TranslationKey } from "@/shared/i18n";
 import type { NewsCategory } from "@/shared/types";
-import { NEWS_CATEGORIES } from "@/shared/config";
+import { NEWS_CATEGORIES } from "@/shared/types/news";
+import { NEWS_TAB_PARAM, isNewsCategoryValue } from "@/client/config/tabs";
 import NewsCategoryData from "./news-category-data.vue";
 
 const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
@@ -21,15 +22,15 @@ const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
 };
 
 const { t } = useTranslation();
-const [activeCategory, setActiveCategory] = useClientTab("tab", NEWS_CATEGORIES, NEWS_CATEGORIES[0]!);
+const [activeCategory, setActiveCategory] = useClientTab(NEWS_TAB_PARAM, NEWS_CATEGORIES, NEWS_CATEGORIES[0]!);
 
 const tabs = computed<TabItem[]>(() => NEWS_CATEGORIES.map((id) => ({ id, label: t(CATEGORY_LABELS[id]) })));
 
 function isNewsCategory(value: string): value is NewsCategory {
-  return (NEWS_CATEGORIES as readonly string[]).includes(value);
+  return isNewsCategoryValue(value, NEWS_CATEGORIES);
 }
 
-const tabIntent = usePrefetchIntent<NewsCategory>((id) => ({ queries: [qNewsRaw(id)] }));
+const tabIntent = usePrefetchIntent<NewsCategory>((id) => ({ queries: [qNewsList(id)] }));
 
 function onTabIntent(tabId: string, active: boolean): void {
   if (!active) {

@@ -1,5 +1,4 @@
 import { numOr, titleCase } from "@/server/parsers/parser-primitives";
-import { SOURCE_LIMITS } from "@/server/config/limits";
 import type { OpenRouterRankEntry } from "@/shared/types";
 import {
   compareRanked,
@@ -81,7 +80,7 @@ export function mapModels(rows: unknown, pricing: PricingLookup, stats?: Ranking
     derivedTokens: usageTotal(group.agg),
   }));
   ranked.sort(compareRanked);
-  const merged = ranked.slice(0, SOURCE_LIMITS.openRouterRankingModels);
+  const merged = ranked;
   const out: OpenRouterRankEntry[] = [];
   for (let i = 0; i < merged.length; i++) {
     const { agg: row, dominant, latest } = merged[i]!.group;

@@ -6,14 +6,18 @@
   "scripts": {
     "dev": "vite",
     "gen:cache-version": "node scripts/gen-cache-version.cjs",
+    "gen:cache-version:check": "node scripts/gen-cache-version.cjs --check",
     "build": "node scripts/gen-cache-version.cjs && vite build",
+    "build:ci": "npm run type-check && npm run lint && npm run build",
     "preview": "npm run build && vite preview",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",
     "lint": "oxlint --vue-plugin --deny-warnings",
+    "lint:fix": "oxlint --vue-plugin --fix",
     "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "clean": "node scripts/clean.mjs",
     "audit": "npm audit --registry=https://registry.npmjs.org"
   },
   "engines": {
@@ -48,8 +52,5 @@
   "allowScripts": {
     "vue-demi@0.14.10": true,
     "esbuild@0.28.1": true
-  },
-  "overrides": {
-    "sharp": "0.35.5"
   }
 }

@@ -1,11 +1,6 @@
 import type { Env } from "@/server/context";
-import { applyApiHeaders } from "@/server/http/headers";
-import {
-  handleApiRoute,
-  methodNotAllowedResponse,
-  notFoundResponse,
-  stripBodyForHead,
-} from "@/server/routes/define-route";
+import { handleApiRoute } from "@/server/routes/define-route";
+import { methodResponse, notFoundForMethod } from "@/server/routes/http";
 import { SOURCES } from "@/server/sources/registry";
 
 export type RouteEntry = (typeof SOURCES)[number];
@@ -26,17 +21,9 @@ export async function onRequest(context: PagesFunctionContext): Promise<Response
   const { request, env } = context;
   const url = new URL(request.url);
   const route = resolveRoute(url.pathname);
-  const isHead = request.method === "HEAD";
-  if (!route) return isHead ? stripBodyForHead(notFoundResponse()) : notFoundResponse();
-  if (request.method === "OPTIONS") {
-    const res = new Response(null, { status: 204 });
-    res.headers.set("Allow", "GET, HEAD, OPTIONS");
-    applyApiHeaders(res.headers);
-    return res;
-  }
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return methodNotAllowedResponse();
-  }
+  if (!route) return notFoundForMethod(request.method);
+  const early = methodResponse(request.method);
+  if (early) return early;
   const onDetach = context.waitUntil ? (work: Promise<unknown>) => context.waitUntil?.(work) : undefined;
   return handleApiRoute(request, env, url, route, onDetach ? { onDetach } : undefined);
 }

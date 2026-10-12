@@ -1,25 +1,5 @@
 <script lang="ts">
-import { h } from "vue";
-import RankingNameCell from "./ranking-name-cell.vue";
-import type { DataTableColumn } from "./table-columns.ts";
-
-export function modelNameCol<T>(
-  header: string,
-  titleOf: (row: T) => string,
-  textOf: (row: T) => string,
-  width = "40%",
-): DataTableColumn<T> {
-  return {
-    id: "model",
-    header,
-    width,
-    cell: (row) => {
-      const title = titleOf(row);
-      const text = textOf(row);
-      return h(RankingNameCell, { name: text, title });
-    },
-  };
-}
+export { modelNameCol } from "./table-columns.ts";
 </script>
 
 <script setup lang="ts" generic="T extends object">
@@ -27,6 +7,7 @@ import { computed, type VNodeChild } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TFunction } from "@/shared/i18n";
 import SearchableDataTable from "./data-table.vue";
+import type { DataTableColumn } from "./table-columns.ts";
 
 const props = defineProps<{
   rows: T[];

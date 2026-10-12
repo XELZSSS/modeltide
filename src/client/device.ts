@@ -1,4 +1,4 @@
-import { ref, type Ref } from "vue";
+import { singletonRef } from "@/client/utils/singleton-ref";
 
 const MOBILE_QUERY = "(max-width: 767px)";
 
@@ -15,18 +15,6 @@ function currentMobile(): boolean {
   return mobileMedia()?.matches ?? false;
 }
 
-const mobile = ref(currentMobile());
-let subscribed = false;
-
-function ensureSubscribed(): void {
-  if (subscribed) return;
-  subscribed = true;
-  mobileMedia()?.addEventListener("change", () => {
-    mobile.value = currentMobile();
-  });
-}
-
-export function useDevice(): Ref<boolean> {
-  ensureSubscribed();
-  return mobile;
-}
+export const useDevice = singletonRef(currentMobile, (update) => {
+  mobileMedia()?.addEventListener("change", () => update(currentMobile()));
+});

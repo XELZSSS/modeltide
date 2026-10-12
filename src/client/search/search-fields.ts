@@ -1,4 +1,4 @@
-import type { ModelSource } from "@/client/config/nav-config";
+import type { ModelSource } from "@/shared/types/app";
 import type {
   ArtificialAnalysisModel,
   HallucinationRankingEntry,

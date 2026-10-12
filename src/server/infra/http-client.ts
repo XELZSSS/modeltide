@@ -1,4 +1,6 @@
 import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, UPSTREAM_FETCH_OPTS, USER_AGENT } from "@/server/config";
+import { fetchPolicy } from "@/server/config/fetch-policies";
+import { upstreamUrl } from "@/server/config/upstream";
 import { ClientAbortError, UpstreamError, errMsg } from "@/server/infra/errors";
 import { acquireSlot, createSlotPools, releaseSlot, type SlotPool, type SlotPools } from "@/server/infra/connection-pool";
 import { fetchBodyText, parseJsonBody, type JsonResponse } from "@/server/infra/body-readers";
@@ -19,6 +21,19 @@ export interface ProbeResult {
 
 function buildHeaders(userAgent: string, accept: string, extra?: Record<string, string>): Record<string, string> {
   return { "user-agent": userAgent, accept, ...extra };
+}
+
+export interface JsonPage<T> {
+  data: T;
+  nextUrl: string | null;
+}
+
+const NEXT_LINK_RE = /<([^>]+)>\s*;\s*rel="next"/;
+
+export function nextLinkUrl(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  const match = NEXT_LINK_RE.exec(linkHeader);
+  return match?.[1] ? match[1] : null;
 }
 
 function isSubrequestLimit(err: unknown): boolean {
@@ -234,6 +249,26 @@ export class HttpClient {
       "text/html,application/xhtml+xml,*/*",
       (res, signal) => fetchBodyText(url, res, maxBytes, signal),
     );
+  }
+
+  async getJson<T>(url: string, policy: "interactive" | "slowFeed" = "interactive"): Promise<T> {
+    return this.json<T>(url, fetchPolicy(policy));
+  }
+
+  async getJsonPage<T>(url: string, policy: "interactive" | "slowFeed" = "interactive"): Promise<JsonPage<T>> {
+    return this.readJson<T, JsonPage<T>>(url, fetchPolicy(policy), MAX_JSON_BYTES, (res, body) => ({
+      data: body,
+      nextUrl: nextLinkUrl(res.headers.get("link")),
+    }));
+  }
+
+  async getRsc(base: string, path: string, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
+    const policy = fetchPolicy("rsc");
+    return this.text(upstreamUrl(base, path), { headers: { RSC: "1" }, ...policy }, maxBytes);
+  }
+
+  async getFeed(url: string, accept: string, maxBytes: number): Promise<string> {
+    return this.text(url, { headers: { accept }, ...fetchPolicy("slowFeed") }, maxBytes);
   }
 
   async probe(url: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<ProbeResult> {

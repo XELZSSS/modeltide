@@ -1,6 +1,6 @@
-import { computed, type ComputedRef } from "vue";
 import { defineStore } from "pinia";
-import { useRoute } from "vue-router";
+
+export { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
 
 const MAX_REMEMBERED_ROUTES = 32;
 
@@ -20,13 +20,3 @@ export const useSearchStore = defineStore("search", {
     },
   },
 });
-
-export function useRouteSearchTerm(): { term: ComputedRef<string>; setTerm: (term: string) => void } {
-  const route = useRoute();
-  const store = useSearchStore();
-  const pathname = computed(() => route.path);
-  return {
-    term: computed(() => store.terms[pathname.value] ?? ""),
-    setTerm: (term) => store.setTerm(pathname.value, term),
-  };
-}

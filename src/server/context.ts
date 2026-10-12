@@ -9,15 +9,26 @@ export interface Env {
   CACHE?: KVNamespace;
 }
 
-export interface AppContext {
+export interface RequestScope {
+  log: Logger;
+  onDetach?: (work: Promise<unknown>) => void;
+  callerSignal?: AbortSignal;
+}
+
+export interface InfraScope {
   cache: CacheService;
-  refreshContext?: AppContext;
   http: HttpClient;
   kv: KvStore | undefined;
+  clock?: () => number;
+  random?: () => number;
+}
+
+export interface AppContext extends InfraScope {
   log: Logger;
   onDetach?: (work: Promise<unknown>) => void;
   clock?: () => number;
   random?: () => number;
+  refreshContext?: AppContext;
 }
 
 let warnedMissingKv = false;

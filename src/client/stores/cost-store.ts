@@ -1,9 +1,9 @@
 import { defineStore } from "pinia";
 import { DEFAULT_COST_SCENARIO, STORAGE_KEYS } from "@/shared/config";
-import { initStorageSync, readPersisted, safeStorage } from "@/client/stores/persist";
+import { loadPersistedState, makeStorageSync } from "@/client/stores/make-persisted-store";
 import type { CostFieldId } from "@/client/pricing/cost-inputs";
 
-const VERSION = 1;
+const COST_STORE_VERSION = 1;
 
 const DEFAULT_VALUES: Record<CostFieldId, string> = {
   dailyInput: String(DEFAULT_COST_SCENARIO.dailyInputM),
@@ -27,7 +27,7 @@ function cleanValues(raw: unknown): Record<CostFieldId, string> {
 }
 
 function readValues(): Record<CostFieldId, string> {
-  const stored = readPersisted<{ values?: unknown }>(safeStorage("local"), STORAGE_KEYS.cost, VERSION);
+  const stored = loadPersistedState<{ values?: unknown }>("local", STORAGE_KEYS.cost, COST_STORE_VERSION);
   return cleanValues(stored.values);
 }
 
@@ -41,20 +41,19 @@ export const useCostStore = defineStore("cost", {
   },
 });
 
-export function initCostStorageSync(): void {
-  initStorageSync(useCostStore(), {
-    storage: safeStorage("local"),
-    key: STORAGE_KEYS.cost,
-    version: VERSION,
-    snapshot: (store) => ({ values: store.values }),
-    onStorageEvent: (store, parsed) => {
-      const values = cleanValues((parsed as { state?: { values?: unknown } }).state?.values);
-      for (const id of COST_FIELD_IDS) {
-        if (values[id] !== store.values[id]) {
-          store.values = values;
-          break;
-        }
+export const initCostStorageSync = makeStorageSync({
+  useStore: useCostStore,
+  kind: "local",
+  key: STORAGE_KEYS.cost,
+  version: COST_STORE_VERSION,
+  snapshot: (store) => ({ values: store.values }),
+  onStorageEvent: (store, parsed) => {
+    const values = cleanValues((parsed as { state?: { values?: unknown } }).state?.values);
+    for (const id of COST_FIELD_IDS) {
+      if (values[id] !== store.values[id]) {
+        store.values = values;
+        break;
       }
-    },
-  });
-}
+    }
+  },
+});
