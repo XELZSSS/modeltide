@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { onRequest, resolveRoute } from "./api/[[route]]";
+import { onRequest, resolveRoute } from "./route";
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen";
 import { apiPaths } from "@/shared/config";
 

@@ -29,7 +29,7 @@
 ## 架构
 
 - **前端**：Vite SPA，静态产物在 `dist`，由 `public/_redirects` 做 SPA 回退
-- **API**：`/api/*` 运行为 Pages Functions（`functions/api/[[route]].ts`），结果缓存于 KV / 内存
+- **API**：`/api/*` 运行为 Pages Functions（`functions/api/`），结果缓存于 KV / 内存
 
 ## 目录
 

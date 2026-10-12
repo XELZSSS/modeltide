@@ -5,7 +5,7 @@ const { createHash } = require("crypto");
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "src", "shared", "config", "cache-version.gen.ts");
 
-const DATA_LAYER_ROOTS = ["src/server", "src/shared", "functions"];
+const DATA_LAYER_ROOTS = ["src/server", "src/shared", "src/functions-entry"];
 
 const WORKER_RUNTIME_DEPS = ["fast-xml-parser", "strnum"];
 
@@ -23,7 +23,7 @@ const HASHED = [
   "src/shared/pricing/",
   "src/shared/types/",
   "src/shared/utils/",
-  "functions/",
+  "src/functions-entry/",
 ];
 
 const IGNORED = [

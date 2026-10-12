@@ -29,7 +29,7 @@
 ## Architecture
 
 - **Client**: Vite SPA — static output in `dist`, SPA fallback via `public/_redirects`
-- **API**: `/api/*` runs as Pages Functions (`functions/api/[[route]].ts`), cached in KV / memory
+- **API**: `/api/*` runs as Pages Functions (`functions/api/`), cached in KV / memory
 
 ## Structure
 

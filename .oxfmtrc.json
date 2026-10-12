@@ -2,5 +2,5 @@
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "printWidth": 120,
   "sortPackageJson": false,
-  "ignorePatterns": ["dist/**", "node_modules/**", ".wrangler/**", "package-lock.json", "coverage/**", "*.tsbuildinfo"]
+  "ignorePatterns": ["dist/**", "node_modules/**", ".wrangler/**", "functions/api/**", "package-lock.json", "coverage/**", "*.tsbuildinfo"]
 }

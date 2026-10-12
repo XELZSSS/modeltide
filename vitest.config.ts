@@ -24,7 +24,7 @@ export default defineConfig({
       {
         test: {
           name: "functions",
-          include: ["functions/**/*.{test,spec}.ts"],
+          include: ["src/functions-entry/**/*.{test,spec}.ts"],
         },
       },
     ],

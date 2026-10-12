@@ -7,7 +7,7 @@
     "dev": "vite",
     "gen:cache-version": "node scripts/gen-cache-version.cjs",
     "gen:cache-version:check": "node scripts/gen-cache-version.cjs --check",
-    "build": "node scripts/gen-cache-version.cjs && vite build",
+    "build": "node scripts/gen-cache-version.cjs && node scripts/bundle-functions.mjs && vite build",
     "build:ci": "npm run type-check && npm run lint && npm run build",
     "preview": "npm run build && vite preview",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",
@@ -41,6 +41,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.19.0",
     "@vitejs/plugin-vue": "^6.0.9",
+    "esbuild": "^0.28.2",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
@@ -51,6 +52,6 @@
   },
   "allowScripts": {
     "vue-demi@0.14.10": true,
-    "esbuild@0.28.1": true
+    "esbuild@0.28.2": true
   }
 }

@@ -11,4 +11,4 @@ export const SRC_ALIAS = "@";
 export const SRC_DIR = "src";
 export const CLIENT_OUT_DIR = "dist";
 export const API_PREFIX = "/api";
-export const FUNCTIONS_ROUTE = "/functions/api/[[route]].ts";
+export const FUNCTIONS_ROUTE = "/src/functions-entry/route.ts";

@@ -12,7 +12,7 @@
           {
             "patterns": [
               {
-                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**", "@/functions-entry", "@/functions-entry/*", "**/functions-entry/**"],
                 "message": "Client code must not import server or functions code. Move the shared piece into src/shared."
               }
             ]
@@ -21,7 +21,7 @@
       }
     },
     {
-      "files": ["src/server/**/*.ts", "functions/**/*.ts"],
+      "files": ["src/server/**/*.ts", "src/functions-entry/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -64,7 +64,7 @@
                 "message": "src/shared must stay platform-neutral. Move the client piece into src/client."
               },
               {
-                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**", "@/functions-entry", "@/functions-entry/*", "**/functions-entry/**"],
                 "message": "src/shared must stay platform-neutral. Move the server piece into src/server."
               }
             ]
@@ -73,7 +73,7 @@
       }
     },
     {
-      "files": ["build/**/*.ts", "scripts/**/*.{ts,mjs,cjs}", "functions/**/*.ts"],
+      "files": ["build/**/*.ts", "scripts/**/*.{ts,mjs,cjs}", "src/functions-entry/**/*.ts"],
       "rules": {
         "no-unused-vars": "error"
       }
