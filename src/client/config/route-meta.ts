@@ -8,7 +8,7 @@ export interface Prefetchable {
   prefetch: (client: QueryClient) => Promise<void>;
 }
 
-export interface RouteNav {
+interface RouteNav {
   group: NavGroup;
   labelKey: TranslationKey;
   icon: Component;

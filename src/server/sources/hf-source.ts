@@ -3,17 +3,16 @@ import { MAX_NAME_CHARS, ONE_MINUTE, SLOW_TTL_MS } from "@/shared/config";
 import { upstreamConfig, cacheKeys } from "@/server/config";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/context";
-import { UpstreamError, ValidationError } from "@/server/infra/errors";
-import { dedupeBy } from "@/shared/utils";
+import { ClientAbortError, UpstreamError, ValidationError, isTimeoutLike } from "@/server/infra/errors";
+import { dedupeBy, errMsg } from "@/shared/utils";
 import { encodeModelIdPath } from "@/shared/utils/models";
 import { LicenseDropTally, keepOpenSourceRanking, mapListModel, mapModel } from "@/server/parsers/hf-parser";
 import type { HFModel } from "@/server/parsers/upstream-types";
 
 import type { SourcePayload } from "@/shared/types";
 import { cachedPayload, requireArrayBody, requireRows } from "@/server/sources/pipeline";
-import { logPartial } from "@/server/infra/logger";
 
-export interface ModelQuery {
+interface ModelQuery {
   sort: string;
   direction: string;
 }
@@ -28,18 +27,23 @@ const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", 
 
 // HF paginates via `Link: <...cursor=...>; rel="next"`. Page size 100 keeps
 // each upstream response small; pagination stops at the safety ceiling so a
-// single invocation cannot exhaust the Workers subrequest budget.
+// single invocation cannot exhaust the Workers subrequest budget or exceed
+// the 35s client timeout on cold cache (deep pages get slower and abort).
+// 15 pages (~1500 raw, ~950 kept after license/ranking gates) is plenty for
+// the rankings table; the previous 30-page ceiling aborted around page 27.
 const HF_PAGE_LIMIT = 100;
-const HF_MAX_PAGES = 30;
-const HF_MAX_RAW_ROWS = HF_PAGE_LIMIT * HF_MAX_PAGES;
-// Homepage only needs a small slice for its cards, so it does one cheap page
-// instead of the full paginated walk used by the public list endpoint.
-const HF_TOP_PAGE_LIMIT = 200;
+const HF_MAX_PAGES = 15;
+
+// Home dashboard only needs top entries + a representative task-share sample.
+// Fetching the full list for it reliably exceeds the 35s client
+// timeout on cold cache (no KV) and aborts deep pagination. Keep it small.
+const HOME_HF_MAX_PAGES = 5;
 
 interface HFRaw {
   items: HFModel[];
   pageCount: number;
   truncated: boolean;
+  incomplete: boolean;
 }
 
 function hfListUrl(p: ModelQuery, limit: number): string {
@@ -54,40 +58,51 @@ async function fetchHFPage(ctx: AppContext, url: string): Promise<{ items: HFMod
   return { items, nextUrl: page.nextUrl };
 }
 
-async function fetchHFModelsAll(ctx: AppContext, p: ModelQuery): Promise<HFRaw> {
+async function fetchHFModelsAll(ctx: AppContext, p: ModelQuery, maxPages: number): Promise<HFRaw> {
   const items: HFModel[] = [];
   let url: string | null = hfListUrl(p, HF_PAGE_LIMIT);
   let pageCount = 0;
   let truncated = false;
+  const maxRawRows = HF_PAGE_LIMIT * maxPages;
   while (url != null) {
-    const page = await fetchHFPage(ctx, url);
+    let page: { items: HFModel[]; nextUrl: string | null };
+    try {
+      page = await fetchHFPage(ctx, url);
+    } catch (err) {
+      // Caller abort / upstream timeout deep in pagination: keep the pages we
+      // already have instead of failing the whole leg. Home dashboard then
+      // serves a degraded-but-useful payload instead of `partial` with zero rows.
+      if (items.length === 0) throw err;
+      if (err instanceof ClientAbortError || isTimeoutLike(err)) {
+        ctx.log(
+          "warn",
+          `[huggingface] pagination stopped early after ${pageCount} pages, using ${items.length} rows: ${errMsg(err)}`,
+        );
+        return { items, pageCount, truncated: true, incomplete: true };
+      }
+      throw err;
+    }
     pageCount += 1;
     for (const item of page.items) {
-      if (items.length >= HF_MAX_RAW_ROWS) break;
+      if (items.length >= maxRawRows) break;
       items.push(item);
     }
-    if (items.length >= HF_MAX_RAW_ROWS) {
+    if (items.length >= maxRawRows) {
       truncated = page.nextUrl != null || page.items.length >= HF_PAGE_LIMIT;
       break;
     }
     if (page.items.length < HF_PAGE_LIMIT) break;
     url = page.nextUrl;
-    if (url != null && pageCount >= HF_MAX_PAGES) {
+    if (url != null && pageCount >= maxPages) {
       truncated = true;
       break;
     }
-    if (pageCount >= HF_MAX_PAGES) {
+    if (pageCount >= maxPages) {
       truncated = url != null;
       break;
     }
   }
-  return { items, pageCount, truncated };
-}
-
-async function fetchHFTopPage(ctx: AppContext, p: ModelQuery): Promise<HFRaw> {
-  const url = hfListUrl(p, HF_TOP_PAGE_LIMIT);
-  const { items } = await fetchHFPage(ctx, url);
-  return { items, pageCount: 1, truncated: false };
+  return { items, pageCount, truncated, incomplete: false };
 }
 
 function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTally): void {
@@ -113,8 +128,32 @@ function parseHFItems(items: HFModel[], ctx: AppContext): OpenSourceModelEntry[]
   const bucket = dedupeBy(kept, (m) => m.id);
   requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
   const dropped = items.length - kept.length;
-  if (dropped > 0) logPartial(ctx.log, "huggingface", { dropped, total: items.length });
+  if (dropped > 0) {
+    // License/ranking gates are intentional filtering, not missing data:
+    // log at info so it isn't mistaken for a partial-data warning.
+    ctx.log("info", `[huggingface] filtered ${dropped}/${items.length} rows (non-open license or zero downloads)`);
+  }
   return bucket;
+}
+
+async function loadHFModels(
+  ctx: AppContext,
+  p: ModelQuery,
+  maxPages: number,
+): Promise<{ rows: OpenSourceModelEntry[]; incomplete: boolean; pageCount: number; rawCount: number }> {
+  const raw = await fetchHFModelsAll(ctx, p, maxPages);
+  const rows = parseHFItems(raw.items, ctx);
+  if (raw.truncated) {
+    // Safety ceiling, not a source failure: upstream served every page we
+    // asked for; we simply stopped paginating. Keep partial=false so the
+    // UI doesn't report "incomplete data" for a healthy response.
+    ctx.log("info", "[huggingface] pagination stopped at safety ceiling", {
+      pages: raw.pageCount,
+      raw: raw.items.length,
+      ceiling: HF_PAGE_LIMIT * maxPages,
+    });
+  }
+  return { rows, incomplete: raw.incomplete, pageCount: raw.pageCount, rawCount: raw.items.length };
 }
 
 export const getModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
@@ -123,31 +162,25 @@ export const getModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload
     cacheKeys.openSourceModels(p.sort, p.direction),
     SLOW_TTL_MS,
     async (refreshCtx) => {
-      const raw = await fetchHFModelsAll(refreshCtx, p);
-      const rows = parseHFItems(raw.items, refreshCtx);
-      if (raw.truncated) {
-        // Safety ceiling, not a source failure: upstream served every page we
-        // asked for; we simply stopped paginating. Keep partial=false so the
-        // UI doesn't report "incomplete data" for a healthy response.
-        refreshCtx.log("info", "[huggingface] pagination stopped at safety ceiling", {
-          pages: raw.pageCount,
-          raw: raw.items.length,
-          ceiling: HF_MAX_RAW_ROWS,
-        });
-      }
-      return { rows };
+      const { rows, incomplete } = await loadHFModels(refreshCtx, p, HF_MAX_PAGES);
+      return { rows, partial: incomplete };
     },
   );
 
-export const getTopModels = (ctx: AppContext, p: ModelQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
+// Home dashboard slice: own cache key (must not pollute the full-list key
+// above) and a small page budget so cold-cache refresh fits in the client
+// timeout. Task-share doughnut aggregates over this sample client-side.
+export const getHomeOpenSourceModels = (
+  ctx: AppContext,
+  p: ModelQuery,
+): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
   cachedPayload<OpenSourceModelEntry[]>(
     ctx,
-    cacheKeys.openSourceModelsTop(p.sort, p.direction),
+    cacheKeys.homeOpenSource(p.sort, p.direction),
     SLOW_TTL_MS,
     async (refreshCtx) => {
-      const raw = await fetchHFTopPage(refreshCtx, p);
-      const rows = parseHFItems(raw.items, refreshCtx);
-      return { rows };
+      const { rows, incomplete } = await loadHFModels(refreshCtx, p, HOME_HF_MAX_PAGES);
+      return { rows, partial: incomplete };
     },
   );
 

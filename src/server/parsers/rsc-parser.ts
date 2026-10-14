@@ -79,8 +79,8 @@ function resolveMarkersInLine<T>(
   if (!unresolvedHit) return parseOk(0);
   const raws: string[] = [];
   const prefixed = STREAM_LINE_RE.exec(line)?.[1];
-  if (prefixed && prefixed.length <= MAX_RSC_BYTES) raws.push(prefixed);
-  if (line.length <= MAX_RSC_BYTES) raws.push(line);
+  if (prefixed && prefixed.length <= MAX_RSC_LINE_CHARS) raws.push(prefixed);
+  if (line.length <= MAX_RSC_LINE_CHARS) raws.push(line);
   const trees = new Map<string, unknown>();
   const treeOf = (raw: string): unknown | undefined => {
     if (!trees.has(raw)) {

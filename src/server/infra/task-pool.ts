@@ -1,6 +1,6 @@
 import { runAbortable } from "@/server/infra/abort";
 
-export class TaskNotRunError extends Error {
+class TaskNotRunError extends Error {
   constructor() {
     super("Pool deadline passed before the task started");
     this.name = "TaskNotRunError";

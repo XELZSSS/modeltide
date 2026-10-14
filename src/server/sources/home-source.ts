@@ -2,7 +2,7 @@ import type { AppContext } from "@/server/context";
 import { errMsg, UpstreamError } from "@/server/infra/errors";
 import { runLegs } from "@/server/sources/join-legs";
 import { getTextToImageLeaderboard } from "@/server/sources/aa";
-import { getModels } from "@/server/sources/hf-source";
+import { getHomeOpenSourceModels } from "@/server/sources/hf-source";
 import { getOpenRouterRankings } from "@/server/sources/openrouter-source";
 import { FIVE_MINUTES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
 import { cacheKeys } from "@/server/config";
@@ -20,7 +20,7 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboar
   const { values, failures } = await runLegs([
     { label: "openrouter", run: () => getOpenRouterRankings(ctx) },
     { label: "textToImage", run: () => getTextToImageLeaderboard(ctx) },
-    { label: "opensource", run: () => getModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS }) },
+    { label: "opensource", run: () => getHomeOpenSourceModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS }) },
   ]);
   const reasons = failures.map((f) => `${f.label}: ${errMsg(f.reason)}`).join("; ");
   const [orRankings, textToImage, opensource] = values;

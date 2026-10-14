@@ -53,13 +53,13 @@ npm run dev    # http://localhost:5173
 
 ## Commands
 
-| Command          | Description        |
-| ---------------- | ------------------ |
-| `npm run dev`    | Dev server         |
-| `npm run build`  | Production build   |
-| `npm run test`   | Run tests          |
-| `npm run lint`   | Lint               |
-| `npm run format` | Format             |
+| Command          | Description      |
+| ---------------- | ---------------- |
+| `npm run dev`    | Dev server       |
+| `npm run build`  | Production build |
+| `npm run test`   | Run tests        |
+| `npm run lint`   | Lint             |
+| `npm run format` | Format           |
 
 ## Deployment
 

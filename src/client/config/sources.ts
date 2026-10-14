@@ -2,7 +2,7 @@ import type { SearchResultSource } from "@/client/search/types";
 import type { TranslationKey } from "@/shared/i18n";
 import type { ModelSource } from "@/shared/types/app";
 
-export interface SourceDecl {
+interface SourceDecl {
   modelSource: ModelSource;
   searchSource: SearchResultSource;
   tabId: "modelRankings" | "openRouterRankings" | "openSourceRankings" | "hallucinationRankings";

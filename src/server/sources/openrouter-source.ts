@@ -54,7 +54,7 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
     const stats: RankingScanStats = { scannedRows: 0, validRows: 0 };
     return { rows, totalRows, stats, dirData };
   },
-  parse: (raw, ctx) => {
+  parse: (raw) => {
     const models = mapModels(raw.rows, raw.dirData.pricing, raw.stats);
     if (raw.stats.validRows === 0) {
       throw new UpstreamError(`OpenRouter: all ${raw.totalRows} ranking rows had invalid model_permaslug`);
@@ -62,17 +62,15 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
     if (models.length === 0 && raw.stats.validRows > 0) {
       throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${raw.stats.validRows} rows`);
     }
-    void ctx;
     return models;
   },
-  partialWhen: ({ rows: models, raw }) => {
+  partialWhen: ({ raw }) => {
     const droppedRows = raw.totalRows - raw.stats.validRows;
     const drift = droppedRows >= Math.max(1, Math.ceil(raw.totalRows * RANKINGS_DRIFT_RATIO));
     const pricingCount = Object.keys(raw.dirData.pricing).length;
     const partial = pricingCount === 0 || drift || raw.dirData.partial;
-    void models;
     return {
-      partial: partial,
+      partial,
       log: partial
         ? {
             pricing: pricingCount,

@@ -3,10 +3,10 @@ import { extractNeedleJsonArrays, MAX_SCAN_CHARS } from "@/server/parsers/rsc-sc
 
 const CANDIDATE_PREFIX_CHARS = 256;
 
-export const AA_MODELS_KEY = '"models"';
+const AA_MODELS_KEY = '"models"';
 const AA_RELEASES_KEY = '"releases"';
 
-export const AA_SCAN_OPTS = {
+const AA_SCAN_OPTS = {
   prefixChars: CANDIDATE_PREFIX_CHARS,
   smallSuffixChars: 256 * 1024 + CANDIDATE_PREFIX_CHARS,
   maxSuffixChars: MAX_SCAN_CHARS + CANDIDATE_PREFIX_CHARS,
@@ -34,7 +34,7 @@ function releaseInfo(raw: unknown): { slug: string; info: ReleaseInfo } | null {
   };
 }
 
-export function collectReleases(html: string): Map<string, ReleaseInfo> {
+function collectReleases(html: string): Map<string, ReleaseInfo> {
   const releases = new Map<string, ReleaseInfo>();
   for (const value of extractNeedleJsonArrays(html, AA_RELEASES_KEY, AA_SCAN_OPTS)) {
     if (!Array.isArray(value)) continue;
@@ -47,7 +47,7 @@ export function collectReleases(html: string): Map<string, ReleaseInfo> {
   return releases;
 }
 
-export interface ReleaseIndexScan {
+interface ReleaseIndexScan {
   releases: Map<string, ReleaseInfo>;
   modelArrays: unknown[];
 }

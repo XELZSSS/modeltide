@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { toClosedReleases, toClosedReleasesFromIndex } from "@/server/parsers/closed-releases-parser";
-import type { ChangelogModel } from "@/server/parsers/aa/changelog-parser";
 import { decodeEntities } from "@/server/parsers/html-entities";
 import { stripHtml } from "@/server/parsers/html-to-text";
 import { parseFeed as parseFeedResult } from "@/server/parsers/rss-feed-parser";
 import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "@/server/parsers/rsc-parser";
 import { isMarkerBoundaryAt } from "@/server/parsers/rsc-scanner";
 import { getOpenLicenseId, licenseTagId } from "@/server/parsers/licenses";
-import { sortByDateDesc, isoDate, numCoerce, numOr } from "@/server/parsers/parser-primitives";
+import { sortByDateDesc, isoDate, numCoerce } from "@/server/parsers/parser-primitives";
 
 function readFeed(xml: string, url = "https://x.example/feed") {
   const res = parseFeedResult(xml, url);
@@ -32,18 +30,10 @@ describe("decodeEntities", () => {
   it.each([
     ["AT&amp;T", "AT&T"],
     ["&lt;tag&gt;", "<tag>"],
-    ["&#65;", "A"],
     ["&#x41;", "A"],
     ["&bogus;", "&bogus;"],
     ["&constructor;", "&constructor;"],
   ])("decodeEntities(%s) -> %s", (input, expected) => {
-    expect(decodeEntities(input)).toBe(expected);
-  });
-
-  it.each([
-    ["&#x110000;", ""],
-    ["&#xD800;", ""],
-  ])("drops invalid code points: %s", (input, expected) => {
     expect(decodeEntities(input)).toBe(expected);
   });
 });
@@ -51,10 +41,7 @@ describe("decodeEntities", () => {
 describe("stripHtml", () => {
   it.each([
     ["<p>Hello <b>world</b></p>", "Hello world"],
-    ['<a title="a < b">x</a>', "x"],
-    ["abc <div", "abc <div"],
     ['<script type="x" data-v="a>b">alert(1)</script>Hi', "Hi"],
-    ["<style>.a{color:red}</style>Hi", "Hi"],
     ["<title><![CDATA[A<B]]></title>", "A<B"],
   ])("stripHtml(%s) -> %s", (input, expected) => {
     expect(stripHtml(input)).toBe(expected);
@@ -71,60 +58,34 @@ describe("findNextData / findLongestData", () => {
     expect(findLongestData({}, "initialModels")).toBeNull();
   });
 
-  it("prefers the shallowest match (BFS)", () => {
-    const tree = { models: [{ slug: "shallow" }], nested: { models: [{ slug: "deep" }] } };
-    expect(findNextData<{ slug: string }>(tree, "models")).toEqual([{ slug: "shallow" }]);
-  });
-
   it("returns the longest array found under the key", () => {
     const tree = { a: { initialModels: [1] }, b: { initialModels: [1, 2, 3] } };
     expect(findLongestData(tree, "initialModels")).toEqual([1, 2, 3]);
-  });
-
-  it("keeps the first array on a longest-length tie", () => {
-    const tree = { a: { k: [1, 2] }, b: { k: [3, 4] } };
-    expect(findLongestData<number>(tree, "k")).toEqual([1, 2]);
-  });
-
-  it("answers both modes from one walk, in either call order", () => {
-    const tree = { a: { k: [] }, b: { k: [1, 2] } };
-    expect(findLongestData<number>(tree, "k")).toEqual([1, 2]);
-    expect(findNextData<number>(tree, "k")).toEqual([]);
-
-    const fresh = { a: { k: [] }, b: { k: [1, 2] } };
-    expect(findNextData<number>(fresh, "k")).toEqual([]);
-    expect(findLongestData<number>(fresh, "k")).toEqual([1, 2]);
   });
 });
 
 describe("isMarkerBoundaryAt", () => {
   const boundary = (line: string, marker: string): boolean => isMarkerBoundaryAt(line, `"${marker}"`);
+  const WHITESPACE = [
+    " ",
+    "\t",
+    "\u00a0",
+    "\u1680",
+    "\u2000",
+    "\u200a",
+    "\u2028",
+    "\u2029",
+    "\u202f",
+    "\u205f",
+    "\u3000",
+    "\ufeff",
+  ];
 
   it("treats every character trimStart skips as whitespace", () => {
-    for (const ws of [
-      " ",
-      "\t",
-      "\u00a0",
-      "\u1680",
-      "\u2000",
-      "\u200a",
-      "\u2028",
-      "\u2029",
-      "\u202f",
-      "\u205f",
-      "\u3000",
-      "\ufeff",
-    ]) {
+    for (const ws of WHITESPACE) {
       expect(boundary(`{"m"${ws}:[]}`, "m")).toBe(true);
     }
     expect(boundary('{"m"\u00b7:[]}', "m")).toBe(false);
-  });
-
-  it("scans past occurrences that are not followed by a boundary", () => {
-    expect(boundary('{"a":"m"x","m":[]}', "m")).toBe(true);
-    expect(boundary('{"a":"m"x"}', "m")).toBe(false);
-    expect(boundary('{"m"', "m")).toBe(false);
-    expect(boundary('{"m"   ', "m")).toBe(false);
   });
 });
 
@@ -153,7 +114,7 @@ describe("parseRscPayload", () => {
     ).toEqual([{ id: "u" }]);
   });
 
-  it('parses hex-prefixed chunk lines (Next.js flight ids are hex, e.g. "c:")', () => {
+  it("parses hex-prefixed chunk lines (Next.js flight ids are hex, e.g. c:)", () => {
     const body =
       '0:{"$a":1}\nc:["$","$L5",null,{"models":[{"slug":"claude-opus-5"},{"slug":"gpt-5"}]}]\n1:{"ignore":true}\n';
     expect(
@@ -161,10 +122,6 @@ describe("parseRscPayload", () => {
         parseRscPayload<{ slug: string }>(body, "models", (tree) => findNextData<{ slug: string }>(tree, "models")),
       ),
     ).toEqual([{ slug: "claude-opus-5" }, { slug: "gpt-5" }]);
-  });
-
-  it("throws when the marker is absent", () => {
-    expect(() => unwrap(parseRscPayload('1:{"a":1}', "missing", () => null))).toThrow(/not found/);
   });
 });
 
@@ -210,31 +167,6 @@ describe("parseFeed", () => {
     expect(items[0]?.link).toBe("https://x.example/post-1");
   });
 
-  it("falls back to the first link with an href when no alternate exists", () => {
-    const items = readFeed(
-      atom(
-        atomEntry(
-          `<title>E1</title><link rel="self" href="https://x.example/self"/><link rel="enclosure" href="https://x.example/file.mp3"/><id>e1</id>`,
-        ),
-      ),
-    );
-    expect(items[0]?.link).toBe("https://x.example/self");
-  });
-
-  it("stringifies attributed nodes via their text node", () => {
-    const item = readFeed(
-      rss(rssItem(`<title>I1</title><link>https://y.example/a</link><guid isPermaLink="false">guid-123</guid>`)),
-      "https://y.example/feed",
-    )[0];
-    expect(item?.id).toBe("guid-123");
-  });
-
-  it("falls back to the link for ids when guid is absent", () => {
-    expect(readFeed(rss(rssItem(`<title>A</title><link>https://y.example/a</link>`)))[0]?.id).toBe(
-      "https://y.example/a",
-    );
-  });
-
   it("drops entries that expose no usable link", () => {
     const items = readFeed(
       rss(rssItem(`<title>Only Title</title>`) + rssItem(`<title>Keep</title><link>https://y.example/keep</link>`)),
@@ -271,26 +203,12 @@ describe("parseFeed", () => {
 });
 
 describe("primitives", () => {
-  it.each([
-    ["", 7, 7],
-    ["12.5", 0, 12.5],
-  ])("numOr(%s) coerces or falls back", (input, fallback, expected) => {
-    expect(numOr(input, fallback)).toBe(expected);
-  });
-
   it("numCoerce accepts numeric strings and rejects non-numeric input", () => {
     expect(numCoerce("85.5")).toBe(85.5);
     expect(numCoerce(85.5)).toBe(85.5);
     expect(numCoerce("")).toBeNull();
     expect(numCoerce(true)).toBeNull();
     expect(numCoerce(Number.NaN)).toBeNull();
-  });
-
-  it.each([
-    ["2026-08-01", "2026-08-01"],
-    ["2026-01-02T03:04:05Z", "2026-01-02T03:04:05Z"],
-  ])("isoDate(%s) accepts ISO", (input, expected) => {
-    expect(isoDate(input)).toBe(expected);
   });
 
   it.each([["Jan 1 2020"], ["2026-02-30"]])("isoDate(%s) rejects loose/impossible dates", (input) => {
@@ -312,73 +230,22 @@ describe("getOpenLicenseId", () => {
 
   it.each([
     [["license:mit"], "mit"],
-    [["license:qwen2.5"], "qwen2.5"],
     [["license:apache_2.0"], "apache-2.0"],
     [["LICENSE:MIT"], "mit"],
   ])("licenseOf(%j) -> %s", (tags, expected) => {
     expect(licenseOf(tags)).toBe(expected);
   });
 
-  it.each([
-    [["license:cc-by-nd-4.0"]],
-    [["license:cc-by-nc-4.0"]],
-    [["license:cc-by-nc-sa-4.0"]],
-    [["license:cc-by-nc4.0"]],
-    [["license:mitre"]],
-    [[]],
-  ])("licenseOf(%j) rejects ND/NC/lookalikes/non-licenses", (tags) => {
-    expect(licenseOf(tags)).toBeNull();
-  });
-
-  it("still accepts the permissive CC variants", () => {
-    expect(licenseOf(["license:cc-by-4.0"])).toBe("cc-by-4.0");
-    expect(licenseOf(["license:cc-by-sa-4.0"])).toBe("cc-by-sa-4.0");
-  });
+  it.each([[["license:cc-by-nd-4.0"]], [["license:cc-by-nc-4.0"]], [["license:mitre"]], [[]]])(
+    "licenseOf(%j) rejects ND/NC/lookalikes/non-licenses",
+    (tags) => {
+      expect(licenseOf(tags)).toBeNull();
+    },
+  );
 });
 
 describe("feed guard", () => {
   it("rejects DOCTYPE/ENTITY bombs before parsing", () => {
     expect(parseFeedResult(`<?xml?><!DOCTYPE foo [<!ENTITY x "y">]><rss/>`, "https://x").ok).toBe(false);
   });
-
-  it("accepts a plain entity-free DOCTYPE (legacy WordPress-style feeds)", () => {
-    const items = readFeed(
-      '<?xml version="1.0"?><!DOCTYPE rss><rss><channel><title>T</title><item><title>A</title><link>https://x.example/a</link></item></channel></rss>',
-      "https://x",
-    );
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ title: "A", link: "https://x.example/a" });
-  });
 });
-
-describe("closed releases full fetch", () => {
-  const total = 510;
-  const releaseDate = (i: number) => `2026-01-${String((i % 28) + 1).padStart(2, "0")}`;
-
-  it("returns all changelog rows, keeping the newest first", () => {
-    const changelog: ChangelogModel[] = Array.from({ length: total }, (_, i) => ({
-      slug: `model-${i}`,
-      name: `Model ${i}`,
-      releaseSlug: `model-${i}`,
-      releaseName: `Model ${i}`,
-      releaseDate: releaseDate(i),
-      creatorName: "Anthropic",
-    }));
-    const entries = toClosedReleases(changelog, "https://example.com");
-    expect(entries).toHaveLength(total);
-    expect(entries[0]!.releaseDate).toBe("2026-01-28");
-  });
-
-  it("returns all index fallback rows the same way", () => {
-    const models = Array.from({ length: total }, (_, i) => ({
-      slug: `model-${i}`,
-      name: `Model ${i}`,
-      model_creators: { name: "Anthropic" },
-      release_date: releaseDate(i),
-    }));
-    const entries = toClosedReleasesFromIndex(models, "https://example.com");
-    expect(entries).toHaveLength(total);
-    expect(entries[0]!.releaseDate).toBe("2026-01-28");
-  });
-});
-

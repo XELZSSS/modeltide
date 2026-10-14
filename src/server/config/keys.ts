@@ -15,8 +15,9 @@ export const cacheKeys = {
   aaModelsEnrich: cacheKey("artificialIndex", "models-enrich"),
   aaOmniscienceEnrich: cacheKey("artificialIndex", "omniscience-enrich"),
   homeDashboard: cacheKey("homeDashboard"),
+  homeOpenSource: (sort: string, direction: string) => cacheKey("homeDashboard", "opensource", sort, direction),
   openSourceModels: (sort: string, direction: string) => cacheKey("openSourceModels", sort, direction),
-  openSourceModelsTop: (sort: string, direction: string) => cacheKey("openSourceModels", sort, direction, "top"),
+
   openSourceModel: (id: string) => {
     const trimmed = id.trim();
     return cacheKey("openSourceModel", "by-id", `h:${modelIdHash(trimmed)}`);
@@ -25,6 +26,6 @@ export const cacheKeys = {
   openRouterRankings: cacheKey("openRouterRankings"),
   openRouterPricing: cacheKey("openRouterRankings", "pricing-map", "per-million"),
   closedReleases: cacheKey("closedReleases"),
-  agentRankings: cacheKey("agentRankings"),
+
   textToImage: cacheKey("artificialIndex", "text-to-image"),
 } as const;

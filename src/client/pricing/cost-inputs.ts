@@ -3,8 +3,8 @@ import type { TranslationKey } from "@/shared/i18n";
 import { monthlyCostFor } from "@/shared/utils";
 import { parseCostFields, type CostFieldValues } from "@/shared/pricing/scenario";
 import { modelId } from "@/shared/utils/models";
-import { resolveEffectivePricing } from "@/shared/utils/pricing";
 import { useCostStore } from "@/client/stores";
+
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 export const COST_FIELDS = [
@@ -55,15 +55,4 @@ export function useMonthlyCosts(models: MaybeRefOrGetter<ArtificialAnalysisModel
   });
 
   return { ...estimator, monthlyCosts };
-}
-
-export function useEffectivePricingMap(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>) {
-  return computed(() => {
-    const map = new Map<string, ReturnType<typeof resolveEffectivePricing>>();
-    for (const model of toValue(models)) {
-      const key = modelId(model);
-      if (key) map.set(key, resolveEffectivePricing(model.pricing));
-    }
-    return map;
-  });
 }

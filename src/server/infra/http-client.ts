@@ -2,23 +2,28 @@ import { MAX_JSON_BYTES, PROBE_TIMEOUT_MS, UPSTREAM_FETCH_OPTS, USER_AGENT } fro
 import { fetchPolicy } from "@/server/config/fetch-policies";
 import { upstreamUrl } from "@/server/config/upstream";
 import { ClientAbortError, UpstreamError, errMsg } from "@/server/infra/errors";
-import { acquireSlot, createSlotPools, releaseSlot, type SlotPool, type SlotPools } from "@/server/infra/connection-pool";
+import {
+  acquireSlot,
+  createSlotPools,
+  releaseSlot,
+  type SlotPool,
+  type SlotPools,
+} from "@/server/infra/connection-pool";
 import { fetchBodyText, parseJsonBody, type JsonResponse } from "@/server/infra/body-readers";
 import { parseRetryAfterMs, computeBackoff, sleepAbortable } from "@/server/infra/retry";
 
-export interface FetchOptions extends Omit<RequestInit, "headers"> {
+type FetchOptions = Omit<RequestInit, "headers"> & {
   timeoutMs?: number;
   retries?: number;
   headers?: Record<string, string>;
-}
+};
 
-export interface ProbeResult {
+interface ProbeResult {
   ok: boolean;
   status: number | null;
   latencyMs: number | null;
   error: string | null;
 }
-
 function buildHeaders(userAgent: string, accept: string, extra?: Record<string, string>): Record<string, string> {
   return { "user-agent": userAgent, accept, ...extra };
 }
@@ -30,7 +35,7 @@ export interface JsonPage<T> {
 
 const NEXT_LINK_RE = /<([^>]+)>\s*;\s*rel="next"/;
 
-export function nextLinkUrl(linkHeader: string | null): string | null {
+function nextLinkUrl(linkHeader: string | null): string | null {
   if (!linkHeader) return null;
   const match = NEXT_LINK_RE.exec(linkHeader);
   return match?.[1] ? match[1] : null;
@@ -91,7 +96,13 @@ function classifyResponse(res: Response, url: string): AttemptOutcome<never> {
   if (res.status >= 400 && res.status < 500 && res.status !== 408) {
     return { kind: "throw", error: new UpstreamError(`HTTP ${res.status} for ${url}`, { status: res.status }) };
   }
-  return { kind: "fail", message: `HTTP ${res.status} for ${url}`, cause: undefined, status: res.status, timedOut: false };
+  return {
+    kind: "fail",
+    message: `HTTP ${res.status} for ${url}`,
+    cause: undefined,
+    status: res.status,
+    timedOut: false,
+  };
 }
 
 export class HttpClient {
@@ -197,7 +208,12 @@ export class HttpClient {
       const outcome = await this.withSlot(
         signal,
         () => this.attemptFetch(url, headers, read, signal, deadline, initSignal, rest),
-        (): AttemptOutcome<T> => ({ kind: "abort" }),
+        // Losing the slot race is either the caller hanging up or this attempt's
+        // own deadline; only the deadline should report as a 504 upstream timeout.
+        (): AttemptOutcome<T> =>
+          initSignal?.aborted
+            ? { kind: "throw", error: new ClientAbortError(`Client aborted fetch for ${url}`) }
+            : { kind: "abort" },
       );
       if (outcome.kind === "return") return outcome.value;
       if (outcome.kind === "throw") throw outcome.error;
@@ -207,7 +223,7 @@ export class HttpClient {
       if (attempt === retries) throw finalError(url, outcome);
       await sleepAbortable(computeBackoff(attempt), initSignal);
       if (initSignal?.aborted) {
-        throw new UpstreamError(`Upstream deadline exceeded for ${url}`, { timeout: true });
+        throw new ClientAbortError(`Client aborted fetch for ${url}`);
       }
     }
     throw new UpstreamError(`HTTP failed for ${url}`);
@@ -219,11 +235,8 @@ export class HttpClient {
     maxBytes: number,
     wrap: (res: Response, body: T) => R,
   ): Promise<R> {
-    return this.doFetch(
-      url,
-      { ...UPSTREAM_FETCH_OPTS, ...init },
-      "application/json",
-      async (res, signal) => wrap(res, await parseJsonBody<T>(url, res, maxBytes, signal)),
+    return this.doFetch(url, { ...UPSTREAM_FETCH_OPTS, ...init }, "application/json", async (res, signal) =>
+      wrap(res, await parseJsonBody<T>(url, res, maxBytes, signal)),
     );
   }
 

@@ -24,14 +24,3 @@ export function parseCostFields(values: CostFieldValues): CostScenario {
     daysPerMonth: Math.max(1, numOr(values.daysPerMonth, 0)),
   };
 }
-
-export function formatScenario(s: CostScenario): CostFieldValues {
-  return {
-    dailyInput: String(s.dailyInputM),
-    dailyOutput: String(s.dailyOutputM),
-    dailyReasoning: String(s.dailyReasoningM),
-    cacheHitRate: String(s.cacheHitRate * 100),
-    cacheWriteRate: String(s.cacheWriteRate * 100),
-    daysPerMonth: String(s.daysPerMonth),
-  };
-}

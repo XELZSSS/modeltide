@@ -3,7 +3,7 @@ import { historyIndex, isPopstateNavigation } from "@/client/router";
 
 const SCROLL_RESTORE_WINDOW_MS = 5_000;
 
-export function createScrollStore(): {
+function createScrollStore(): {
   record: (main: HTMLElement | null) => void;
   restore: (main: HTMLElement | null) => () => void;
 } {

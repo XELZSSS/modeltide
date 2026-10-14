@@ -8,7 +8,7 @@
     "gen:cache-version": "node scripts/gen-cache-version.cjs",
     "gen:cache-version:check": "node scripts/gen-cache-version.cjs --check",
     "build": "node scripts/gen-cache-version.cjs && node scripts/bundle-functions.mjs && vite build",
-    "build:ci": "npm run type-check && npm run lint && npm run build",
+    "build:ci": "npm run type-check && npm run lint && npm run gen:cache-version:check && npm run build",
     "preview": "npm run build && vite preview",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",
     "lint": "oxlint --vue-plugin --deny-warnings",

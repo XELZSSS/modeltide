@@ -93,7 +93,7 @@ export interface PreparedFields {
   tokens: string[][];
 }
 
-export function prepareFields(fields: (string | null | undefined)[]): PreparedFields {
+function prepareFields(fields: (string | null | undefined)[]): PreparedFields {
   const usable = usableFields(fields);
   const lower = usable.map((f) => f.toLowerCase());
   return { folded: usable.map(foldSearchStr), lower, tokens: lower.map(tokenize) };

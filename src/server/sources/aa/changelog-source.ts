@@ -5,7 +5,7 @@ import { parseChangelogModels, type ChangelogModel } from "@/server/parsers/aa/c
 import { getAaLeaderboardBody } from "./index-source";
 import { requireParsed } from "@/server/sources/pipeline";
 
-export interface ChangelogModels {
+interface ChangelogModels {
   models: ChangelogModel[];
   degraded: boolean;
 }

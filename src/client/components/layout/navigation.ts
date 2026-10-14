@@ -5,7 +5,7 @@ import type { NavGroup } from "@/client/config/route-meta";
 
 export { usePrefetch } from "@/client/hooks/use-prefetch";
 
-export interface NavItem {
+interface NavItem {
   path: string;
   group: NavGroup;
   label: string;
@@ -13,7 +13,7 @@ export interface NavItem {
   activePrefixes?: readonly string[];
 }
 
-export interface Navigation {
+interface Navigation {
   all: ComputedRef<NavItem[]>;
   mobilePrimary: ComputedRef<NavItem[]>;
   mobileMore: ComputedRef<NavItem[]>;

@@ -10,29 +10,59 @@ import {
   type RankingScanStats,
 } from "@/server/parsers/openrouter-aggregate";
 
+// Display names for the owners the live rankings actually serve (verified against
+// the 2026-10 payload: 86 distinct owners, 41 of which need a branded spelling).
+// Owners outside this map fall back to a title-cased form of their slug.
 const CREATORS: Record<string, string> = {
   anthropic: "Anthropic",
+  "arcee-ai": "Arcee AI",
+  assemblyai: "AssemblyAI",
+  baai: "BAAI",
+  bytedance: "ByteDance",
+  "bytedance-seed": "ByteDance Seed",
+  canopylabs: "Canopy Labs",
+  cerebras: "Cerebras",
   cohere: "Cohere",
   deepseek: "DeepSeek",
+  elevenlabs: "ElevenLabs",
+  fireworks: "Fireworks",
   google: "Google",
-  mistralai: "Mistral",
+  groq: "Groq",
+  heygen: "HeyGen",
+  "ibm-granite": "IBM Granite",
+  inclusionai: "InclusionAI",
+  intfloat: "intfloat",
   "meta-llama": "Meta",
   minimax: "MiniMax",
-  openai: "OpenAI",
-  qwen: "Qwen",
-  xiaomi: "Xiaomi",
-  groq: "Groq",
-  cerebras: "Cerebras",
-  fireworks: "Fireworks",
   moonshot: "Moonshot",
-  zhipu: "Zhipu",
+  moonshotai: "Moonshot AI",
+  "nace-ai": "Nace AI",
+  "nex-agi": "Nex AGI",
+  nvidia: "NVIDIA",
+  openai: "OpenAI",
+  "prism-ml": "Prism ML",
+  qwen: "Qwen",
+  rekaai: "Reka",
+  scaledown: "ScaleDown",
   stepfun: "StepFun",
+  thedrummer: "TheDrummer",
+  thinkingmachines: "Thinking Machines",
+  togethercomputer: "Together",
+  voyageai: "Voyage AI",
+  "x-ai": "xAI",
   xai: "xAI",
+  xiaomi: "Xiaomi",
+  "z-ai": "Z.ai",
+  zhipu: "Zhipu",
 };
 export function creatorFromSlug(slug: unknown): string {
   if (typeof slug !== "string" || !slug.trim()) return "Unknown";
   const slashAt = slug.indexOf("/");
-  const owner = (slashAt === -1 ? slug : slug.slice(0, slashAt)).trim();
+  // Upstream occasionally serves a bare model id with no `owner/` prefix (the
+  // duplicated text-embedding rows do). Titling the model id would invent a
+  // publisher that does not exist, so report it as unknown instead.
+  if (slashAt <= 0) return "Unknown";
+  const owner = slug.slice(0, slashAt).trim();
   if (!owner) return "Unknown";
   const lower = owner.toLowerCase();
   if (Object.hasOwn(CREATORS, lower)) return CREATORS[lower]!;
@@ -61,7 +91,7 @@ export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry[
   }
   return "general";
 }
-export function titleFromSlug(permaslug: unknown): string {
+function titleFromSlug(permaslug: unknown): string {
   if (typeof permaslug !== "string" || !permaslug.trim()) return "";
   const raw = permaslug.split("/").slice(1).join("/") || permaslug;
   return raw

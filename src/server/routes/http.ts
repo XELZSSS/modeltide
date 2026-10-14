@@ -1,7 +1,7 @@
 import { applyApiHeaders } from "@/server/http/headers";
 import { methodNotAllowedResponse, notFoundResponse, stripBodyForHead } from "@/server/routes/define-route";
 
-export function optionsResponse(): Response {
+function optionsResponse(): Response {
   const res = new Response(null, { status: 204 });
   res.headers.set("Allow", "GET, HEAD, OPTIONS");
   applyApiHeaders(res.headers);

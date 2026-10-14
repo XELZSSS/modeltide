@@ -1,6 +1,5 @@
 import type { ApiDomain } from "@/shared/config/paths";
 import type {
-  AgentRankEntry,
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
   HomeDashboardData,
@@ -15,8 +14,8 @@ export interface ApiContract {
   artificialIndex: ArtificialAnalysisModel[];
   homeDashboard: HomeDashboardData;
   news: NewsItem[];
-  agentRankings: AgentRankEntry[];
   openSourceModels: OpenSourceModelEntry[];
+
   closedReleases: ClosedReleaseEntry[];
   openSourceModel: OpenSourceModelEntry | null;
   openRouterRankings: OpenRouterRankEntry[];

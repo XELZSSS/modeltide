@@ -11,15 +11,18 @@ import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "./paging";
 import TableBody, { TableHeader } from "./desktop.vue";
 import MobileTableBody from "./mobile.vue";
 
-const props = withDefaults(defineProps<{
-  data: T[];
-  columns: DataTableColumn<T>[];
-  getRowId: (row: T) => string;
-  getRowName?: (row: T) => string;
-  getSearchFields: (row: T) => (string | null | undefined)[];
-  renderExpandedRow?: (row: T) => VNodeChild;
-  term?: string;
-}>(), { term: undefined });
+const props = withDefaults(
+  defineProps<{
+    data: T[];
+    columns: DataTableColumn<T>[];
+    getRowId: (row: T) => string;
+    getRowName?: (row: T) => string;
+    getSearchFields: (row: T) => (string | null | undefined)[];
+    renderExpandedRow?: (row: T) => VNodeChild;
+    term?: string;
+  }>(),
+  { term: undefined },
+);
 
 defineSlots<{ expandedRow?: (props: { row: T }) => VNodeChild }>();
 

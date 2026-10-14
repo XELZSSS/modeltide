@@ -1,11 +1,4 @@
-export {
-  upstreamConfig,
-  upstreamEndpoints,
-  USER_AGENT,
-  MAX_JSON_BYTES,
-  MAX_FEED_BYTES,
-  upstreamUrl,
-} from "./upstream";
+export { upstreamConfig, upstreamEndpoints, USER_AGENT, MAX_JSON_BYTES, MAX_FEED_BYTES, upstreamUrl } from "./upstream";
 export {
   PROBE_TIMEOUT_MS,
   UPSTREAM_MAX_CONNECTIONS,

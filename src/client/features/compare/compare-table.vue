@@ -73,7 +73,11 @@ function getWinner(
   <div v-if="isMobile" class="flex flex-col gap-3">
     <Card v-for="(model, index) in models" :key="modelKeyOf(model, index)">
       <CardContent compact class="flex flex-col gap-3">
-        <p class="flex items-center gap-2 text-sm font-medium truncate" :style="{ color: seriesColor(theme, index) }" :title="modelDisplayName(model)">
+        <p
+          class="flex items-center gap-2 text-sm font-medium truncate"
+          :style="{ color: seriesColor(theme, index) }"
+          :title="modelDisplayName(model)"
+        >
           <Dot size="sm" :color="seriesColor(theme, index)" />
           {{ modelDisplayName(model) }}
         </p>

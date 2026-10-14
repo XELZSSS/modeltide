@@ -9,12 +9,6 @@ export interface Env {
   CACHE?: KVNamespace;
 }
 
-export interface RequestScope {
-  log: Logger;
-  onDetach?: (work: Promise<unknown>) => void;
-  callerSignal?: AbortSignal;
-}
-
 export interface InfraScope {
   cache: CacheService;
   http: HttpClient;

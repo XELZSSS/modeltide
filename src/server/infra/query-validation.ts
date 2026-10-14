@@ -26,10 +26,6 @@ export const qEnum = <const V extends string>(values: readonly V[], d?: V): Enum
   values,
   ...(d === undefined ? {} : { default: d }),
 });
-export const qNum = (o: { default?: string; min?: number; max?: number; integer?: boolean } = {}): NumberSpec => ({
-  type: "number",
-  ...o,
-});
 export const qStr = (o: { default?: string; maxLength?: number } = {}): StringSpec => ({
   type: "string",
   ...o,

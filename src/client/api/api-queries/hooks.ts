@@ -1,6 +1,5 @@
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type {
-  AgentRankEntry,
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
   HallucinationRankingEntry,
@@ -20,14 +19,13 @@ import {
   type NormalizedHomeDashboard,
 } from "@/client/api/payload-normalize";
 import {
-  qAgent,
-  qArtificialRaw,
-  qClosedReleasesRaw,
-  qHomeDashboardRaw,
-  qNewsRaw,
-  qOpenSourceModel,
-  qOpenSourceModelsRaw,
-  qOpenRouter,
+  qArtificialList,
+  qClosedReleasesList,
+  qHomeDashboard,
+  qNewsList,
+  qOpenSourceModelById,
+  qOpenSourceModelsList,
+  qOpenRouterList,
 } from "./catalog";
 import type { QueryResult } from "./factory";
 
@@ -51,7 +49,7 @@ async function suspenseState<T>(query: SuspenseQueryLike, label: string): Promis
 }
 
 export function useArtificialRankings(enabled: MaybeRefOrGetter<boolean> = true) {
-  const query = qArtificialRaw.use(enabled);
+  const query = qArtificialList.use(enabled);
   const unwrapped = computed(() => unwrapListPartial<ArtificialAnalysisModel>(query.data.value, "artificialIndex"));
   const data = computed(() => unwrapped.value.data);
   const isError = computed(
@@ -68,47 +66,45 @@ export function useArtificialRankings(enabled: MaybeRefOrGetter<boolean> = true)
 }
 
 export async function useSuspenseArtificialRankings(): Promise<ComputedRef<ArtificialAnalysisModel[]>> {
-  const query = qArtificialRaw.use();
+  const query = qArtificialList.use();
   await query.suspense();
   return computed(() => unwrapList<ArtificialAnalysisModel>(query.data.value, "artificialIndex"));
 }
 
 export const useSuspenseArtificialRankingsState = () =>
-  suspenseState<ArtificialAnalysisModel>(qArtificialRaw.use(), "artificialIndex");
+  suspenseState<ArtificialAnalysisModel>(qArtificialList.use(), "artificialIndex");
 
 export async function useSuspenseHomeDashboard(): Promise<ComputedRef<NormalizedHomeDashboard>> {
-  const query = qHomeDashboardRaw.use();
+  const query = qHomeDashboard.use();
   await query.suspense();
   return computed(() => normalizeHomeDashboard(query.data.value));
 }
 
-export const useOpenRouterRankings = qOpenRouter.use;
+export const useOpenRouterRankings = qOpenRouterList.use;
 
 export async function useSuspenseOpenRouterRankings(): Promise<QueryResult<"openRouterRankings">> {
-  const query = qOpenRouter.use();
+  const query = qOpenRouterList.use();
   await query.suspense();
   return query;
 }
 
 export const useSuspenseOpenSourceModelsState = () =>
-  suspenseState<OpenSourceModelEntry>(qOpenSourceModelsRaw.use(), "openSourceModels");
+  suspenseState<OpenSourceModelEntry>(qOpenSourceModelsList.use(), "openSourceModels");
 
 export const useSuspenseOpenRouterRankingsState = () =>
-  suspenseState<OpenRouterRankEntry>(qOpenRouter.use(), "openRouterRankings");
+  suspenseState<OpenRouterRankEntry>(qOpenRouterList.use(), "openRouterRankings");
 
 export async function useSuspenseOpenSourceModel(id: string): Promise<ComputedRef<OpenSourceModelEntry | null>> {
-  const query = qOpenSourceModel(id).use();
+  const query = qOpenSourceModelById(id).use();
   await query.suspense();
   return computed(() => unwrapObject<OpenSourceModelEntry | null>(query.data.value, "openSourceModel") ?? null);
 }
 
 export const useSuspenseClosedReleasesState = () =>
-  suspenseState<ClosedReleaseEntry>(qClosedReleasesRaw.use(), "closedReleases");
+  suspenseState<ClosedReleaseEntry>(qClosedReleasesList.use(), "closedReleases");
 
 export const useSuspenseNewsState = (category: NewsCategory) =>
-  suspenseState<NewsItem>(qNewsRaw(category).use(), `news:${category}`);
-
-export const useSuspenseAgentRankingsState = () => suspenseState<AgentRankEntry>(qAgent.use(), "agentRankings");
+  suspenseState<NewsItem>(qNewsList(category).use(), `news:${category}`);
 
 export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true): {
   data: ComputedRef<OpenSourceModelEntry[]>;
@@ -116,7 +112,7 @@ export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true
   isError: ComputedRef<boolean>;
   error: ComputedRef<Error | null>;
 } {
-  const trending = qOpenSourceModelsRaw.use(enabled);
+  const trending = qOpenSourceModelsList.use(enabled);
   const unwrapped = computed(() => unwrapListPartial<OpenSourceModelEntry>(trending.data.value, "openSourceModels"));
   const data = computed(() =>
     dedupeBy(
@@ -155,12 +151,3 @@ export async function useSuspenseHallucinationRankings(): Promise<ComputedRef<Ha
   const models = await useSuspenseArtificialRankings();
   return useHallucinationRankings(models);
 }
-
-// Canonical List names — prefer these over the legacy *Models/*Rankings aliases above.
-export const useOpenSourceModelsList = useAllOpenSourceModels;
-export const useSuspenseArtificialRankingsList = useSuspenseArtificialRankingsState;
-export const useSuspenseOpenRouterRankingsList = useSuspenseOpenRouterRankingsState;
-export const useSuspenseOpenSourceModelsList = useSuspenseOpenSourceModelsState;
-export const useSuspenseClosedReleasesList = useSuspenseClosedReleasesState;
-export const useSuspenseNewsList = useSuspenseNewsState;
-export const useSuspenseAgentRankingsList = useSuspenseAgentRankingsState;

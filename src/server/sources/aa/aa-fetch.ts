@@ -1,17 +1,12 @@
 import type { AppContext } from "@/server/context";
-import { UPSTREAM_FETCH_OPTS, upstreamConfig } from "@/server/config";
+import { upstreamConfig } from "@/server/config";
 import { ClientAbortError, UpstreamError } from "@/server/infra/errors";
 import { logPartial } from "@/server/infra/logger";
 import { parseRscPayload } from "@/server/parsers/rsc-parser";
 import { cachedRaw } from "@/server/sources/pipeline";
 import { SLOW_TTL_MS } from "@/shared/config";
 
-export function fetchAaRsc(
-  ctx: AppContext,
-  path: string,
-  retries: number = UPSTREAM_FETCH_OPTS.retries,
-): Promise<string> {
-  void retries;
+export function fetchAaRsc(ctx: AppContext, path: string): Promise<string> {
   return ctx.http.getRsc(upstreamConfig.artificialAnalysis, path);
 }
 

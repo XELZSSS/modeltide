@@ -7,7 +7,6 @@ export const API_DOMAINS = {
   news: "news",
   openRouterRankings: "openrouter-rankings",
   closedReleases: "closed-releases",
-  agentRankings: "agent-rankings",
   homeDashboard: "home-dashboard",
 } as const;
 
@@ -35,7 +34,6 @@ export const queryKeys = {
   news: (category: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.news, category],
   openRouterRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.openRouterRankings],
   closedReleases: [...QUERY_KEY_PREFIX, API_DOMAINS.closedReleases],
-  agentRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.agentRankings],
   homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],
 } as const satisfies Record<ApiDomain, unknown>;
 
@@ -46,9 +44,5 @@ export const apiPaths = {
   news: `${API_PREFIX}/${API_DOMAINS.news}`,
   openRouterRankings: `${API_PREFIX}/${API_DOMAINS.openRouterRankings}`,
   closedReleases: `${API_PREFIX}/${API_DOMAINS.closedReleases}`,
-  agentRankings: `${API_PREFIX}/${API_DOMAINS.agentRankings}`,
   homeDashboard: `${API_PREFIX}/${API_DOMAINS.homeDashboard}`,
 } as const satisfies Record<ApiDomain, string>;
-
-export const STATIC_FILE_RE =
-  /\.(?:js|mjs|css|map|json|webmanifest|txt|xml|wasm|png|jpe?g|gif|svg|webp|avif|ico|bmp|woff2?|ttf|otf|eot)$/i;

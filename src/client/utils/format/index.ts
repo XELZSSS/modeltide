@@ -1,4 +1,5 @@
 export {
+  formatCompact,
   formatIndex,
   formatPercent,
   formatScore,

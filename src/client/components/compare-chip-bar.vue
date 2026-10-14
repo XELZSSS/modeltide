@@ -46,7 +46,9 @@ watch(
         :key="modelKeyOf(model, index)"
         class="pl-3 pr-1 py-1 text-sm normal-case tracking-normal text-text-primary hoverable:hover:border-text-tertiary/40"
       >
-        <span class="font-medium truncate max-w-36" :title="modelDisplayName(model)">{{ modelDisplayName(model) }}</span>
+        <span class="font-medium truncate max-w-36" :title="modelDisplayName(model)">{{
+          modelDisplayName(model)
+        }}</span>
         <button
           type="button"
           :aria-label="t('removeModel', { name: modelDisplayName(model) })"

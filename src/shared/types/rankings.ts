@@ -33,17 +33,6 @@ export interface OpenSourceModelEntry {
   tags: string[];
 }
 
-export interface AgentRankEntry {
-  rank: number;
-  id: string;
-  name: string;
-  creator: string;
-  score: number | null;
-  ciLower: number | null;
-  ciUpper: number | null;
-  license: string | null;
-}
-
 export interface ClosedReleaseEntry {
   id: string;
   model: string;

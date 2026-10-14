@@ -9,13 +9,13 @@ export function isHttpUrl(link: string): boolean {
   }
 }
 
-export function isProtocolRelative(href: string): boolean {
+function isProtocolRelative(href: string): boolean {
   return href.startsWith("//") || href.startsWith("/\\");
 }
 
 const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f\ufeff]/g; // oxlint-disable-line no-control-regex -- intentional URL sanitizer
 
-export function stripControlChars(s: string): string {
+function stripControlChars(s: string): string {
   return s.replace(CONTROL_CHARS_RE, "");
 }
 

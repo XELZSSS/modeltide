@@ -121,7 +121,10 @@ function main() {
     console.log(`gen:cache-version ok (${version})`);
     return;
   }
-  if (check) fail(`stale cache version (have ${existing.match(/"(sha-[^"]*)"/)?.[1] ?? "none"}, want ${version}): run npm run gen:cache-version`);
+  if (check)
+    fail(
+      `stale cache version (have ${existing.match(/"(sha-[^"]*)"/)?.[1] ?? "none"}, want ${version}): run npm run gen:cache-version`,
+    );
   fs.writeFileSync(OUT, content);
   console.log(`gen:cache-version updated (${version})`);
 }

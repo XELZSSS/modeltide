@@ -18,11 +18,7 @@ function cleanIds(raw: unknown): string[] {
 }
 
 function readCompareIds(): string[] {
-  const stored = loadPersistedState<{ compareIds?: unknown }>(
-    "session",
-    STORAGE_KEYS.compare,
-    COMPARE_STORE_VERSION,
-  );
+  const stored = loadPersistedState<{ compareIds?: unknown }>("session", STORAGE_KEYS.compare, COMPARE_STORE_VERSION);
   return cleanIds(stored.compareIds);
 }
 

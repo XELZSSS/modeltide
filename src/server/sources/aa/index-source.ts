@@ -45,10 +45,12 @@ const MODELS_ENRICH_BASE_FIELDS = [
   ...modalityWireNames,
 ];
 
-// Live RSC shapes (verified 2026-10): /models carries
-// omniscienceHallucinationRate but not medianCanonicalAnswerOutputSpeed /
-// omniscienceBreakdown / itbenchSre; /evaluations/omniscience is the reverse
-// (itbenchSre is covered there and on the leaderboard body).
+// Live RSC shapes (verified 2026-10): /models carries omniscienceHallucinationRate
+// and itBenchSre (camelCase; the same values the leaderboard already reports, so the
+// field is excluded below) but neither medianCanonicalAnswerOutputSpeed nor
+// omniscienceBreakdown; /evaluations/omniscience is the reverse and also carries
+// itbenchSre (lowercase). The leaderboard body carries both spellings' worth of data
+// through its mapped rows.
 const MODELS_PATH_FIELDS = [
   ...MODELS_ENRICH_BASE_FIELDS.filter((f) => f !== "itbenchSre"),
   "omniscienceHallucinationRate",
@@ -117,13 +119,20 @@ async function fetchIntelligenceIndex(
     throw new UpstreamError("Artificial Analysis: leaderboard fetch failed", { retryable: true });
   }
   const openRouterMeta = directoryMeta == null ? null : directoryMeta.meta;
-  const directoryPartial = directoryMeta == null || ("failed" in directoryMeta && directoryMeta.failed) || ("partial" in directoryMeta && directoryMeta.partial === true);
+  const directoryPartial =
+    directoryMeta == null ||
+    ("failed" in directoryMeta && directoryMeta.failed) ||
+    ("partial" in directoryMeta && directoryMeta.partial === true);
 
   const indexModels = requireParsed(parseLeaderboardModels(indexBody.value), ctx.log, "aa-leaderboard");
 
   const enrichFailures =
     [modelsEnrich, omniscienceEnrich].filter((leg) => leg?.failed).length + (openRouterMeta === null ? 1 : 0);
-  const merged = mergeBySlug(indexModels, (modelsEnrich?.rows ?? []) as Record<string, unknown>[], (omniscienceEnrich?.rows ?? []) as Record<string, unknown>[])
+  const merged = mergeBySlug(
+    indexModels,
+    (modelsEnrich?.rows ?? []) as Record<string, unknown>[],
+    (omniscienceEnrich?.rows ?? []) as Record<string, unknown>[],
+  )
     .map(compact)
     .filter((m) => isValidModelIdentity(m.id, m.slug, m.name));
   const ranked = merged.sort(byNumberDesc((m) => m.intelligence_index));

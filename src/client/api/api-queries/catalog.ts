@@ -37,7 +37,11 @@ export const qOpenSourceModelsList = createApiQuery("openSourceModels", queryKey
   query: openSourceModelsQueryString(),
 });
 
-function memoQuery<K extends string, T>(max: number, resolveKey: (input: string) => K, create: (key: K) => T): (input: string) => T {
+function memoQuery<K extends string, T>(
+  max: number,
+  resolveKey: (input: string) => K,
+  create: (key: K) => T,
+): (input: string) => T {
   const entries = new Map<K, T>();
   return (input: string) => {
     const key = resolveKey(input);
@@ -59,18 +63,17 @@ function memoQuery<K extends string, T>(max: number, resolveKey: (input: string)
 
 type NewsQuery = ReturnType<typeof createApiQuery<"news">>;
 
-export const qNewsList = memoQuery<NewsCategory, NewsQuery>(8, (category) => (isNewsCategory(category) ? category : "industry"), (resolved) =>
-  createApiQuery("news", queryKeys.news(resolved), {
-    ttl: NEWS_TTL_MS,
-    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
-    isPartialData: isPartialPayload,
-    query: { category: resolved },
-  }),
+export const qNewsList = memoQuery<NewsCategory, NewsQuery>(
+  8,
+  (category) => (isNewsCategory(category) ? category : "industry"),
+  (resolved) =>
+    createApiQuery("news", queryKeys.news(resolved), {
+      ttl: NEWS_TTL_MS,
+      partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+      isPartialData: isPartialPayload,
+      query: { category: resolved },
+    }),
 );
-
-export const qAgentList = createApiQuery("agentRankings", queryKeys.agentRankings, {
-  ttl: SLOW_TTL_MS,
-});
 
 export const qClosedReleasesList = createApiQuery("closedReleases", queryKeys.closedReleases, {
   ttl: STATIC_TTL_MS,
@@ -89,13 +92,3 @@ export const qOpenSourceModelById: (id: string) => OpenSourceModelQuery = memoQu
       query: { id },
     }),
 );
-
-// Legacy aliases — prefer the *List names above.
-export const qArtificialRaw = qArtificialList;
-export const qOpenRouter = qOpenRouterList;
-export const qHomeDashboardRaw = qHomeDashboard;
-export const qOpenSourceModelsRaw = qOpenSourceModelsList;
-export const qNewsRaw = qNewsList;
-export const qAgent = qAgentList;
-export const qClosedReleasesRaw = qClosedReleasesList;
-export const qOpenSourceModel = qOpenSourceModelById;

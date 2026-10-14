@@ -20,10 +20,9 @@ export interface HomeProviderStat {
 
 const TOP_ROWS = 5;
 
-const topRows = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] =>
-  items.slice(0, TOP_ROWS).map(map);
+const topRows = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, TOP_ROWS).map(map);
 
-export interface HomeStats {
+interface HomeStats {
   trendingStats: ComputedRef<HomeBarStat[]>;
   hallucinationStats: ComputedRef<HomeBarStat[]>;
   providerStats: ComputedRef<HomeProviderStat[]>;

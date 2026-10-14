@@ -36,15 +36,10 @@ const columns = computed<DataTableColumn<ReleaseRow>[]>(() => [
       ]),
     ]),
   ),
-  rightCol(
-    "provider",
-    translate("provider"),
-    (row) => h(RightAlignedText, { class: "text-sm" }, () => row.provider),
-    {
-      width: "24%",
-      hiddenMd: true,
-    },
-  ),
+  rightCol("provider", translate("provider"), (row) => h(RightAlignedText, { class: "text-sm" }, () => row.provider), {
+    width: "24%",
+    hiddenMd: true,
+  }),
   rightCol(
     "releaseDate",
     translate("releaseDate"),

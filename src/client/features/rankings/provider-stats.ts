@@ -3,7 +3,7 @@ import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { computeProviderStats, type ProviderStats } from "@/shared/utils/models";
 
-export type ProviderSortBy = "count" | "speed";
+type ProviderSortBy = "count" | "speed";
 
 export function useProviderStats(
   models: MaybeRefOrGetter<ArtificialAnalysisModel[]>,

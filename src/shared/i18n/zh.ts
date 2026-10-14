@@ -186,8 +186,13 @@ export const zh = {
   benchmarkAutomationBench: "AutomationBench",
   benchmarkCritpt: "CritPT",
   benchmarkApexAgents: "APEX Agents",
+  benchmarkBriefcaseElo: "Briefcase Elo",
+  benchmarkCweBench: "CWE-Bench",
+  benchmarkCyberIndex: "CyberIndex",
+  benchmarkDeepsecBench: "DeepSec Bench",
   benchmarkItbenchSre: "ITBench SRE",
   benchmarkTerminalbenchV2_1: "TerminalBench v2.1",
+  benchmarkTerminalbenchScience: "TerminalBench Science",
   benchmarkTauBanking: "TAU Banking",
 
   elo: "ELO",
@@ -210,9 +215,7 @@ export const zh = {
   langEn: "EN",
   navReleases: "发布",
 
-  agentRankings: "智能体",
-  agentSource: "数据来源：Arena",
-
   score: "分数",
+
   compareStale: "部分已选模型已下线，已自动移除。",
 } as const satisfies Record<keyof EnDict, string>;

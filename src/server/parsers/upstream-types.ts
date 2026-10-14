@@ -67,16 +67,6 @@ export interface RawEntry {
   creator?: unknown;
 }
 
-export interface AgentSignalEntry {
-  contenderName?: unknown;
-  model?: unknown;
-  modelOrganization?: unknown;
-  license?: unknown;
-  score?: unknown;
-  ciLower?: unknown;
-  ciUpper?: unknown;
-}
-
 export interface ChangelogModelEntry {
   slug?: unknown;
   name?: unknown;

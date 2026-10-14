@@ -40,11 +40,7 @@ function wakeWaiters(pools: SlotPools, pool: SlotPool): void {
   }
 }
 
-export async function acquireSlot(
-  signal: AbortSignal | undefined,
-  pools: SlotPools,
-  pool: SlotPool,
-): Promise<void> {
+export async function acquireSlot(signal: AbortSignal | undefined, pools: SlotPools, pool: SlotPool): Promise<void> {
   const sibling = pool === pools.background ? pools.interactive : pools.background;
   if (signal?.aborted) return Promise.reject(signal.reason);
   if (pool.active < poolLimit(pool, sibling)) {

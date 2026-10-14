@@ -1,7 +1,7 @@
 import type { TFunction, TranslationKey } from "@/shared/i18n";
 import { titleCase } from "@/shared/utils/text";
 
-export const TASK_SLICE_LIMIT = 5;
+const TASK_SLICE_LIMIT = 5;
 export const OTHER_TASK_KEY = "__other__";
 
 export interface TaskSlice {
@@ -9,7 +9,7 @@ export interface TaskSlice {
   total: number;
 }
 
-export const TASK_LABEL_KEYS: Record<string, TranslationKey> = {
+const TASK_LABEL_KEYS: Record<string, TranslationKey> = {
   "text-generation": "taskTextGeneration",
   "text-to-image": "taskTextToImage",
   "image-text-to-text": "taskImageTextToText",

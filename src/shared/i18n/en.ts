@@ -185,8 +185,13 @@ export const en = {
   benchmarkAutomationBench: "AutomationBench",
   benchmarkCritpt: "CritPT",
   benchmarkApexAgents: "APEX Agents",
+  benchmarkBriefcaseElo: "Briefcase Elo",
+  benchmarkCweBench: "CWE-Bench",
+  benchmarkCyberIndex: "CyberIndex",
+  benchmarkDeepsecBench: "DeepSec Bench",
   benchmarkItbenchSre: "ITBench SRE",
   benchmarkTerminalbenchV2_1: "TerminalBench v2.1",
+  benchmarkTerminalbenchScience: "TerminalBench Science",
   benchmarkTauBanking: "TAU Banking",
 
   elo: "ELO",
@@ -209,10 +214,8 @@ export const en = {
   langEn: "EN",
   navReleases: "Releases",
 
-  agentRankings: "Agent",
-  agentSource: "Data Source: Arena",
-
   score: "Score",
+
   compareStale: "Some selected models are no longer listed and were removed.",
 } as const;
 

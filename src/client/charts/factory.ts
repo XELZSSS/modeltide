@@ -1,9 +1,9 @@
 import type { Chart as ChartJS, TooltipOptions } from "chart.js";
 import type { ChartTheme } from "./tokens";
 
-export const CHART_FONT_FAMILY =
+const CHART_FONT_FAMILY =
   "'IBM Plex Sans', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif";
-export const CHART_FONT_SIZE = 12;
+const CHART_FONT_SIZE = 12;
 
 export function applyChartDefaults(chart: typeof ChartJS): void {
   chart.defaults.font.family = CHART_FONT_FAMILY;

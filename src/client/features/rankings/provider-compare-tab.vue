@@ -14,7 +14,10 @@ const state = await useSuspenseArtificialRankingsState();
 
 const { t } = useTranslation();
 
-const providerStats = useProviderStats(computed(() => state.value.items), t);
+const providerStats = useProviderStats(
+  computed(() => state.value.items),
+  t,
+);
 
 const columns = computed<DataTableColumn<ProviderStats>[]>(() => [
   col("name", t("provider"), (p) => h(LabeledDot, { color: p.color, title: p.name }, () => p.name)),

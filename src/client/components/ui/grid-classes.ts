@@ -1,7 +1,5 @@
 import { cn } from "@/client/utils/cn";
 
-export const GRID_BASE = "grid gap-3 sm:gap-4";
-
 export const STAT_GRID_COLS = { 2: "grid-cols-2", 4: "grid-cols-2 md:grid-cols-4" } as const;
 
 export const INFO_GRID_COLS = "grid-cols-1 md:grid-cols-2";

@@ -59,23 +59,12 @@ function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
   );
 }
 
-export function directoryRowPricing(raw: unknown): PricingEntry | null {
-  if (!isValidOpenRouterDirectoryRow(raw)) return null;
-  return pricingOfValidRow(raw as unknown as PricingRow);
-}
-
 const DYNAMIC_PRICING = -1;
 
-function dynamicPricingOfValidRow(raw: PricingRow): boolean {
+function hasDynamicPricing(raw: PricingRow): boolean {
   const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
   return numCoerce(pricing.prompt) === DYNAMIC_PRICING && numCoerce(pricing.completion) === DYNAMIC_PRICING;
 }
-
-export function hasDynamicPricing(raw: unknown): boolean {
-  if (!isValidOpenRouterDirectoryRow(raw)) return false;
-  return dynamicPricingOfValidRow(raw as unknown as PricingRow);
-}
-
 function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
   return {
     intelligenceIndex: target.intelligenceIndex ?? patch.intelligenceIndex,
@@ -118,7 +107,7 @@ export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
           if (pricingRecord[index] === undefined) pricingRecord[index] = pricingEntry;
         }
       }
-    } else if (dynamicPricingOfValidRow(m)) {
+    } else if (hasDynamicPricing(m)) {
       // Dynamic pricing is intentional and not a pricing gap.
     } else {
       missingPricing++;

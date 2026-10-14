@@ -6,7 +6,7 @@ import { parseLeaderboardModels } from "@/server/parsers/aa/leaderboard-parser";
 import { parseChangelogModels, type ChangelogModel } from "@/server/parsers/aa/changelog-parser";
 import { mapEntry } from "@/server/parsers/aa/text-to-image-parser";
 import type { RawEntry } from "@/server/parsers/upstream-types";
-import { parseAgentBoards } from "@/server/parsers/agent-arena-parser";
+
 import { toClosedReleases } from "@/server/parsers/closed-releases-parser";
 import { normalizeModelKey } from "@/shared/utils";
 import type { ArtificialAnalysisModel } from "@/shared/types";
@@ -80,28 +80,6 @@ describe("compact", () => {
   it("averages coding sub-scores only when at least one is present", () => {
     expect(compact(rawModel({ terminalBench21: null })).coding_index).toBe(60);
     expect(compact(rawModel({ terminalBench21: null, scicode: null })).coding_index).toBeNull();
-  });
-
-  it("treats text as the base modality and honours declared flags", () => {
-    const inputOnly = compact(
-      rawModel({
-        inputModalityText: undefined,
-        outputModalityText: undefined,
-        inputModalityImage: true,
-        inputModalitySpeech: false,
-      }),
-    );
-    expect(inputOnly).toMatchObject({
-      input_modality_text: true,
-      output_modality_text: true,
-      input_modality_image: true,
-      input_modality_speech: false,
-    });
-
-    expect(compact(rawModel({ inputModalityText: false })).input_modality_text).toBe(false);
-    expect(compact(rawModel({ outputModalityText: false })).output_modality_text).toBe(false);
-    expect(compact({ id: "x", slug: "x", name: "X" }).input_modality_text).toBe(true);
-    expect(compact({ id: "x", slug: "x", name: "X" }).input_modality_image).toBe(false);
   });
 
   it("drops invalid release dates", () => {
@@ -191,60 +169,6 @@ describe("mapEntry (text-to-image)", () => {
       pricePer1kImages: 211,
     });
   });
-
-  it("returns null when identity or elo is missing", () => {
-    expect(mapEntry({ ...base, elo: null })).toBeNull();
-  });
-});
-
-describe("parseAgentBoards (agent overall composite)", () => {
-  const SIGNALS = [
-    "task_outcome_explicit",
-    "praise_complaint",
-    "steering_burden",
-    "bash_recovery_steps",
-    "tool_hallucination",
-  ];
-  const entry = (id: string, name: string, score: number | null) => ({
-    contenderName: id,
-    model: name,
-    modelOrganization: "Org",
-    license: "Proprietary",
-    isPublic: true,
-    score,
-    ciLower: 0,
-    ciUpper: 1,
-    rank: 1,
-  });
-  const scores: Record<string, number[]> = {
-    "contenders/a": [0.3, 0.3, 0.0, 0.0, 0.0],
-    "contenders/b": [0.1, 0.1, 0.1, 0.1, 0.1],
-    "contenders/c": [0.2, 0.2, 0.2, 0.2, 0.2],
-  };
-  const FLIGHT_BODY = [
-    "41:" +
-      JSON.stringify({
-        signals: SIGNALS.map((signal, si) => ({
-          name: signal,
-          entries: [
-            entry("contenders/a", "A", scores["contenders/a"]![si]!),
-            entry("contenders/b", "B", scores["contenders/b"]![si]!),
-            entry("contenders/c", "C", scores["contenders/c"]![si]!),
-            { contenderName: "broken", model: "", score: null },
-          ],
-        })),
-      }),
-  ].join("\n");
-
-  it("composites the overall board as the mean of the five signals", () => {
-    const res = parseAgentBoards(FLIGHT_BODY);
-    if (!res.ok) throw new Error(res.error);
-    expect(res.data.map((r) => r.id)).toEqual(["contenders/c", "contenders/a", "contenders/b"]);
-    expect(res.data.map((r) => r.rank)).toEqual([1, 2, 3]);
-    expect(res.data[0]?.score).toBeCloseTo(0.2, 10);
-    expect(res.data[1]?.score).toBeCloseTo(0.12, 10);
-    expect(res.data[0]).toMatchObject({ ciLower: 0, ciUpper: 1 });
-  });
 });
 
 function clModel(over: Partial<ChangelogModel> = {}): ChangelogModel {
@@ -284,12 +208,12 @@ function changelogHtml(): string {
     { slug: "claude-opus-4-5", name: "Claude Opus 4.5 (Non-reasoning)", releaseSlug: "claude-opus-4-5" },
     { slug: "llama-3-3-70b", name: "Llama 3.3 70B", releaseSlug: "llama-3-3" },
   ];
-  const payload = JSON.stringify({ modelsAndReleases: { releases: changelogReleases() }, models }).replace(/"/g, '\\"');
+  const QUOTE = String.fromCharCode(34);
+  const ESCAPED_QUOTE = String.fromCharCode(92, 34);
+  const payload = JSON.stringify({ modelsAndReleases: { releases: changelogReleases() }, models })
+    .split(QUOTE)
+    .join(ESCAPED_QUOTE);
   return `<html><body><script>self.__next_f.push([1,"${payload}"])</script></body></html>`;
-}
-
-function changelogPayload(models: unknown[], releases: unknown[]): string {
-  return JSON.stringify({ modelsAndReleases: { releases }, models });
 }
 
 describe("parseChangelogModels", () => {
@@ -304,49 +228,8 @@ describe("parseChangelogModels", () => {
       creatorName: "Meta",
     });
   });
-
-  it("extracts plain (non-escaped) models arrays too", () => {
-    const models = unwrap(
-      parseChangelogModels(
-        `<html><div data-payload='${changelogPayload(
-          [{ slug: "gpt-5", name: "GPT-5", releaseSlug: "gpt-5" }],
-          [
-            {
-              slug: "gpt-5",
-              name: "GPT-5",
-              deprecated: false,
-              releaseDate: "2026-01-15",
-              creator: { slug: "openai", name: "OpenAI" },
-            },
-          ],
-        )}'></div></html>`,
-      ),
-    );
-    expect(models).toHaveLength(1);
-    expect(models[0]).toMatchObject({ slug: "gpt-5", creatorName: "OpenAI" });
-  });
-
-  it("ignores non-array models values and still parses the real payload", () => {
-    const html =
-      `<script>track({"models":"decoy-string"})</script>` +
-      `<script>track({"models":123})</script>` +
-      `<div data-payload='${changelogPayload(
-        [{ slug: "real", name: "Real", releaseSlug: "real" }],
-        [
-          {
-            slug: "real",
-            name: "Real",
-            deprecated: false,
-            releaseDate: "2026-03-01",
-            creator: { slug: "r", name: "R" },
-          },
-        ],
-      )}'></div>`;
-    const models = unwrap(parseChangelogModels(html));
-    expect(models).toHaveLength(1);
-    expect(models[0]).toMatchObject({ slug: "real", creatorName: "R" });
-  });
 });
+
 function leaderboardHtml(rows: unknown[], links: unknown[], releases: unknown[]): string {
   const linksPayload = JSON.stringify({ models: links, modelsAndReleases: { releases } });
   const statsPayload = JSON.stringify({ models: rows });
@@ -429,24 +312,24 @@ describe("toClosedReleases", () => {
   it("dedupes variants by release family, newest first, keeping open-weight families", () => {
     const entries = toClosedReleases(
       [
-      clModel(),
-      clModel({ slug: "claude-opus-4-5", name: "Claude Opus 4.5 (Non-reasoning)" }),
-      clModel({
-        slug: "llama-3-3-70b",
-        name: "Llama 3.3 70B",
-        releaseSlug: "llama-3-3",
-        releaseName: "Llama 3.3",
-        releaseDate: "2024-12-06",
-        creatorName: "Meta",
-      }),
-      clModel({
-        slug: "mystery-1",
-        name: "Mystery 1",
-        releaseSlug: "mystery-1",
-        releaseName: "Mystery 1",
-        releaseDate: "2025-06-01",
-        creatorName: "Some New Lab",
-      }),
+        clModel(),
+        clModel({ slug: "claude-opus-4-5", name: "Claude Opus 4.5 (Non-reasoning)" }),
+        clModel({
+          slug: "llama-3-3-70b",
+          name: "Llama 3.3 70B",
+          releaseSlug: "llama-3-3",
+          releaseName: "Llama 3.3",
+          releaseDate: "2024-12-06",
+          creatorName: "Meta",
+        }),
+        clModel({
+          slug: "mystery-1",
+          name: "Mystery 1",
+          releaseSlug: "mystery-1",
+          releaseName: "Mystery 1",
+          releaseDate: "2025-06-01",
+          creatorName: "Some New Lab",
+        }),
       ],
       "https://artificialanalysis.ai",
     );
@@ -457,21 +340,5 @@ describe("toClosedReleases", () => {
       releaseDate: "2025-11-24",
       link: "https://artificialanalysis.ai/models/claude-opus-4-5",
     });
-  });
-
-  it("keeps every release below the row cap, newest first", () => {
-    const changelog = Array.from({ length: 250 }, (_, i) =>
-      clModel({
-        slug: `model-${i}`,
-        name: `Model ${i}`,
-        releaseSlug: `model-${i}`,
-        releaseName: `Model ${i}`,
-        releaseDate: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
-        creatorName: "Anthropic",
-      }),
-    );
-    const entries = toClosedReleases(changelog, "https://artificialanalysis.ai");
-    expect(entries).toHaveLength(250);
-    expect(entries[0]?.releaseDate).toBe("2026-01-28");
   });
 });

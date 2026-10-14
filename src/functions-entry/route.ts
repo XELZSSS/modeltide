@@ -3,11 +3,11 @@ import { handleApiRoute } from "@/server/routes/define-route";
 import { methodResponse, notFoundForMethod } from "@/server/routes/http";
 import { SOURCES } from "@/server/sources/registry";
 
-export type RouteEntry = (typeof SOURCES)[number];
+type RouteEntry = (typeof SOURCES)[number];
 
 const ROUTES = new Map<string, RouteEntry>(SOURCES.map((source) => [source.path, source]));
 
-export function resolveRoute(pathname: string): RouteEntry | undefined {
+function resolveRoute(pathname: string): RouteEntry | undefined {
   return ROUTES.get(pathname);
 }
 

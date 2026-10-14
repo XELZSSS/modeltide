@@ -16,6 +16,10 @@ const { t } = useTranslation();
 
 <template>
   <PartialNotice v-if="props.state.partial" />
-  <EmptyState v-if="props.state.items.length === 0" variant="plain" :message="t(props.emptyMessageKey ?? 'noRankingsData')" />
+  <EmptyState
+    v-if="props.state.items.length === 0"
+    variant="plain"
+    :message="t(props.emptyMessageKey ?? 'noRankingsData')"
+  />
   <slot v-else />
 </template>

@@ -10,7 +10,7 @@ export const RANKING_TABS = [
   "openRouterRankings",
   "openSourceRankings",
   "hallucinationRankings",
-  "agentRankings",
+
   "providerCompare",
 ] as const;
 
@@ -49,7 +49,7 @@ export const RANKING_TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   openRouterRankings: MODEL_SOURCES.or.sourceLabelKey,
   openSourceRankings: MODEL_SOURCES.os.sourceLabelKey,
   hallucinationRankings: MODEL_SOURCES.hall.sourceLabelKey,
-  agentRankings: "agentSource",
+
   providerCompare: MODEL_SOURCES.aa.sourceLabelKey,
 };
 

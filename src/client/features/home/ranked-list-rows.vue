@@ -1,5 +1,5 @@
 <script setup lang="ts">
-export interface RankedRow {
+interface RankedRow {
   label: string;
   valueLabel: string;
   color?: string;

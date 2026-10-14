@@ -1,12 +1,8 @@
-import { buildContext } from "@/server/context";
-import type { Env } from "@/server/context";
-const UNKNOWN_QUERY_WARN_THROTTLE_MS = 30 * 60 * 1000;
-const UNKNOWN_QUERY_WARN_MAX_PATHS = 64;
-import { ApiError, ClientAbortError, UpstreamError, isTimeoutLike, errMsg } from "@/server/infra/errors";
+import { buildContext, type AppContext, type Env } from "@/server/context";
+import { ApiError, ClientAbortError, UpstreamError, errMsg, isTimeoutLike } from "@/server/infra/errors";
 import { keyedThrottleGate } from "@/server/infra/throttle";
 import { logger, type Logger } from "@/server/infra/logger";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "@/server/infra/query-validation";
-import type { AppContext } from "@/server/context";
 import type { ApiDomain, DomainPayload } from "@/shared/contract";
 import { API_VERSION_PARAM } from "@/shared/config/paths";
 import {
@@ -19,6 +15,9 @@ import {
   ifNoneMatchSatisfied,
   payloadEtag,
 } from "@/server/http/headers";
+
+const UNKNOWN_QUERY_WARN_THROTTLE_MS = 30 * 60 * 1000;
+const UNKNOWN_QUERY_WARN_MAX_PATHS = 64;
 
 function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string }): string {
   const browser = override?.browser ?? BROWSER_CACHE_HEADER;
@@ -88,8 +87,10 @@ export function stripBodyForHead(res: Response): Response {
   return new Response(null, { status: res.status, headers });
 }
 
-function mapApiError(err: unknown, method: string, path: string): Response {
-  if (err instanceof ClientAbortError) {
+function mapApiError(err: unknown, method: string, path: string, clientAborted: boolean): Response {
+  // A request the caller already dropped is not an upstream failure: report it as
+  // 499 instead of logging a misleading timeout for it.
+  if (clientAborted || err instanceof ClientAbortError) {
     return errorJson(499, "Client closed request");
   }
   if (isTimeoutLike(err)) {
@@ -144,6 +145,6 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
     }
     return req.method === "HEAD" ? new Response(null, { headers }) : Response.json(payload, { headers });
   } catch (err) {
-    return mapApiError(err, req.method, path);
+    return mapApiError(err, req.method, path, req.signal.aborted);
   }
 }

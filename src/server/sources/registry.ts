@@ -4,8 +4,8 @@ import { SHORT_CACHE_HEADERS } from "@/server/http/headers";
 import type { ApiDomain, DomainPayload } from "@/shared/contract";
 import { apiPaths, MAX_NAME_CHARS, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
 import { OPEN_SOURCE_SORTS, SORT_DIRECTIONS } from "@/shared/api/query-schemas";
-import { getAgentRankings } from "@/server/sources/agent-arena-source";
 import { getIntelligenceIndex } from "@/server/sources/aa";
+
 import { getClosedReleases } from "@/server/sources/closed-releases-source";
 import { getHomeDashboard } from "@/server/sources/home-source";
 import { getNews } from "@/server/sources/news-source";
@@ -18,19 +18,12 @@ interface SourceDefinition<D extends ApiDomain, Q extends QuerySchema> {
   handler(ctx: AppContext, params: ValidatedQuery<Q>): Promise<DomainPayload<D>>;
 }
 
-export interface SourceEntry<
-  D extends ApiDomain = ApiDomain,
-  Q extends QuerySchema = QuerySchema,
-> extends SourceDefinition<D, Q> {
+interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends SourceDefinition<
+  D,
+  Q
+> {
   readonly domain: D;
   readonly path: string;
-}
-
-export interface RouteTableEntry {
-  readonly domain: ApiDomain;
-  readonly path: string;
-  readonly query?: QuerySchema;
-  readonly cache?: { browser: string; cdn: string };
 }
 
 function defineSource<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
@@ -51,9 +44,7 @@ const ENTRIES = {
     query: { category: qEnum(NEWS_CATEGORIES, NEWS_CATEGORIES[0]) },
     handler: (ctx, params) => getNews(ctx, params.category),
   }),
-  agentRankings: defineSource("agentRankings", {
-    handler: (ctx) => getAgentRankings(ctx),
-  }),
+
   openSourceModels: defineSource("openSourceModels", {
     query: {
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
@@ -75,10 +66,3 @@ const ENTRIES = {
 } satisfies Record<ApiDomain, unknown>;
 
 export const SOURCES: readonly SourceEntry[] = Object.values(ENTRIES);
-
-export const ROUTE_TABLE: readonly RouteTableEntry[] = SOURCES.map(({ domain, path, query, cache }) => ({
-  domain,
-  path,
-  query,
-  cache,
-}));

@@ -13,7 +13,7 @@ export const DOC_META: Record<Lang, { html: string; og: string; ogAlternate: str
   en: { html: "en", og: "en_US", ogAlternate: "zh_CN" },
 };
 
-export function interpolate(template: string, params?: TranslationParams): string {
+function interpolate(template: string, params?: TranslationParams): string {
   if (!params) return template;
   return template.replace(/\{(\w+)\}/g, (match, key: string) => {
     const value = params[key];

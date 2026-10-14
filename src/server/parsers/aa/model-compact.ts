@@ -12,15 +12,20 @@ import { BENCHMARK_KEYS, MODALITY_KEYS, ABSOLUTE_SCORE_BENCHMARKS, type Benchmar
 import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
 import { clampedPercent, unclampedPercent } from "@/shared/utils";
 
-export const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
-  itbench_sre: "itbenchSre",
-  tau_banking: "tauBanking",
-  terminalbench_v2_1: "terminalBench21",
-  terminalbench_hard: "terminalbenchHard",
-  terminalbench_v4_0: "terminalBench40",
+const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   apex_agents: "apexAgents",
-  mmmu_pro: "mmmuPro",
   automation_bench: "automationBenchPartialScore",
+  briefcase_elo: "briefcaseElo",
+  cwe_bench: "cweBench",
+  cyber_index: "cyberIndex",
+  deepsec_bench: "deepsecBench",
+  itbench_sre: "itbenchSre",
+  mmmu_pro: "mmmuPro",
+  tau_banking: "tauBanking",
+  terminalbench_hard: "terminalbenchHard",
+  terminalbench_science: "terminalBenchScience",
+  terminalbench_v2_1: "terminalBench21",
+  terminalbench_v4_0: "terminalBench40",
 };
 
 function compactBenchmarks(m: Record<string, unknown>): Partial<Record<BenchmarkKey, number | null>> {

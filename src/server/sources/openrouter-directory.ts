@@ -38,7 +38,9 @@ export async function getModelDirectory(ctx: AppContext): Promise<DirectoryCache
   return toPartial(value, degraded);
 }
 
-export async function getModelDirectoryMeta(ctx: AppContext): Promise<{ meta: Record<string, ModelMetaEntry>; partial: boolean }> {
+export async function getModelDirectoryMeta(
+  ctx: AppContext,
+): Promise<{ meta: Record<string, ModelMetaEntry>; partial: boolean }> {
   const { meta, partial } = await getModelDirectory(ctx);
   return { meta, partial };
 }

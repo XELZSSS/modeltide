@@ -1,11 +1,11 @@
 import type { RouteRecordRaw } from "vue-router";
 import { Award, Home, Megaphone, Newspaper } from "@lucide/vue";
 import {
-  qArtificialRaw,
-  qClosedReleasesRaw,
-  qHomeDashboardRaw,
-  qNewsRaw,
-  qOpenRouter,
+  qArtificialList,
+  qClosedReleasesList,
+  qHomeDashboard,
+  qNewsList,
+  qOpenRouterList,
 } from "@/client/api/api-queries";
 import NotFoundView from "@/client/components/feedback/not-found.vue";
 import { DEFAULT_RANKING_TAB } from "@/client/config/nav-config";
@@ -33,7 +33,7 @@ const PriceCompareView = loadableView(loadPriceCompareView);
 const ReleasesView = loadableView(loadReleasesView);
 const NewsView = loadableView(loadNewsView);
 
-const newsPrefetch: readonly Prefetchable[] = [qNewsRaw(NEWS_CATEGORIES[0])];
+const newsPrefetch: readonly Prefetchable[] = [qNewsList(NEWS_CATEGORIES[0])];
 
 export { RANKING_TAB_QUERIES };
 
@@ -44,7 +44,7 @@ export const ROUTES: RouteRecordRaw[] = [
     component: HomeView,
     meta: {
       titleKey: "home",
-      prefetch: [qArtificialRaw, qHomeDashboardRaw, qClosedReleasesRaw],
+      prefetch: [qArtificialList, qHomeDashboard, qClosedReleasesList],
       nav: { group: "primary", labelKey: "home", icon: Home },
     },
   },
@@ -68,13 +68,13 @@ export const ROUTES: RouteRecordRaw[] = [
     path: "/compare",
     name: "compare",
     component: CompareView,
-    meta: { titleKey: "modelComparison", load: loadCompareView, prefetch: [qArtificialRaw] },
+    meta: { titleKey: "modelComparison", load: loadCompareView, prefetch: [qArtificialList] },
   },
   {
     path: "/price-compare",
     name: "price",
     component: PriceCompareView,
-    meta: { titleKey: "priceComparison", load: loadPriceCompareView, prefetch: [qArtificialRaw] },
+    meta: { titleKey: "priceComparison", load: loadPriceCompareView, prefetch: [qArtificialList] },
   },
   {
     path: "/releases",
@@ -83,7 +83,7 @@ export const ROUTES: RouteRecordRaw[] = [
     meta: {
       titleKey: "releases",
       load: loadReleasesView,
-      prefetch: [qClosedReleasesRaw],
+      prefetch: [qClosedReleasesList],
       nav: { group: "secondary", labelKey: "navReleases", icon: Megaphone },
     },
   },
@@ -102,7 +102,7 @@ export const ROUTES: RouteRecordRaw[] = [
     path: "/model/:id(.*)",
     name: "model",
     component: ModelDetailView,
-    meta: { titleKey: "modelDetail", load: loadModelView, prefetch: [qArtificialRaw, qOpenRouter] },
+    meta: { titleKey: "modelDetail", load: loadModelView, prefetch: [qArtificialList, qOpenRouterList] },
   },
   {
     path: "/:pathMatch(.*)*",

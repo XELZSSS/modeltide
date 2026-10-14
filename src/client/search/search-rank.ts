@@ -10,11 +10,7 @@ import type {
   OpenSourceModelEntry,
 } from "@/shared/types";
 
-export type SearchItem =
-  | ArtificialAnalysisModel
-  | OpenRouterRankEntry
-  | OpenSourceModelEntry
-  | HallucinationRankingEntry;
+type SearchItem = ArtificialAnalysisModel | OpenRouterRankEntry | OpenSourceModelEntry | HallucinationRankingEntry;
 
 interface PreparedEntry {
   item: SearchItem;

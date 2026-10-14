@@ -8,7 +8,6 @@ export type {
 export type {
   OpenRouterRankEntry,
   OpenSourceModelEntry,
-  AgentRankEntry,
   ClosedReleaseEntry,
   HallucinationRankingEntry,
 } from "@/shared/types/rankings";

@@ -33,7 +33,7 @@ function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
   return typeof e === "number" && Number.isFinite(e);
 }
 
-export function jitteredTtl(vk: string, ttl: number): number {
+function jitteredTtl(vk: string, ttl: number): number {
   const base = Number.isFinite(ttl) && ttl > 0 ? ttl : 60_000;
   const h1 = (fnv1aHashUint32(vk) % 50) / 1000;
   const factor = 0.95 + h1;

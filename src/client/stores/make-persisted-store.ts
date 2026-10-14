@@ -1,12 +1,12 @@
 import { initStorageSync, readPersisted, safeStorage } from "@/client/stores/persist";
 
-export type StorageKind = "local" | "session";
+type StorageKind = "local" | "session";
 
 export function loadPersistedState<T>(kind: StorageKind, key: string, version: number): Partial<T> {
   return readPersisted<T>(safeStorage(kind), key, version);
 }
 
-export interface PersistedSyncDef<TStore extends { $subscribe: (...args: never[]) => unknown }, TSnapshot> {
+interface PersistedSyncDef<TStore extends { $subscribe: (...args: never[]) => unknown }, TSnapshot> {
   useStore: () => TStore;
   kind: StorageKind;
   key: string;

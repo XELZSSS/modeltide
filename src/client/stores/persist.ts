@@ -27,7 +27,7 @@ export function readPersisted<T>(storage: Storage | null, key: string, version: 
   }
 }
 
-export function writePersisted<T>(storage: Storage | null, key: string, version: number, state: T): void {
+function writePersisted<T>(storage: Storage | null, key: string, version: number, state: T): void {
   if (!storage) return;
   try {
     storage.setItem(key, JSON.stringify({ state, version }));
@@ -40,7 +40,7 @@ interface Subscribable {
   $subscribe(callback: (mutation: unknown, state: unknown) => void, options?: { detached?: boolean }): () => void;
 }
 
-export interface StorageSyncOptions<TStore extends Subscribable, TPersisted> {
+interface StorageSyncOptions<TStore extends Subscribable, TPersisted> {
   storage: Storage | null;
   key: string;
   version: number;
@@ -49,10 +49,6 @@ export interface StorageSyncOptions<TStore extends Subscribable, TPersisted> {
 }
 
 const syncedKeys = new Set<string>();
-
-export function resetStorageSyncForTest(): void {
-  syncedKeys.clear();
-}
 
 export function initStorageSync<TStore extends Subscribable, TPersisted>(
   store: TStore,

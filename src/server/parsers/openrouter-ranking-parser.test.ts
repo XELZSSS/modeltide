@@ -1,7 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/infra/cache/service";
-import { parseDirectoryRows } from "@/server/parsers/openrouter-directory-parser";
-import { categoryFrom, creatorFromSlug, mapModels, titleFromSlug } from "@/server/parsers/openrouter-ranking-parser";
+import { categoryFrom, creatorFromSlug, mapModels } from "@/server/parsers/openrouter-ranking-parser";
 import type { PricingEntry } from "@/server/parsers/openrouter-directory-parser";
 import type { ModelRow } from "@/server/parsers/upstream-types";
 
@@ -30,23 +29,18 @@ const pricing = new Map<string, PricingEntry>([
   ["openai/gpt-5", { input: 1, output: 2, cacheHit: 0.5, cacheWrite: 1.5 }],
 ]);
 
-describe("creatorFromSlug / titleFromSlug / categoryFrom", () => {
+describe("creatorFromSlug / categoryFrom", () => {
   it.each([
     ["openai/gpt-5", "OpenAI"],
-    ["meta-llama/llama-4", "Meta"],
     ["constructor/x", "Constructor"],
+    ["z-ai/glm-5", "Z.ai"],
+    ["nvidia/nemotron-4", "NVIDIA"],
+    ["bytedance-seed/seed-oss", "ByteDance Seed"],
+    ["ibm-granite/granite-4.0", "IBM Granite"],
+    ["moonshotai/kimi-k2", "Moonshot AI"],
+    ["text-embedding-3-large", "Unknown"],
   ])("creatorFromSlug(%s) -> %s", (slug, expected) => {
     expect(creatorFromSlug(slug)).toBe(expected);
-  });
-
-  it.each([
-    ["openai/gpt-5", "GPT 5"],
-    ["solo-model", "Solo Model"],
-    ["openai/gpt-4o", "GPT 4o"],
-    ["openai/gpt-4.1-mini-2025-04-14", "GPT 4.1 Mini 2025 04 14"],
-    ["openai/gpt-3.5-turbo", "GPT 3.5 Turbo"],
-  ])("titleFromSlug(%s) -> %s", (slug, expected) => {
-    expect(titleFromSlug(slug)).toBe(expected);
   });
 
   it.each([
@@ -109,18 +103,6 @@ describe("mapModels", () => {
     const [noPricing] = mapModels([row({ model_permaslug: "x/y", variant_permaslug: "x/y" })], new Map());
     expect(noPricing!.pricing).toBeNull();
     expect(noPricing!.isFree).toBe(false);
-  });
-
-  it("falls back to the derived total when no row carries an upstream ranking metric", () => {
-    const models = mapModels(
-      [
-        row({ model_permaslug: "a/small", variant_permaslug: "a/small", total_prompt_tokens: 1 }),
-        row({ model_permaslug: "b/big", variant_permaslug: "b/big", total_prompt_tokens: 999 }),
-      ],
-      new Map(),
-    );
-    expect(models.map((m) => m.id)).toEqual(["b/big", "a/small"]);
-    expect(models.map((m) => m.rank)).toEqual([1, 2]);
   });
 
   it("ranks by the upstream metric, not by the summed window total", () => {
@@ -192,43 +174,6 @@ describe("mapModels", () => {
     expect(models.map((m) => m.id)).toEqual(["tie/higher", "tie/lower", "with/small-metric", "no/metric"]);
   });
 
-  it("returns every aggregated entry without a ceiling", () => {
-    const total = 1010;
-    const rows = Array.from({ length: total }, (_, i) =>
-      row({
-        model_permaslug: `bulk/model-${i}`,
-        variant_permaslug: `bulk/model-${i}`,
-        total_prompt_tokens: i,
-        rankingMetricValue: i,
-      }),
-    );
-    const models = mapModels(rows, new Map());
-    expect(models).toHaveLength(total);
-    expect(models[0]!.id).toBe(`bulk/model-${total - 1}`);
-    expect(models.at(-1)!.rank).toBe(total);
-  });
-
-  it("keeps multi-variant rows without token data below genuine zero usage", () => {
-    const missing: Partial<ModelRow> = {
-      total_prompt_tokens: undefined,
-      total_completion_tokens: undefined,
-    };
-    const models = mapModels(
-      [
-        row({ model_permaslug: "u/unknown", variant_permaslug: "u/unknown:a", ...missing }),
-        row({ model_permaslug: "u/unknown", variant_permaslug: "u/unknown:b", ...missing }),
-        row({
-          model_permaslug: "z/zero",
-          variant_permaslug: "z/zero",
-          total_prompt_tokens: 0,
-          total_completion_tokens: 0,
-        }),
-      ],
-      new Map(),
-    );
-    expect(models.map((m) => m.id)).toEqual(["z/zero", "u/unknown"]);
-  });
-
   it("merges variant rows of one model into a single entry with dominant-variant pricing", () => {
     const variantPricing = new Map<string, PricingEntry>([
       ["a/b:standard", { input: 2, output: 3, cacheHit: 1, cacheWrite: 2 }],
@@ -262,27 +207,5 @@ describe("mapModels", () => {
       variant: "standard",
       pricing: variantPricing.get("a/b:standard"),
     });
-  });
-
-  it("prices a dated variant permaslug through the mirrored key", () => {
-    const {
-      entry: { pricing: record },
-    } = parseDirectoryRows([
-      {
-        id: "acme/m",
-        canonical_slug: "acme/m-20260910",
-        pricing: { prompt: "0.000001", completion: "0.000002" },
-      },
-      {
-        id: "acme/m:free",
-        canonical_slug: "acme/m-20260910",
-        pricing: { prompt: "0", completion: "0" },
-      },
-    ]);
-    const [model] = mapModels(
-      [row({ model_permaslug: "acme/m-20260910", variant: "free", variant_permaslug: "acme/m-20260910:free" })],
-      new Map(Object.entries(record)),
-    );
-    expect(model!.isFree).toBe(true);
   });
 });

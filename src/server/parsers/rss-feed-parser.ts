@@ -87,7 +87,7 @@ function itemId(item: Record<string, unknown>, link: string | null, title: strin
   return guid.length > MAX_ID_CHARS ? fnv1aHash(guid) : guid;
 }
 
-export const DEFAULT_MAX_FEED_BYTES = 2 * 1024 * 1024;
+const DEFAULT_MAX_FEED_BYTES = 2 * 1024 * 1024;
 
 export function parseFeed(
   xml: unknown,
