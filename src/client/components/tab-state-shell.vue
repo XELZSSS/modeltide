@@ -10,25 +10,25 @@ interface TabState {
   items: readonly unknown[];
   partial: boolean;
   /** Set by unwrapListPartial when the payload could not be parsed. */
-  malformed?: boolean;
+  malformed: boolean;
 }
 
 const props = defineProps<{
   state: TabState;
   /** Domain label used in the error raised for a malformed payload. */
-  domain?: ApiDomain;
+  domain: ApiDomain;
   emptyMessageKey?: TranslationKey;
 }>();
 
 // A malformed payload escalates the tab to the error boundary instead of
 // rendering an empty tab.
-assertPayloadShape(props.state.malformed ?? false, props.domain ?? "");
+assertPayloadShape(props.state.malformed, props.domain);
 
 const { t } = useTranslation();
 </script>
 
 <template>
-  <PartialNotice v-if="props.state.partial" />
+  <PartialNotice v-if="props.state.partial || props.state.malformed" />
   <EmptyState
     v-if="props.state.items.length === 0"
     variant="plain"

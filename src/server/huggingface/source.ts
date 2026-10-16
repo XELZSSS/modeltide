@@ -90,10 +90,6 @@ async function fetchHFModelsAll(ctx: AppContext, p: OpenSourceModelsQuery, maxPa
     }
     if (page.items.length < HF_PAGE_LIMIT) break;
     url = page.nextUrl;
-    if (url != null && pageCount >= maxPages) {
-      truncated = true;
-      break;
-    }
     if (pageCount >= maxPages) {
       truncated = url != null;
       break;

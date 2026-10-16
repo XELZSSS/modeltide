@@ -147,7 +147,16 @@ export class HttpClient {
       try {
         return { kind: "return", value: await read(res, signal) };
       } catch (err) {
-        if (!(err instanceof UpstreamError) || !err.retryable || signal.aborted || initSignal?.aborted) {
+        if (initSignal?.aborted) {
+          return { kind: "throw", error: new ClientAbortError(`Client aborted body read for ${url}`) };
+        }
+        // A body read killed by this attempt's own deadline is the same failure
+        // as a fetch-stage timeout: consume the retry budget instead of
+        // surfacing a 504 straight away, keeping the two stages symmetric.
+        if (err instanceof UpstreamError && err.causedByTimeout && deadline.aborted) {
+          return { kind: "fail", message: err.message, cause: undefined, status: null, timedOut: true };
+        }
+        if (!(err instanceof UpstreamError) || !err.retryable || signal.aborted) {
           return { kind: "throw", error: err };
         }
         return { kind: "fail", message: err.message, cause: undefined, status: null, timedOut: false };

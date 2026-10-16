@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, h } from "vue";
-import { ShieldAlert } from "@lucide/vue";
 import RankedTableView, { modelNameCol } from "@/client/components/table/ranked-table-view.vue";
 import {
   mobilePrimaryCol,
@@ -10,9 +9,7 @@ import {
   RightAlignedText,
   type DataTableColumn,
 } from "@/client/components/table/table-columns.ts";
-import EmptyState from "@/client/components/empty-state.vue";
 import OpenRouterModelDetail from "@/client/pages/model/openrouter-detail.vue";
-import { useTranslation } from "@/client/i18n";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { assertPayloadShape, unwrapListPartial } from "@/client/api/payload-normalize";
 import { cn } from "@/client/utils/cn";
@@ -59,30 +56,27 @@ function buildOpenRouterBodyColumns(t: TFunction): DataTableColumn<OpenRouterRan
 const getModelRowId = (r: OpenRouterRankEntry) => r.id;
 const getModelRowName = (r: OpenRouterRankEntry) => r.name;
 
-const props = defineProps<{ data?: SourcePayload<OpenRouterRankEntry[]> }>();
+const props = defineProps<{ data: SourcePayload<OpenRouterRankEntry[]> }>();
 
-const { t } = useTranslation();
-
+// Sole caller (open-router-tab.vue) always passes an assembled payload; treat
+// `data` as required so the props.data/!state fallbacks collapse away.
 const state = computed(() => {
-  const value = props.data ? unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings") : null;
-  assertPayloadShape(value?.malformed ?? false, "openRouterRankings");
+  const value = unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings");
+  assertPayloadShape(value.malformed, "openRouterRankings");
   return value;
 });
 </script>
 
 <template>
-  <EmptyState v-if="!state" :icon="ShieldAlert" :message="t('noRankingsData')" />
-  <template v-else>
-    <RankedTableView
-      :rows="state.data"
-      :get-row-id="getModelRowId"
-      :get-row-name="getModelRowName"
-      :get-search-fields="SEARCH_FIELDS.or"
-      :build-body-columns="buildOpenRouterBodyColumns"
-    >
-      <template #expandedRow="{ row }">
-        <OpenRouterModelDetail :model="row" />
-      </template>
-    </RankedTableView>
-  </template>
+  <RankedTableView
+    :rows="state.data"
+    :get-row-id="getModelRowId"
+    :get-row-name="getModelRowName"
+    :get-search-fields="SEARCH_FIELDS.or"
+    :build-body-columns="buildOpenRouterBodyColumns"
+  >
+    <template #expandedRow="{ row }">
+      <OpenRouterModelDetail :model="row" />
+    </template>
+  </RankedTableView>
 </template>

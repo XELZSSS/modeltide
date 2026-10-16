@@ -45,25 +45,35 @@ const MODELS_ENRICH_BASE_FIELDS = [
   ...modalityWireNames,
 ];
 
-// Live RSC shapes (verified 2026-10): /models carries omniscienceHallucinationRate
-// and itBenchSre (camelCase; the same values the leaderboard already reports, so the
-// field is excluded below) but neither medianCanonicalAnswerOutputSpeed nor
-// omniscienceBreakdown; /evaluations/omniscience is the reverse and also carries
-// itbenchSre (lowercase). The leaderboard body carries both spellings' worth of data
-// through its mapped rows.
+// Per-path field allow-lists, derived from the live RSC payloads (2026-10:
+// 704 leaderboard / 27 /models / 32 omniscience rows). Only names a path
+// actually returns are listed — a name that never shows up is dead weight
+// that also masks drift, so it is omitted rather than filtered at read time.
+//
+// /models       omits briefcaseElo, cweBench, cyberIndex, deepsecBench and
+//               itBenchSre; adds omniscienceHallucinationRate.
+// /omniscience  omits gdpvalNormalized. It serves `gdpval` instead, but that is
+//               the raw Elo score (1076-1866) while gdpvalNormalized is the
+//               0-1 normalized form compact() reads, so the two are not
+//               interchangeable and the raw field is deliberately not pulled.
+//               Adds medianCanonicalAnswerOutputSpeed + omniscienceBreakdown.
+const MODELS_PATH_ABSENT = ["briefcaseElo", "cweBench", "cyberIndex", "deepsecBench", "itBenchSre"] as const;
+
 const MODELS_PATH_FIELDS = [
   ...MODELS_ENRICH_BASE_FIELDS.filter((f) => f !== "itbenchSre"),
   "omniscienceHallucinationRate",
 ];
 
+const OMNISCIENCE_PATH_ABSENT = ["gdpvalNormalized", "itbenchSre"] as const;
+
 const OMNISCIENCE_PATH_FIELDS = [
-  ...MODELS_ENRICH_BASE_FIELDS,
+  ...MODELS_ENRICH_BASE_FIELDS.filter((f) => f !== "gdpvalNormalized"),
   "medianCanonicalAnswerOutputSpeed",
   "omniscienceBreakdown",
 ];
 
-function compactWithFields(fields: readonly string[]) {
-  return (m: Record<string, unknown>): Record<string, unknown> => {
+function projectFields(fields: readonly string[]): (m: Record<string, unknown>) => Record<string, unknown> {
+  return (m) => {
     const row: Record<string, unknown> = {};
     for (const field of fields) {
       if (field in m) row[field] = m[field];
@@ -75,20 +85,37 @@ function compactWithFields(fields: readonly string[]) {
 async function fetchIntelligenceIndex(
   ctx: AppContext,
 ): Promise<{ models: ArtificialAnalysisModel[]; partial: boolean }> {
-  const enrichLeg = (cacheKey: string, label: string, path: string, fields: readonly string[]) =>
-    getAndParseEnrich<Record<string, unknown>>(ctx, cacheKey, {
+  const enrichLeg = (
+    cacheKey: string,
+    label: string,
+    path: string,
+    fields: readonly string[],
+    absent: readonly string[] = [],
+  ) => {
+    const project = projectFields(fields);
+    return getAndParseEnrich<Record<string, unknown>>(ctx, cacheKey, {
       label,
       path,
       marker: "initialModels",
       extract: (tree) => findNextData(tree, "initialModels"),
-      map: (arr) => arr.map(compactWithFields(fields)),
+      fields,
+      absent,
+      map: (arr) => arr.map(project),
     });
+  };
   const { values, failures } = await runLegs(
     [
       { label: "leaderboard", run: () => getAaLeaderboardBody(ctx) },
       {
         label: "models-enrich",
-        run: () => enrichLeg(cacheKeys.aaModelsEnrich, "/models", upstreamEndpoints.aaModels, MODELS_PATH_FIELDS),
+        run: () =>
+          enrichLeg(
+            cacheKeys.aaModelsEnrich,
+            "/models",
+            upstreamEndpoints.aaModels,
+            MODELS_PATH_FIELDS,
+            MODELS_PATH_ABSENT,
+          ),
       },
       {
         label: "omniscience-enrich",
@@ -98,6 +125,7 @@ async function fetchIntelligenceIndex(
             "/omniscience",
             upstreamEndpoints.aaOmniscience,
             OMNISCIENCE_PATH_FIELDS,
+            OMNISCIENCE_PATH_ABSENT,
           ),
       },
       {

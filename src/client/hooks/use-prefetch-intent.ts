@@ -1,5 +1,6 @@
 import { onUnmounted } from "vue";
-import { preloadChunk, prefetchQueries, type PrefetchTarget } from "@/client/router/prefetch";
+import { prefetchQueries, type PrefetchTarget } from "@/client/router/prefetch";
+import { preloadChunk } from "@/client/router/lazy-view";
 
 const HOVER_PREFETCH_DELAY_MS = 150;
 

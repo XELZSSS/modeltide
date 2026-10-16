@@ -40,31 +40,17 @@ export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpan
 </script>
 
 <script setup lang="ts" generic="T extends object">
-import { computed, type VNodeChild } from "vue";
-import type { RowListProps } from "./table-columns.ts";
+import type { RowListProps } from "./table-columns";
 import { CellView, type RowListEmits } from "./cell-view";
 import ExpandToggle from "./expand-toggle.vue";
 import { ExpandedRowPanel } from "./expanded-row-panel.ts";
+import { useRowList } from "./use-row-list";
 
 const props = defineProps<RowListProps<T>>();
 
 const emit = defineEmits<RowListEmits>();
 
-// Derive ids, names and expansion once per row instead of calling the
-// accessors three to five times per row inside the template.
-const rows = computed(() =>
-  props.pagedData.map((row) => {
-    const id = props.getRowId(row);
-    return {
-      row,
-      id,
-      name: props.getRowName?.(row) ?? id,
-      expanded: props.expandedRowId === id,
-    };
-  }),
-);
-
-const renderExpanded = (row: T): VNodeChild => props.renderExpandedRow?.(row);
+const { rows, renderExpanded } = useRowList(props);
 </script>
 
 <template>

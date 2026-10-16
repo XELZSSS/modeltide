@@ -1,12 +1,6 @@
 import { balancedJsonSlice } from "./json-balance";
 import { isTrimWhitespace } from "./rsc-text";
-import {
-  MAX_NEEDLE_CANDIDATES,
-  MAX_RSC_BYTES,
-  MAX_SCAN_CHARS,
-  STREAM_LINE_RE,
-  type RscExtractor,
-} from "./rsc-limits";
+import { MAX_NEEDLE_CANDIDATES, MAX_RSC_BYTES, MAX_SCAN_CHARS, STREAM_LINE_RE, type RscExtractor } from "./rsc-limits";
 
 const MAX_OVERSIZED_WINDOWS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
 

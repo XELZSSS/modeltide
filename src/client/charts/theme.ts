@@ -82,11 +82,9 @@ export function ceilToStep(peak: number, step = AXIS_STEP): number {
 }
 
 export function seriesColor(theme: ChartTheme, index: number): string {
-  const fallback = "#888888";
-  if (theme.palette.length === 0) return fallback;
-  const raw = theme.palette[index % theme.palette.length];
-  if (typeof raw !== "string" || !raw.trim()) return fallback;
-  return raw;
+  // Themes only come from resolveChartTheme/FALLBACK_THEME, whose palette
+  // entries are always non-empty strings; `||` still covers a blank/missing slot.
+  return theme.palette[index % theme.palette.length] || "#888888";
 }
 
 export function legendStyle(theme: ChartTheme) {

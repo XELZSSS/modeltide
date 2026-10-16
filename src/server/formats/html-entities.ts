@@ -172,11 +172,9 @@ export function decodeEntities(s: unknown): string {
 }
 
 function safeFromCodePoint(cp: number): string {
+  // The two guards below exclude every class of input fromCodePoint can throw
+  // for (non-finite, <= 0, > 0x10ffff, lone surrogates), so no try/catch.
   if (!Number.isFinite(cp) || cp <= 0 || cp > 0x10ffff) return "";
   if (cp >= 0xd800 && cp <= 0xdfff) return "";
-  try {
-    return String.fromCodePoint(cp);
-  } catch {
-    return "";
-  }
+  return String.fromCodePoint(cp);
 }

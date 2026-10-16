@@ -17,7 +17,6 @@ const CATEGORY_LABELS: Record<NewsCategory, TranslationKey> = {
   industry: "catIndustry",
   opensource: "catOpenSource",
   hardware: "catHardware",
-  funding: "catFunding",
   research: "catResearch",
 };
 

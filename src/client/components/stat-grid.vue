@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { gridClasses } from "./grid-classes";
+import { statGridClasses } from "./grid-classes";
 
 const props = withDefaults(defineProps<{ columns?: 2 | 4; class?: string }>(), { columns: 4 });
-const classes = computed(() => gridClasses("stat", props.columns, props.class));
+const classes = computed(() => statGridClasses(props.columns, props.class));
 </script>
 
 <template>

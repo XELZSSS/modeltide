@@ -9,7 +9,6 @@ function priceDisplayPrecision(v: number): number {
 }
 
 function usdString(v: number): string {
-  if (Object.is(v, -0)) v = 0;
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
   const out = abs.toFixed(priceDisplayPrecision(abs));

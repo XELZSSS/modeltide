@@ -76,23 +76,18 @@ async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<Ne
 }
 
 export const getNews = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>
-  cachedPayload<NewsItem[]>(
-    ctx,
-    cacheKeys.news(category),
-    NEWS_TTL_MS,
-    async (refreshCtx) => {
-      const raw = await fetchNewsRaw(refreshCtx, category);
-      const rows = requireRows(
-        pickNewsItems(refreshCtx, category, raw.items),
-        `news "${category}"`,
-        "usable items",
-        "all filtered?",
-      );
-      const partial = raw.failCount > 0;
-      return {
-        rows,
-        partial,
-        ttl: ttlForRatio(raw.failCount, raw.total, NEWS_TTL_MS),
-      };
-    },
-  );
+  cachedPayload<NewsItem[]>(ctx, cacheKeys.news(category), NEWS_TTL_MS, async (refreshCtx) => {
+    const raw = await fetchNewsRaw(refreshCtx, category);
+    const rows = requireRows(
+      pickNewsItems(refreshCtx, category, raw.items),
+      `news "${category}"`,
+      "usable items",
+      "all filtered?",
+    );
+    const partial = raw.failCount > 0;
+    return {
+      rows,
+      partial,
+      ttl: ttlForRatio(raw.failCount, raw.total, NEWS_TTL_MS),
+    };
+  });

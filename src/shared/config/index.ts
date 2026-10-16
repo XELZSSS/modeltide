@@ -18,10 +18,5 @@ export {
 export { DEFAULT_COST_SCENARIO } from "./pricing";
 export { localeOf, FALLBACK_DASH, FALLBACK_NA } from "./ui";
 export { NEWS_CATEGORIES } from "@/shared/types/news";
-export {
-  BENCHMARK_KEYS,
-  type BenchmarkKey,
-  ABSOLUTE_SCORE_BENCHMARKS,
-  BENCHMARK_LABELS,
-} from "./benchmarks";
+export { BENCHMARK_KEYS, type BenchmarkKey, ABSOLUTE_SCORE_BENCHMARKS, BENCHMARK_LABELS } from "./benchmarks";
 export { THEME_COLORS } from "./ui";

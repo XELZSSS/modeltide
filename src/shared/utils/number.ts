@@ -55,7 +55,8 @@ function formatScaled(abs: number, sign: string, value: number, scales: ScaleEnt
   return null;
 }
 
-function formatCompact(n: number | null | undefined, decimals = 2, fallback = FALLBACK_DASH): string {  if (!isFiniteNumber(n)) return fallback;
+function formatCompact(n: number | null | undefined, decimals = 2, fallback = FALLBACK_DASH): string {
+  if (!isFiniteNumber(n)) return fallback;
   const { abs, sign } = compactParts(n);
   const scales = decimals === 1 ? TOKEN_SCALES : SHORT_SCALES;
   const scaled = formatScaled(abs, sign, abs, scales, decimals);

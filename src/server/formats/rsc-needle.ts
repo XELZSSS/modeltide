@@ -34,26 +34,22 @@ function valuePosAfterColon(text: string, at: number): number | null {
 
 function collectNeedleCandidates(text: string, locators: readonly string[]): NeedleCandidate[] {
   const candidates: NeedleCandidate[] = [];
+  const cap = MAX_NEEDLE_CANDIDATES * 4;
   for (const locator of locators) {
     let from = 0;
     for (;;) {
+      // Bound upfront: high-frequency needles on multi-MB bodies could
+      // otherwise keep scanning the tail with a full candidate set.
+      if (candidates.length >= cap) break;
       const at = text.indexOf(locator, from);
       if (at === -1) break;
       from = at + 1;
       const valueAt = valuePosAfterColon(text, at + locator.length);
-      if (valueAt !== null) {
-        candidates.push({ start: at, valueAt });
-        // Bound upfront: high-frequency needles on multi-MB bodies could
-        // otherwise materialize ~1M candidates before the 256 cap applies.
-        if (candidates.length >= MAX_NEEDLE_CANDIDATES * 4) break;
-      }
-      // Defensive: avoid pathological loops on huge inputs.
-      if (candidates.length > 4096) break;
+      if (valueAt !== null) candidates.push({ start: at, valueAt });
     }
-    if (candidates.length >= MAX_NEEDLE_CANDIDATES * 4) break;
   }
   candidates.sort((a, b) => a.start - b.start);
-  return candidates.slice(0, MAX_NEEDLE_CANDIDATES * 4);
+  return candidates.slice(0, cap);
 }
 
 function scanNeedleRange(

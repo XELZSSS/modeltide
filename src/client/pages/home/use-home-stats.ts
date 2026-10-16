@@ -2,7 +2,8 @@ import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue"
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel, HallucinationRankingEntry, TextToImageModel } from "@/shared/types";
 import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
-import { computeProviderStats, shortModelId } from "@/shared/utils/models";
+import { useProviderStats } from "@/client/pages/rankings/provider-stats";
+import { shortModelId } from "@/shared/utils/models";
 import { formatShortNumber } from "@/shared/utils";
 
 export interface HomeBarStat {
@@ -34,10 +35,10 @@ export function useHomeStats(
   dashboardData: MaybeRefOrGetter<NormalizedHomeDashboard>,
   t: TFunction,
 ): HomeStats {
-  const t2iModels = computed(() => toValue(dashboardData).textToImage ?? ([] as TextToImageModel[]));
+  const t2iModels = computed(() => toValue(dashboardData).textToImage);
 
   const trendingStats = computed<HomeBarStat[]>(() =>
-    topRows(toValue(dashboardData).opensource ?? [], (model) => ({
+    topRows(toValue(dashboardData).opensource, (model) => ({
       label: shortModelId(model.id),
       value: model.downloads,
       valueLabel: formatShortNumber(model.downloads, t("notAvailable")),
@@ -57,11 +58,13 @@ export function useHomeStats(
     ),
   );
 
+  // Delegate to useProviderStats so the home card and the provider-compare tab
+  // share one sort definition (by average speed, highest first) instead of each
+  // applying its own ordering.
   const providerStats = computed<HomeProviderStat[]>(() =>
-    computeProviderStats(toValue(artificialData), t("unknown"))
-      .filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
-      .map(({ name, color, avgSpeed }) => ({ name, color, avgSpeed }))
-      .sort((a, b) => b.avgSpeed - a.avgSpeed),
+    useProviderStats(artificialData, t, "speed")
+      .value.filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
+      .map(({ name, color, avgSpeed }) => ({ name, color, avgSpeed })),
   );
 
   return { trendingStats, hallucinationStats, providerStats, t2iModels };

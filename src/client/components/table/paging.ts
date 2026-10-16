@@ -10,7 +10,7 @@ export function usePagedData<T>(
   pageSize: MaybeRefOrGetter<number> = DEFAULT_PAGE_SIZE,
   resetKey?: MaybeRefOrGetter<string | number | undefined>,
 ) {
-  const dedupedData = computed(() => dedupeBy(toValue(data) ?? [], getRowId));
+  const dedupedData = computed(() => dedupeBy(toValue(data), getRowId));
   const page = ref(1);
   const safePageSize = computed(() => {
     const size = toValue(pageSize);

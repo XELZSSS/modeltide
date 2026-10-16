@@ -36,19 +36,14 @@ function applyTheme(): void {
 watch(() => settings.themeMode, applyTheme, { immediate: true, flush: "post" });
 
 watch(
-  () => route.path,
-  () => {
-    openSheet.value = null;
-    restoreScroll();
-  },
-  { flush: "post" },
-);
-
-watch(
   () => route.fullPath,
-  () => {
-    // Query-only navigation (e.g. ?tab=) keeps scroll position.
+  (now, was) => {
     openSheet.value = null;
+    // fullPath is a superset trigger: sheets close on every navigation, while
+    // scroll restores only for path navigation (query-only moves, e.g. ?tab=,
+    // keep scroll position).
+    const pathOf = (fullPath: string): string => fullPath.split("?")[0]!.split("#")[0]!;
+    if (pathOf(now) !== pathOf(was)) restoreScroll();
   },
   { flush: "post" },
 );
@@ -77,7 +72,7 @@ onUnmounted(() => {
       id="main-content"
       tabindex="-1"
       :aria-label="t('mainContent')"
-      class="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] overscroll-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0 focus:outline-none"
+      class="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0 focus:outline-none"
     >
       <div :class="[PAGE_WIDTH, PAGE_GUTTER]">
         <ContractSkewNotice />

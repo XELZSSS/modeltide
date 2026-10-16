@@ -34,7 +34,7 @@ export function useCombobox({
     watch(
       () => toValue(externalValue),
       (next) => {
-        if (typeof next === "string" && next !== debounced.value && next !== inputValue.value) {
+        if (next !== debounced.value && next !== inputValue.value) {
           setDebouncedDirect(next);
         }
       },
@@ -84,14 +84,13 @@ export function useCombobox({
     handleKeyDown(e);
   }
 
-  function onChange(value: string | undefined): void {
-    const next = value ?? "";
-    inputValue.value = next;
+  function onChange(value: string): void {
+    inputValue.value = value;
     if (composing.value) {
       isOpen.value = false;
       return;
     }
-    isOpen.value = next.trim().length >= minQuery;
+    isOpen.value = value.trim().length >= minQuery;
     setActiveIndex(-1);
   }
 

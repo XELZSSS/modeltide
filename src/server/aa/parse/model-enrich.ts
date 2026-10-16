@@ -27,7 +27,8 @@ export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<stri
   const merged = new Map<string, Record<string, unknown>>();
   const catalogArr = Array.isArray(catalog) ? catalog.slice(0, MAX_DIRECTORY_ROWS) : [];
   for (const raw of catalogArr) {
-    if (!isRecord(raw) || !hasCatalogIdentity(raw)) continue;
+    // hasCatalogIdentity already subsumes isRecord.
+    if (!hasCatalogIdentity(raw)) continue;
     const slug = str(raw.slug);
     if (!merged.has(slug)) merged.set(slug, { ...raw });
   }
@@ -53,8 +54,7 @@ export interface IntelligenceIndexResult {
 
 function metaEntry(meta: Record<string, ModelMetaEntry>, key: string): ModelMetaEntry | undefined {
   if (!Object.hasOwn(meta, key)) return undefined;
-  const e = meta[key];
-  return isRecord(e) ? (e as ModelMetaEntry) : undefined;
+  return meta[key];
 }
 
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {

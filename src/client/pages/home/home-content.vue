@@ -36,7 +36,12 @@ const { trendingStats, hallucinationStats, providerStats, t2iModels } = useHomeS
 );
 
 const partial = computed(
-  () => dashboardData.value.partial || closedReleasesState.value.partial || artificialState.value.partial,
+  () =>
+    dashboardData.value.partial ||
+    closedReleasesState.value.partial ||
+    artificialState.value.partial ||
+    closedReleasesState.value.malformed ||
+    artificialState.value.malformed,
 );
 </script>
 

@@ -231,9 +231,11 @@ describe("parseChangelogModels", () => {
 });
 
 function leaderboardHtml(rows: unknown[], links: unknown[], releases: unknown[]): string {
+  // Upstream layout: the model matrix rides in an RSC JSON line under the
+  // `initialModels` component prop, while the `"models"` script only carries
+  // the slug/name/releaseSlug release links.
   const linksPayload = JSON.stringify({ models: links, modelsAndReleases: { releases } });
-  const statsPayload = JSON.stringify({ models: rows });
-  return `<script>push([1,${linksPayload}])</script><script>push([1,${statsPayload}])</script>`;
+  return `<script>push([1,${linksPayload}])</script>\n2:${JSON.stringify({ initialModels: rows })}\n`;
 }
 
 describe("parseLeaderboardModels", () => {
@@ -276,7 +278,8 @@ describe("parseLeaderboardModels", () => {
   it("normalizes leaderboard rows onto the index shape and joins the release date", () => {
     const rows = unwrap(parseLeaderboardModels(leaderboardHtml([row], links, releases)));
     expect(rows).toHaveLength(1);
-    expect(compact(rows[0])).toMatchObject({
+    const first = rows[0]!;
+    expect(compact(first)).toMatchObject({
       id: "claude-opus-4-5-thinking",
       slug: "claude-opus-4-5-thinking",
       name: "Claude Opus 4.5 (Reasoning)",
@@ -289,9 +292,9 @@ describe("parseLeaderboardModels", () => {
       pricing: { input: 4, output: 20, cacheHit: 0.2, cacheWrite: 5 },
       speed: { median_output_speed: 146.5 },
     });
-    expect(compact(rows[0]).benchmarks).toMatchObject({ terminalbench_v2_1: 60, gpqa: 83 });
-    expect(compact(rows[0]).benchmarks?.gdpval).toBeUndefined();
-    const total = compact(rows[0]).omniscience_breakdown?.total;
+    expect(compact(first).benchmarks).toMatchObject({ terminalbench_v2_1: 60, gpqa: 83 });
+    expect(compact(first).benchmarks?.gdpval).toBeUndefined();
+    const total = compact(first).omniscience_breakdown?.total;
     expect(total?.accuracy).toBe(66);
     expect(total?.attempt_rate).toBeNull();
     expect(total?.hallucination_rate).toBeCloseTo(58.6, 10);
@@ -305,6 +308,18 @@ describe("parseLeaderboardModels", () => {
       ),
     );
     expect(rows.map((r) => r.slug)).toEqual(["claude-opus-4-5-thinking"]);
+  });
+
+  it("fails when the initialModels prop is missing or not the model matrix", () => {
+    const linksPayload = JSON.stringify({ models: [], modelsAndReleases: { releases } });
+    // No initialModels prop at all.
+    expect(parseLeaderboardModels(`<script>push([1,${linksPayload}])</script>\n`).ok).toBe(false);
+    // Prop exists but resembles the release-link identifier list instead.
+    expect(
+      parseLeaderboardModels(
+        leaderboardHtml([{ slug: "a", name: "A", releaseSlug: "a" }], [], releases),
+      ).ok,
+    ).toBe(false);
   });
 });
 

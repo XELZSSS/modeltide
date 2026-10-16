@@ -46,7 +46,7 @@ function titleCaseSizeClass(s: string): string {
         <InfoRow :label="t('creator')">{{ orNA(model.model_creators?.name, t) }}</InfoRow>
         <InfoRow :label="t('releaseDate')">{{ orNA(model.release_date, t) }}</InfoRow>
         <InfoRow :label="t('openWeights')">{{ formatBoolean(model.is_open_weights, t) }}</InfoRow>
-        <InfoRow :label="t('reasoning')">{{ formatBoolean(model.is_reasoning === true, t) }}</InfoRow>
+        <InfoRow :label="t('reasoning')">{{ formatBoolean(model.is_reasoning, t) }}</InfoRow>
         <InfoRow v-if="model.parameters != null" :label="t('parameters')">
           {{ formatTokens(model.parameters, t) }}
         </InfoRow>

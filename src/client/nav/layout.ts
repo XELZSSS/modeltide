@@ -10,3 +10,6 @@ export const ROW_PADDING = "px-4 py-3.5";
 
 // Denser than ROW_PADDING: compare tables carry 4+ rows and must fit one screen.
 export const ROW_PADDING_COMPACT = "px-4 py-2.5";
+
+// Densest tier: the compare table sits beside the cost estimator and must fit one screen.
+export const ROW_PADDING_ULTRA_COMPACT = "px-4 py-1.5";

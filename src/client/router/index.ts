@@ -1,6 +1,7 @@
 import { computed, type ComputedRef } from "vue";
 import { createRouter, createWebHistory, useRoute, type Router } from "vue-router";
 import { ROUTES } from "./routes";
+import type { PrefetchTarget } from "./prefetch";
 
 export const router: Router = createRouter({
   history: createWebHistory(),
@@ -9,9 +10,24 @@ export const router: Router = createRouter({
 });
 
 let popstateNavigation = false;
+// Popstate also drives genuine traversals; guard the afterEach reset so the
+// flag stays true for that navigation and only flushes on programmatic ones.
+let traversing = false;
 
 window.addEventListener("popstate", () => {
+  traversing = true;
   popstateNavigation = true;
+});
+
+router.afterEach(() => {
+  if (traversing) {
+    traversing = false;
+    return;
+  }
+  // Programmatic navigation (router.push/replace from anywhere) must not be
+  // treated as a history traversal for scroll restore, even when it bypasses
+  // navigate() — previously one Back press poisoned every later forward nav.
+  popstateNavigation = false;
 });
 
 export function isPopstateNavigation(): boolean {
@@ -58,6 +74,11 @@ export function navigate(to: string, replace = false): void {
 export function usePathname(): ComputedRef<string> {
   const route = useRoute();
   return computed(() => route.path);
+}
+
+export function routePrefetchTarget(path: string): PrefetchTarget {
+  const meta = router.resolve(path).matched.at(-1)?.meta;
+  return { queries: meta?.prefetch, load: meta?.load };
 }
 
 export function useSearchParams(): ComputedRef<URLSearchParams> {

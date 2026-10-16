@@ -48,6 +48,15 @@ export const strOr = (v: unknown): string | null | undefined => (v == null ? v :
 export const bool = (v: unknown): boolean | undefined => (typeof v === "boolean" ? v : undefined);
 export const obj = (v: unknown): Record<string, unknown> | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+
+// Some upstream label fields (notably AA's paramClass) carry a number where the
+// public shape expects a string label. Render the number as text so the value
+// survives the coercion instead of being dropped as a non-string.
+export function numericLabel(v: unknown): string | null {
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  if (typeof v === "bigint") return String(v);
+  return null;
+}
 export const isRecord = (v: unknown): v is Record<string, unknown> => obj(v) !== undefined;
 
 export const numIntCoerceNonNegative = (v: unknown): number | null => {

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { Loader2 } from "@lucide/vue";
-import { useRouter } from "vue-router";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import { useRouteSearchTerm } from "@/client/stores";
+import { navigate } from "@/client/router";
 import { MIN_QUERY, useSearchAllRankings } from "./use-search";
 import Combobox from "./combobox.vue";
 import { useCombobox } from "./use-combobox";
@@ -12,7 +12,6 @@ import { useCombobox } from "./use-combobox";
 const props = defineProps<{ class?: string }>();
 
 const { t } = useTranslation();
-const router = useRouter();
 const isOpen = ref(false);
 const isFocused = ref(false);
 
@@ -32,7 +31,7 @@ const combobox = useCombobox({
   isFocused,
   onSelect: (index) => {
     const result = results.value[index];
-    if (result) void router.push(result.link);
+    if (result) navigate(result.link);
   },
 });
 

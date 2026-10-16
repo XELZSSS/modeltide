@@ -1,11 +1,6 @@
 import type { Env } from "./api/context";
 import { applyApiHeaders } from "./api/headers";
-import {
-  handleApiRoute,
-  methodNotAllowedResponse,
-  notFoundResponse,
-  stripBodyForHead,
-} from "./api/router";
+import { handleApiRoute, methodNotAllowedResponse, notFoundResponse, stripBodyForHead } from "./api/router";
 import { SOURCES } from "./registry";
 
 type RouteEntry = (typeof SOURCES)[number];

@@ -11,26 +11,21 @@ import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "./paging";
 import TableBody, { TableHeader } from "./desktop.vue";
 import MobileTableBody from "./mobile.vue";
 
-const props = withDefaults(
-  defineProps<{
-    data: T[];
-    columns: DataTableColumn<T>[];
-    getRowId: (row: T) => string;
-    getRowName?: (row: T) => string;
-    getSearchFields: (row: T) => (string | null | undefined)[];
-    renderExpandedRow?: (row: T) => VNodeChild;
-    term?: string;
-  }>(),
-  { term: undefined },
-);
+const props = defineProps<{
+  data: T[];
+  columns: DataTableColumn<T>[];
+  getRowId: (row: T) => string;
+  getRowName?: (row: T) => string;
+  getSearchFields: (row: T) => (string | null | undefined)[];
+  renderExpandedRow?: (row: T) => VNodeChild;
+}>();
 
 defineSlots<{ expandedRow?: (props: { row: T }) => VNodeChild }>();
 
 const slots = useSlots();
 const isMobile = useDevice();
 const { t } = useTranslation();
-const { term: routeTerm } = useRouteSearchTerm();
-const term = computed(() => props.term ?? routeTerm.value);
+const { term } = useRouteSearchTerm();
 
 const filtered = computed(() => filterByTerm(props.data, term.value, props.getSearchFields));
 const expandedId = ref<string | null>(null);

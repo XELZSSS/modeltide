@@ -1,10 +1,9 @@
-export type NewsCategory = "industry" | "opensource" | "hardware" | "funding" | "research";
+export type NewsCategory = "industry" | "opensource" | "hardware" | "research";
 
 export const NEWS_CATEGORIES = [
   "industry",
   "opensource",
   "hardware",
-  "funding",
   "research",
 ] as const satisfies readonly NewsCategory[];
 

@@ -46,7 +46,9 @@ function textOf(v: unknown): string | null {
 }
 
 function cleanTitle(raw: string): string {
-  const stripped = stripHtml(raw);
+  // Plain-text titles are the majority; skip the two HTML passes when there is
+  // no markup to strip.
+  const stripped = raw.includes("<") ? stripHtml(raw) : raw;
   const decoded = decodeEntities(stripped);
   const clean = decoded.includes("<") ? stripHtml(decoded) : decoded;
   return truncateSafe(clean, MAX_NEWS_TITLE_CHARS).trim();

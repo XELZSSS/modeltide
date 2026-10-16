@@ -1,11 +1,6 @@
 import { UpstreamError } from "@/server/api/errors";
 import { utf8ByteLength } from "@/server/util/hash";
-import {
-  MAX_RSC_BYTES,
-  MAX_RSC_LINE_CHARS,
-  STREAM_LINE_RE,
-  type RscExtractor,
-} from "./rsc-limits";
+import { MAX_RSC_BYTES, MAX_RSC_LINE_CHARS, STREAM_LINE_RE, type RscExtractor } from "./rsc-limits";
 import { isMarkerBoundaryAt, iterateLines, rscNotFoundMessage } from "./rsc-text";
 import { scanOversizedMarkers } from "./rsc-oversized";
 import { parseFail, parseOk, type ParseResult } from "./parse-result";
@@ -41,7 +36,7 @@ export function* traverse(root: unknown): Generator<unknown> {
 }
 
 export function findNextData<T>(root: unknown, key: string): T[] | null {
-  if (typeof key !== "string" || !key || root === null || typeof root !== "object") return null;
+  if (!key || root === null || typeof root !== "object") return null;
   for (const node of traverse(root)) {
     const raw = (node as Record<string, unknown>)[key];
     if (Array.isArray(raw)) return raw as T[];
@@ -50,7 +45,7 @@ export function findNextData<T>(root: unknown, key: string): T[] | null {
 }
 
 export function findLongestData<T>(root: unknown, key: string): T[] | null {
-  if (typeof key !== "string" || !key || root === null || typeof root !== "object") return null;
+  if (!key || root === null || typeof root !== "object") return null;
   let best: T[] | null = null;
   for (const node of traverse(root)) {
     const raw = (node as Record<string, unknown>)[key];
@@ -92,7 +87,9 @@ function resolveMarkersInLine<T>(
   };
   let resolved = 0;
   for (let mi = 0; mi < markers.length; mi++) {
-    if (results[mi] || !boundaries[mi]) continue;
+    // boundaries[mi] was computed as `!results[mi] && boundary`, and results
+    // haven't been written since, so the `results[mi]` recheck is redundant.
+    if (!boundaries[mi]) continue;
     for (const raw of raws) {
       const tree = treeOf(raw);
       if (tree === undefined) continue;
@@ -115,10 +112,10 @@ export function parseRscPayloads<T>(
   extract: RscExtractor<T>,
 ): ParseResult<T[][]> {
   if (typeof body !== "string") return parseFail("RSC body is not a string");
-  if (!Array.isArray(markers) || markers.length === 0 || markers.some((m) => typeof m !== "string" || !m)) {
+  // Empty or blank markers would never match a needle `"m"` boundary.
+  if (markers.length === 0 || markers.some((m) => !m)) {
     return parseFail("RSC markers are invalid");
   }
-  if (typeof extract !== "function") return parseFail("RSC extractor is invalid");
   const byteLength = utf8ByteLength(body);
   if (byteLength > MAX_RSC_BYTES) {
     return parseFail(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);

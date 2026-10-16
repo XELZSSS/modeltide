@@ -4,6 +4,12 @@ import { UpstreamError, errMsg } from "@/server/api/errors";
 const UTF8_DECODER = new TextDecoder();
 const CONTENT_LENGTH_DIGITS_RE = /^\d+$/;
 
+// A bare abort() carries no reason; substituting a real Error keeps errMsg()
+// from degrading to the string "undefined" in messages and logs.
+function readAbortError(signal: AbortSignal): unknown {
+  return signal.reason ?? new Error("Body read aborted");
+}
+
 export async function fetchBodyText(
   url: string,
   res: Response,
@@ -54,13 +60,13 @@ async function readBodyText(
   let total = 0;
   try {
     for (;;) {
-      if (signal.aborted) throw signal.reason;
+      if (signal.aborted) throw readAbortError(signal);
       const readPromise = reader.read();
       // Race the read against abort so a stalled upstream can't outlive timeoutMs.
       const { done, value } = await new Promise<Awaited<ReturnType<typeof reader.read>>>((resolve, reject) => {
-        const onAbort = (): void => reject(signal.reason);
+        const onAbort = (): void => reject(readAbortError(signal));
         if (signal.aborted) {
-          reject(signal.reason);
+          onAbort();
           return;
         }
         signal.addEventListener("abort", onAbort, { once: true });

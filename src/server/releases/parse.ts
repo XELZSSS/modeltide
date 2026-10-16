@@ -5,21 +5,21 @@ import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types
 import type { ChangelogModel } from "@/server/aa/parse/changelog";
 import { dedupeBy } from "@/shared/utils";
 
+// All params arrive as strings by construction: ChangelogModel fields from
+// collectModels, and str()-coerced values from the index fallback path.
 function toClosedEntry(
-  id: unknown,
-  model: unknown,
-  provider: unknown,
-  rawDate: unknown,
+  id: string,
+  model: string,
+  provider: string,
+  rawDate: string,
   modelsBaseUrl: string,
 ): ClosedReleaseEntry | null {
-  if (typeof id !== "string" || typeof model !== "string" || typeof provider !== "string") return null;
   const cleanId = id.trim();
   const cleanModel = model.trim();
   const cleanProvider = provider.trim();
   if (!cleanId || !cleanModel || !cleanProvider) return null;
   if (cleanId.length > MAX_ID_CHARS || cleanModel.length > MAX_ID_CHARS || cleanProvider.length > MAX_NAME_CHARS)
     return null;
-  if (typeof rawDate !== "string") return null;
   const date = rawDate.slice(0, 10);
   if (!isoDate(date)) return null;
   return {
@@ -56,9 +56,9 @@ export function toClosedReleasesFromIndex(models: unknown, modelsBaseUrl: string
   return deduped;
 }
 
-export function toClosedReleases(changelog: unknown, modelsBaseUrl: string): ClosedReleaseEntry[] {
-  if (!Array.isArray(changelog)) return [];
-  const records = changelog.filter((e): e is ChangelogModel => isRecord(e) && typeof e.slug === "string");
+export function toClosedReleases(changelog: readonly ChangelogModel[], modelsBaseUrl: string): ClosedReleaseEntry[] {
+  // collectModels already guarantees record-shaped entries with non-empty slugs.
+  const records = [...changelog];
   sortByDateDesc(records, (e) => e.releaseDate);
   const entries: ClosedReleaseEntry[] = [];
   const seen = new Set<string>();

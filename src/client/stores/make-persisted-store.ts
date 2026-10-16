@@ -38,6 +38,39 @@ function writePersisted<T>(storage: Storage | null, key: string, version: number
   }
 }
 
+// One queued microtask per key: a burst of mutations (the cost form writes on
+// every keystroke) collapses into a single serialisation instead of one per
+// character, while still landing before the next task runs.
+const pendingFlushes = new Map<string, () => void>();
+
+function scheduleFlush(key: string, write: () => void): void {
+  if (pendingFlushes.has(key)) {
+    // The queued task reads the store live, so replacing the callback is what
+    // keeps the final write in sync with the latest state.
+    pendingFlushes.set(key, write);
+    return;
+  }
+  pendingFlushes.set(key, write);
+  queueMicrotask(() => {
+    const latest = pendingFlushes.get(key);
+    pendingFlushes.delete(key);
+    latest?.();
+  });
+}
+
+/** Drain any queued writes. Used on pagehide so no mutation is lost. */
+export function flushPersistedWrites(): void {
+  while (pendingFlushes.size > 0) {
+    const entries = [...pendingFlushes.entries()];
+    pendingFlushes.clear();
+    for (const [, write] of entries) write();
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPersistedWrites);
+}
+
 export function loadPersistedState<T>(kind: StorageKind, key: string, version: number): Partial<T> {
   return readPersisted(safeStorage(kind), key, version);
 }
@@ -62,7 +95,9 @@ export function makeStorageSync<TStore extends Subscribable, TSnapshot>(def: {
     if (syncedKeys.has(key)) return;
     syncedKeys.add(key);
     const storage = safeStorage(def.kind);
-    store.$subscribe(() => writePersisted(storage, key, def.version, def.snapshot(store)), { detached: true });
+    store.$subscribe(() => scheduleFlush(key, () => writePersisted(storage, key, def.version, def.snapshot(store))), {
+      detached: true,
+    });
     if (def.onStorageEvent == null) return;
     const onStorageEvent = def.onStorageEvent;
     window.addEventListener("storage", (event) => {

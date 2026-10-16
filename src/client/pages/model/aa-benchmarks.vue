@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
-import { ABSOLUTE_SCORE_BENCHMARKS, type BenchmarkKey } from "@/shared/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { benchmarkLabel, formatScore } from "@/shared/utils";
-import { unclampedPercent } from "@/shared/utils";
 import StatGrid from "@/client/components/stat-grid.vue";
 import StatCard from "@/client/components/stat-card.vue";
 import PageSection from "@/client/components/page-section.vue";
@@ -20,15 +18,10 @@ const showBenchmarksSection = computed(
 const benchmarkStats = computed(() => {
   const benchmarks = props.model.benchmarks;
   if (!benchmarks) return [];
+  // Values arrive final from the server: percent-scaled for relative
+  // benchmarks and raw for absolute ones — no client-side rescaling.
   return Object.entries(benchmarks)
-    .map(([key, value]) => ({
-      key,
-      display: ABSOLUTE_SCORE_BENCHMARKS.has(key as BenchmarkKey)
-        ? typeof value === "number" && Number.isFinite(value)
-          ? value
-          : null
-        : unclampedPercent(value),
-    }))
+    .map(([key, value]) => ({ key, display: value }))
     .filter((entry) => entry.display != null);
 });
 </script>

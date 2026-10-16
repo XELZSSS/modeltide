@@ -5,7 +5,7 @@ import type { TabItem } from "@/client/components/tabs";
 import SearchInput from "@/client/search/search-input.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { loadableView } from "@/client/router/lazy-view";
-import { preloadChunk } from "@/client/router/prefetch";
+import { preloadChunk } from "@/client/router/lazy-view";
 import { usePrefetchIntent } from "@/client/hooks/use-prefetch";
 import { useClientTab } from "@/client/hooks/use-client-tab";
 import { useTranslation } from "@/client/i18n";
@@ -50,7 +50,7 @@ function onTabIntent(tabId: string, active: boolean): void {
 
 function preloadTabs(): void {
   // Preload only the most-visited neighbor; the rest stay on hover-prefetch.
-  preloadChunk(RANKING_TAB_LOADS.openRouterRankings ?? RANKING_TAB_LOADS[DEFAULT_RANKING_TAB]);
+  preloadChunk(RANKING_TAB_LOADS.openRouterRankings);
 }
 
 if (typeof requestIdleCallback === "function") requestIdleCallback(preloadTabs, { timeout: 2000 });

@@ -1,6 +1,10 @@
 import { ref, type Ref } from "vue";
 
-const MOBILE_QUERY = "(max-width: 767px)";
+// Tailwind's `md` breakpoint is 768px, so the JS-side mobile query must stop one
+// pixel below it. Deriving both from MOBILE_MAX_WIDTH_PX keeps the matchMedia
+// check and the CSS `md:` utilities from drifting apart.
+export const MOBILE_MAX_WIDTH_PX = 767;
+const MOBILE_QUERY = `(max-width: ${MOBILE_MAX_WIDTH_PX}px)`;
 
 let media: MediaQueryList | null | undefined;
 

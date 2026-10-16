@@ -21,7 +21,7 @@ import { useChartTheme, legendStyle } from "@/client/charts/theme";
 import { chartBase, defaultTooltipOptions } from "@/client/charts/factory";
 import type { HomeBarStat } from "./use-home-stats";
 import RankedListRows from "./ranked-list-rows.vue";
-import { OTHER_TASK_KEY, aggregateTaskShare, taskLabel, type TaskSlice } from "./task-share";
+import { OTHER_TASK_KEY, UNTAGGED_TASK_KEY, aggregateTaskShare, taskLabel, type TaskSlice } from "./task-share";
 
 const props = defineProps<{ models: { task: string | null | undefined }[]; trending: HomeBarStat[] }>();
 
@@ -31,8 +31,11 @@ const aggregated = computed(() => aggregateTaskShare(props.models));
 const slices = computed(() => aggregated.value.slices);
 const total = computed(() => aggregated.value.total);
 
-const sliceLabel = (slice: TaskSlice): string =>
-  slice.key === OTHER_TASK_KEY ? t("otherTasks") : taskLabel(slice.key, t);
+const sliceLabel = (slice: TaskSlice): string => {
+  if (slice.key === UNTAGGED_TASK_KEY) return t("untaggedTasks");
+  if (slice.key === OTHER_TASK_KEY) return t("otherTasks");
+  return taskLabel(slice.key, t);
+};
 
 const data = computed<ChartData<"doughnut">>(() => ({
   labels: slices.value.map((s) => sliceLabel(s)),

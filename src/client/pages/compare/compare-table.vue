@@ -35,16 +35,18 @@ import { seriesColor, useChartTheme } from "@/client/charts/theme";
 import Card from "@/client/components/card.vue";
 import CardContent from "@/client/components/card-content.vue";
 import Dot from "@/client/components/dot.vue";
+import CardHeader from "@/client/components/card-header.vue";
 import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "@/client/utils/compare-logic";
 import { RenderView } from "@/client/components/table/cell-view";
-import { ROW_PADDING_COMPACT } from "@/client/nav/layout";
+import { ROW_PADDING_ULTRA_COMPACT } from "@/client/nav/layout";
 
-// Denser than ROW_PADDING: compare tables carry 4+ rows and must fit one screen.
-const CELL = ROW_PADDING_COMPACT;
+// Densest tier: the compare table sits beside the cost estimator and must fit one screen.
+const CELL = ROW_PADDING_ULTRA_COMPACT;
 
 const props = defineProps<{
+  title?: string;
   rows: CompareRow<ArtificialAnalysisModel>[];
   models: ArtificialAnalysisModel[];
   renderValue: (
@@ -91,7 +93,8 @@ function getWinner(
     </Card>
   </div>
   <Card v-else>
-    <CardContent>
+    <CardContent class="!p-0">
+      <div v-if="title" class="px-4 pt-4"><CardHeader :title="title" class="mb-3" /></div>
       <div class="min-w-0 w-full overflow-x-auto">
         <table class="w-full text-sm">
           <thead>

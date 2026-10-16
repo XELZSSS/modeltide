@@ -29,3 +29,11 @@ export function loadableView(load: () => Promise<LazyModule>): Component {
     },
   });
 }
+
+/**
+ * Kick a lazily loaded view's chunk request in the background, ignoring
+ * failures (a failed preload is simply retried by the actual navigation).
+ */
+export function preloadChunk(load: (() => Promise<unknown>) | undefined): void {
+  if (load) void load().then(undefined, () => {});
+}

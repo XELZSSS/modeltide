@@ -1,7 +1,5 @@
 import { defineStore } from "pinia";
 
-export { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
-
 const MAX_REMEMBERED_ROUTES = 32;
 
 export const useSearchStore = defineStore("search", {

@@ -2,15 +2,13 @@
 import { Settings } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { REPO_URL } from "@/client/nav/nav-config";
-import { usePathname } from "@/client/router";
-import { isNavActive, useNavigation, usePrefetch } from "@/client/nav/navigation";
+import { useNavigation, usePrefetch } from "@/client/nav/navigation";
 import SafeLink from "@/client/components/safe-link.vue";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";
 
 const emit = defineEmits<{ settingsOpen: [] }>();
 
-const pathname = usePathname();
-const { all } = useNavigation();
+const { all, isActive } = useNavigation();
 const { t } = useTranslation();
 const { hover, cancel } = usePrefetch();
 
@@ -32,10 +30,10 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           :key="item.path"
           :href="item.path"
           :aria-label="item.label"
-          :aria-current="isNavActive(pathname, item) ? 'page' : undefined"
+          :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
             'relative px-3 py-1.5 text-sm font-medium transition-colors duration-fast whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1',
-            isNavActive(pathname, item) ? 'text-text-primary' : 'text-text-secondary hoverable:hover:text-text-primary',
+            isActive(item) ? 'text-text-primary' : 'text-text-secondary hoverable:hover:text-text-primary',
           ]"
           @mouseenter="hover(item.path)"
           @mouseleave="cancel"
@@ -47,7 +45,7 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
             aria-hidden="true"
             :class="[
               'absolute inset-x-3 -bottom-px h-px bg-accent transition-transform duration-base origin-left',
-              isNavActive(pathname, item) ? 'scale-x-100' : 'scale-x-0',
+              isActive(item) ? 'scale-x-100' : 'scale-x-0',
             ]"
           />
         </SafeLink>

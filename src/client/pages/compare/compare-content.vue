@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onUnmounted, ref } from "vue";
-import { useRouter } from "vue-router";
 import { useTranslation } from "@/client/i18n";
 import EmptyState from "@/client/components/empty-state.vue";
 import BackButton from "@/client/shell/back-button.vue";
@@ -8,6 +7,7 @@ import DetailPageLayout from "@/client/components/detail-page-layout.vue";
 import PageContainer from "@/client/components/page-container.vue";
 import { useSuspenseArtificialRankings } from "@/client/api/hooks";
 import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
+import { navigate } from "@/client/router";
 import CompareChipBar from "./compare-chip-bar.vue";
 
 const PRUNE_NOTICE_MS = 8000;
@@ -15,7 +15,6 @@ const PRUNE_NOTICE_MS = 8000;
 const props = defineProps<{ backTo: string; title: string }>();
 
 const store = useCompareStore();
-const router = useRouter();
 const { t } = useTranslation();
 
 const rankings = await useSuspenseArtificialRankings();
@@ -36,7 +35,7 @@ usePruneCompareIds(rankings, () => {
 
 function clearAndBack(): void {
   store.clearCompare();
-  void router.replace(props.backTo);
+  navigate(props.backTo, true);
 }
 </script>
 

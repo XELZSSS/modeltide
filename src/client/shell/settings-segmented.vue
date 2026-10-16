@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import SegmentedGroup from "@/client/components/segmented-group.vue";
 import TabButton from "@/client/components/tab-button.vue";
-import { nextIndexForKey } from "@/client/components/tabs";
+import { nextRovingId } from "@/client/components/tabs";
 
 const props = defineProps<{
   value: string;
@@ -13,17 +13,14 @@ const props = defineProps<{
 const emit = defineEmits<{ change: [value: string] }>();
 
 function onKeydown(event: KeyboardEvent): void {
-  const next = nextIndexForKey(
-    event.key,
-    props.options.findIndex((option) => option.value === props.value),
-    props.options.length,
+  const nextId = nextRovingId(
+    event,
+    props.options.map((option) => ({ id: option.value })),
+    props.value,
   );
-  if (next == null) return;
-  event.preventDefault();
-  const target = props.options[next];
-  if (!target) return;
-  emit("change", target.value);
-  document.getElementById(`setting-${props.idPrefix}-${target.value}`)?.focus();
+  if (nextId == null) return;
+  emit("change", nextId);
+  document.getElementById(`setting-${props.idPrefix}-${nextId}`)?.focus();
 }
 </script>
 

@@ -1,4 +1,4 @@
-import { routePrefetchTarget } from "@/client/router/prefetch";
+import { routePrefetchTarget } from "@/client/router";
 import { usePrefetchIntent, type PrefetchIntent } from "./use-prefetch-intent";
 
 export { usePrefetchIntent, type PrefetchIntent };

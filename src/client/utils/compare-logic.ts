@@ -1,6 +1,6 @@
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { approxEq, unclampedPercent } from "@/shared/utils";
+import { approxEq } from "@/shared/utils";
 import { modelId } from "@/shared/utils/models";
 import { resolveEffectivePricing, PRICE_LEG_IDS, PRICE_LEGS, type PriceLegPick } from "@/shared/utils/pricing";
 import { ceilToStep } from "@/client/charts/theme";
@@ -59,6 +59,8 @@ function decideRowWinners<T>(
   getKey: (m: T, index: number) => string,
 ): Map<string, Winner> | null {
   const values = collectNumeric(row, models, getKey);
+  // Type-forced narrowing: the values != null ⟹ row.bestIs coupling lives in
+  // collectNumeric, not in the types, so this guard must stay.
   if (!values || !row.bestIs) return null;
   const best = pickExtreme(values, row.bestIs);
   if (values.every((v) => approxEq(v.val, best))) return null;
@@ -88,10 +90,14 @@ function radarMetricGetters(
     { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.intelligence_index) },
     { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.coding_index) },
     { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.agentic_index) },
-    { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.gpqa) },
-    { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.hle) },
-    { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.scicode) },
-    { metric: t("ifbench"), getValue: (m: ArtificialAnalysisModel) => unclampedPercent(m.benchmarks?.ifbench) },
+    // Benchmark values arrive percent-converted from the server for relative
+    // benchmarks and raw for absolute ones (briefcase_elo/cyber_index), so no
+    // client-side rescaling is needed — re-applying the ratio heuristic here
+    // would magnify legitimately small percentages (e.g. gdpval ≤ 0.68).
+    { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.gpqa ?? null },
+    { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.hle ?? null },
+    { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.scicode ?? null },
+    { metric: t("ifbench"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.ifbench ?? null },
   ];
 }
 

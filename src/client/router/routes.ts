@@ -1,11 +1,10 @@
 import type { RouteRecordRaw } from "vue-router";
 import { Award, Home, Megaphone, Newspaper } from "@lucide/vue";
 import { qArtificialList, qClosedReleasesList, qHomeDashboard, qNewsList, qOpenRouterList } from "@/client/api/catalog";
-import NotFoundView from "@/client/components/not-found.vue";
 import { DEFAULT_RANKING_TAB } from "@/client/nav/nav-config";
 import { NEWS_CATEGORIES } from "@/shared/config";
 import { loadableView } from "./lazy-view";
-import { preloadChunk } from "./prefetch";
+import { preloadChunk } from "./lazy-view";
 import { RANKING_TAB_LOADS, RANKING_TAB_QUERIES } from "@/client/pages/rankings/tab-loaders";
 import HomeView from "@/client/pages/home/home-view.vue";
 import type { Prefetchable } from "./route-meta";
@@ -101,7 +100,9 @@ export const ROUTES: RouteRecordRaw[] = [
   {
     path: "/:pathMatch(.*)*",
     name: "notFound",
-    component: NotFoundView,
+    // Lazy load to break the static import cycle
+    // routes -> not-found -> safe-link -> router/index (ROUTES TDZ at boot).
+    component: loadableView(() => import("@/client/components/not-found.vue")),
     meta: { titleKey: "notFound" },
   },
 ];

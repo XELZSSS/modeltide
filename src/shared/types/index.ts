@@ -1,9 +1,4 @@
-export type {
-  ModelPricing,
-  ModelOmniscienceBreakdown,
-  ArtificialAnalysisModel,
-  TextToImageModel,
-} from "./catalog";
+export type { ModelPricing, ModelOmniscienceBreakdown, ArtificialAnalysisModel, TextToImageModel } from "./catalog";
 
 export type {
   OpenRouterRankEntry,

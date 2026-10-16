@@ -26,7 +26,6 @@ import {
   qOpenSourceModelsList,
   qOpenRouterList,
 } from "./catalog";
-import type { QueryResult } from "./factory";
 
 interface ListState<T> {
   items: T[];
@@ -81,17 +80,31 @@ export async function useSuspenseHomeDashboard(): Promise<ComputedRef<Normalized
 
 export const useOpenRouterRankings = qOpenRouterList.use;
 
-export async function useSuspenseOpenRouterRankings(): Promise<QueryResult<"openRouterRankings">> {
+/** Resolved list state plus the server's real fetch time, for copy that ages the data. */
+export interface OpenRouterRankingsState {
+  readonly items: ComputedRef<OpenRouterRankEntry[]>;
+  readonly partial: ComputedRef<boolean>;
+  readonly malformed: ComputedRef<boolean>;
+  readonly fetchedAt: ComputedRef<string | undefined>;
+}
+
+export async function useSuspenseOpenRouterRankings(): Promise<OpenRouterRankingsState> {
   const query = qOpenRouterList.use();
   await query.suspense();
-  return query;
+  // One unwrap feeds both the list state and fetchedAt, so the payload is
+  // decoded once per change instead of once per consumer.
+  const unwrapped = computed(() => unwrapListPartial<OpenRouterRankEntry>(query.data.value, "openRouterRankings"));
+  const fetchedAt = computed(() => (query.data.value as { fetchedAt?: unknown } | null)?.fetchedAt);
+  return {
+    items: computed(() => unwrapped.value.data),
+    partial: computed(() => unwrapped.value.partial),
+    malformed: computed(() => unwrapped.value.malformed),
+    fetchedAt: computed(() => (typeof fetchedAt.value === "string" ? fetchedAt.value : undefined)),
+  };
 }
 
 export const useSuspenseOpenSourceModelsState = () =>
   suspenseState<OpenSourceModelEntry>(qOpenSourceModelsList.use(), "openSourceModels");
-
-export const useSuspenseOpenRouterRankingsState = () =>
-  suspenseState<OpenRouterRankEntry>(qOpenRouterList.use(), "openRouterRankings");
 
 export async function useSuspenseOpenSourceModel(id: string): Promise<ComputedRef<OpenSourceModelEntry | null>> {
   const query = qOpenSourceModelById(id).use();
@@ -142,7 +155,7 @@ export function useHallucinationRankings(
     const models = toValue(data);
     return toValue(enabled) && models.length > 0
       ? buildHallucinationRankings(models)
-      : [] as HallucinationRankingEntry[];
+      : ([] as HallucinationRankingEntry[]);
   });
 }
 

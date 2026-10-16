@@ -33,8 +33,9 @@ export function col<T>(id: string, header: string, cell: (row: T) => VNodeChild,
   return { id, header, cell, ...opts };
 }
 
-export function trendClass(change: number | null | undefined, zeroAsSuccess = false): string {
-  if (change == null || change === 0) return zeroAsSuccess ? "text-success" : "text-text-tertiary";
+// Only caller passes the raw change percent; zero/absent renders muted.
+export function trendClass(change: number | null | undefined): string {
+  if (change == null || change === 0) return "text-text-tertiary";
   return change > 0 ? "text-success" : "text-destructive";
 }
 

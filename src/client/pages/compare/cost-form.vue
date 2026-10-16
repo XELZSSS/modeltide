@@ -35,8 +35,8 @@ function isInvalid(value: string): boolean {
   return trimmed !== "" && !/^\d*(\.\d*)?$/.test(trimmed);
 }
 
-function onFieldChange(field: CostFieldDef, value: string | undefined): void {
-  field.onChange(value ?? "");
+function onFieldChange(field: CostFieldDef, value: string): void {
+  field.onChange(value);
 }
 </script>
 

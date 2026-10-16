@@ -2,15 +2,13 @@
 import { computed } from "vue";
 import { MoreHorizontal, Settings } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
-import { usePathname } from "@/client/router";
-import { isNavActive, useNavigation, usePrefetch } from "@/client/nav/navigation";
+import { useNavigation, usePrefetch } from "@/client/nav/navigation";
 import SafeLink from "@/client/components/safe-link.vue";
 
 const emit = defineEmits<{ moreOpen: []; settingsOpen: [] }>();
 
-const pathname = usePathname();
 const { t } = useTranslation();
-const { mobilePrimary, mobileMore } = useNavigation();
+const { mobilePrimary, mobileMore, isActive } = useNavigation();
 const { touch } = usePrefetch();
 
 const BAR_BUTTON =
@@ -18,7 +16,7 @@ const BAR_BUTTON =
 
 const barItemClass = (active: boolean) => `${BAR_BUTTON} relative ${active ? "text-accent" : "text-text-secondary"}`;
 
-const isMoreActive = computed(() => mobileMore.value.some((item) => isNavActive(pathname.value, item)));
+const isMoreActive = computed(() => mobileMore.value.some(isActive));
 </script>
 
 <template>
@@ -31,15 +29,11 @@ const isMoreActive = computed(() => mobileMore.value.some((item) => isNavActive(
       :key="item.path"
       :href="item.path"
       :aria-label="item.label"
-      :aria-current="isNavActive(pathname, item) ? 'page' : undefined"
-      :class="barItemClass(isNavActive(pathname, item))"
+      :aria-current="isActive(item) ? 'page' : undefined"
+      :class="barItemClass(isActive(item))"
       @touchstart="touch(item.path)"
     >
-      <span
-        v-if="isNavActive(pathname, item)"
-        class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent"
-        aria-hidden="true"
-      />
+      <span v-if="isActive(item)" class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />
       <component :is="item.icon" :size="18" />
       <span>{{ item.label }}</span>
     </SafeLink>

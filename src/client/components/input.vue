@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import { cn } from "@/client/utils/cn";
 
-const model = defineModel<string>();
+const model = defineModel<string>({ required: true });
 
 const props = defineProps<{ class?: string; ariaInvalid?: boolean }>();
 

@@ -1,5 +1,6 @@
 import { isRecord, isValidRowId, numCoerce, parseTs } from "@/server/formats/parser-primitives";
 import { MAX_DIRECTORY_ROWS } from "@/server/formats/limits";
+import { pruneBounded } from "@/server/util/throttle";
 import { normalizeModelKey } from "@/shared/utils";
 
 import type { ModelRow } from "@/server/formats/wire-types";
@@ -36,9 +37,15 @@ interface Group {
   metric: number | null;
 }
 
+// Upstream serves `change` as a ratio (0.005 == +0.5%), but a value already
+// expressed in percent (0.5) is indistinguishable by type alone. |v| < 1 is
+// treated as a ratio — a genuine 100%-plus swing arrives as >= 1 — so the two
+// wire forms both land on the same percentage scale instead of the percent
+// form being silently inflated 100x.
 function changePercent(value: unknown): number | null {
   const n = numCoerce(value);
-  return n == null ? null : n * 100;
+  if (n == null) return null;
+  return Math.abs(n) < 1 ? n * 100 : n;
 }
 
 export type PricingLookup = Map<string, PricingEntry> | Record<string, PricingEntry>;
@@ -48,11 +55,31 @@ function lookupPricing(pricing: PricingLookup, key: string): PricingEntry | unde
   return Object.hasOwn(pricing, key) ? pricing[key] : undefined;
 }
 
+// normalizeModelKey strips punctuation and rebuilds the key from tokens, which
+// is far costlier than the lowercase pass. Rankings rows repeat the same
+// permaslug/variant across many days, so memoize the normalized form per call
+// instead of recomputing it for every candidate of every row.
+const NORMALIZED_KEY_CACHE_MAX = 8192;
+const normalizedKeyCache = new Map<string, string>();
+
+function normalizeKeyCached(raw: string): string {
+  let normalized = normalizedKeyCache.get(raw);
+  if (normalized === undefined) {
+    normalized = normalizeModelKey(raw);
+    normalizedKeyCache.set(raw, normalized);
+    // Upstream slugs drift over time, so entries never expire naturally — keep
+    // the long-lived memo bounded (drop oldest by insertion order) instead of
+    // letting it grow for the life of the isolate.
+    pruneBounded(normalizedKeyCache, NORMALIZED_KEY_CACHE_MAX, () => false);
+  }
+  return normalized;
+}
+
 function resolvePricing(pricing: PricingLookup, id: string, variantKey: string | undefined): PricingEntry | undefined {
   const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
   const candidates = [
     ...keys.map((key) => key.toLowerCase()),
-    ...keys.map((key) => normalizeModelKey(key)).filter((key): key is string => key !== ""),
+    ...keys.map(normalizeKeyCached).filter((key): key is string => key !== ""),
   ];
   for (const key of candidates) {
     const hit = lookupPricing(pricing, key);
@@ -95,11 +122,12 @@ function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> 
       });
       continue;
     }
+    const agg = group.agg;
     for (const k of SUM_KEYS) {
-      const cur = numCoerce(group.agg[k]);
+      const cur = numCoerce(agg[k]);
       const add = numCoerce(row[k]);
       if (cur == null && add == null) continue;
-      group.agg[k] = (cur ?? 0) + (add ?? 0);
+      agg[k] = (cur ?? 0) + (add ?? 0);
     }
     if (tokens > group.dominantTokens) {
       group.dominant = row;

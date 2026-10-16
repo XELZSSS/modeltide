@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 import SegmentedGroup from "./segmented-group.vue";
 import TabButton from "./tab-button.vue";
-import { nextIndexForKey, type TabItem } from "./tabs";
+import { nextRovingId, type TabItem } from "./tabs";
 
 const props = withDefaults(
   defineProps<{
@@ -25,17 +25,10 @@ const groupClasses = computed(() =>
 const panelClasses = computed(() => cn("min-w-0 flex flex-col gap-4", props.class));
 
 function onKeydown(event: KeyboardEvent): void {
-  const nextIndex = nextIndexForKey(
-    event.key,
-    props.tabs.findIndex((tab) => tab.id === props.activeTab),
-    props.tabs.length,
-  );
-  if (nextIndex == null) return;
-  event.preventDefault();
-  const next = props.tabs[nextIndex];
-  if (!next) return;
-  emit("tabChange", next.id);
-  document.getElementById(`tab-${next.id}`)?.focus();
+  const nextId = nextRovingId(event, props.tabs, props.activeTab);
+  if (nextId == null) return;
+  emit("tabChange", nextId);
+  document.getElementById(`tab-${nextId}`)?.focus();
 }
 </script>
 

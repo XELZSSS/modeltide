@@ -1,4 +1,5 @@
 import { computed, type Component, type ComputedRef } from "vue";
+import { useRoute } from "vue-router";
 import { useTranslation } from "@/client/i18n";
 import { ROUTES } from "@/client/router/routes";
 import type { NavGroup } from "@/client/router/route-meta";
@@ -17,10 +18,13 @@ interface Navigation {
   all: ComputedRef<NavItem[]>;
   mobilePrimary: ComputedRef<NavItem[]>;
   mobileMore: ComputedRef<NavItem[]>;
+  /** Memoized against the current pathname — O(items) per route change, O(1) per render. */
+  isActive: (item: NavItem) => boolean;
 }
 
 export function useNavigation(): Navigation {
   const { t } = useTranslation();
+  const route = useRoute();
   const all = computed<NavItem[]>(() =>
     ROUTES.flatMap((route): NavItem[] => {
       const nav = route.meta?.nav;
@@ -36,10 +40,20 @@ export function useNavigation(): Navigation {
       ];
     }),
   );
+  const activePaths = computed(() => {
+    const active = new Set<string>();
+    const current = route.path;
+    for (const item of all.value) {
+      if (isNavActive(current, item)) active.add(item.path);
+    }
+    return active;
+  });
+  const isActive = (item: NavItem): boolean => activePaths.value.has(item.path);
   return {
     all,
     mobilePrimary: computed(() => all.value.filter((item) => item.group === "primary")),
     mobileMore: computed(() => all.value.filter((item) => item.group === "secondary")),
+    isActive,
   };
 }
 

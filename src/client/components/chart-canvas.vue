@@ -39,7 +39,18 @@ function update(): void {
 watch(() => props.type, create, { flush: "post" });
 
 // Inline plugins can't be reassigned via chart.config — recreate instead.
-watch(() => props.plugins, create, { flush: "post" });
+// Callers often pass a fresh array literal each render, so compare by identity
+// of the entries rather than the array: an equal set of plugin objects does
+// not need a rebuild.
+watch(
+  () => props.plugins,
+  (next, prev) => {
+    if (next === prev) return;
+    if (next != null && prev != null && next.length === prev.length && next.every((p, i) => p === prev[i])) return;
+    create();
+  },
+  { flush: "post" },
+);
 
 // Shallow watching avoids deep-traversing chart data.
 watch([() => props.data, () => props.options], update, { flush: "post" });

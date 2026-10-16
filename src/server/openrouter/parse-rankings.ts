@@ -91,8 +91,8 @@ export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry[
   }
   return "general";
 }
-function titleFromSlug(permaslug: unknown): string {
-  if (typeof permaslug !== "string" || !permaslug.trim()) return "";
+// Sole caller passes row.model_permaslug — trimmed non-empty string from groupRows.
+function titleFromSlug(permaslug: string): string {
   const raw = permaslug.split("/").slice(1).join("/") || permaslug;
   return raw
     .replace(/[:/_]/g, " ")

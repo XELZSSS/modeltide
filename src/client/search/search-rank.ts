@@ -22,6 +22,18 @@ export interface SourceConfig {
   map(item: SearchItem): SearchResult;
 }
 
+// Declared before `collect`, whose `limit` default reads MAX_PER_SOURCE: a later
+// declaration would be a temporal-dead-zone reference.
+const MAX_RESULTS = 20;
+const MAX_PER_SOURCE = 50;
+
+const SOURCE_PRIORITY: Record<SearchResultSource, number> = {
+  modelRankings: 0,
+  openRouterRankings: 1,
+  openSourceRankings: 2,
+  hallucinationRankings: 3,
+};
+
 export function defineSource<T extends SearchItem>(
   items: readonly T[],
   getFields: (item: T) => (string | undefined | null)[],
@@ -36,7 +48,7 @@ export function defineSource<T extends SearchItem>(
 export function collect(
   config: SourceConfig,
   needle: string,
-  limit = MAX_PER_SOURCE,
+  limit: number = MAX_PER_SOURCE,
 ): { result: SearchResult; match: number }[] {
   const out: { result: SearchResult; match: number }[] = [];
   const missed: PreparedEntry[] = [];
@@ -63,16 +75,6 @@ function topPerSource<T extends { match: number }>(hits: T[], limit: number): T[
 export function detailLink(source: SearchResultSource, id: string): string {
   return modelDetailPath(SEARCH_SOURCE_TO_MODEL_SOURCE[source], id);
 }
-
-const MAX_RESULTS = 20;
-const MAX_PER_SOURCE = 50;
-
-const SOURCE_PRIORITY: Record<SearchResultSource, number> = {
-  modelRankings: 0,
-  openRouterRankings: 1,
-  openSourceRankings: 2,
-  hallucinationRankings: 3,
-};
 
 export function rankSearchHits(hits: { result: SearchResult; match: number }[]): SearchResult[] {
   const ordered = [...hits].sort(

@@ -6,7 +6,7 @@ registerLine();
 
 <script setup lang="ts">
 import { computed } from "vue";
-import type { ChartData, ChartOptions, Plugin } from "chart.js";
+import type { ChartData, ChartOptions } from "chart.js";
 import Card from "@/client/components/card.vue";
 import CardContent from "@/client/components/card-content.vue";
 import CardHeader from "@/client/components/card-header.vue";
@@ -17,7 +17,6 @@ import EmptyState from "@/client/components/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
 import { modelDisplayName, shortModelId } from "@/shared/utils/models";
 import { cn } from "@/client/utils/cn";
-import { hexToRgba } from "@/shared/utils/color";
 import { AXIS_MAX, AXIS_STEP, cartesianChartOptions, seriesColor, useChartTheme } from "@/client/charts/theme";
 import { axisTickStyle, lineSeriesStyle } from "@/client/charts/factory";
 import type { ArtificialAnalysisModel } from "@/shared/types";
@@ -25,8 +24,13 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 const SERIES_KEYS = ["intelligence_index", "coding_index"] as const;
 const SERIES_LABEL_KEYS = ["intelligence", "coding"] as const;
 const TOP_N = 10;
+const AXIS_POINT_RADIUS = 4;
+const AXIS_POINT_HOVER_RADIUS = 7;
 
 type IndexSeriesKey = (typeof SERIES_KEYS)[number];
+
+// ~10 categories across a half-width card: long names would overlap.
+const AXIS_LABEL_MAX_CHARS = 8;
 type IndexRow = ArtificialAnalysisModel & Record<IndexSeriesKey, number>;
 
 function buildIndexRows(models: readonly ArtificialAnalysisModel[]): IndexRow[] {
@@ -37,70 +41,58 @@ function buildIndexRows(models: readonly ArtificialAnalysisModel[]): IndexRow[] 
   return complete.slice(0, TOP_N);
 }
 
-function indexAxisX(index: number, count: number): number {
-  return count <= 1 ? 0 : (index / (count - 1)) * AXIS_MAX;
-}
-
 function formatIndexValue(value: number): string {
   if (!Number.isFinite(value)) return "—";
   return Number(value.toFixed(2)).toString();
 }
 
-const AREA_FILL_ALPHA = 0.2;
-
 const tickLabel = (value: string | number): string => formatIndexValue(Number(value));
 
-function bottomRule(getColor: () => string): Plugin<"line"> {
-  return {
-    id: "indexAreaBottomRule",
-    afterDatasetsDraw(chart) {
-      const { ctx, chartArea } = chart;
-      if (!chartArea) return;
-      const y = Math.round(chartArea.bottom) + 0.5;
-      ctx.save();
-      ctx.beginPath();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = getColor();
-      ctx.moveTo(chartArea.left, y);
-      ctx.lineTo(chartArea.right, y);
-      ctx.stroke();
-      ctx.restore();
-    },
-  };
+function axisLabel(value: string): string {
+  return value.length > AXIS_LABEL_MAX_CHARS ? `${value.slice(0, AXIS_LABEL_MAX_CHARS - 1)}…` : value;
 }
 
 const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
 
 const { t } = useTranslation();
 const theme = useChartTheme();
-// Stable plugin: color is read lazily so theme switches use update(), not recreate.
-const bottomRulePlugin = bottomRule(() => theme.value.grid);
-const plugins: Plugin<"line">[] = [bottomRulePlugin];
 const rows = computed(() => buildIndexRows(props.models));
-const labels = computed(() => rows.value.map((m) => m.short_name || shortModelId(m.name) || m.id || "—"));
+// Long names are clipped on the axis; the full name stays in the tooltip title.
+const fullLabels = computed(() => rows.value.map((m) => m.short_name || shortModelId(m.name) || m.id || "—"));
+const labels = computed(() => fullLabels.value.map(axisLabel));
 
 const data = computed<ChartData<"line">>(() => ({
+  labels: labels.value,
   datasets: SERIES_KEYS.map((key, slot) => {
     const color = seriesColor(theme.value, slot);
     return {
       label: t(SERIES_LABEL_KEYS[slot]!),
-      data: rows.value.map((m, i) => ({ x: indexAxisX(i, rows.value.length), y: m[key] })),
+      data: rows.value.map((m) => m[key]),
       borderColor: color,
-      backgroundColor: hexToRgba(color, AREA_FILL_ALPHA),
-      fill: true,
+      backgroundColor: color,
+      // A trend line, not an area chart: the two series would muddy each other.
+      fill: false,
       ...lineSeriesStyle,
+      // Straight segments between points: lineSeriesStyle opts into monotone
+      // smoothing, which this chart does not want.
+      cubicInterpolationMode: "default",
+      tension: 0,
+      pointRadius: AXIS_POINT_RADIUS,
+      pointHoverRadius: AXIS_POINT_HOVER_RADIUS,
+      pointStyle: "circle",
+      pointBackgroundColor: theme.value.tooltipBg,
+      pointBorderColor: color,
+      pointBorderWidth: 2.5,
     };
   }),
 }));
 
 const options = computed<ChartOptions<"line">>(() =>
-  cartesianChartOptions<"line", "linear">(theme.value, {
+  cartesianChartOptions<"line", "category">(theme.value, {
     interaction: { mode: "index", intersect: false },
     x: {
-      type: "linear",
-      min: 0,
-      max: AXIS_MAX,
-      ticks: { ...axisTickStyle(theme.value), stepSize: AXIS_STEP, callback: tickLabel },
+      type: "category",
+      ticks: { ...axisTickStyle(theme.value), autoSkip: false, maxRotation: 0, minRotation: 0 },
     },
     y: {
       min: 0,
@@ -109,7 +101,7 @@ const options = computed<ChartOptions<"line">>(() =>
     },
     tooltip: {
       callbacks: {
-        title: (items) => labels.value[items[0]?.dataIndex ?? -1] ?? "",
+        title: (items) => fullLabels.value[items[0]?.dataIndex ?? -1] ?? "",
         label: (ctx) => {
           const y = ctx.parsed.y;
           return `${ctx.dataset.label}: ${y == null ? "—" : formatIndexValue(Number(y))}`;
@@ -142,14 +134,7 @@ const caption = computed(() =>
         :class="cn(CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT)"
       />
       <ChartFrame v-else :height="FLEX_CHART_HEIGHT">
-        <ChartCanvas
-          type="line"
-          :data="data"
-          :options="options"
-          :plugins="plugins"
-          :aria-label="t('intelligenceIndex')"
-          role="img"
-        />
+        <ChartCanvas type="line" :data="data" :options="options" :aria-label="t('intelligenceIndex')" role="img" />
         <figcaption class="sr-only">{{ caption }}</figcaption>
       </ChartFrame>
     </CardContent>

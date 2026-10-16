@@ -40,8 +40,9 @@ function normalizeLicenseId(raw: string): string {
   return raw.replace(/_+/g, "-").replace(/\s+/g, "");
 }
 
-export function licenseTagId(tag: unknown): string | null {
-  if (typeof tag !== "string") return null;
+// Callers only pass string tags (huggingface/parse.ts filters non-strings
+// first; tests pass literals).
+export function licenseTagId(tag: string): string | null {
   const lower = tag.toLowerCase().trim();
   if (!lower.startsWith("license:")) return null;
   return normalizeLicenseId(lower.slice(8)) || null;

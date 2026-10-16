@@ -11,9 +11,9 @@ export function buildHallucinationRankings(models: ArtificialAnalysisModel[]): H
       id: model.id,
       slug: model.slug,
       model: model.name,
-      hallucinationRate: total.hallucination_rate ?? null,
-      accuracy: total.accuracy ?? null,
-      attemptRate: total.attempt_rate ?? null,
+      hallucinationRate: total.hallucination_rate,
+      accuracy: total.accuracy,
+      attemptRate: total.attempt_rate,
       omniscienceIndex: total.omniscience,
     });
   }

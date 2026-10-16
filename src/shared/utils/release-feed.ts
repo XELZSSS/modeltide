@@ -9,22 +9,17 @@ export interface ReleaseRow {
   link: string | null;
 }
 
-function parseReleaseTs(value: string): number | null {
-  const ts = Date.parse(value);
-  return Number.isFinite(ts) ? ts : null;
-}
-
+// releaseDate is "YYYY-MM-DD" (server releases/parse.ts forces isoDate before
+// persisting), and date-only ISO strings always parse to a finite timestamp.
 function fromClosedReleases(releases: ClosedReleaseEntry[]): ReleaseRow[] {
   const rows: ReleaseRow[] = [];
   for (const e of releases) {
-    const ts = parseReleaseTs(e.releaseDate);
-    if (ts == null) continue;
     rows.push({
       id: `aa:${e.id}`,
       name: e.model,
       provider: e.provider,
       date: e.releaseDate.slice(0, 10),
-      ts,
+      ts: Date.parse(e.releaseDate),
       link: e.link,
     });
   }
