@@ -215,7 +215,5 @@ export const zh = {
   langEn: "EN",
   navReleases: "发布",
 
-  score: "分数",
-
   compareStale: "部分已选模型已下线，已自动移除。",
 } as const satisfies Record<keyof EnDict, string>;

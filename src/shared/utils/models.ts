@@ -1,5 +1,5 @@
 import type { ArtificialAnalysisModel } from "@/shared/types/catalog";
-import { isFiniteNumber } from "@/shared/utils/numbers";
+import { isFiniteNumber } from "./number";
 import type { ModelSource } from "@/shared/types/app";
 
 export function getOutputSpeed(model: ArtificialAnalysisModel): number | null {

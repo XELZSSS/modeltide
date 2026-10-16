@@ -2,9 +2,9 @@
 import { onErrorCaptured, onMounted, onUnmounted, ref } from "vue";
 import { TriangleAlert } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
-import EmptyState from "@/client/components/feedback/empty-state.vue";
-import Button from "@/client/components/ui/button.vue";
-import PageContainer from "@/client/components/layout/page-container.vue";
+import EmptyState from "./empty-state.vue";
+import Button from "./button.vue";
+import PageContainer from "./page-container.vue";
 
 const props = defineProps<{ reset?: () => void }>();
 

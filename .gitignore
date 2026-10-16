@@ -17,5 +17,5 @@ Thumbs.db
 # Cloudflare
 .wrangler/
 
-# Generated Pages Functions bundle (built by scripts/bundle-functions.mjs)
+# Generated Pages Functions bundle (built by build/bundle-functions.mjs)
 functions/api/\[\[route\]\].js

@@ -1,4 +1,4 @@
-import type { ApiDomain } from "@/shared/config/paths";
+import type { ApiDomain } from "./config/api";
 import type {
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
@@ -7,7 +7,7 @@ import type {
   OpenSourceModelEntry,
   OpenRouterRankEntry,
   SourcePayload,
-} from "@/shared/types";
+} from "./types";
 export type { ApiDomain };
 
 export interface ApiContract {

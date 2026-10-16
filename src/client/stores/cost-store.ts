@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { DEFAULT_COST_SCENARIO, STORAGE_KEYS } from "@/shared/config";
-import { loadPersistedState, makeStorageSync } from "@/client/stores/make-persisted-store";
-import type { CostFieldId } from "@/client/pricing/cost-inputs";
+import { loadPersistedState, makeStorageSync } from "./make-persisted-store";
+import type { CostFieldId } from "@/client/pages/compare/cost-inputs";
 
 const COST_STORE_VERSION = 1;
 

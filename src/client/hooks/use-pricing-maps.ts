@@ -2,7 +2,7 @@ import { computed, toValue, type MaybeRefOrGetter } from "vue";
 import { monthlyCostFor } from "@/shared/utils/cost";
 import { modelId } from "@/shared/utils/models";
 import { resolveEffectivePricing } from "@/shared/utils/pricing";
-import { parseCostFields, type CostFieldValues } from "@/shared/pricing/scenario";
+import { parseCostFields, type CostFieldValues } from "@/shared/scenario";
 import type { ArtificialAnalysisModel } from "@/shared/types/catalog";
 
 export function usePricingMaps(
@@ -27,5 +27,5 @@ export function usePricingMaps(
     }
     return map;
   });
-  return { scenario, monthlyCosts, effectivePricing };
+  return { monthlyCosts, effectivePricing };
 }

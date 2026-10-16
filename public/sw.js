@@ -1,7 +1,7 @@
 const SW_VERSION = "dev-local";
 const CACHE_NAME = `modeltide-${SW_VERSION}`;
 
-// Must match API_PREFIX in src/shared/config/paths.ts and build/constants.ts
+// Must match API_PREFIX in src/shared/config/api.ts and build/constants.ts
 // (checked by build/plugins/consistency-guard.ts — sw.js cannot import TS).
 const API_PREFIX = "/api";
 
@@ -9,23 +9,8 @@ const OTHER_CACHE_MAX = 100;
 
 const PRECACHE_SHELL = [];
 
-// Precached shell — must cover FONT_FILES + ICON_FILES in src/shared/pwa.ts
-// (checked by build/plugins/consistency-guard.ts).
-const PRECACHE_URLS = [
-  "/",
-  "/manifest.webmanifest",
-  "/fonts/plex-sans-latin.woff2",
-  "/fonts/plex-sans-latin-ext.woff2",
-  "/fonts/plex-mono-400-latin.woff2",
-  "/fonts/plex-mono-500-latin.woff2",
-  "/fonts/plex-mono-600-latin.woff2",
-  "/icons/app-icon.svg",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/icons/apple-touch-icon.png",
-  "/icons/favicon-32.png",
-  ...PRECACHE_SHELL,
-];
+// @generated-from src/shared/pwa.ts by build/plugins/sw-version.ts — do not edit by hand
+const PRECACHE_URLS = [...PRECACHE_SHELL];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));

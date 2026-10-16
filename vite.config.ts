@@ -1,7 +1,9 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
-import { consistencyGuard, localApi, serviceWorkerVersion } from "./build/vite-plugins.ts";
+import { consistencyGuard } from "./build/consistency-guard.ts";
+import { localApi } from "./build/local-api.ts";
+import { serviceWorkerVersion } from "./build/sw-version.ts";
 import { srcAlias } from "./vite.shared.ts";
 
 export default defineConfig({

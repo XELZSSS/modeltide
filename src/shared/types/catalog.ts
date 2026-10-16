@@ -1,4 +1,4 @@
-import type { BenchmarkKey } from "@/shared/types/benchmark";
+import type { BenchmarkKey } from "./benchmark";
 
 export interface ModelCreators {
   name: string;

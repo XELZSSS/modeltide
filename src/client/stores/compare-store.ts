@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { STORAGE_KEYS } from "@/shared/config";
 import { modelId } from "@/shared/utils/models";
-import { loadPersistedState, makeStorageSync } from "@/client/stores/make-persisted-store";
+import { loadPersistedState, makeStorageSync } from "./make-persisted-store";
 
 export { useCompareModels, usePruneCompareIds } from "@/client/hooks/use-compare-models";
 

@@ -1,6 +1,6 @@
 // Single source for PWA/font/icon asset lists.
-// public/sw.js cannot import TS, so build/plugins/consistency-guard.ts verifies
-// the sw PRECACHE_URLS below stay in sync with this file. index.html preloads
+// public/sw.js cannot import TS: build/plugins/sw-version.ts injects these
+// entries into dist/sw.js PRECACHE_URLS at build time. index.html preloads
 // the two critical fonts; the rest are warmed by bootstrap + precached by sw.
 
 export const FONT_FILES = [

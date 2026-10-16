@@ -1,15 +1,9 @@
-export { API_PREFIX, API_DOMAINS, queryKeys, apiPaths } from "@/shared/config/paths";
-export {
-  STORAGE_KEYS,
-  SETTINGS_STORAGE_VERSION,
-  MAX_ID_CHARS,
-  MAX_NAME_CHARS,
-  OPEN_SOURCE_MODELS_DEFAULTS,
-} from "@/shared/config/limits";
-export { MODALITY_KEYS, type ModalityKey } from "@/shared/config/modality";
+export { API_PREFIX, queryKeys, apiPaths } from "./api";
+export { STORAGE_KEYS, SETTINGS_STORAGE_VERSION } from "./storage";
+export { MAX_ID_CHARS, MAX_NAME_CHARS, OPEN_SOURCE_MODELS_DEFAULTS } from "./api";
+export { MODALITY_KEYS, type ModalityKey } from "./ui";
 export {
   ONE_MINUTE,
-  ONE_HOUR,
   ONE_DAY,
   FIVE_MINUTES,
   THIRTY_MINUTES,
@@ -20,14 +14,14 @@ export {
   PARTIAL_FAIL_TTL_MS,
   ttlFor,
   ttlForRatio,
-} from "@/shared/config/time";
-export { DEFAULT_COST_SCENARIO } from "@/shared/config/cost";
-export { localeOf, FALLBACK_DASH, FALLBACK_NA, type SupportedLocale } from "@/shared/config/locale";
-export { NEWS_CATEGORIES } from "@/shared/config/sources";
+} from "./time";
+export { DEFAULT_COST_SCENARIO } from "./pricing";
+export { localeOf, FALLBACK_DASH, FALLBACK_NA } from "./ui";
+export { NEWS_CATEGORIES } from "@/shared/types/news";
 export {
   BENCHMARK_KEYS,
   type BenchmarkKey,
   ABSOLUTE_SCORE_BENCHMARKS,
   BENCHMARK_LABELS,
-} from "@/shared/config/benchmarks";
-export { THEME_COLORS } from "@/shared/config/theme";
+} from "./benchmarks";
+export { THEME_COLORS } from "./ui";

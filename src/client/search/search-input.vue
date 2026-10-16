@@ -5,9 +5,9 @@ import { useRouter } from "vue-router";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import { useRouteSearchTerm } from "@/client/stores";
-import { MIN_QUERY, useSearchAllRankings } from "@/client/search/use-search";
-import Combobox from "@/client/search/combobox.vue";
-import { useCombobox } from "@/client/search/use-combobox";
+import { MIN_QUERY, useSearchAllRankings } from "./use-search";
+import Combobox from "./combobox.vue";
+import { useCombobox } from "./use-combobox";
 
 const props = defineProps<{ class?: string }>();
 

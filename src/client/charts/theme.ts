@@ -4,7 +4,6 @@ import { axisDashedBorderStyle, axisGridStyle, chartBase, defaultTooltipOptions 
 import { DONUT_FALLBACK, FALLBACK_THEME, type ChartTheme } from "./tokens";
 
 export type { ChartTheme };
-export { DONUT_FALLBACK, FALLBACK_THEME };
 
 function resolveChartTheme(): ChartTheme {
   const styles = getComputedStyle(document.documentElement);
@@ -43,19 +42,6 @@ function themeSignature(theme: ChartTheme): string {
     ...theme.palette,
     ...theme.donut,
   ].join("\u0000");
-}
-
-function publish(next: ChartTheme): void {
-  const signature = themeSignature(next);
-  if (signature === sharedSignature) return;
-  sharedSignature = signature;
-  sharedTheme = next;
-}
-
-export function refreshChartTheme(): void {
-  if (!sharedTheme) return;
-  publish(resolveChartTheme());
-  theme.value = sharedTheme;
 }
 
 const theme = ref<ChartTheme>(currentTheme());

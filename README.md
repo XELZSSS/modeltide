@@ -34,12 +34,11 @@
 ## Structure
 
 ```text
-src/client/   SPA: views, router, components, queries
-src/server/   Data sources, parsers, cache
-src/shared/   Shared types, config, contract, i18n
-functions/    Pages Functions entry: /api/* routes
-public/       Static assets + PWA
-scripts/      Build scripts
+src/client/   Frontend SPA
+src/server/   Backend API
+src/shared/   Shared code
+functions/    Pages Functions entry
+build/        Build scripts
 ```
 
 ## Quick Start

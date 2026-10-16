@@ -1,4 +1,4 @@
-import { isFiniteNumber } from "@/shared/utils/numbers";
+import { isFiniteNumber } from "./number";
 import type { ModelPricing } from "@/shared/types/catalog";
 import type { TranslationKey } from "@/shared/i18n";
 

@@ -1,0 +1,121 @@
+<script setup lang="ts">
+import { computed } from "vue";
+import { navigate } from "@/client/router";
+import { useTranslation } from "@/client/i18n";
+import { useClientTab } from "@/client/hooks/use-client-tab";
+import { AGENT_VIEW_PARAM } from "@/client/nav/nav-config";
+import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
+import { useCostStore } from "@/client/stores";
+import { usePricingMaps } from "@/client/hooks/use-pricing-maps";
+import CompareChipBar from "@/client/pages/compare/compare-chip-bar.vue";
+import { SEARCH_FIELDS } from "@/client/search/search-fields";
+import SegmentedGroup from "@/client/components/segmented-group.vue";
+import TabButton from "@/client/components/tab-button.vue";
+import SearchableDataTable from "@/client/components/table/data-table.vue";
+import ModelExpandedDetail from "./aa/aa-cells.vue";
+import { buildRankingColumns } from "./aa/aa-rank-columns";
+import { buildPricingColumns, type PricingRow } from "./aa/aa-price-columns";
+import { modelId } from "@/shared/utils/models";
+import type { ArtificialAnalysisModel } from "@/shared/types";
+
+// Frozen empty array so the pricing-mode computed keeps a stable ComputedRef
+// identity across mode switches. MUST NOT be mutated.
+const EMPTY_MODELS: ArtificialAnalysisModel[] = [];
+Object.freeze(EMPTY_MODELS);
+
+const VIEW_MODES = ["rankings", "pricing"] as const;
+
+const props = defineProps<{ rankings: ArtificialAnalysisModel[] }>();
+
+const { t } = useTranslation();
+const store = useCompareStore();
+const costStore = useCostStore();
+const [viewMode, setViewMode] = useClientTab(AGENT_VIEW_PARAM, VIEW_MODES, VIEW_MODES[0]);
+
+const pricingMode = computed(() => viewMode.value === "pricing");
+const pricingModels = computed(() => (pricingMode.value ? props.rankings : EMPTY_MODELS));
+
+const pricing = usePricingMaps(pricingModels, () => costStore.values);
+const effectivePricingMap = pricing.effectivePricing;
+const monthlyCosts = pricing.monthlyCosts;
+const comparedModels = useCompareModels(() => props.rankings);
+
+usePruneCompareIds(() => props.rankings);
+
+const viewItems = computed(() => [
+  { id: "rankings" as const, label: t("modelRankings") },
+  { id: "pricing" as const, label: t("pricing") },
+]);
+
+const rankingColumns = computed(() => buildRankingColumns(t));
+const pricingColumns = computed(() => buildPricingColumns(t, effectivePricingMap.value));
+
+const pricingRows = computed<PricingRow[]>(() =>
+  props.rankings.map((model) => ({ model, monthlyCost: monthlyCosts.value.get(modelId(model)) ?? null })),
+);
+
+function handleCompare(): void {
+  navigate(pricingMode.value ? "/price-compare" : "/compare");
+}
+
+const modelRowName = (m: ArtificialAnalysisModel) => m.name || m.slug || modelId(m);
+const getAARowId = (model: ArtificialAnalysisModel) => modelId(model);
+const getAARowName = (model: ArtificialAnalysisModel) => modelRowName(model);
+const getPricingRowId = (row: PricingRow) => modelId(row.model);
+const getPricingRowName = (row: PricingRow) => modelRowName(row.model);
+const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
+</script>
+
+<template>
+  <div class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center gap-2 min-w-0">
+      <SegmentedGroup class="overflow-x-auto no-scrollbar" role="radiogroup" :aria-label="t('viewMode')">
+        <TabButton
+          v-for="item in viewItems"
+          :key="item.id"
+          role="radio"
+          :active="viewMode === item.id"
+          @click="setViewMode(item.id)"
+        >
+          {{ item.label }}
+        </TabButton>
+      </SegmentedGroup>
+    </div>
+
+    <CompareChipBar
+      :models="comparedModels"
+      :show-compare="true"
+      @remove="store.removeCompareModel"
+      @clear="store.clearCompare"
+      @compare="handleCompare"
+    >
+      <template #leading>
+        <p v-if="pricingMode" class="text-xs text-text-tertiary">{{ t("pricingDisclaimer") }}</p>
+      </template>
+    </CompareChipBar>
+    <SearchableDataTable
+      v-if="pricingMode"
+      :data="pricingRows"
+      :columns="pricingColumns"
+      :get-row-id="getPricingRowId"
+      :get-row-name="getPricingRowName"
+      :get-search-fields="getPricingSearchFields"
+    >
+      <template #expandedRow="{ row }">
+        <ModelExpandedDetail :model="row.model" />
+      </template>
+    </SearchableDataTable>
+    <SearchableDataTable
+      v-else
+      :data="rankings"
+      :columns="rankingColumns"
+      :get-row-id="getAARowId"
+      :get-row-name="getAARowName"
+      :get-search-fields="SEARCH_FIELDS.aa"
+    >
+      <template #expandedRow="{ row }">
+        <ModelExpandedDetail :model="row" />
+      </template>
+    </SearchableDataTable>
+  </div>
+</template>

@@ -12,17 +12,7 @@
           {
             "patterns": [
               {
-                "group": [
-                  "@/server",
-                  "@/server/*",
-                  "**/server/**",
-                  "@/functions",
-                  "@/functions/*",
-                  "**/functions/**",
-                  "@/functions-entry",
-                  "@/functions-entry/*",
-                  "**/functions-entry/**"
-                ],
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
                 "message": "Client code must not import server or functions code. Move the shared piece into src/shared."
               }
             ]
@@ -31,7 +21,7 @@
       }
     },
     {
-      "files": ["src/server/**/*.ts", "src/functions-entry/**/*.ts"],
+      "files": ["src/server/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -47,7 +37,7 @@
       }
     },
     {
-      "files": ["src/server/parsers/**/*.ts"],
+      "files": ["src/server/formats/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -55,13 +45,13 @@
             "patterns": [
               {
                 "group": [
-                  "@/server/config",
-                  "@/server/config/upstream",
-                  "@/server/config/timeouts",
-                  "@/server/config/cache",
-                  "@/server/config/keys"
+                  "@/server/upstream/upstream",
+                  "@/server/upstream/timeouts",
+                  "@/server/upstream/fetch-policies",
+                  "@/server/cache/config",
+                  "@/server/cache/keys"
                 ],
-                "message": "Parsers must stay pure: pass bytes/urls/timeouts as arguments instead of importing server config. Limits from @/server/config/limits are allowed."
+                "message": "Parsers must stay pure: pass bytes/urls/timeouts as arguments instead of importing server config. Limits from @/server/formats/limits are allowed."
               }
             ]
           }
@@ -80,28 +70,12 @@
                 "message": "src/shared must stay platform-neutral. Move the client piece into src/client."
               },
               {
-                "group": [
-                  "@/server",
-                  "@/server/*",
-                  "**/server/**",
-                  "@/functions",
-                  "@/functions/*",
-                  "**/functions/**",
-                  "@/functions-entry",
-                  "@/functions-entry/*",
-                  "**/functions-entry/**"
-                ],
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
                 "message": "src/shared must stay platform-neutral. Move the server piece into src/server."
               }
             ]
           }
         ]
-      }
-    },
-    {
-      "files": ["build/**/*.ts", "scripts/**/*.{ts,mjs,cjs}", "src/functions-entry/**/*.ts"],
-      "rules": {
-        "no-unused-vars": "error"
       }
     }
   ]

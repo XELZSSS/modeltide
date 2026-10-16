@@ -1,6 +1,6 @@
 import { queryClient } from "@/client/api/query-client";
-import { router } from "@/client/router";
-import type { Prefetchable } from "@/client/config/route-meta";
+import { router } from "./index.ts";
+import type { Prefetchable } from "./route-meta";
 
 export interface PrefetchTarget {
   queries?: readonly Prefetchable[];

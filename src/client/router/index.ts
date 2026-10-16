@@ -1,6 +1,6 @@
 import { computed, type ComputedRef } from "vue";
 import { createRouter, createWebHistory, useRoute, type Router } from "vue-router";
-import { ROUTES } from "@/client/config/routes";
+import { ROUTES } from "./routes";
 
 export const router: Router = createRouter({
   history: createWebHistory(),

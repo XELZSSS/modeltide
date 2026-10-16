@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import type { ThemeMode } from "@/shared/types";
 import type { Lang } from "@/shared/i18n";
 import { SETTINGS_STORAGE_VERSION, STORAGE_KEYS } from "@/shared/config";
-import { loadPersistedState, makeStorageSync } from "@/client/stores/make-persisted-store";
+import { loadPersistedState, makeStorageSync } from "./make-persisted-store";
 
 const VERSION = SETTINGS_STORAGE_VERSION;
 

@@ -3,7 +3,7 @@ import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq, unclampedPercent } from "@/shared/utils";
 import { modelId } from "@/shared/utils/models";
 import { resolveEffectivePricing, PRICE_LEG_IDS, PRICE_LEGS, type PriceLegPick } from "@/shared/utils/pricing";
-import { ceilToStep } from "@/client/theme/chart-theme";
+import { ceilToStep } from "@/client/charts/theme";
 export interface CompareRow<T> {
   id?: string;
   label: string;

@@ -34,12 +34,11 @@
 ## 目录
 
 ```text
-src/client/   SPA：视图、路由、组件、查询
-src/server/   数据源、解析器、缓存
-src/shared/   共享类型、配置、契约、i18n
-functions/    Pages Functions 入口：/api/* 路由
-public/       静态资源 + PWA
-scripts/      构建脚本
+src/client/   前端 SPA
+src/server/   后端 API
+src/shared/   共享代码
+functions/    Pages Functions 入口
+build/        构建脚本
 ```
 
 ## 快速开始

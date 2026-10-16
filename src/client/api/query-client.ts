@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/vue-query";
 import { FIVE_MINUTES, THIRTY_MINUTES } from "@/shared/config";
-import { ApiClientError, isAbortError } from "@/client/api/api-client";
+import { ApiClientError, isAbortError } from "./api-client";
 
 export const queryClient = new QueryClient({
   defaultOptions: {

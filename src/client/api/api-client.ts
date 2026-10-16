@@ -1,5 +1,5 @@
-import { CACHE_VERSION } from "@/shared/config/cache-version.gen";
-import { API_VERSION_PARAM } from "@/shared/config/paths";
+import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
+import { API_VERSION_PARAM } from "@/shared/config/api";
 import type { SourcePayload } from "@/shared/types";
 
 const CLIENT_FETCH_TIMEOUT_MS = 35_000;

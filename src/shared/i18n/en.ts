@@ -214,8 +214,6 @@ export const en = {
   langEn: "EN",
   navReleases: "Releases",
 
-  score: "Score",
-
   compareStale: "Some selected models are no longer listed and were removed.",
 } as const;
 

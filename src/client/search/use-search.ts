@@ -4,13 +4,12 @@ import {
   useArtificialRankings,
   useHallucinationRankings,
   useOpenRouterRankings,
-} from "@/client/api/api-queries";
+} from "@/client/api/hooks";
 import { unwrapListPartial } from "@/client/api/payload-normalize";
 import type { SearchResult } from "@/client/search/types";
 import type { OpenRouterRankEntry } from "@/shared/types";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { foldSearchStr } from "@/client/search/match";
-import { emptyArray } from "@/client/utils/empty";
 import type { ArtificialAnalysisModel, OpenSourceModelEntry } from "@/shared/types";
 import { defineSource, collect, detailLink, rankSearchHits, type SourceConfig } from "@/client/search/search-rank";
 
@@ -34,8 +33,8 @@ export function useSearchAllRankings(
   const openSourceQ = useAllOpenSourceModels(enabled);
   const orQ = useOpenRouterRankings(enabled);
 
-  const artificialData = computed(() => artificialQ.data.value ?? emptyArray<ArtificialAnalysisModel>());
-  const openSourceRankings = computed(() => openSourceQ.data.value ?? emptyArray<OpenSourceModelEntry>());
+  const artificialData = computed(() => artificialQ.data.value ?? ([] as ArtificialAnalysisModel[]));
+  const openSourceRankings = computed(() => openSourceQ.data.value ?? ([] as OpenSourceModelEntry[]));
   const openRouter = computed(() => {
     const unwrapped = unwrapListPartial<OpenRouterRankEntry>(orQ.data.value, "openRouterRankings");
     return { data: unwrapped.data, malformed: unwrapped.malformed };

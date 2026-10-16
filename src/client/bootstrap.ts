@@ -1,6 +1,6 @@
-import { router } from "@/client/router";
-import { initCompareStorageSync, initCostStorageSync, initSettingsStorageSync } from "@/client/stores";
-import { registerServiceWorker, unregisterStaleServiceWorker } from "@/client/pwa/pwa-client";
+import { router } from "./router";
+import { initCompareStorageSync, initCostStorageSync, initSettingsStorageSync } from "./stores";
+import { registerServiceWorker, unregisterStaleServiceWorker } from "./pwa-client";
 import { FONT_LOAD_SPECS } from "@/shared/pwa";
 
 function loadFonts(): void {
@@ -11,7 +11,7 @@ function loadFonts(): void {
 function boot(): void {
   registerServiceWorker();
   unregisterStaleServiceWorker();
-  if (router.resolve(window.location.pathname).name === "home") void import("@/client/utils/charts-register");
+  if (router.resolve(window.location.pathname).name === "home") void import("./charts/register");
   loadFonts();
 }
 

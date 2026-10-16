@@ -1,8 +1,8 @@
 import { computed, type ComputedRef } from "vue";
 import { createT, DOC_META, type Lang, type TFunction } from "@/shared/i18n";
-import { useSettingsStore } from "@/client/stores/settings-store";
+import { useSettingsStore } from "./stores/settings-store";
 
-export { syncDocumentMeta } from "@/client/router/document-meta";
+export { syncDocumentMeta } from "./router/document-meta";
 
 const translators = new Map<Lang, TFunction>();
 

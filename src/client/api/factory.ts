@@ -1,0 +1,60 @@
+import type { Query } from "@tanstack/query-core";
+import { useQuery, type QueryClient, type UseQueryReturnType } from "@tanstack/vue-query";
+import type { MaybeRefOrGetter } from "vue";
+import { STATIC_TTL_MS, THIRTY_MINUTES, apiPaths } from "@/shared/config";
+import type { ApiDomain, PayloadOf } from "@/shared/contract";
+import type { SourcePayload } from "@/shared/types";
+import { fetcher } from "./api-client";
+import { partialPollInterval } from "./partial-poll";
+
+type RawPayload<D extends ApiDomain> = SourcePayload<PayloadOf<D>>;
+
+export type QueryResult<D extends ApiDomain> = UseQueryReturnType<RawPayload<D>, Error>;
+
+type PollFn<D extends ApiDomain> = (
+  query: Query<RawPayload<D>, Error, RawPayload<D>, readonly unknown[]>,
+) => number | false;
+
+const QUERY_DEFAULTS = {
+  ttlMs: THIRTY_MINUTES,
+  gcTimeMs: THIRTY_MINUTES,
+  maxGcTimeMs: STATIC_TTL_MS,
+} as const;
+
+interface ApiQueryOptions<T> {
+  ttl?: number;
+  gcTime?: number;
+  partialRefetchMs?: number;
+  isPartialData?: (data: SourcePayload<T> | undefined) => boolean;
+  query?: Record<string, string>;
+}
+
+export function createApiQuery<D extends ApiDomain>(
+  domain: D,
+  key: readonly (string | number)[],
+  opts?: ApiQueryOptions<PayloadOf<D>>,
+) {
+  const { ttl, gcTime, partialRefetchMs, isPartialData, query } = opts ?? {};
+  const path = query ? `${apiPaths[domain]}?${new URLSearchParams(query)}` : apiPaths[domain];
+  const queryFn = fetcher<PayloadOf<D>>(path);
+  const ttlMs = ttl ?? QUERY_DEFAULTS.ttlMs;
+  const refetchInterval: number | false | PollFn<D> =
+    isPartialData != null && partialRefetchMs != null
+      ? (query) => partialPollInterval(query, isPartialData as (data: unknown) => boolean, partialRefetchMs)
+      : false;
+  const timing = {
+    gcTime: gcTime ?? Math.min(Math.max(ttlMs, QUERY_DEFAULTS.gcTimeMs), QUERY_DEFAULTS.maxGcTimeMs),
+    refetchInterval,
+    staleTime: ttlMs,
+  };
+  const use = (enabled?: MaybeRefOrGetter<boolean>): UseQueryReturnType<RawPayload<D>, Error> =>
+    useQuery<RawPayload<D>, Error>({ queryKey: key, queryFn, ...timing, enabled });
+  return {
+    domain,
+    key,
+    queryFn,
+    use,
+    prefetch: (client: QueryClient) =>
+      client.prefetchQuery({ queryKey: key, queryFn, staleTime: timing.staleTime, gcTime: timing.gcTime }),
+  };
+}

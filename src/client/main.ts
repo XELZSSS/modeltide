@@ -1,10 +1,10 @@
 import { createApp } from "vue";
 import { createPinia } from "pinia";
 import { VueQueryPlugin } from "@tanstack/vue-query";
-import App from "@/client/app.vue";
-import { router } from "@/client/router";
-import { queryClient } from "@/client/api/query-client";
-import { initBootstrap } from "@/client/bootstrap";
+import App from "./app.vue";
+import { router } from "./router";
+import { queryClient } from "./api/query-client";
+import { initBootstrap } from "./bootstrap";
 import "@/styles/globals.css";
 
 const app = createApp(App);

@@ -3,20 +3,20 @@ export type {
   ModelOmniscienceBreakdown,
   ArtificialAnalysisModel,
   TextToImageModel,
-} from "@/shared/types/catalog";
+} from "./catalog";
 
 export type {
   OpenRouterRankEntry,
   OpenSourceModelEntry,
   ClosedReleaseEntry,
   HallucinationRankingEntry,
-} from "@/shared/types/rankings";
+} from "./rankings";
 
-export type { NewsCategory, NewsItem } from "@/shared/types/news";
-export { NEWS_CATEGORIES, isNewsCategory } from "@/shared/types/news";
-export type { BenchmarkKey } from "@/shared/types/benchmark";
-export { BENCHMARK_KEYS } from "@/shared/types/benchmark";
+export type { NewsCategory, NewsItem } from "./news";
+export { NEWS_CATEGORIES, isNewsCategory } from "./news";
+export type { BenchmarkKey } from "./benchmark";
+export { BENCHMARK_KEYS } from "./benchmark";
 
-export type { ThemeMode, HomeOpenSourceEntry, HomeDashboardData, ModelSource } from "@/shared/types/app";
+export type { ThemeMode, HomeOpenSourceEntry, HomeDashboardData, ModelSource } from "./app";
 
-export type { SourcePayload } from "@/shared/types/payload";
+export type { SourcePayload } from "./payload";

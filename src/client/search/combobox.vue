@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { Search, X } from "@lucide/vue";
 import { cn } from "@/client/utils/cn";
-import Input from "@/client/components/ui/input.vue";
+import Input from "@/client/components/input.vue";
 import { useTranslation } from "@/client/i18n";
 import type { ComboboxController } from "./use-combobox";
 

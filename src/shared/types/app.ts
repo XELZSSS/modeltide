@@ -1,5 +1,5 @@
-import type { TextToImageModel } from "@/shared/types/catalog";
-import type { OpenRouterRankEntry, OpenSourceModelEntry } from "@/shared/types/rankings";
+import type { TextToImageModel } from "./catalog";
+import type { OpenRouterRankEntry, OpenSourceModelEntry } from "./rankings";
 
 export type ThemeMode = "light" | "dark";
 

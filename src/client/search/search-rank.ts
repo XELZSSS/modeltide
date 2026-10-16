@@ -1,8 +1,8 @@
 import { modelDetailPath } from "@/shared/utils/models";
-import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/config/nav-config";
-import { matchFolded, fuzzyHit, preparedFieldsFor, type PreparedFields } from "@/client/search/match";
+import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/nav/nav-config";
+import { matchFolded, fuzzyHit, preparedFieldsFor, type PreparedFields } from "./match";
 import { normalizeModelKey } from "@/shared/utils";
-import type { SearchResult, SearchResultSource } from "@/client/search/types";
+import type { SearchResult, SearchResultSource } from "./types";
 import type {
   ArtificialAnalysisModel,
   HallucinationRankingEntry,

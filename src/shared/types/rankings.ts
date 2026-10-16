@@ -1,4 +1,4 @@
-import type { ModelPricing } from "@/shared/types/catalog";
+import type { ModelPricing } from "./catalog";
 
 type OpenRouterCategory = "coding" | "reasoning" | "general";
 

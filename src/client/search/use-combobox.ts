@@ -1,7 +1,7 @@
 import { computed, ref, toValue, useId, watch, type MaybeRefOrGetter, type Ref } from "vue";
-import { useClickOutside } from "@/client/search/use-click-outside";
-import { useDebouncedTerm } from "@/client/search/use-debounced-term";
-import { useListKeyboard } from "@/client/search/use-list-keyboard";
+import { useClickOutside } from "./use-click-outside";
+import { useDebouncedTerm } from "./use-debounced-term";
+import { useListKeyboard } from "./use-list-keyboard";
 
 interface ComboboxOptions {
   initialValue: string;
