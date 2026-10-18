@@ -9,8 +9,7 @@ export interface ReleaseRow {
   link: string | null;
 }
 
-// releaseDate is "YYYY-MM-DD" (server releases/parse.ts forces isoDate before
-// persisting), and date-only ISO strings always parse to a finite timestamp.
+// releaseDate is "YYYY-MM-DD" (server releases/parse.ts forces isoDate before persisting), so Date.parse always yields a finite timestamp.
 function fromClosedReleases(releases: ClosedReleaseEntry[]): ReleaseRow[] {
   const rows: ReleaseRow[] = [];
   for (const e of releases) {

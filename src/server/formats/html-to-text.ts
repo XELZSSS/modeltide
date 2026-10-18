@@ -34,12 +34,12 @@ function tagNameOf(tagInner: string): string {
   return (m?.[0] ?? "").toLowerCase().replace(/^\//, "");
 }
 
-const SCRIPT_CLOSE_RE = /<\/script\s*>/gi;
-const STYLE_CLOSE_RE = /<\/style\s*>/gi;
-
 export function stripHtml(s: unknown): string {
   if (typeof s !== "string" || !s) return "";
   const parts: string[] = [];
+  // Local instances: a shared /g regex carries lastIndex state and is not reentrant.
+  const scriptCloseRe = /<\/script\s*>/gi;
+  const styleCloseRe = /<\/style\s*>/gi;
   let i = 0;
   while (i < s.length) {
     if (s.startsWith("<!--", i)) {
@@ -87,7 +87,7 @@ export function stripHtml(s: unknown): string {
       continue;
     }
     if (name === "script" || name === "style") {
-      const closeRe = name === "script" ? SCRIPT_CLOSE_RE : STYLE_CLOSE_RE;
+      const closeRe = name === "script" ? scriptCloseRe : styleCloseRe;
       closeRe.lastIndex = end + 1;
       const m = closeRe.exec(s);
       parts.push(" ");

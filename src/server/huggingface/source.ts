@@ -22,18 +22,11 @@ function isValidHFModelId(value: string): boolean {
 
 const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", "createdAt", "lastModified"];
 
-// HF paginates via `Link: <...cursor=...>; rel="next"`. Page size 100 keeps
-// each upstream response small; pagination stops at the safety ceiling so a
-// single invocation cannot exhaust the Workers subrequest budget or exceed
-// the 35s client timeout on cold cache (deep pages get slower and abort).
-// 15 pages (~1500 raw, ~950 kept after license/ranking gates) is plenty for
-// the rankings table; the previous 30-page ceiling aborted around page 27.
+// HF paginates via `Link: rel="next"`; these caps keep one invocation inside the Workers subrequest + timeout budget.
 const HF_PAGE_LIMIT = 100;
 const HF_MAX_PAGES = 15;
 
-// Home dashboard only needs top entries + a representative task-share sample.
-// Fetching the full list for it reliably exceeds the 35s client
-// timeout on cold cache (no KV) and aborts deep pagination. Keep it small.
+// Home dashboard needs only a sample; the full list exceeds the 35s cold-cache client timeout.
 const HOME_HF_MAX_PAGES = 5;
 
 interface HFRaw {
@@ -66,9 +59,7 @@ async function fetchHFModelsAll(ctx: AppContext, p: OpenSourceModelsQuery, maxPa
     try {
       page = await fetchHFPage(ctx, url);
     } catch (err) {
-      // Caller abort / upstream timeout deep in pagination: keep the pages we
-      // already have instead of failing the whole leg. Home dashboard then
-      // serves a degraded-but-useful payload instead of `partial` with zero rows.
+      // Keep the pages already fetched on abort/timeout: a degraded payload beats a failed leg.
       if (items.length === 0) throw err;
       if (err instanceof ClientAbortError || isTimeoutLike(err)) {
         ctx.log(
@@ -122,8 +113,7 @@ function parseHFItems(items: HFModel[], ctx: AppContext): OpenSourceModelEntry[]
   requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
   const dropped = items.length - kept.length;
   if (dropped > 0) {
-    // License/ranking gates are intentional filtering, not missing data:
-    // log at info so it isn't mistaken for a partial-data warning.
+    // Intentional filtering, not missing data: log at info so it isn't a partial-data warning.
     ctx.log("info", `[huggingface] filtered ${dropped}/${items.length} rows (non-open license or zero downloads)`);
   }
   return bucket;
@@ -137,9 +127,7 @@ async function loadHFModels(
   const raw = await fetchHFModelsAll(ctx, p, maxPages);
   const rows = parseHFItems(raw.items, ctx);
   if (raw.truncated) {
-    // Safety ceiling, not a source failure: upstream served every page we
-    // asked for; we simply stopped paginating. Keep partial=false so the
-    // UI doesn't report "incomplete data" for a healthy response.
+    // Safety ceiling, not a source failure: keep partial=false so the UI doesn't report incomplete data.
     ctx.log("info", "[huggingface] pagination stopped at safety ceiling", {
       pages: raw.pageCount,
       raw: raw.items.length,
@@ -160,9 +148,7 @@ export const getModels = (ctx: AppContext, p: OpenSourceModelsQuery): Promise<So
     },
   );
 
-// Home dashboard slice: own cache key (must not pollute the full-list key
-// above) and a small page budget so cold-cache refresh fits in the client
-// timeout. Task-share doughnut aggregates over this sample client-side.
+// Home slice: own cache key (must not pollute the full-list key) and a small page budget to fit the client timeout.
 export const getHomeOpenSourceModels = (
   ctx: AppContext,
   p: OpenSourceModelsQuery,
@@ -204,6 +190,7 @@ export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload
       const model = await fetchHFModelById(ctx, trimmed);
       return model == null ? { rows: model, ttl: ONE_MINUTE } : { rows: model };
     },
+    // Memory-only: ids are caller-supplied, so persisting them would burn the KV write quota.
     { memoryOnly: true, staleCapMs: NEGATIVE_STALE_CAP_MS },
   );
 };

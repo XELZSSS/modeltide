@@ -24,9 +24,7 @@ function initialThemeMode(): ThemeMode {
     if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
-  } catch {
-    // ignore - fall through to default
-  }
+  } catch {}
   return "light";
 }
 

@@ -12,12 +12,7 @@ export function nextIndexForKey(key: string, index: number, length: number): num
   return null;
 }
 
-/**
- * Roving-focus keydown shared by tab containers and segmented controls:
- * resolves the next item and calls `preventDefault()` for handled keys.
- * Callers emit their own change event and focus `element-${returnedId}`
- * afterwards, in that order.
- */
+/** Resolves the next roving item and calls `preventDefault()`; callers must then emit the change event. */
 export function nextRovingId(
   event: KeyboardEvent,
   items: readonly { id: string }[],
@@ -31,4 +26,42 @@ export function nextRovingId(
   if (nextIndex == null) return null;
   event.preventDefault();
   return items[nextIndex]?.id ?? null;
+}
+
+/** Wiring for a `role="radiogroup"` built from `role="radio"` buttons. */
+export interface RovingRadioConfig<Id extends string> {
+  items: () => readonly Id[];
+  activeId: () => Id;
+  elementId: (id: Id) => string;
+  select: (id: Id) => void;
+}
+
+export interface RovingRadio<Id extends string> {
+  tabIndexFor: (id: Id) => number;
+  onKeydown: (event: KeyboardEvent) => void;
+}
+
+/**
+ * Roving tabindex + arrow/Home/End selection for a `role="radiogroup"` of `role="radio"`s;
+ * bind `onKeydown` on the group and `tabIndexFor(id)` on every option.
+ */
+export function useRovingRadio<Id extends string>(config: RovingRadioConfig<Id>): RovingRadio<Id> {
+  function tabIndexFor(id: Id): number {
+    return id === config.activeId() ? 0 : -1;
+  }
+
+  function onKeydown(event: KeyboardEvent): void {
+    const ids = config.items();
+    const nextId = nextRovingId(
+      event,
+      ids.map((id) => ({ id })),
+      config.activeId(),
+    );
+    const next = ids.find((id) => id === nextId);
+    if (next == null) return;
+    config.select(next);
+    document.getElementById(config.elementId(next))?.focus();
+  }
+
+  return { tabIndexFor, onKeydown };
 }

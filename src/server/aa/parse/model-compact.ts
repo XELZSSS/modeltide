@@ -92,7 +92,6 @@ function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unkn
 }
 
 export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
-  // Sole production caller feeds mergeBySlug output — always record-shaped.
   const rec = m;
   const creator = obj(rec.creator);
   const creatorName = creator ? str(creator.name).trim() : "";
@@ -110,10 +109,7 @@ export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
     release_date: isoDate(strOr(rec.releaseDate)),
     is_open_weights: bool(rec.isOpenWeights) ?? false,
     parameters: parameters != null && parameters > 0 ? parameters : null,
-    // paramClass is a label upstream ("large"), but a bare number arriving here
-    // (e.g. 70 for a 70B model) would be dropped by a string-only coercion.
-    // Coerce numbers to their string form so the size class survives either
-    // wire form instead of silently becoming null.
+    // sizeClass arrives upstream as a label or a bare number; keep both forms.
     size_class: strOr(rec.sizeClass) ?? numericLabel(rec.sizeClass),
     coding_index: compactCodingIndex(rec),
     agentic_index: clampedPercent(numCoerce(rec.analystAgent)),

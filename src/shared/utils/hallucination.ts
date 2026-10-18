@@ -2,7 +2,6 @@ import type { ArtificialAnalysisModel } from "@/shared/types/catalog";
 import type { HallucinationRankingEntry } from "@/shared/types/rankings";
 
 export function buildHallucinationRankings(models: ArtificialAnalysisModel[]): HallucinationRankingEntry[] {
-  // for-loop + push avoids a throwaway empty array per model without data.
   const out: HallucinationRankingEntry[] = [];
   for (const model of models) {
     const total = model.omniscience_breakdown?.total;

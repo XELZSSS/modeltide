@@ -18,8 +18,7 @@ const showBenchmarksSection = computed(
 const benchmarkStats = computed(() => {
   const benchmarks = props.model.benchmarks;
   if (!benchmarks) return [];
-  // Values arrive final from the server: percent-scaled for relative
-  // benchmarks and raw for absolute ones — no client-side rescaling.
+  // Server sends final values (percent for relative, raw for absolute): no client rescaling.
   return Object.entries(benchmarks)
     .map(([key, value]) => ({ key, display: value }))
     .filter((entry) => entry.display != null);

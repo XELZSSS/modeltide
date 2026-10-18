@@ -20,11 +20,13 @@ const OpenSourceCard = loadableView(() => import("./open-source-card.vue"));
 
 const { t } = useTranslation();
 
-const artificialState = await useSuspenseArtificialRankingsState();
+const [artificialState, hallucinationRankings, dashboardData, closedReleasesState] = await Promise.all([
+  useSuspenseArtificialRankingsState(),
+  useSuspenseHallucinationRankings(),
+  useSuspenseHomeDashboard(),
+  useSuspenseClosedReleasesState(),
+]);
 assertPayloadShape(artificialState.value.malformed, "artificialIndex");
-const hallucinationRankings = await useSuspenseHallucinationRankings();
-const dashboardData = await useSuspenseHomeDashboard();
-const closedReleasesState = await useSuspenseClosedReleasesState();
 assertPayloadShape(closedReleasesState.value.malformed, "closedReleases");
 const artificialData = computed(() => artificialState.value.items);
 

@@ -49,8 +49,7 @@ export function buildContext(
       refresh ??= {
         ...base,
         cache: new CacheService(kv, CACHE_VERSION, { onDetach: init?.onDetach, log: logger }),
-        // Share the base pools: the platform budget is per invocation, so the
-        // foreground client and its background refreshes must draw from one pool.
+        // Share the base pools: the connection budget is per invocation.
         http: new HttpClient({ signal: AbortSignal.timeout(SHARED_REFRESH_TIMEOUT_MS), pools: base.http.pools }),
       };
       return refresh;

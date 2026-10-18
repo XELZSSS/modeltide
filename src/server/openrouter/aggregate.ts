@@ -37,11 +37,7 @@ interface Group {
   metric: number | null;
 }
 
-// Upstream serves `change` as a ratio (0.005 == +0.5%), but a value already
-// expressed in percent (0.5) is indistinguishable by type alone. |v| < 1 is
-// treated as a ratio — a genuine 100%-plus swing arrives as >= 1 — so the two
-// wire forms both land on the same percentage scale instead of the percent
-// form being silently inflated 100x.
+// Upstream `change` is a ratio (0.005 = +0.5%) but percent values also appear; |v| < 1 means ratio.
 function changePercent(value: unknown): number | null {
   const n = numCoerce(value);
   if (n == null) return null;
@@ -55,10 +51,7 @@ function lookupPricing(pricing: PricingLookup, key: string): PricingEntry | unde
   return Object.hasOwn(pricing, key) ? pricing[key] : undefined;
 }
 
-// normalizeModelKey strips punctuation and rebuilds the key from tokens, which
-// is far costlier than the lowercase pass. Rankings rows repeat the same
-// permaslug/variant across many days, so memoize the normalized form per call
-// instead of recomputing it for every candidate of every row.
+// Memoized: normalizeModelKey costs far more than a lowercase pass and rows repeat the same slugs.
 const NORMALIZED_KEY_CACHE_MAX = 8192;
 const normalizedKeyCache = new Map<string, string>();
 
@@ -67,9 +60,6 @@ function normalizeKeyCached(raw: string): string {
   if (normalized === undefined) {
     normalized = normalizeModelKey(raw);
     normalizedKeyCache.set(raw, normalized);
-    // Upstream slugs drift over time, so entries never expire naturally — keep
-    // the long-lived memo bounded (drop oldest by insertion order) instead of
-    // letting it grow for the life of the isolate.
     pruneBounded(normalizedKeyCache, NORMALIZED_KEY_CACHE_MAX, () => false);
   }
   return normalized;

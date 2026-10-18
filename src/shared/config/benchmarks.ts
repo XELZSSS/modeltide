@@ -3,12 +3,7 @@ import { BENCHMARK_KEYS, type BenchmarkKey } from "@/shared/types/benchmark";
 
 export { BENCHMARK_KEYS, type BenchmarkKey };
 
-// Benchmarks whose live value is already an absolute score rather than a 0-1
-// ratio, verified against the 2026-10 payloads: briefcaseElo ranges 832-1817
-// and cyberIndex 12.7-56.4, so both must skip the ratio->percent conversion.
-// gdpval used to be listed here too, but gdpvalNormalized actually spans
-// 0.00-0.68 — the same scale as gpqa/hle — and was rendering as a fraction of
-// one percent, so it now goes through the normal percent conversion.
+// briefcaseElo (832-1817) and cyberIndex (12.7-56.4) are absolute scores, not 0-1 ratios, so they skip the ratio->percent conversion (gdpvalNormalized spans 0.00-0.68 and must keep it).
 export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["briefcase_elo", "cyber_index"]);
 
 export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {

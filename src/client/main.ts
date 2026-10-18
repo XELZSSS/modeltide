@@ -19,6 +19,12 @@ app.config.errorHandler = (err, _instance, info) => {
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");
-app.mount(root);
 
-initBootstrap();
+// Mount after the first navigation: lazy routes resolve async and would paint an empty RouterView; a failed navigation still mounts the shell.
+void router
+  .isReady()
+  .catch(() => {})
+  .then(() => {
+    app.mount(root);
+    initBootstrap();
+  });

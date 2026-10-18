@@ -3,10 +3,7 @@ import { titleCase } from "@/shared/utils/text";
 
 const TASK_SLICE_LIMIT = 5;
 export const OTHER_TASK_KEY = "__other__";
-// Models carrying no task tag at all are a different thing from the ranked tail:
-// one is missing data, the other is real tasks that did not make the top cut.
-// Collapsing both into a single "Other" slice made the legend ambiguous, so
-// they get their own slices.
+// Missing task data and the ranked tail are different things: keep separate slices.
 export const UNTAGGED_TASK_KEY = "__untagged__";
 
 export interface TaskSlice {
@@ -14,7 +11,7 @@ export interface TaskSlice {
   total: number;
 }
 
-const TASK_LABEL_KEYS: Record<string, TranslationKey> = {
+export const TASK_LABEL_KEYS: Record<string, TranslationKey> = {
   "text-generation": "taskTextGeneration",
   "text-to-image": "taskTextToImage",
   "image-text-to-text": "taskImageTextToText",
@@ -51,8 +48,7 @@ export function aggregateTaskShare(models: { task: string | null | undefined }[]
     counts.set(task, (counts.get(task) ?? 0) + 1);
   }
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  // `total` stays the count of every model so the share percentages keep their
-  // original denominator; only the slice breakdown distinguishes the two cases.
+  // total counts every model so slice shares keep the original denominator.
   let total = untagged;
   const slices: TaskSlice[] = ranked.slice(0, TASK_SLICE_LIMIT).map(([key, count]) => {
     total += count;

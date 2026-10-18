@@ -87,8 +87,6 @@ function resolveMarkersInLine<T>(
   };
   let resolved = 0;
   for (let mi = 0; mi < markers.length; mi++) {
-    // boundaries[mi] was computed as `!results[mi] && boundary`, and results
-    // haven't been written since, so the `results[mi]` recheck is redundant.
     if (!boundaries[mi]) continue;
     for (const raw of raws) {
       const tree = treeOf(raw);

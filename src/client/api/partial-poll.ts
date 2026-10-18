@@ -1,9 +1,6 @@
 const MAX_PARTIAL_POLLS = 5;
 
-// Entries are removed only when the payload stops being partial or the poll
-// budget is spent, so a source that stays partial forever (or a memoized key
-// that is never revisited) would otherwise leak one entry per key. Bound it
-// with LRU eviction, matching the memoization in api/catalog.ts.
+// Entries only clear when the payload stops being partial or the budget is spent, so bound the map.
 const MAX_TRACKED_KEYS = 256;
 
 const partialPollCounts = new Map<string, number>();
@@ -36,8 +33,7 @@ export function partialPollInterval(
     return false;
   }
   const settled = (state?.dataUpdateCount ?? 0) + (state?.errorUpdateCount ?? 0);
-  // A query reset (route change) zeroes dataUpdateCount; restart the window
-  // from the current count instead of keeping a stale, larger base.
+  // A query reset (route change) zeroes dataUpdateCount; restart the window from the current count.
   const prev = partialPollCounts.get(pollKey);
   const base = prev == null || settled < prev ? settled : prev;
   trackBase(pollKey, base);

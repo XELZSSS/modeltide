@@ -88,7 +88,6 @@ export interface SourceSpec<TRaw, TRow> {
   scope?: CacheScope;
   label: string;
   fetch: (ctx: AppContext) => Promise<TRaw>;
-  // Implementations may declare fewer params than the signature passes (ctx is optional).
   parse: (raw: TRaw, ctx: AppContext) => TRow[];
   partialWhen?: (stats: { raw: TRaw }) => { partial: boolean; ttl?: number; log?: Record<string, unknown> };
   cap?: number;

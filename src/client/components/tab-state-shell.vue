@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { watch } from "vue";
 import { assertPayloadShape } from "@/client/api/payload-normalize";
 import PartialNotice from "./partial-notice.vue";
 import EmptyState from "./empty-state.vue";
@@ -9,26 +10,27 @@ import type { TranslationKey } from "@/shared/i18n";
 interface TabState {
   items: readonly unknown[];
   partial: boolean;
-  /** Set by unwrapListPartial when the payload could not be parsed. */
   malformed: boolean;
 }
 
 const props = defineProps<{
   state: TabState;
-  /** Domain label used in the error raised for a malformed payload. */
   domain: ApiDomain;
   emptyMessageKey?: TranslationKey;
 }>();
 
-// A malformed payload escalates the tab to the error boundary instead of
-// rendering an empty tab.
-assertPayloadShape(props.state.malformed, props.domain);
+// Watched, not read once at setup: a payload that only turns malformed after mount must still raise.
+watch(
+  () => props.state.malformed,
+  (malformed) => assertPayloadShape(malformed, props.domain),
+  { immediate: true },
+);
 
 const { t } = useTranslation();
 </script>
 
 <template>
-  <PartialNotice v-if="props.state.partial || props.state.malformed" />
+  <PartialNotice v-if="props.state.partial" />
   <EmptyState
     v-if="props.state.items.length === 0"
     variant="plain"

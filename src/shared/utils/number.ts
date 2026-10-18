@@ -83,7 +83,6 @@ export function formatTokens(n: number | null | undefined, t?: TFunction): strin
 
 export function formatScore(n: number | null | undefined, t: TFunction): string {
   if (!isFiniteNumber(n)) return t("notAvailable");
-  // Scores above 1M are upstream anomalies, not displayable values (caller shows N/A).
   if (Math.abs(n) > 1_000_000) return t("notAvailable");
   return n.toFixed(2);
 }

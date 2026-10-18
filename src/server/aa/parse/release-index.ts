@@ -1,6 +1,7 @@
 import { isRecord, str } from "@/server/formats/parser-primitives";
 import { extractNeedleJsonArrays } from "@/server/formats/rsc-needle";
 import { MAX_SCAN_CHARS } from "@/server/formats/rsc-limits";
+import { fnv1aHash } from "@/server/util/hash";
 
 const CANDIDATE_PREFIX_CHARS = 256;
 
@@ -53,16 +54,18 @@ interface ReleaseIndexScan {
   modelArrays: unknown[];
 }
 
-let cachedHtml = "";
+let cachedFingerprint = "";
 let cachedScan: ReleaseIndexScan | null = null;
 
 export function scanReleaseIndex(html: string): ReleaseIndexScan {
-  if (cachedScan && cachedHtml === html) return cachedScan;
+  // Memo on a fingerprint: retaining the multi-MB payload doubled the isolate's footprint.
+  const fingerprint = `${html.length}:${fnv1aHash(html)}`;
+  if (cachedScan && cachedFingerprint === fingerprint) return cachedScan;
   const scan: ReleaseIndexScan = {
     releases: collectReleases(html),
     modelArrays: extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS),
   };
-  cachedHtml = html;
+  cachedFingerprint = fingerprint;
   cachedScan = scan;
   return scan;
 }

@@ -88,8 +88,7 @@ export function stripBodyForHead(res: Response): Response {
 }
 
 function mapApiError(err: unknown, method: string, path: string, clientAborted: boolean): Response {
-  // A request the caller already dropped is not an upstream failure: report it as
-  // 499 instead of logging a misleading timeout for it.
+  // A dropped request is not an upstream failure: report 499, not a timeout.
   if (clientAborted || err instanceof ClientAbortError) {
     return errorJson(499, "Client closed request");
   }

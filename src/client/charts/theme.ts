@@ -82,8 +82,7 @@ export function ceilToStep(peak: number, step = AXIS_STEP): number {
 }
 
 export function seriesColor(theme: ChartTheme, index: number): string {
-  // Themes only come from resolveChartTheme/FALLBACK_THEME, whose palette
-  // entries are always non-empty strings; `||` still covers a blank/missing slot.
+  // Palette entries are always non-empty; `||` only guards a blank/missing slot.
   return theme.palette[index % theme.palette.length] || "#888888";
 }
 

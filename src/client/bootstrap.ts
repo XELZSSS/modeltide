@@ -20,7 +20,6 @@ function bootWhenLoaded(): void {
   else window.addEventListener("load", boot, { once: true });
 }
 
-/** Kick off client-side boot tasks once the page is idle: storage sync, PWA, fonts, charts. */
 export function initBootstrap(): void {
   initSettingsStorageSync();
   initCompareStorageSync();

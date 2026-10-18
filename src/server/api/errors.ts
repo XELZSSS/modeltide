@@ -4,8 +4,7 @@ export { errMsg };
 
 export function isTimeoutLike(err: unknown): boolean {
   if (err instanceof UpstreamError) return err.causedByTimeout;
-  // DOMException (e.g. AbortSignal.timeout's TimeoutError) is not instanceof Error
-  // in some runtimes, so check name on any object.
+  // DOMException (e.g. AbortSignal.timeout) is not `instanceof Error` in some runtimes, so match on name.
   const name = (err as { name?: unknown } | null | undefined)?.name;
   return name === "TimeoutError" || name === "AbortError";
 }

@@ -33,8 +33,7 @@ function isSubrequestLimit(err: unknown): boolean {
   return msg.includes("Too many subrequests");
 }
 
-// fetch() rejections carry the real reason (DNS, TCP reset, TLS) on `message`/`cause`.
-// Truncate so upstream logs stay readable while keeping the signal.
+// fetch() rejections carry DNS/TCP/TLS detail on `message`/`cause`; truncate so logs stay readable.
 const FETCH_ERROR_DETAIL_MAX = 160;
 
 function describeFetchError(err: unknown): string {
@@ -121,8 +120,7 @@ export class HttpClient {
   ): Promise<AttemptOutcome<T>> {
     let res: Response | null = null;
     try {
-      // Resolve `fetch` lazily per call: never store the Pages Functions
-      // global by reference ahead of time.
+      // Resolve `fetch` per call: never capture the Pages Functions global ahead of time.
       res = await fetch(url, { headers, signal, ...rest });
     } catch (err) {
       if (isSubrequestLimit(err)) {
@@ -150,9 +148,7 @@ export class HttpClient {
         if (initSignal?.aborted) {
           return { kind: "throw", error: new ClientAbortError(`Client aborted body read for ${url}`) };
         }
-        // A body read killed by this attempt's own deadline is the same failure
-        // as a fetch-stage timeout: consume the retry budget instead of
-        // surfacing a 504 straight away, keeping the two stages symmetric.
+        // A body read killed by this attempt's deadline is a timeout like the fetch stage; spend retries too.
         if (err instanceof UpstreamError && err.causedByTimeout && deadline.aborted) {
           return { kind: "fail", message: err.message, cause: undefined, status: null, timedOut: true };
         }
@@ -183,8 +179,7 @@ export class HttpClient {
       const outcome = await this.withSlot(
         signal,
         () => this.attemptFetch(url, headers, read, signal, deadline, initSignal, rest),
-        // Losing the slot race is either the caller hanging up or this attempt's
-        // own deadline; only the deadline should report as a 504 upstream timeout.
+        // Slot-race loss is either the caller hanging up or this attempt's own deadline.
         (): AttemptOutcome<T> =>
           initSignal?.aborted
             ? { kind: "throw", error: new ClientAbortError(`Client aborted fetch for ${url}`) }

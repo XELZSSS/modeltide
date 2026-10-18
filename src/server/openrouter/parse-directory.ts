@@ -46,10 +46,7 @@ function buildPricingEntry(
 
 function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
   const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
-  // Live directory omits input_cache_write on many rows but provides
-  // input_cache_write_1h; fall back so cache-write isn't needlessly null.
-  // web_search / image_output / overrides are intentionally ignored:
-  // ModelPricing tracks per-token text pricing only.
+  // Many live rows omit input_cache_write but provide the _1h form; only text pricing is tracked.
   const cacheWriteRaw = pricing.input_cache_write ?? pricing.input_cache_write_1h;
   return buildPricingEntry(
     numCoerceNonNegative(pricing.prompt),

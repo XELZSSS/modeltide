@@ -38,8 +38,7 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
   for (const locator of locators) {
     let from = 0;
     for (;;) {
-      // Bound upfront: high-frequency needles on multi-MB bodies could
-      // otherwise keep scanning the tail with a full candidate set.
+      // Bound upfront: a full candidate set on multi-MB bodies keeps scanning the tail.
       if (candidates.length >= cap) break;
       const at = text.indexOf(locator, from);
       if (at === -1) break;

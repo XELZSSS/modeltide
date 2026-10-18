@@ -4,8 +4,7 @@ interface KvBinding {
   delete(key: string): Promise<void>;
 }
 
-// Constructed only when the CACHE binding exists; callers route around it
-// (memory-only fallback) otherwise.
+// Only constructed when the CACHE binding exists; callers use memory-only otherwise.
 export class KvStore {
   constructor(private readonly binding: KvBinding) {}
 

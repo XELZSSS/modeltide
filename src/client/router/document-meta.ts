@@ -30,10 +30,11 @@ export function useDocumentTitle(): (title: string) => void {
 
 export function useDocumentMeta(): void {
   const route = useRoute();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const setDocumentTitle = useDocumentTitle();
+  // `lang` is part of the watched source: the title is translated, so a language switch must re-set it.
   watch(
-    () => [route.name, route.meta.titleKey],
+    () => [route.name, route.meta.titleKey, lang.value],
     () => {
       if (route.name == null) return;
       const known = route.name !== "notFound";

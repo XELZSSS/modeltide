@@ -39,9 +39,7 @@ watch(
   () => route.fullPath,
   (now, was) => {
     openSheet.value = null;
-    // fullPath is a superset trigger: sheets close on every navigation, while
-    // scroll restores only for path navigation (query-only moves, e.g. ?tab=,
-    // keep scroll position).
+    // fullPath closes sheets on every navigation, but scroll restores only on path changes (a ?tab= move keeps scroll).
     const pathOf = (fullPath: string): string => fullPath.split("?")[0]!.split("#")[0]!;
     if (pathOf(now) !== pathOf(was)) restoreScroll();
   },

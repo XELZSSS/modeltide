@@ -52,9 +52,13 @@ function onFieldChange(field: CostFieldDef, value: string): void {
         class="w-20 h-9 shrink-0"
         :model-value="field.value"
         :aria-invalid="isInvalid(field.value) ? true : undefined"
+        :aria-describedby="isInvalid(field.value) ? `cost-${field.id}-error` : undefined"
         @update:model-value="onFieldChange(field, $event)"
       />
       <span v-if="field.unit" class="text-xs text-text-secondary shrink-0">{{ field.unit }}</span>
+      <p v-if="isInvalid(field.value)" :id="`cost-${field.id}-error`" class="w-full text-xs text-destructive">
+        {{ t("invalidCostValue") }}
+      </p>
     </div>
     <div v-else class="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
       <Input
@@ -67,11 +71,15 @@ function onFieldChange(field: CostFieldDef, value: string): void {
         :placeholder="field.label"
         :aria-label="field.unit ? `${field.label} (${field.unit})` : field.label"
         :aria-invalid="isInvalid(field.value) ? true : undefined"
+        :aria-describedby="isInvalid(field.value) ? `cost-${field.id}-error` : undefined"
         @update:model-value="onFieldChange(field, $event)"
       />
       <label :for="`cost-${field.id}`" class="ui-caption min-w-0 cursor-text">
         {{ field.unit ? `${field.label} (${field.unit})` : field.label }}
       </label>
+      <p v-if="isInvalid(field.value)" :id="`cost-${field.id}-error`" class="w-full text-xs text-destructive">
+        {{ t("invalidCostValue") }}
+      </p>
     </div>
   </template>
   <div v-if="layout === 'input-label' && avgCost !== undefined" class="flex items-center gap-2">

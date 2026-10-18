@@ -11,9 +11,7 @@ const SW_VERSION_DECL = /const SW_VERSION = "[^"]*";/;
 const SW_SHELL_DECL = /const PRECACHE_SHELL = \[[\s\S]*?\];/;
 const SHELL_ASSET = /<(?:script|link)\b[^>]*\s(?:src|href)="(\/assets\/[^"]+)"/g;
 
-// public/sw.js ships an empty PRECACHE_URLS shell tagged with this marker; the
-// static entries from src/shared/pwa.ts are injected here so that file stays the
-// single source of truth.
+// public/sw.js ships an empty PRECACHE_URLS shell tagged with this marker; the static entries come from src/shared/pwa.ts.
 const PRECACHE_MARKER = "// @generated-from src/shared/pwa.ts by build/plugins/sw-version.ts — do not edit by hand";
 const PRECACHE_DECL = "const PRECACHE_URLS = [";
 const PRECACHE_TAIL = "...PRECACHE_SHELL";

@@ -1,6 +1,7 @@
 import { isSuitableNewsItem, isRecord, truncateSafe, MAX_NEWS_TITLE_CHARS } from "./parser-primitives";
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
+import { MAX_FEED_BYTES } from "./limits";
 import { fnv1aHash, utf8ByteLength } from "@/server/util/hash";
 import { sourceNameFromUrl as channelHost } from "./url";
 import { zeroUpstreamMessage, errMsg } from "@/server/api/errors";
@@ -46,8 +47,6 @@ function textOf(v: unknown): string | null {
 }
 
 function cleanTitle(raw: string): string {
-  // Plain-text titles are the majority; skip the two HTML passes when there is
-  // no markup to strip.
   const stripped = raw.includes("<") ? stripHtml(raw) : raw;
   const decoded = decodeEntities(stripped);
   const clean = decoded.includes("<") ? stripHtml(decoded) : decoded;
@@ -89,8 +88,6 @@ function itemId(item: Record<string, unknown>, link: string | null, title: strin
   return guid.length > MAX_ID_CHARS ? fnv1aHash(guid) : guid;
 }
 
-const DEFAULT_MAX_FEED_BYTES = 2 * 1024 * 1024;
-
 export function parseFeed(
   xml: unknown,
   sourceUrl: unknown,
@@ -102,7 +99,7 @@ export function parseFeed(
   }
   const sourceUrlStr = urlLabel;
   const bytes = utf8ByteLength(xml);
-  const maxBytes = opts?.maxBytes ?? DEFAULT_MAX_FEED_BYTES;
+  const maxBytes = opts?.maxBytes ?? MAX_FEED_BYTES;
   if (bytes > maxBytes) {
     return parseFail(`Feed too large at ${sourceUrlStr} (${bytes} bytes)`);
   }

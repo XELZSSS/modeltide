@@ -58,12 +58,11 @@ export function useHomeStats(
     ),
   );
 
-  // Delegate to useProviderStats so the home card and the provider-compare tab
-  // share one sort definition (by average speed, highest first) instead of each
-  // applying its own ordering.
+  // Shared with the provider-compare tab; keep at setup top level, not inside computed.
+  const providerRows = useProviderStats(artificialData, t, "speed");
   const providerStats = computed<HomeProviderStat[]>(() =>
-    useProviderStats(artificialData, t, "speed")
-      .value.filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
+    providerRows.value
+      .filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
       .map(({ name, color, avgSpeed }) => ({ name, color, avgSpeed })),
   );
 

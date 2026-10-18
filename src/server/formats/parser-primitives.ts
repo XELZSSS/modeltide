@@ -49,9 +49,7 @@ export const bool = (v: unknown): boolean | undefined => (typeof v === "boolean"
 export const obj = (v: unknown): Record<string, unknown> | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 
-// Some upstream label fields (notably AA's paramClass) carry a number where the
-// public shape expects a string label. Render the number as text so the value
-// survives the coercion instead of being dropped as a non-string.
+// Upstream label fields occasionally carry a number; render it as text instead of dropping it.
 export function numericLabel(v: unknown): string | null {
   if (typeof v === "number" && Number.isFinite(v)) return String(v);
   if (typeof v === "bigint") return String(v);
@@ -65,8 +63,7 @@ export const numIntCoerceNonNegative = (v: unknown): number | null => {
 };
 
 export const titleCase = (s: string): string =>
-  // Single-token legacy variant (preserves ALL-CAPS like "OPENAI").
-  // For multi-word humanization use titleCaseWords from shared/utils/text.
+  // Single-token legacy variant (preserves ALL-CAPS); use titleCaseWords for multi-word.
   s ? (s.length >= 2 && s === s.toUpperCase() ? s : s[0]!.toUpperCase() + s.slice(1).toLowerCase()) : s;
 
 export function truncateSafe(s: string, max: number): string {
@@ -142,7 +139,7 @@ function isNonEmptyString(v: unknown): v is string {
 }
 
 function isPlaceholderText(t: string): boolean {
-  // All callers pass an already-trimmed string.
+  // Callers must pass an already-trimmed string.
   return PLACEHOLDER_TEXTS.has(t.toLowerCase());
 }
 

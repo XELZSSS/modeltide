@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h } from "vue";
+import { h } from "vue";
 import RankedTableView, { modelNameCol } from "@/client/components/table/ranked-table-view.vue";
 import {
   mobilePrimaryCol,
@@ -11,11 +11,10 @@ import {
 } from "@/client/components/table/table-columns.ts";
 import OpenRouterModelDetail from "@/client/pages/model/openrouter-detail.vue";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
-import { assertPayloadShape, unwrapListPartial } from "@/client/api/payload-normalize";
 import { cn } from "@/client/utils/cn";
 import { formatShortNumber, formatTrend } from "@/shared/utils";
 import type { TFunction } from "@/shared/i18n";
-import type { OpenRouterRankEntry, SourcePayload } from "@/shared/types";
+import type { OpenRouterRankEntry } from "@/shared/types";
 
 function buildOpenRouterBodyColumns(t: TFunction): DataTableColumn<OpenRouterRankEntry>[] {
   return [
@@ -56,20 +55,12 @@ function buildOpenRouterBodyColumns(t: TFunction): DataTableColumn<OpenRouterRan
 const getModelRowId = (r: OpenRouterRankEntry) => r.id;
 const getModelRowName = (r: OpenRouterRankEntry) => r.name;
 
-const props = defineProps<{ data: SourcePayload<OpenRouterRankEntry[]> }>();
-
-// Sole caller (open-router-tab.vue) always passes an assembled payload; treat
-// `data` as required so the props.data/!state fallbacks collapse away.
-const state = computed(() => {
-  const value = unwrapListPartial<OpenRouterRankEntry>(props.data, "openRouterRankings");
-  assertPayloadShape(value.malformed, "openRouterRankings");
-  return value;
-});
+const props = defineProps<{ rows: OpenRouterRankEntry[] }>();
 </script>
 
 <template>
   <RankedTableView
-    :rows="state.data"
+    :rows="props.rows"
     :get-row-id="getModelRowId"
     :get-row-name="getModelRowName"
     :get-search-fields="SEARCH_FIELDS.or"

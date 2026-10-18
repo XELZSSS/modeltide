@@ -9,7 +9,7 @@ import { computed } from "vue";
 import type { ChartData, ChartOptions } from "chart.js";
 import { useTranslation } from "@/client/i18n";
 import { hexToRgba } from "@/shared/utils/color";
-import { legendStyle, seriesColor, useChartTheme } from "@/client/charts/theme";
+import { AXIS_STEP, legendStyle, seriesColor, useChartTheme } from "@/client/charts/theme";
 import Card from "@/client/components/card.vue";
 import CardContent from "@/client/components/card-content.vue";
 import ChartCanvas from "@/client/components/chart-canvas.vue";
@@ -56,7 +56,7 @@ const options = computed<ChartOptions<"radar">>(() => ({
       max: radarMax.value,
       ticks: {
         ...axisTickStyle(theme.value),
-        stepSize: 25,
+        stepSize: AXIS_STEP,
         backdropColor: "transparent",
       },
       grid: { color: theme.value.grid },

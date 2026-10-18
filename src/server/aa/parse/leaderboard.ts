@@ -49,27 +49,17 @@ function normalizeRow(
   return normalized;
 }
 
-/**
- * The model matrix lives in the RSC component prop `initialModels` on the
- * leaderboard page (2026-11 layout); the scanable `"models"` array carries
- * only the slug/name/releaseSlug identifier list that feeds the release
- * join.
- */
+/** Model matrix is the `initialModels` RSC prop; the `"models"` array holds only ids. */
 export function parseLeaderboardModels(html: unknown): ParseResult<Record<string, unknown>[]> {
   if (typeof html !== "string" || !html) return parseFail("AA leaderboard page is not a string");
   const { releases, modelArrays } = scanReleaseIndex(html);
   const links = collectModelReleaseLinksFromArrays(modelArrays);
   const prop = parseRscPayload<unknown[]>(html, "initialModels", (tree) => findNextData(tree, "initialModels"));
   const rows = prop.ok && Array.isArray(prop.data) ? prop.data : [];
-  // First-layer shape contract: a prop without a single intelligenceIndex-bearing
-  // row is not the model matrix (future redesigns would land here).
   if (rows.length === 0 || !rows.some((raw) => isRecord(raw) && "intelligenceIndex" in raw)) {
     return parseFail("AA leaderboard page yielded no usable model rows");
   }
-  // A benchmark that stops appearing upstream is otherwise invisible: the row
-  // mapper simply finds no matching key and the column renders empty. Track
-  // which wire names showed up at all so a rename surfaces as a warning
-  // instead of silently blank data.
+  // Track seen wire names so an upstream rename surfaces as a warning, not blank columns.
   const seenWire = new Set<string>();
   const kept: Record<string, unknown>[] = [];
   for (const raw of rows) {

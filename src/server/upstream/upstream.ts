@@ -14,8 +14,7 @@ export const upstreamEndpoints = {
   openRouterDirectory: "/api/v1/models",
 } as const;
 
-export const MAX_JSON_BYTES = 5 * 1024 * 1024;
-export const MAX_FEED_BYTES = 2 * 1024 * 1024;
+export { MAX_FEED_BYTES, MAX_JSON_BYTES } from "@/server/formats/limits";
 
 export const USER_AGENT = "ModelTide/1.0 (+https://github.com/XELZSSS/modeltide)";
 

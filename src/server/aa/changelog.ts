@@ -2,7 +2,7 @@ import { sortByDateDesc } from "@/server/formats/parser-primitives";
 import type { AppContext } from "@/server/api/context";
 import { ClientAbortError, errMsg } from "@/server/api/errors";
 import { parseChangelogModels, type ChangelogModel } from "./parse/changelog";
-import { getAaLeaderboardBody } from "./index.ts";
+import { getAaLeaderboardBody } from "./index";
 import { requireParsed } from "@/server/pipeline";
 
 interface ChangelogModels {

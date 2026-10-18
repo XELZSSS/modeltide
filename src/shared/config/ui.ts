@@ -1,6 +1,4 @@
-// Single source for the app background lives in THEME_COLORS below (mirrored by
-// CSS variables --bg-primary in src/styles/theme.css and the inline <style> in
-// index.html; consistencyGuard verifies the three stay in sync).
+// THEME_COLORS is the single source for the app background, mirrored by --bg-primary in src/styles/theme.css and the inline <style> in index.html; consistencyGuard verifies all three.
 export const THEME_COLORS = { light: "#fafbfc", dark: "#1a1a1a" } as const;
 
 type SupportedLocale = "zh-CN" | "en-US";

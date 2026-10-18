@@ -44,8 +44,6 @@ interface NewsRaw {
 }
 
 async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<NewsRaw> {
-  // Category is validated at the route layer (qEnum with default); the feed
-  // table is exhaustive for NewsCategory so this is unreachable in practice.
   const feeds = rssFeeds[category];
   const legs: { label: string; run: () => Promise<NewsItem[]> }[] = feeds.map((feed) => ({
     label: feed.id,

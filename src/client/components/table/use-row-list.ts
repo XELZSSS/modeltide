@@ -8,11 +8,7 @@ export interface RowListItem<T> {
   expanded: boolean;
 }
 
-/**
- * Shared derivation for the desktop table body and the mobile card list:
- * ids, names and expansion state are computed once per row instead of
- * calling the accessors three to five times per row inside the template.
- */
+/** Derives ids/names/expansion once per row instead of calling the accessors repeatedly in the template. */
 export function useRowList<T extends object>(
   props: RowListProps<T>,
 ): { rows: ComputedRef<RowListItem<T>[]>; renderExpanded: (row: T) => VNodeChild } {

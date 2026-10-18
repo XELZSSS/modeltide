@@ -10,9 +10,7 @@ import {
   type RankingScanStats,
 } from "./aggregate";
 
-// Display names for the owners the live rankings actually serve (verified against
-// the 2026-10 payload: 86 distinct owners, 41 of which need a branded spelling).
-// Owners outside this map fall back to a title-cased form of their slug.
+// Branded owner names; owners outside this map fall back to a title-cased slug.
 const CREATORS: Record<string, string> = {
   anthropic: "Anthropic",
   "arcee-ai": "Arcee AI",
@@ -58,9 +56,7 @@ const CREATORS: Record<string, string> = {
 export function creatorFromSlug(slug: unknown): string {
   if (typeof slug !== "string" || !slug.trim()) return "Unknown";
   const slashAt = slug.indexOf("/");
-  // Upstream occasionally serves a bare model id with no `owner/` prefix (the
-  // duplicated text-embedding rows do). Titling the model id would invent a
-  // publisher that does not exist, so report it as unknown instead.
+  // Some rows carry a bare model id with no `owner/` prefix; titling it would invent a publisher.
   if (slashAt <= 0) return "Unknown";
   const owner = slug.slice(0, slashAt).trim();
   if (!owner) return "Unknown";
@@ -80,7 +76,6 @@ function categoryOf(text: string): OpenRouterRankEntry["category"] | null {
 }
 
 export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry["category"] {
-  // The regexes never match across the separator, so slug and name can be tested independently.
   if (typeof slug === "string" && slug) {
     const fromSlug = categoryOf(slug);
     if (fromSlug) return fromSlug;
@@ -91,7 +86,6 @@ export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry[
   }
   return "general";
 }
-// Sole caller passes row.model_permaslug — trimmed non-empty string from groupRows.
 function titleFromSlug(permaslug: string): string {
   const raw = permaslug.split("/").slice(1).join("/") || permaslug;
   return raw

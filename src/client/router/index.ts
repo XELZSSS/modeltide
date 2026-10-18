@@ -10,8 +10,7 @@ export const router: Router = createRouter({
 });
 
 let popstateNavigation = false;
-// Popstate also drives genuine traversals; guard the afterEach reset so the
-// flag stays true for that navigation and only flushes on programmatic ones.
+// Popstate also drives genuine traversals: keep the flag true for them, flush only on programmatic navs.
 let traversing = false;
 
 window.addEventListener("popstate", () => {
@@ -24,9 +23,7 @@ router.afterEach(() => {
     traversing = false;
     return;
   }
-  // Programmatic navigation (router.push/replace from anywhere) must not be
-  // treated as a history traversal for scroll restore, even when it bypasses
-  // navigate() — previously one Back press poisoned every later forward nav.
+  // Programmatic navigation must not count as a traversal, even when it bypasses navigate().
   popstateNavigation = false;
 });
 

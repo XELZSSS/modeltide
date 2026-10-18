@@ -1,7 +1,4 @@
-// Single source for PWA/font/icon asset lists.
-// public/sw.js cannot import TS: build/plugins/sw-version.ts injects these
-// entries into dist/sw.js PRECACHE_URLS at build time. index.html preloads
-// the two critical fonts; the rest are warmed by bootstrap + precached by sw.
+// public/sw.js cannot import TS: build/sw-version.ts injects these entries into PRECACHE_URLS at build time.
 
 export const FONT_FILES = [
   "/fonts/plex-sans-latin.woff2",

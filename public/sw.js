@@ -1,8 +1,7 @@
 const SW_VERSION = "dev-local";
 const CACHE_NAME = `modeltide-${SW_VERSION}`;
 
-// Must match API_PREFIX in src/shared/config/api.ts and build/constants.ts
-// (checked by build/plugins/consistency-guard.ts — sw.js cannot import TS).
+// Must match API_PREFIX in src/shared/config/api.ts and build/constants.ts (sw.js cannot import TS; consistencyGuard enforces it).
 const API_PREFIX = "/api";
 
 const OTHER_CACHE_MAX = 100;

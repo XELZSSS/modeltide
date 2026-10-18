@@ -28,9 +28,7 @@ function create(): void {
 
 function update(): void {
   if (!chart) return;
-  // NOTE: chart.config.plugins is getter-only in Chart.js v4 (no setter).
-  // Inline plugins are fixed at construction; a plugins identity change
-  // must go through create() below, while data/options update in place.
+  // chart.config.plugins is getter-only in Chart.js v4, so a plugins change must go through create().
   chart.data = props.data;
   if (props.options) chart.options = props.options;
   chart.update();
@@ -38,10 +36,7 @@ function update(): void {
 
 watch(() => props.type, create, { flush: "post" });
 
-// Inline plugins can't be reassigned via chart.config — recreate instead.
-// Callers often pass a fresh array literal each render, so compare by identity
-// of the entries rather than the array: an equal set of plugin objects does
-// not need a rebuild.
+// Callers pass a fresh array literal each render, so compare plugin entries, not the array.
 watch(
   () => props.plugins,
   (next, prev) => {

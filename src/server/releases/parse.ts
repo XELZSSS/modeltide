@@ -5,8 +5,6 @@ import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types
 import type { ChangelogModel } from "@/server/aa/parse/changelog";
 import { dedupeBy } from "@/shared/utils";
 
-// All params arrive as strings by construction: ChangelogModel fields from
-// collectModels, and str()-coerced values from the index fallback path.
 function toClosedEntry(
   id: string,
   model: string,
@@ -57,7 +55,6 @@ export function toClosedReleasesFromIndex(models: unknown, modelsBaseUrl: string
 }
 
 export function toClosedReleases(changelog: readonly ChangelogModel[], modelsBaseUrl: string): ClosedReleaseEntry[] {
-  // collectModels already guarantees record-shaped entries with non-empty slugs.
   const records = [...changelog];
   sortByDateDesc(records, (e) => e.releaseDate);
   const entries: ClosedReleaseEntry[] = [];

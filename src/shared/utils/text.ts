@@ -25,10 +25,7 @@ function tokensOf(segment: string): string {
 export function normalizeModelKey(raw: string): string {
   const lowered = raw.toLowerCase().replace(/\([^)]*\)/g, " ");
   const lastSep = Math.max(lowered.lastIndexOf(":"), lowered.lastIndexOf("/"));
-  // Only the trailing segment is tokenized, so a key whose tail carries no
-  // usable token (e.g. ":free" or ":beta") would otherwise collapse to a bare
-  // qualifier and collide across unrelated models. Fall back to the whole
-  // lowercased string in that case so distinct models keep distinct keys.
+  // A tail with no usable token (e.g. ":free") would collapse to a bare qualifier and collide across models, so fall back to the whole string.
   const tail = tokensOf(lastSep >= 0 ? lowered.slice(lastSep + 1) : lowered);
   if (tail) return tail;
   return tokensOf(lowered);

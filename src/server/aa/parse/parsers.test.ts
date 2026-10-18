@@ -315,11 +315,9 @@ describe("parseLeaderboardModels", () => {
     // No initialModels prop at all.
     expect(parseLeaderboardModels(`<script>push([1,${linksPayload}])</script>\n`).ok).toBe(false);
     // Prop exists but resembles the release-link identifier list instead.
-    expect(
-      parseLeaderboardModels(
-        leaderboardHtml([{ slug: "a", name: "A", releaseSlug: "a" }], [], releases),
-      ).ok,
-    ).toBe(false);
+    expect(parseLeaderboardModels(leaderboardHtml([{ slug: "a", name: "A", releaseSlug: "a" }], [], releases)).ok).toBe(
+      false,
+    );
   });
 });
 

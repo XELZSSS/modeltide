@@ -11,6 +11,7 @@ import CompareChipBar from "@/client/pages/compare/compare-chip-bar.vue";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import SegmentedGroup from "@/client/components/segmented-group.vue";
 import TabButton from "@/client/components/tab-button.vue";
+import { useRovingRadio } from "@/client/components/tabs";
 import SearchableDataTable from "@/client/components/table/data-table.vue";
 import ModelExpandedDetail from "./aa/aa-cells.vue";
 import { buildRankingColumns } from "./aa/aa-rank-columns";
@@ -31,6 +32,13 @@ const { t } = useTranslation();
 const store = useCompareStore();
 const costStore = useCostStore();
 const [viewMode, setViewMode] = useClientTab(AGENT_VIEW_PARAM, VIEW_MODES, VIEW_MODES[0]);
+
+const { tabIndexFor: viewTabIndex, onKeydown: onViewKeydown } = useRovingRadio({
+  items: () => VIEW_MODES,
+  activeId: () => viewMode.value,
+  elementId: (id) => `view-mode-${id}`,
+  select: (id) => setViewMode(id),
+});
 
 const pricingMode = computed(() => viewMode.value === "pricing");
 const pricingModels = computed(() => (pricingMode.value ? props.rankings : EMPTY_MODELS));
@@ -69,12 +77,19 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex flex-wrap items-center gap-2 min-w-0">
-      <SegmentedGroup class="overflow-x-auto no-scrollbar" role="radiogroup" :aria-label="t('viewMode')">
+      <SegmentedGroup
+        class="overflow-x-auto no-scrollbar"
+        role="radiogroup"
+        :aria-label="t('viewMode')"
+        @keydown="onViewKeydown"
+      >
         <TabButton
           v-for="item in viewItems"
           :key="item.id"
           role="radio"
+          :id="`view-mode-${item.id}`"
           :active="viewMode === item.id"
+          :tab-index="viewTabIndex(item.id)"
           @click="setViewMode(item.id)"
         >
           {{ item.label }}
@@ -82,17 +97,14 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
       </SegmentedGroup>
     </div>
 
+    <p v-if="pricingMode" class="text-xs text-text-tertiary">{{ t("pricingDisclaimer") }} · {{ t("priceUnitNote") }}</p>
     <CompareChipBar
       :models="comparedModels"
       :show-compare="true"
       @remove="store.removeCompareModel"
       @clear="store.clearCompare"
       @compare="handleCompare"
-    >
-      <template #leading>
-        <p v-if="pricingMode" class="text-xs text-text-tertiary">{{ t("pricingDisclaimer") }}</p>
-      </template>
-    </CompareChipBar>
+    />
     <SearchableDataTable
       v-if="pricingMode"
       :data="pricingRows"

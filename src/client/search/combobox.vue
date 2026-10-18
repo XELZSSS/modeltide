@@ -100,12 +100,15 @@ function setListEl(el: unknown): void {
 
     <div
       v-if="isOpen && canSearch"
-      :id="listboxId"
-      :ref="setListEl"
-      role="listbox"
       class="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay z-40 animate-enter"
     >
-      <div class="p-1.5"><slot /></div>
+      <div class="p-1.5">
+        <!-- Non-option content (empty/error/loading copy) lives outside the listbox. -->
+        <slot name="status" />
+        <div :id="listboxId" :ref="setListEl" role="listbox">
+          <slot />
+        </div>
+      </div>
     </div>
     <div :id="statusId" role="status" aria-live="polite" aria-atomic="true" class="sr-only">
       {{ isOpen && canSearch ? status : "" }}

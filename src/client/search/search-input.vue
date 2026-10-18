@@ -57,50 +57,50 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
     :class="props.class"
     :status="pending ? undefined : t('searchResultsCount', { count: results.length })"
   >
-    <div
-      v-if="pending && results.length === 0"
-      class="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary"
-    >
-      <Loader2 class="size-4 animate-spin" aria-hidden="true" />
-      {{ t("searching") }}
-    </div>
-    <div v-else-if="isError && results.length === 0" class="p-4 text-sm text-text-secondary" role="alert">
-      {{ t("searchFailed") }}
-    </div>
-    <div v-else-if="results.length === 0" class="p-4 text-sm text-text-secondary" role="status">
-      {{ t("noResults") }}
-    </div>
-    <template v-else>
+    <template #status>
       <div
-        v-for="(result, index) in results"
-        :id="`${listboxId}-option-${index}`"
-        :key="`${result.source}-${result.id}`"
-        role="option"
-        :aria-selected="activeIndex === index"
-        :class="
-          cn(
-            'w-full text-left p-2.5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
-            activeIndex === index ? 'bg-hover' : 'hoverable:hover:bg-hover',
-          )
-        "
-        @mouseenter="onHover(index)"
-        @mousedown.prevent
-        @click="onSelectIndex(index)"
+        v-if="pending && results.length === 0"
+        class="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary"
       >
-        <span class="flex items-center justify-between gap-2">
-          <span class="text-sm font-medium text-text-primary truncate" :title="result.name">{{ result.name }}</span>
-          <span
-            v-if="typeof result.score === 'number' && Number.isFinite(result.score)"
-            class="text-xs text-text-secondary ml-2 shrink-0 font-mono"
-          >
-            {{ result.score.toFixed(1) }}
-          </span>
-        </span>
-        <span class="flex items-center gap-2 mt-1">
-          <span class="text-xs text-text-secondary">{{ t(result.source) }}</span>
-          <span v-if="result.provider" class="text-xs text-text-tertiary">{{ result.provider }}</span>
-        </span>
+        <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+        {{ t("searching") }}
+      </div>
+      <div v-else-if="isError && results.length === 0" class="p-4 text-sm text-text-secondary" role="alert">
+        {{ t("searchFailed") }}
+      </div>
+      <div v-else-if="results.length === 0" class="p-4 text-sm text-text-secondary" role="status">
+        {{ t("noResults") }}
       </div>
     </template>
+    <div
+      v-for="(result, index) in results"
+      :id="`${listboxId}-option-${index}`"
+      :key="`${result.source}-${result.id}`"
+      role="option"
+      :aria-selected="activeIndex === index"
+      :class="
+        cn(
+          'w-full text-left p-2.5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
+          activeIndex === index ? 'bg-hover' : 'hoverable:hover:bg-hover',
+        )
+      "
+      @mouseenter="onHover(index)"
+      @mousedown.prevent
+      @click="onSelectIndex(index)"
+    >
+      <span class="flex items-center justify-between gap-2">
+        <span class="text-sm font-medium text-text-primary truncate" :title="result.name">{{ result.name }}</span>
+        <span
+          v-if="typeof result.score === 'number' && Number.isFinite(result.score)"
+          class="text-xs text-text-secondary ml-2 shrink-0 font-mono"
+        >
+          {{ result.score.toFixed(1) }}
+        </span>
+      </span>
+      <span class="flex items-center gap-2 mt-1">
+        <span class="text-xs text-text-secondary">{{ t(result.source) }}</span>
+        <span v-if="result.provider" class="text-xs text-text-tertiary">{{ result.provider }}</span>
+      </span>
+    </div>
   </Combobox>
 </template>

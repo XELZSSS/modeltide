@@ -216,4 +216,7 @@ export const zh = {
   navReleases: "发布",
 
   compareStale: "部分已选模型已下线，已自动移除。",
+  noData: "暂无数据。",
+  invalidCostValue: "请填写 0 或更大的数值。",
+  priceUnitNote: "价格为每百万 tokens 的美元单价",
 } as const satisfies Record<keyof EnDict, string>;

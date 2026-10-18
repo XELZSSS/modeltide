@@ -45,18 +45,7 @@ const MODELS_ENRICH_BASE_FIELDS = [
   ...modalityWireNames,
 ];
 
-// Per-path field allow-lists, derived from the live RSC payloads (2026-10:
-// 704 leaderboard / 27 /models / 32 omniscience rows). Only names a path
-// actually returns are listed — a name that never shows up is dead weight
-// that also masks drift, so it is omitted rather than filtered at read time.
-//
-// /models       omits briefcaseElo, cweBench, cyberIndex, deepsecBench and
-//               itBenchSre; adds omniscienceHallucinationRate.
-// /omniscience  omits gdpvalNormalized. It serves `gdpval` instead, but that is
-//               the raw Elo score (1076-1866) while gdpvalNormalized is the
-//               0-1 normalized form compact() reads, so the two are not
-//               interchangeable and the raw field is deliberately not pulled.
-//               Adds medianCanonicalAnswerOutputSpeed + omniscienceBreakdown.
+// Per-path allow-lists of what each RSC path returns; /omniscience serves raw Elo `gdpval`, not normalized.
 const MODELS_PATH_ABSENT = ["briefcaseElo", "cweBench", "cyberIndex", "deepsecBench", "itBenchSre"] as const;
 
 const MODELS_PATH_FIELDS = [
@@ -163,16 +152,16 @@ async function fetchIntelligenceIndex(
   )
     .map(compact)
     .filter((m) => isValidModelIdentity(m.id, m.slug, m.name));
-  const ranked = merged.sort(byNumberDesc((m) => m.intelligence_index));
-  const models = ranked;
+  // Backfill before ranking: an -Infinity sort key would keep that slot once filled.
+  const backfilled = backfillFromMeta(merged, openRouterMeta ?? {});
+  if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
+  const models = merged.sort(byNumberDesc((m) => m.intelligence_index));
   requireRows(
     models,
     "Artificial Analysis parsing",
     "models",
     `raw=${indexModels.length}, kept=0, enrichFailures=${enrichFailures}`,
   );
-  const backfilled = backfillFromMeta(models, openRouterMeta ?? {});
-  if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
   return { models, partial: enrichFailures > 0 || indexBody.degraded || directoryPartial };
 }
 

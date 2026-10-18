@@ -15,7 +15,9 @@ import ChartFrame from "@/client/components/chart-frame.vue";
 import { CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT } from "@/client/charts/tokens";
 import EmptyState from "@/client/components/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
+import { formatIndex } from "@/shared/utils";
 import { modelDisplayName, shortModelId } from "@/shared/utils/models";
+import { FALLBACK_DASH } from "@/shared/config/ui";
 import { cn } from "@/client/utils/cn";
 import { AXIS_MAX, AXIS_STEP, cartesianChartOptions, seriesColor, useChartTheme } from "@/client/charts/theme";
 import { axisTickStyle, lineSeriesStyle } from "@/client/charts/factory";
@@ -29,7 +31,6 @@ const AXIS_POINT_HOVER_RADIUS = 7;
 
 type IndexSeriesKey = (typeof SERIES_KEYS)[number];
 
-// ~10 categories across a half-width card: long names would overlap.
 const AXIS_LABEL_MAX_CHARS = 8;
 type IndexRow = ArtificialAnalysisModel & Record<IndexSeriesKey, number>;
 
@@ -41,12 +42,7 @@ function buildIndexRows(models: readonly ArtificialAnalysisModel[]): IndexRow[] 
   return complete.slice(0, TOP_N);
 }
 
-function formatIndexValue(value: number): string {
-  if (!Number.isFinite(value)) return "—";
-  return Number(value.toFixed(2)).toString();
-}
-
-const tickLabel = (value: string | number): string => formatIndexValue(Number(value));
+const tickLabel = (value: string | number): string => formatIndex(Number(value));
 
 function axisLabel(value: string): string {
   return value.length > AXIS_LABEL_MAX_CHARS ? `${value.slice(0, AXIS_LABEL_MAX_CHARS - 1)}…` : value;
@@ -57,8 +53,7 @@ const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
 const { t } = useTranslation();
 const theme = useChartTheme();
 const rows = computed(() => buildIndexRows(props.models));
-// Long names are clipped on the axis; the full name stays in the tooltip title.
-const fullLabels = computed(() => rows.value.map((m) => m.short_name || shortModelId(m.name) || m.id || "—"));
+const fullLabels = computed(() => rows.value.map((m) => m.short_name || shortModelId(m.name) || m.id || FALLBACK_DASH));
 const labels = computed(() => fullLabels.value.map(axisLabel));
 
 const data = computed<ChartData<"line">>(() => ({
@@ -70,11 +65,9 @@ const data = computed<ChartData<"line">>(() => ({
       data: rows.value.map((m) => m[key]),
       borderColor: color,
       backgroundColor: color,
-      // A trend line, not an area chart: the two series would muddy each other.
       fill: false,
       ...lineSeriesStyle,
-      // Straight segments between points: lineSeriesStyle opts into monotone
-      // smoothing, which this chart does not want.
+      // lineSeriesStyle opts into monotone smoothing; straight segments are wanted here.
       cubicInterpolationMode: "default",
       tension: 0,
       pointRadius: AXIS_POINT_RADIUS,
@@ -104,7 +97,7 @@ const options = computed<ChartOptions<"line">>(() =>
         title: (items) => fullLabels.value[items[0]?.dataIndex ?? -1] ?? "",
         label: (ctx) => {
           const y = ctx.parsed.y;
-          return `${ctx.dataset.label}: ${y == null ? "—" : formatIndexValue(Number(y))}`;
+          return `${ctx.dataset.label}: ${y == null ? FALLBACK_DASH : formatIndex(Number(y))}`;
         },
       },
     },
@@ -116,7 +109,7 @@ const caption = computed(() =>
     .map(
       (m) =>
         `${modelDisplayName(m)}: ${SERIES_KEYS.map(
-          (key, slot) => `${t(SERIES_LABEL_KEYS[slot]!)} ${formatIndexValue(m[key])}`,
+          (key, slot) => `${t(SERIES_LABEL_KEYS[slot]!)} ${formatIndex(m[key])}`,
         ).join(", ")}`,
     )
     .join("; "),

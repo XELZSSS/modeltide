@@ -1,11 +1,9 @@
 import { utf8ByteLength } from "@/server/util/hash";
 import { UpstreamError, errMsg } from "@/server/api/errors";
 
-const UTF8_DECODER = new TextDecoder();
 const CONTENT_LENGTH_DIGITS_RE = /^\d+$/;
 
-// A bare abort() carries no reason; substituting a real Error keeps errMsg()
-// from degrading to the string "undefined" in messages and logs.
+// A bare abort() carries no reason, which makes errMsg() print "undefined".
 function readAbortError(signal: AbortSignal): unknown {
   return signal.reason ?? new Error("Body read aborted");
 }
@@ -56,7 +54,9 @@ async function readBodyText(
     }
   }
   const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
+  const parts: string[] = [];
+  // Decode incrementally: buffering all chunks first peaked at ~2x the body budget.
+  const decoder = new TextDecoder();
   let total = 0;
   try {
     for (;;) {
@@ -88,7 +88,7 @@ async function readBodyText(
           await reader.cancel().catch(() => {});
           throw new UpstreamError(`Upstream payload too large for ${url}`);
         }
-        chunks.push(value);
+        parts.push(decoder.decode(value, { stream: true }));
       }
     }
   } catch (e) {
@@ -102,14 +102,9 @@ async function readBodyText(
     try {
       reader.releaseLock();
     } catch {
-      // reader may already be closed after cancel() - ignore
+      // The reader may already be closed after cancel(); releaseLock throws then.
     }
   }
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    merged.set(c, offset);
-    offset += c.byteLength;
-  }
-  return { text: UTF8_DECODER.decode(merged), bytes: total };
+  parts.push(decoder.decode());
+  return { text: parts.join(""), bytes: total };
 }

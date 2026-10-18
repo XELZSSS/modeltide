@@ -29,7 +29,6 @@ const paged = usePagedData(
   () => (isMobile.value ? MOBILE_PAGE_SIZE : DEFAULT_PAGE_SIZE),
 );
 
-// safeHref rebuilds the link string per call; derive once per row.
 const rows = computed(() =>
   paged.pagedData.value.map((item) => ({ item, id: getRowId(item), href: safeHref(item.link) })),
 );

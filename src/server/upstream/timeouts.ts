@@ -18,4 +18,5 @@ export const RETRY_AFTER_MAX_MS = 5 * 60_000;
 
 export const SHARED_REFRESH_TIMEOUT_MS = WORST_CASE_UPSTREAM_CALL_MS;
 
-export const INFLIGHT_HANG_GUARD_MS = WORST_CASE_UPSTREAM_CALL_MS * 2;
+// The guard must still fire inside the platform's post-response window, so it sits just past the refresh budget.
+export const INFLIGHT_HANG_GUARD_MS = SHARED_REFRESH_TIMEOUT_MS + 4_000;

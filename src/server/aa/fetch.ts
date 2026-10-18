@@ -16,12 +16,7 @@ interface EnrichSpec<T> {
   path: string;
   marker: string;
   extract: (tree: unknown) => T[] | null;
-  /**
-   * Field audit inputs. Missing-field warnings can only be computed from rows
-   * the cache layer freshly parsed — on a cache hit the stored rows were
-   * already mapped, and no audit ran against them — so the check lives inside
-   * the refresh closure instead of being read afterwards.
-   */
+  /** Audited inside the refresh closure: a cache hit returns already-mapped rows. */
   fields?: readonly string[];
   absent?: readonly string[];
   map?: (arr: T[]) => T[];
@@ -40,11 +35,7 @@ function parseEnrich<T>(spec: EnrichSpec<T>, body: string): T[] {
   return spec.map ? spec.map(parsed.data) : parsed.data;
 }
 
-function missingFields<T>(
-  rows: readonly T[],
-  fields: readonly string[],
-  absent: readonly string[],
-): readonly string[] {
+function missingFields<T>(rows: readonly T[], fields: readonly string[], absent: readonly string[]): readonly string[] {
   const seen = new Set<string>();
   for (const row of rows) {
     if (!isRecord(row)) continue;
@@ -52,7 +43,9 @@ function missingFields<T>(
       if (field in row) seen.add(field);
     }
   }
-  return [...fields, ...absent].filter((field) => !seen.has(field));
+  // Counting documented-absent fields as missing warns on every refresh.
+  const expectedAbsent = new Set(absent);
+  return fields.filter((field) => !seen.has(field) && !expectedAbsent.has(field));
 }
 
 export async function getAndParseEnrich<T>(

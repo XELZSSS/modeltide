@@ -12,8 +12,6 @@ export function hexToRgba(hex: string, alpha: number): string {
           .map((c) => c + c)
           .join("")
       : value;
-  // `full` matches /^[0-9a-f]{6}$/i by construction, so the parseInt below
-  // always yields a finite integer in [0, 0xFFFFFF].
   const int = Number.parseInt(full, 16);
   const r = (int >> 16) & 255;
   const g = (int >> 8) & 255;

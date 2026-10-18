@@ -73,8 +73,7 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
   if (!isRecord(m)) return null;
   const model = m as HFModel;
   if (!isValidRowId(model.id)) return null;
-  // isValidRowId validates the trimmed form, so normalize before use: an id
-  // carrying stray whitespace would otherwise reach cache keys and links.
+  // isValidRowId checks the trimmed form; normalize before use so whitespace never reaches cache keys or links.
   const id = (model.id as string).trim();
   const downloads = numIntCoerceNonNegative(model.downloads) ?? 0;
   const likes = numIntCoerceNonNegative(model.likes) ?? 0;

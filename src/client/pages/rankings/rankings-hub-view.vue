@@ -49,7 +49,6 @@ function onTabIntent(tabId: string, active: boolean): void {
 }
 
 function preloadTabs(): void {
-  // Preload only the most-visited neighbor; the rest stay on hover-prefetch.
   preloadChunk(RANKING_TAB_LOADS.openRouterRankings);
 }
 

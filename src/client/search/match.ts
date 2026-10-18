@@ -75,10 +75,7 @@ function levenshteinWithin(a: string, b: string, max: number): number {
 const WORD_SPLIT = /[^\p{L}\p{N}]+/u;
 const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 
-// A long CJK run yields one bigram per character, and every bigram can enter
-// the Levenshtein pass. Cap the per-word bigrams so a 40-character model name
-// cannot dominate the fuzzy budget, while keeping the leading bigrams that
-// carry the distinctive part of the name.
+// Cap per-word CJK bigrams: a 40-char name would otherwise flood the Levenshtein pass, keeping the leading bigrams.
 const MAX_CJK_BIGRAMS = 8;
 
 function tokenize(text: string): string[] {

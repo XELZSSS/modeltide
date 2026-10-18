@@ -35,9 +35,6 @@ function collectModels(
       const slug = str(entry.slug).trim();
       const name = str(entry.name).trim();
       const releaseSlug = str(entry.releaseSlug).trim();
-      // Text checks subsume the emptiness guards (isUnsuitableContent rejects
-      // "", and a "" releaseSlug can't match any release key — keys are
-      // guaranteed non-empty by releaseIndex).
       const release = releases.get(releaseSlug);
       if (!release) continue;
       if (!isUsableField(slug) || !isUsableField(name) || !isUsableField(release.name)) continue;

@@ -7,6 +7,13 @@ type RouteEntry = (typeof SOURCES)[number];
 
 const ROUTES = new Map<string, RouteEntry>(SOURCES.map((source) => [source.path, source]));
 
+function normalizePathname(pathname: string): string {
+  if (pathname.length <= 1) return pathname;
+  // The route table is keyed by exact path, so a trailing slash would 404.
+  const trimmed = pathname.replace(/\/+$/, "");
+  return trimmed === "" ? "/" : trimmed;
+}
+
 function resolveRoute(pathname: string): RouteEntry | undefined {
   return ROUTES.get(pathname);
 }
@@ -38,7 +45,7 @@ interface PagesFunctionContext {
 export async function onRequest(context: PagesFunctionContext): Promise<Response> {
   const { request, env } = context;
   const url = new URL(request.url);
-  const route = resolveRoute(url.pathname);
+  const route = resolveRoute(normalizePathname(url.pathname));
   if (!route) return notFoundForMethod(request.method);
   const early = methodResponse(request.method);
   if (early) return early;

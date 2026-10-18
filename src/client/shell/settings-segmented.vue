@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import SegmentedGroup from "@/client/components/segmented-group.vue";
 import TabButton from "@/client/components/tab-button.vue";
-import { nextRovingId } from "@/client/components/tabs";
+import { useRovingRadio } from "@/client/components/tabs";
 
 const props = defineProps<{
   value: string;
@@ -12,16 +12,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{ change: [value: string] }>();
 
-function onKeydown(event: KeyboardEvent): void {
-  const nextId = nextRovingId(
-    event,
-    props.options.map((option) => ({ id: option.value })),
-    props.value,
-  );
-  if (nextId == null) return;
-  emit("change", nextId);
-  document.getElementById(`setting-${props.idPrefix}-${nextId}`)?.focus();
-}
+const { tabIndexFor, onKeydown } = useRovingRadio({
+  items: () => props.options.map((option) => option.value),
+  activeId: () => props.value,
+  elementId: (id) => `setting-${props.idPrefix}-${id}`,
+  select: (id) => emit("change", id),
+});
 </script>
 
 <template>
@@ -33,6 +29,7 @@ function onKeydown(event: KeyboardEvent): void {
       size="sm"
       :active="value === option.value"
       :id="`setting-${idPrefix}-${option.value}`"
+      :tab-index="tabIndexFor(option.value)"
       @click="emit('change', option.value)"
     >
       {{ option.label }}

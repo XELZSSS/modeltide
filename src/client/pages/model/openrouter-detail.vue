@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
 import type { OpenRouterRankEntry } from "@/shared/types";
-import { categoryLabel, formatPricePerMillion, formatShortNumber, formatTrend } from "@/shared/utils";
+import { categoryLabel, formatPricePerMillion, formatShortNumber, formatTrend, orNA } from "@/shared/utils";
 import { PRICE_LEGS, type PriceLegId } from "@/shared/utils/pricing";
 import StatGrid from "@/client/components/stat-grid.vue";
 import InfoGrid from "@/client/components/info-grid.vue";
@@ -40,7 +40,7 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
 <template>
   <div :class="DETAIL_BLOCK_GAP">
     <StatGrid :columns="4">
-      <StatCard :label="t('creator')">{{ model.creator }}</StatCard>
+      <StatCard :label="t('creator')">{{ orNA(model.creator, t) }}</StatCard>
       <StatCard v-for="[labelKey, value] in tokenStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
       <StatCard v-if="model.reasoningTokens != null" :label="t('reasoningTokens')">
         {{ formatShortNumber(model.reasoningTokens, t("notAvailable")) }}

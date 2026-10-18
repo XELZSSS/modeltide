@@ -14,6 +14,7 @@ const props = defineProps<{ models: TextToImageModel[] }>();
 
 const { t } = useTranslation();
 
+// Elo is a whole-number rating, so toFixed(0) rather than formatIndex or formatPercent.
 function formatRatingInterval(entry: TextToImageModel): string {
   if (entry.eloUpper == null || entry.eloLower == null) return "";
   return ` (${entry.eloLower.toFixed(0)}–${entry.eloUpper.toFixed(0)})`;

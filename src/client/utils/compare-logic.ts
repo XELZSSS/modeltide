@@ -59,8 +59,7 @@ function decideRowWinners<T>(
   getKey: (m: T, index: number) => string,
 ): Map<string, Winner> | null {
   const values = collectNumeric(row, models, getKey);
-  // Type-forced narrowing: the values != null ⟹ row.bestIs coupling lives in
-  // collectNumeric, not in the types, so this guard must stay.
+  // values != null ⟹ row.bestIs lives in collectNumeric, not in the types; this guard must stay.
   if (!values || !row.bestIs) return null;
   const best = pickExtreme(values, row.bestIs);
   if (values.every((v) => approxEq(v.val, best))) return null;
@@ -90,10 +89,7 @@ function radarMetricGetters(
     { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.intelligence_index) },
     { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.coding_index) },
     { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.agentic_index) },
-    // Benchmark values arrive percent-converted from the server for relative
-    // benchmarks and raw for absolute ones (briefcase_elo/cyber_index), so no
-    // client-side rescaling is needed — re-applying the ratio heuristic here
-    // would magnify legitimately small percentages (e.g. gdpval ≤ 0.68).
+    // Benchmarks arrive percent-converted (relative) or raw (absolute), so rescaling here would magnify small values.
     { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.gpqa ?? null },
     { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.hle ?? null },
     { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.scicode ?? null },

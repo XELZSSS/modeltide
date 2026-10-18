@@ -100,8 +100,7 @@ export const ROUTES: RouteRecordRaw[] = [
   {
     path: "/:pathMatch(.*)*",
     name: "notFound",
-    // Lazy load to break the static import cycle
-    // routes -> not-found -> safe-link -> router/index (ROUTES TDZ at boot).
+    // Lazy-load to break the import cycle routes -> not-found -> safe-link -> router/index (ROUTES TDZ at boot).
     component: loadableView(() => import("@/client/components/not-found.vue")),
     meta: { titleKey: "notFound" },
   },

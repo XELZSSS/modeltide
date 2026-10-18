@@ -2,8 +2,9 @@
 import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
-import { formatDate, formatShortNumber, orNA } from "@/shared/utils";
+import { formatDate, formatShortNumber, orNA, safeHref } from "@/shared/utils";
 import { encodeModelIdPath, shortModelId } from "@/shared/utils/models";
+import { TASK_LABEL_KEYS } from "@/client/pages/home/task-share";
 import { useSuspenseOpenSourceModel } from "@/client/api/hooks";
 import StatGrid from "@/client/components/stat-grid.vue";
 import InfoGrid from "@/client/components/info-grid.vue";
@@ -32,6 +33,17 @@ const dateRows = computed<[TranslationKey, string | null][]>(() =>
 );
 
 const tags = computed(() => model.value?.tags ?? []);
+
+function taskText(task: string | null | undefined): string {
+  if (!task) return t("notAvailable");
+  const key = TASK_LABEL_KEYS[task];
+  return key ? t(key) : task;
+}
+
+// Sanitised once so the repository link can never be handed a non-http href.
+const repoHref = computed(() =>
+  model.value?.id ? safeHref(`https://huggingface.co/${encodeModelIdPath(model.value.id)}`) : undefined,
+);
 </script>
 
 <template>
@@ -46,15 +58,15 @@ const tags = computed(() => model.value?.tags ?? []);
         <InfoCard :title="t('modelInfo')">
           <InfoRow :label="t('creator')">{{ orNA(model.author, t) }}</InfoRow>
           <InfoRow :label="t('license')">{{ orNA(model.license, t) }}</InfoRow>
-          <InfoRow :label="t('task')">{{ orNA(model.task, t) }}</InfoRow>
+          <InfoRow :label="t('task')">{{ taskText(model.task) }}</InfoRow>
           <InfoRow v-for="[labelKey, value] in dateRows" :key="labelKey" :label="t(labelKey)">
             {{ value ? formatDate(value, lang) : t("notAvailable") }}
           </InfoRow>
         </InfoCard>
         <InfoCard :title="t('repository')">
           <a
-            v-if="model.id"
-            :href="`https://huggingface.co/${encodeModelIdPath(model.id)}`"
+            v-if="repoHref"
+            :href="repoHref"
             target="_blank"
             rel="noopener noreferrer"
             class="text-sm text-accent break-all underline-offset-4 transition-colors duration-fast hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"

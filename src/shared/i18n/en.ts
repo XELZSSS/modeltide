@@ -215,6 +215,9 @@ export const en = {
   navReleases: "Releases",
 
   compareStale: "Some selected models are no longer listed and were removed.",
+  noData: "No data available yet.",
+  invalidCostValue: "Enter a value of 0 or more.",
+  priceUnitNote: "Prices in USD per 1M tokens",
 } as const;
 
 export type EnDict = typeof en;

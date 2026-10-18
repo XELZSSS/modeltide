@@ -38,7 +38,7 @@ watch(
 </script>
 
 <template>
-  <div class="ui-card flex flex-wrap gap-3 items-center justify-between px-3 py-2.5">
+  <div v-if="models.length > 0" class="ui-card flex flex-wrap gap-3 items-center justify-between px-3 py-2.5">
     <div class="flex flex-wrap gap-2 items-center min-w-0">
       <slot name="leading" />
       <Badge

@@ -91,8 +91,7 @@ export interface OpenRouterRankingsState {
 export async function useSuspenseOpenRouterRankings(): Promise<OpenRouterRankingsState> {
   const query = qOpenRouterList.use();
   await query.suspense();
-  // One unwrap feeds both the list state and fetchedAt, so the payload is
-  // decoded once per change instead of once per consumer.
+  // One unwrap feeds both the list state and fetchedAt, so the payload is decoded once per change.
   const unwrapped = computed(() => unwrapListPartial<OpenRouterRankEntry>(query.data.value, "openRouterRankings"));
   const fetchedAt = computed(() => (query.data.value as { fetchedAt?: unknown } | null)?.fetchedAt);
   return {

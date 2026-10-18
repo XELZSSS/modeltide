@@ -27,7 +27,6 @@ export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<stri
   const merged = new Map<string, Record<string, unknown>>();
   const catalogArr = Array.isArray(catalog) ? catalog.slice(0, MAX_DIRECTORY_ROWS) : [];
   for (const raw of catalogArr) {
-    // hasCatalogIdentity already subsumes isRecord.
     if (!hasCatalogIdentity(raw)) continue;
     const slug = str(raw.slug);
     if (!merged.has(slug)) merged.set(slug, { ...raw });

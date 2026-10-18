@@ -10,8 +10,7 @@ const DATA_LAYER_ROOTS = ["src/server", "src/shared"];
 const WORKER_RUNTIME_DEPS = ["fast-xml-parser", "strnum"];
 
 const HASHED = [
-  // Blanket coverage of the data layer: everything under these two roots is
-  // hashed (minus the IGNORED entries below).
+  // Everything under these two roots is hashed (minus the IGNORED entries below).
   "src/server/",
   "src/shared/",
 ];

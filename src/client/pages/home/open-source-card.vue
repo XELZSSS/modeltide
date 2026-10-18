@@ -15,7 +15,7 @@ import ChartFrame from "@/client/components/chart-frame.vue";
 import { CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT } from "@/client/charts/tokens";
 import EmptyState from "@/client/components/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
-import { formatShortNumber } from "@/shared/utils";
+import { formatPercent, formatShortNumber } from "@/shared/utils";
 import { cn } from "@/client/utils/cn";
 import { useChartTheme, legendStyle } from "@/client/charts/theme";
 import { chartBase, defaultTooltipOptions } from "@/client/charts/factory";
@@ -31,6 +31,16 @@ const aggregated = computed(() => aggregateTaskShare(props.models));
 const slices = computed(() => aggregated.value.slices);
 const total = computed(() => aggregated.value.total);
 
+// The donut palette has 6 colours but the breakdown can hold 7 slices; extend with the wider palette.
+const sliceColors = computed<string[]>(() => {
+  const { donut, palette } = theme.value;
+  const available = [...donut];
+  for (const color of palette) if (!available.includes(color)) available.push(color);
+  return slices.value.map((_, i) => available[i % available.length]!);
+});
+
+const percentOf = (part: number): string => formatPercent(total.value > 0 ? (part / total.value) * 100 : 0, t);
+
 const sliceLabel = (slice: TaskSlice): string => {
   if (slice.key === UNTAGGED_TASK_KEY) return t("untaggedTasks");
   if (slice.key === OTHER_TASK_KEY) return t("otherTasks");
@@ -42,7 +52,7 @@ const data = computed<ChartData<"doughnut">>(() => ({
   datasets: [
     {
       data: slices.value.map((s) => s.total),
-      backgroundColor: slices.value.map((_, i) => theme.value.donut[i % theme.value.donut.length]!),
+      backgroundColor: sliceColors.value,
       borderColor: theme.value.tooltipBg,
       borderWidth: 2,
       borderRadius: 0,
@@ -62,8 +72,7 @@ const options = computed<ChartOptions<"doughnut">>(() => ({
       callbacks: {
         label: (ctx) => {
           const v = typeof ctx.parsed === "number" ? ctx.parsed : 0;
-          const pct = total.value > 0 ? ((v / total.value) * 100).toFixed(1) : "0.0";
-          return `${ctx.label}: ${formatShortNumber(v, t("notAvailable"))} (${pct}%)`;
+          return `${ctx.label}: ${formatShortNumber(v, t("notAvailable"))} (${percentOf(v)})`;
         },
       },
     },
@@ -72,10 +81,7 @@ const options = computed<ChartOptions<"doughnut">>(() => ({
 
 const caption = computed(() =>
   slices.value
-    .map((s) => {
-      const pct = total.value > 0 ? ((s.total / total.value) * 100).toFixed(1) : "0.0";
-      return `${sliceLabel(s)}: ${formatShortNumber(s.total, t("notAvailable"))} (${pct}%)`;
-    })
+    .map((s) => `${sliceLabel(s)}: ${formatShortNumber(s.total, t("notAvailable"))} (${percentOf(s.total)})`)
     .join(""),
 );
 </script>

@@ -1,7 +1,4 @@
-// Pre-bundles the Pages Functions entry (including the @ -> src alias and
-// node_modules) into a single self-contained ESM file. Wrangler's Functions
-// bundler cannot resolve the @ alias, so the checked-in source must never sit
-// under functions/ directly; the generated bundle is gitignored.
+// Wrangler's Functions bundler cannot resolve the @ -> src alias, so the checked-in source stays in src/server and this bundle is gitignored.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

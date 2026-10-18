@@ -30,8 +30,7 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboar
   const data: HomeDashboardData = {
     orRankings: (orRankings?.data ?? []).slice(0, HOME_OR_RANKING_ROWS),
     textToImage: (textToImage?.data ?? []).slice(0, HOME_TEXT_TO_IMAGE_ROWS),
-    // Full list: the doughnut aggregates task share over all rows, while the
-    // trending sidebar only takes the top entries client-side.
+    // Full list: the doughnut aggregates over all rows; the sidebar slices client-side.
     opensource: (opensource?.data ?? []).map(homeOpenSourceRow),
   };
   const partial =

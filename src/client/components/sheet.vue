@@ -5,21 +5,54 @@ import { cn } from "@/client/utils/cn";
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-let lockCount = 0;
-let prevOverflow = "";
-let prevPaddingRight = "";
-let inertedAppChildren: HTMLElement[] = [];
-
-function inertAppChildren(): void {
-  const root = document.getElementById("root");
-  if (!root) return;
-  inertedAppChildren = Array.from(root.children).filter((el): el is HTMLElement => el instanceof HTMLElement);
-  for (const el of inertedAppChildren) el.setAttribute("inert", "");
+interface SheetLockEntry {
+  inerted: HTMLElement[];
 }
 
-function restoreAppChildren(): void {
-  for (const el of inertedAppChildren) el.removeAttribute("inert");
-  inertedAppChildren = [];
+// Bottom-most sheet owns the body scroll lock; each entry restores only what it set, so any close order is safe.
+const lockStack: SheetLockEntry[] = [];
+let bodyOwner: SheetLockEntry | null = null;
+let prevOverflow = "";
+let prevPaddingRight = "";
+
+function appRootChildren(): HTMLElement[] {
+  const root = document.getElementById("root");
+  if (!root) return [];
+  return Array.from(root.children).filter((el): el is HTMLElement => el instanceof HTMLElement);
+}
+
+function applyLock(entry: SheetLockEntry): void {
+  bodyOwner = entry;
+  prevOverflow = document.body.style.overflow;
+  prevPaddingRight = document.body.style.paddingRight;
+  const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+  document.body.style.overflow = "hidden";
+  if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+  // Skip already-inert children so another owner's markers are never cleared with ours.
+  entry.inerted = appRootChildren().filter((el) => !el.hasAttribute("inert"));
+  for (const el of entry.inerted) el.setAttribute("inert", "");
+}
+
+function releaseLock(entry: SheetLockEntry): void {
+  if (bodyOwner !== entry) return;
+  document.body.style.overflow = prevOverflow;
+  document.body.style.paddingRight = prevPaddingRight;
+  bodyOwner = null;
+}
+
+function releaseInert(entry: SheetLockEntry): void {
+  for (const el of entry.inerted) el.removeAttribute("inert");
+  entry.inerted = [];
+}
+
+function syncLock(): void {
+  const owner = lockStack[0];
+  if (bodyOwner === owner) return;
+  if (bodyOwner) {
+    releaseInert(bodyOwner);
+    releaseLock(bodyOwner);
+  }
+  if (owner) applyLock(owner);
 }
 
 const props = defineProps<{ open: boolean; class?: string; ariaLabel?: string }>();
@@ -27,6 +60,7 @@ const emit = defineEmits<{ close: [] }>();
 
 const panelRef = ref<HTMLDivElement | null>(null);
 let trigger: HTMLElement | null = null;
+let entry: SheetLockEntry | null = null;
 let locked = false;
 let openToken = 0;
 
@@ -50,21 +84,15 @@ function onKeydown(event: KeyboardEvent): void {
 
 function lock(): void {
   const panel = panelRef.value;
-  if (!panel) return;
+  if (!panel || locked) return;
   const active = document.activeElement;
   if (active instanceof HTMLElement && active !== document.body && !panel.contains(active)) trigger = active;
   const first = panel.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
   if (first) first.focus();
   else panel.focus();
-  if (lockCount === 0) {
-    prevOverflow = document.body.style.overflow;
-    prevPaddingRight = document.body.style.paddingRight;
-    inertAppChildren();
-  }
-  lockCount += 1;
-  const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-  document.body.style.overflow = "hidden";
-  if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+  entry = { inerted: [] };
+  lockStack.push(entry);
+  syncLock();
   document.addEventListener("keydown", onKeydown);
   locked = true;
 }
@@ -73,12 +101,14 @@ function unlock(): void {
   if (!locked) return;
   locked = false;
   document.removeEventListener("keydown", onKeydown);
-  lockCount = Math.max(0, lockCount - 1);
-  if (lockCount === 0) {
-    document.body.style.overflow = prevOverflow;
-    document.body.style.paddingRight = prevPaddingRight;
-    restoreAppChildren();
+  const closing = entry;
+  entry = null;
+  if (closing) {
+    const index = lockStack.indexOf(closing);
+    if (index >= 0) lockStack.splice(index, 1);
+    releaseInert(closing);
   }
+  syncLock();
   if (trigger instanceof HTMLElement) trigger.focus();
   trigger = null;
 }

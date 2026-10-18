@@ -89,8 +89,9 @@ export class RefreshRunner {
     let p!: Promise<T>;
     const work = (async (): Promise<T> => {
       const { data, ttl: t } = await fn();
-      const current = this.inflight.get(vk);
-      if (current !== p) return data;
+      // Still valid data if the hang guard released the key, unless a newer refresh owns it.
+      const owner = this.inflight.get(vk);
+      if (owner !== undefined && owner !== p) return data;
       await this.tier.storeCurrent(kv, vk, data, t ?? ttl);
       return data;
     })();

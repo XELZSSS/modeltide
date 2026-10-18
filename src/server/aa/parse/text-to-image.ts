@@ -13,7 +13,6 @@ export function parseTextToImageRows(body: unknown): ParseResult<Omit<TextToImag
     (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
   );
   if (!scanned.ok) return parseFail(`Text-to-image parse failed: ${scanned.error}`);
-  // Map once: the old flow ran mapEntry a second time in the source just to count drops.
   let dropped = 0;
   const rows: Omit<TextToImageModel, "rank">[] = [];
   for (const entry of scanned.data.map(mapEntry)) {

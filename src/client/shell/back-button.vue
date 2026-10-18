@@ -13,9 +13,7 @@ const router = useRouter();
 const route = useRoute();
 const { t } = useTranslation();
 
-// historyFrom() reads untracked window.history.state; tracking the route makes
-// the label re-derive once per navigation instead of reading the state twice
-// per template render with no reactive dependency at all.
+// historyFrom() reads untracked history.state; touching route.fullPath re-derives the label once per navigation.
 const label = computed(() => {
   void route.fullPath;
   const previous = historyFrom();

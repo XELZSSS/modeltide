@@ -42,7 +42,6 @@ import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "@/client/ut
 import { RenderView } from "@/client/components/table/cell-view";
 import { ROW_PADDING_ULTRA_COMPACT } from "@/client/nav/layout";
 
-// Densest tier: the compare table sits beside the cost estimator and must fit one screen.
 const CELL = ROW_PADDING_ULTRA_COMPACT;
 
 const props = defineProps<{

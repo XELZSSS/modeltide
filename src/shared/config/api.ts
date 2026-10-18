@@ -1,6 +1,4 @@
-// Moved from ./limits.ts: API request limits and default query parameters.
-// Declared before queryKeys, which reads OPEN_SOURCE_MODELS_DEFAULTS at module
-// evaluation time (a plain const reference would hit the temporal dead zone).
+// Declared before queryKeys, which reads OPEN_SOURCE_MODELS_DEFAULTS at module evaluation time (TDZ).
 export const MAX_ID_CHARS = 500;
 export const MAX_NAME_CHARS = 200;
 

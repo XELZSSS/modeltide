@@ -11,10 +11,7 @@ export interface SlotPool {
   max: number;
 }
 
-// One pool per HttpClient (i.e. per invocation), not a global singleton: the
-// platform budget is 6 simultaneous connections *per invocation*, so unrelated
-// invocations sharing one pool would starve each other while each stays under
-// budget.
+// One pool per invocation, not a global singleton: the platform budget is 6 connections per invocation.
 export function createSlotPool(): SlotPool {
   return { active: 0, waiters: [], max: UPSTREAM_MAX_CONNECTIONS };
 }

@@ -22,8 +22,7 @@ export interface SourceConfig {
   map(item: SearchItem): SearchResult;
 }
 
-// Declared before `collect`, whose `limit` default reads MAX_PER_SOURCE: a later
-// declaration would be a temporal-dead-zone reference.
+// Declared before `collect`: its `limit` default reads MAX_PER_SOURCE, so a later declaration would be a TDZ error.
 const MAX_RESULTS = 20;
 const MAX_PER_SOURCE = 50;
 
@@ -56,7 +55,6 @@ export function collect(
     const { matched, score } = matchFolded(entry.fields.folded, needle);
     if (matched) {
       out.push({ result: config.map(entry.item), match: score });
-      // Skip the fuzzy pass once exact/prefix hits fill the per-source budget.
       if (out.length >= limit) return topPerSource(out, limit);
     } else missed.push(entry);
   }

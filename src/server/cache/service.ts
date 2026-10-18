@@ -53,11 +53,18 @@ export class CacheService {
     kvHit: { env: StaleEnvelope<T> } | undefined,
     capMs?: number,
   ): { value: T } | undefined {
-    if (kvHit) {
-      const env = kvHit.env;
-      return Date.now() - env.e <= this.staleBudget(env.t ?? ttl, capMs) ? { value: env.d } : undefined;
+    const now = Date.now();
+    const candidates: { value: T; expiresAt: number; storedTtl: number }[] = [];
+    if (kvHit) candidates.push({ value: kvHit.env.d, expiresAt: kvHit.env.e, storedTtl: kvHit.env.t ?? ttl });
+    if (mem) candidates.push({ value: mem.d, expiresAt: mem.e, storedTtl: mem.t });
+    let freshest: { value: T; expiresAt: number } | undefined;
+    for (const candidate of candidates) {
+      if (now - candidate.expiresAt > this.staleBudget(candidate.storedTtl, capMs)) continue;
+      if (freshest === undefined || candidate.expiresAt > freshest.expiresAt) {
+        freshest = { value: candidate.value, expiresAt: candidate.expiresAt };
+      }
     }
-    return mem && Date.now() - mem.e <= this.staleBudget(mem.t, capMs) ? { value: mem.d } : undefined;
+    return freshest === undefined ? undefined : { value: freshest.value };
   }
 
   private async loadStaleOrRefresh<T>(

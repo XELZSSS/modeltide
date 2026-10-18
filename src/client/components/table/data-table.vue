@@ -4,7 +4,7 @@ import EmptyState from "@/client/components/empty-state.vue";
 import Pagination from "@/client/components/pagination.vue";
 import { useTranslation } from "@/client/i18n";
 import { useDevice } from "@/client/device";
-import { filterByTerm } from "@/client/search/match";
+import { filterByTerm, foldSearchStr } from "@/client/search/match";
 import { useRouteSearchTerm } from "@/client/stores";
 import type { DataTableColumn } from "./table-columns.ts";
 import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "./paging";
@@ -28,6 +28,7 @@ const { t } = useTranslation();
 const { term } = useRouteSearchTerm();
 
 const filtered = computed(() => filterByTerm(props.data, term.value, props.getSearchFields));
+const emptyMessage = computed(() => (foldSearchStr(term.value) === "" ? t("noData") : t("noResults")));
 const expandedId = ref<string | null>(null);
 const isExpandable = computed(() => props.renderExpandedRow != null || slots.expandedRow != null);
 const renderExpanded = computed<(row: T) => VNodeChild>(
@@ -67,7 +68,7 @@ function handlePageChange(p: number): void {
 
 <template>
   <div class="flex flex-col gap-4 min-w-0">
-    <EmptyState v-if="dedupedData.length === 0" :message="t('noResults')" />
+    <EmptyState v-if="dedupedData.length === 0" :message="emptyMessage" />
     <template v-else>
       <div ref="bodyEl" tabindex="-1" class="flex flex-col gap-4 min-w-0 outline-none">
         <MobileTableBody

@@ -28,6 +28,7 @@ function renderPrice(
 <template>
   <ComparePageLayout :back-to="`${SOURCES.aa.backTo}&view=pricing`" :title="t('priceComparison')">
     <template #default="{ models }">
+      <p class="text-xs text-text-tertiary lg:col-span-2">{{ t("priceUnitNote") }}</p>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch min-w-0">
         <CompareTable :title="t('priceBreakdown')" :rows="priceRows" :models="models" :render-value="renderPrice" />
         <CostEstimator :models="models" />

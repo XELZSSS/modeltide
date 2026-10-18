@@ -30,7 +30,7 @@ export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpan
             style: { width: col.width },
           },
           h("div", { class: cellInnerClasses(col) }, [
-            props.isExpandable && colIdx === 0 ? h("span", { class: "w-3.5 shrink-0", "aria-hidden": "true" }) : null,
+            props.isExpandable && colIdx === 0 ? h("span", { class: "w-7 shrink-0", "aria-hidden": "true" }) : null,
             col.header ? h("span", { class: "truncate uppercase tracking-caps", title: col.header }, col.header) : null,
           ]),
         ),

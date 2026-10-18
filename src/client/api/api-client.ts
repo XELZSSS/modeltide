@@ -58,8 +58,7 @@ function buildApiUrl(path: string): string {
 
 function timeoutSignal(ms: number): AbortSignal {
   if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
-  // Older Safari/Chrome have neither AbortSignal.timeout nor AbortSignal.any;
-  // emulate the timeout so every query doesn't throw a synchronous TypeError.
+  // Older Safari/Chrome lack AbortSignal.timeout; emulate it so queries don't throw a TypeError.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(new DOMException("Timed out", "TimeoutError")), ms);
   ctrl.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
