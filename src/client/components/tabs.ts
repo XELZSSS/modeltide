@@ -3,7 +3,7 @@ export interface TabItem {
   label: string;
 }
 
-export function nextIndexForKey(key: string, index: number, length: number): number | null {
+function nextIndexForKey(key: string, index: number, length: number): number | null {
   if (length === 0 || index < 0) return null;
   if (key === "ArrowRight" || key === "ArrowDown") return (index + 1) % length;
   if (key === "ArrowLeft" || key === "ArrowUp") return (index - 1 + length) % length;
@@ -29,14 +29,14 @@ export function nextRovingId(
 }
 
 /** Wiring for a `role="radiogroup"` built from `role="radio"` buttons. */
-export interface RovingRadioConfig<Id extends string> {
+interface RovingRadioConfig<Id extends string> {
   items: () => readonly Id[];
   activeId: () => Id;
   elementId: (id: Id) => string;
   select: (id: Id) => void;
 }
 
-export interface RovingRadio<Id extends string> {
+interface RovingRadio<Id extends string> {
   tabIndexFor: (id: Id) => number;
   onKeydown: (event: KeyboardEvent) => void;
 }

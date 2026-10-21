@@ -15,8 +15,8 @@ export const cacheKeys = {
   aaModelsEnrich: cacheKey("artificialIndex", "models-enrich"),
   aaOmniscienceEnrich: cacheKey("artificialIndex", "omniscience-enrich"),
   homeDashboard: cacheKey("homeDashboard"),
-  homeOpenSource: (sort: string, direction: string) => cacheKey("homeDashboard", "opensource", sort, direction),
-  openSourceModels: (sort: string, direction: string) => cacheKey("openSourceModels", sort, direction),
+  homeOpenSource: (sort: string) => cacheKey("homeDashboard", "opensource", sort),
+  openSourceModels: (sort: string) => cacheKey("openSourceModels", sort),
 
   openSourceModel: (id: string) => {
     const trimmed = id.trim();

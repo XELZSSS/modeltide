@@ -9,8 +9,6 @@ import { partialPollInterval } from "./partial-poll";
 
 type RawPayload<D extends ApiDomain> = SourcePayload<PayloadOf<D>>;
 
-export type QueryResult<D extends ApiDomain> = UseQueryReturnType<RawPayload<D>, Error>;
-
 type PollFn<D extends ApiDomain> = (
   query: Query<RawPayload<D>, Error, RawPayload<D>, readonly unknown[]>,
 ) => number | false;

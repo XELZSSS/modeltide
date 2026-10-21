@@ -2,11 +2,9 @@
 import { useTranslation } from "@/client/i18n";
 import Notice from "./notice.vue";
 
-defineProps<{ message?: string }>();
-
 const { t } = useTranslation();
 </script>
 
 <template>
-  <Notice>{{ message ?? t("partialDataNotice") }}</Notice>
+  <Notice>{{ t("partialDataNotice") }}</Notice>
 </template>

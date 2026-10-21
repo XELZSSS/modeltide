@@ -1,10 +1,6 @@
 import { errMsg } from "@/server/api/errors";
 import { logger } from "@/server/api/logger";
 
-function abortError(): Error {
-  return new Error("Aborted");
-}
-
 export function raceAbort<T>(
   work: Promise<T>,
   signal: AbortSignal,
@@ -32,14 +28,4 @@ export function raceAbort<T>(
       },
     );
   });
-}
-
-export async function runAbortable<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return task();
-  if (signal.aborted) throw abortError();
-  const work = Promise.resolve().then((): Promise<T> => {
-    if (signal.aborted) return Promise.reject(abortError());
-    return task();
-  });
-  return raceAbort(work, signal, abortError);
 }

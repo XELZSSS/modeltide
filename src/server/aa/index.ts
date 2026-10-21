@@ -1,12 +1,19 @@
 import { byNumberDesc, isValidModelIdentity } from "@/server/formats/parser-primitives";
 import type { AppContext } from "@/server/api/context";
-import { BENCHMARK_KEYS, DEFAULT_TTL_MS } from "@/shared/config";
+import { DEFAULT_TTL_MS } from "@/shared/config";
 import { cacheKeys } from "@/server/cache/keys";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { findNextData } from "@/server/formats/rsc-parser";
 
 import { getModelDirectoryMeta } from "@/server/openrouter/directory";
-import { benchmarkWireNames, compact, modalityWireNames } from "./parse/model-compact";
+import {
+  compact,
+  fieldAliases,
+  modalityWireNames,
+  modelsBenchmarkWireNames,
+  omniscienceBenchmarkWireNames,
+  omniscienceModalityWireNames,
+} from "./parse/model-compact";
 import { parseLeaderboardModels } from "./parse/leaderboard";
 import { backfillFromMeta, mergeBySlug, type IntelligenceIndexResult } from "./parse/model-enrich";
 import { fetchAaRsc, getAndParseEnrich } from "./fetch";
@@ -23,7 +30,8 @@ export function getAaLeaderboardBody(ctx: AppContext): Promise<CacheResult<strin
   );
 }
 
-const MODELS_ENRICH_BASE_FIELDS = [
+// Fields every enrich path serves.
+const ENRICH_BASE_FIELDS = [
   "id",
   "slug",
   "name",
@@ -40,32 +48,34 @@ const MODELS_ENRICH_BASE_FIELDS = [
   "cacheHitPrice",
   "cacheWritePrice",
   "creator",
-  ...BENCHMARK_KEYS,
-  ...benchmarkWireNames,
+];
+
+// Per-path allow-lists of exactly what each RSC path returns; a field a path does not serve
+// is contributed by another path and merged in, so it is never reported as missing.
+const MODELS_PATH_FIELDS = [
+  ...ENRICH_BASE_FIELDS,
+  "omniscienceHallucinationRate",
+  ...modelsBenchmarkWireNames,
   ...modalityWireNames,
 ];
 
-// Per-path allow-lists of what each RSC path returns; /omniscience serves raw Elo `gdpval`, not normalized.
-const MODELS_PATH_ABSENT = ["briefcaseElo", "cweBench", "cyberIndex", "deepsecBench", "itBenchSre"] as const;
-
-const MODELS_PATH_FIELDS = [
-  ...MODELS_ENRICH_BASE_FIELDS.filter((f) => f !== "itbenchSre"),
-  "omniscienceHallucinationRate",
-];
-
-const OMNISCIENCE_PATH_ABSENT = ["gdpvalNormalized", "itbenchSre"] as const;
-
 const OMNISCIENCE_PATH_FIELDS = [
-  ...MODELS_ENRICH_BASE_FIELDS.filter((f) => f !== "gdpvalNormalized"),
+  ...ENRICH_BASE_FIELDS,
   "medianCanonicalAnswerOutputSpeed",
   "omniscienceBreakdown",
+  ...omniscienceBenchmarkWireNames,
+  ...omniscienceModalityWireNames,
 ];
 
 function projectFields(fields: readonly string[]): (m: Record<string, unknown>) => Record<string, unknown> {
   return (m) => {
     const row: Record<string, unknown> = {};
     for (const field of fields) {
-      if (field in m) row[field] = m[field];
+      for (const alias of fieldAliases(field)) {
+        if (!(alias in m)) continue;
+        row[field] = m[alias];
+        break;
+      }
     }
     return row;
   };
@@ -74,13 +84,7 @@ function projectFields(fields: readonly string[]): (m: Record<string, unknown>) 
 async function fetchIntelligenceIndex(
   ctx: AppContext,
 ): Promise<{ models: ArtificialAnalysisModel[]; partial: boolean }> {
-  const enrichLeg = (
-    cacheKey: string,
-    label: string,
-    path: string,
-    fields: readonly string[],
-    absent: readonly string[] = [],
-  ) => {
+  const enrichLeg = (cacheKey: string, label: string, path: string, fields: readonly string[]) => {
     const project = projectFields(fields);
     return getAndParseEnrich<Record<string, unknown>>(ctx, cacheKey, {
       label,
@@ -88,7 +92,6 @@ async function fetchIntelligenceIndex(
       marker: "initialModels",
       extract: (tree) => findNextData(tree, "initialModels"),
       fields,
-      absent,
       map: (arr) => arr.map(project),
     });
   };
@@ -97,14 +100,7 @@ async function fetchIntelligenceIndex(
       { label: "leaderboard", run: () => getAaLeaderboardBody(ctx) },
       {
         label: "models-enrich",
-        run: () =>
-          enrichLeg(
-            cacheKeys.aaModelsEnrich,
-            "/models",
-            upstreamEndpoints.aaModels,
-            MODELS_PATH_FIELDS,
-            MODELS_PATH_ABSENT,
-          ),
+        run: () => enrichLeg(cacheKeys.aaModelsEnrich, "/models", upstreamEndpoints.aaModels, MODELS_PATH_FIELDS),
       },
       {
         label: "omniscience-enrich",
@@ -114,7 +110,6 @@ async function fetchIntelligenceIndex(
             "/omniscience",
             upstreamEndpoints.aaOmniscience,
             OMNISCIENCE_PATH_FIELDS,
-            OMNISCIENCE_PATH_ABSENT,
           ),
       },
       {

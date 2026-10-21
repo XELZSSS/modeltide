@@ -1,7 +1,7 @@
 import { computed, type ComputedRef, type VNodeChild } from "vue";
 import type { RowListProps } from "./table-columns";
 
-export interface RowListItem<T> {
+interface RowListItem<T> {
   row: T;
   id: string;
   name: string;

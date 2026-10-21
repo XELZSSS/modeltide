@@ -13,11 +13,8 @@ interface LegFailure {
 
 interface RunLegsOptions {
   concurrency?: number;
-  signal?: AbortSignal;
   onFailure?: (failure: LegFailure) => void;
-  filter?: (failure: LegFailure) => boolean;
   allFailedMessage?: string;
-  retryable?: boolean;
 }
 
 type LegValue<L> = L extends Leg<infer T> ? T : never;
@@ -29,24 +26,19 @@ export async function runLegs<L extends readonly Leg<unknown>[]>(
   opts: RunLegsOptions = {},
 ): Promise<{ values: LegValues<L>; failures: LegFailure[] }> {
   const tasks = legs.map((leg) => leg.run);
-  const settled = await runCapped(
-    tasks,
-    opts.concurrency ?? tasks.length,
-    opts.signal ? { signal: opts.signal } : undefined,
-  );
+  const settled = await runCapped(tasks, opts.concurrency ?? tasks.length);
 
   const failures: LegFailure[] = [];
   settled.forEach((result, i) => {
     if (result.status !== "rejected") return;
     const failure: LegFailure = { label: legs[i]?.label ?? String(i), reason: result.reason };
-    if (opts.filter && !opts.filter(failure)) return;
     failures.push(failure);
     opts.onFailure?.(failure);
   });
   rethrowIfAllAborted(settled);
 
   if (opts.allFailedMessage != null && failures.length === legs.length && legs.length > 0) {
-    throw new UpstreamError(opts.allFailedMessage, { retryable: opts.retryable ?? true });
+    throw new UpstreamError(opts.allFailedMessage, { retryable: true });
   }
 
   const values = settled.map((result) => (result.status === "fulfilled" ? result.value : undefined));

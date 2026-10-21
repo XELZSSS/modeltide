@@ -81,7 +81,7 @@ export async function useSuspenseHomeDashboard(): Promise<ComputedRef<Normalized
 export const useOpenRouterRankings = qOpenRouterList.use;
 
 /** Resolved list state plus the server's real fetch time, for copy that ages the data. */
-export interface OpenRouterRankingsState {
+interface OpenRouterRankingsState {
   readonly items: ComputedRef<OpenRouterRankEntry[]>;
   readonly partial: ComputedRef<boolean>;
   readonly malformed: ComputedRef<boolean>;

@@ -1,5 +1,3 @@
-import { runAbortable } from "@/server/util/abort";
-
 class TaskNotRunError extends Error {
   constructor() {
     super("Pool deadline passed before the task started");
@@ -10,23 +8,12 @@ class TaskNotRunError extends Error {
 export async function runCapped<T>(
   tasks: readonly (() => Promise<T>)[],
   concurrency: number,
-  opts?: { signal?: AbortSignal },
 ): Promise<PromiseSettledResult<T>[]> {
   const results: PromiseSettledResult<T>[] = [];
   const total = tasks.length;
   let cursor = 0;
   const runner = async (): Promise<void> => {
     while (cursor < total) {
-      if (opts?.signal?.aborted) {
-        while (cursor < total) {
-          const j = cursor;
-          cursor += 1;
-          if (results[j] === undefined) {
-            results[j] = { status: "rejected", reason: new TaskNotRunError() };
-          }
-        }
-        return;
-      }
       const i = cursor;
       cursor += 1;
       const task = tasks[i];
@@ -35,7 +22,7 @@ export async function runCapped<T>(
         continue;
       }
       try {
-        results[i] = { status: "fulfilled", value: await runAbortable(task, opts?.signal) };
+        results[i] = { status: "fulfilled", value: await task() };
       } catch (reason) {
         results[i] = { status: "rejected", reason };
       }

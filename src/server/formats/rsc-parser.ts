@@ -16,7 +16,7 @@ function scanStep<T>(step: () => T): ParseResult<T> {
   }
 }
 
-export function* traverse(root: unknown): Generator<unknown> {
+function* traverse(root: unknown): Generator<unknown> {
   const queue: unknown[] = [root];
   let visited = 0;
   let head = 0;

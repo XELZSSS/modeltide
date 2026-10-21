@@ -3,7 +3,7 @@ import { qEnum, qStr, type QuerySchema } from "./api/validation";
 import { SHORT_CACHE_HEADERS } from "./api/headers";
 import type { ApiDomain } from "@/shared/contract";
 import { apiPaths, MAX_NAME_CHARS, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
-import { OPEN_SOURCE_SORTS, SORT_DIRECTIONS } from "@/shared/query-schemas";
+import { OPEN_SOURCE_SORTS } from "@/shared/query-schemas";
 import { getIntelligenceIndex } from "./aa";
 
 import { getClosedReleases } from "./releases/source";
@@ -39,7 +39,6 @@ const ENTRIES = {
   openSourceModels: defineSource("openSourceModels", {
     query: {
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
-      direction: qEnum(SORT_DIRECTIONS, OPEN_SOURCE_MODELS_DEFAULTS.direction),
     },
     handler: (ctx, params) => getModels(ctx, params),
   }),

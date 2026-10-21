@@ -3,20 +3,14 @@ import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 import Dot from "./dot.vue";
 
-const props = withDefaults(
-  defineProps<{ color?: string; size?: "sm" | "md"; class?: string; textClass?: string; title?: string }>(),
-  {
-    size: "sm",
-  },
-);
+const props = defineProps<{ color?: string; class?: string; title?: string }>();
 
 const classes = computed(() => cn("flex items-center gap-2 min-w-0", props.class));
-const textClasses = computed(() => cn("text-sm font-medium truncate min-w-0", props.textClass));
 </script>
 
 <template>
   <span :class="classes">
-    <Dot :size="size" :color="color" />
-    <span :class="textClasses" :title="title ?? undefined"><slot /></span>
+    <Dot size="sm" :color="color" />
+    <span class="text-sm font-medium truncate min-w-0" :title="title ?? undefined"><slot /></span>
   </span>
 </template>

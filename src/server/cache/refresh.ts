@@ -36,7 +36,7 @@ class FailureCooldown {
 
 export const refreshFailureCooldown = new FailureCooldown();
 
-export class InflightRegistry {
+class InflightRegistry {
   private map = new Map<string, Promise<unknown>>();
 
   get<T>(vk: string): Promise<T> | undefined {

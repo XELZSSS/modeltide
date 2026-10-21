@@ -19,6 +19,9 @@ const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   cwe_bench: "cweBench",
   cyber_index: "cyberIndex",
   deepsec_bench: "deepsecBench",
+  // `gdpval` upstream is the raw Elo score (1076-1866); `gdpvalNormalized` is the 0-1 ratio
+  // on the same scale as gpqa/hle and is the value that belongs in the benchmark.
+  gdpval: "gdpvalNormalized",
   itbench_sre: "itbenchSre",
   mmmu_pro: "mmmuPro",
   tau_banking: "tauBanking",
@@ -28,10 +31,105 @@ const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   terminalbench_v4_0: "terminalBench40",
 };
 
+// Upstream spells the same benchmark differently per path: /models serves `itBenchSre`,
+// /leaderboards and /omniscience serve `itbenchSre`. The canonical name wins downstream.
+const FIELD_ALIASES: Record<string, readonly string[]> = {
+  itbenchSre: ["itbenchSre", "itBenchSre"],
+};
+
+/** Every upstream spelling accepted for a canonical field name. */
+export function fieldAliases(field: string): readonly string[] {
+  return FIELD_ALIASES[field] ?? [field];
+}
+
+/** Canonical upstream field name for a benchmark key. */
+export function benchmarkWireName(key: BenchmarkKey): string {
+  return BENCHMARK_FIELD_OVERRIDES[key] ?? key;
+}
+
+// Which benchmarks each Artificial Analysis path serves, verified against the live payloads.
+// A benchmark a path does not serve is contributed by another path and merged in, so its
+// absence from that path is not drift and must not be reported as a missing field.
+const LEADERBOARD_BENCHMARKS = [
+  "gpqa",
+  "hle",
+  "gdpval",
+  "scicode",
+  "ifbench",
+  "lcr",
+  "tau2",
+  "tau_banking",
+  "terminalbench_v2_1",
+  "terminalbench_hard",
+  "terminalbench_v4_0",
+  "critpt",
+  "apex_agents",
+  "itbench_sre",
+  "mmmu_pro",
+  "omniscience",
+] as const satisfies readonly BenchmarkKey[];
+
+const MODELS_BENCHMARKS = [
+  "gpqa",
+  "hle",
+  "gdpval",
+  "scicode",
+  "ifbench",
+  "lcr",
+  "tau2",
+  "tau_banking",
+  "terminalbench_v2_1",
+  "terminalbench_hard",
+  "terminalbench_v4_0",
+  "terminalbench_science",
+  "critpt",
+  "apex_agents",
+  "itbench_sre",
+  "mmmu_pro",
+  "automation_bench",
+  "omniscience",
+] as const satisfies readonly BenchmarkKey[];
+
+// /omniscience serves the raw `gdpval` Elo score but not `gdpvalNormalized`, so gdpval is
+// contributed by the leaderboard and /models instead.
+const OMNISCIENCE_BENCHMARKS = [
+  "gpqa",
+  "hle",
+  "scicode",
+  "ifbench",
+  "lcr",
+  "tau2",
+  "tau_banking",
+  "terminalbench_v2_1",
+  "terminalbench_hard",
+  "terminalbench_v4_0",
+  "terminalbench_science",
+  "critpt",
+  "apex_agents",
+  "briefcase_elo",
+  "itbench_sre",
+  "cwe_bench",
+  "cyber_index",
+  "deepsec_bench",
+  "mmmu_pro",
+  "automation_bench",
+  "omniscience",
+] as const satisfies readonly BenchmarkKey[];
+
+export const leaderboardBenchmarkWireNames = LEADERBOARD_BENCHMARKS.map(benchmarkWireName);
+export const modelsBenchmarkWireNames = MODELS_BENCHMARKS.map(benchmarkWireName);
+export const omniscienceBenchmarkWireNames = OMNISCIENCE_BENCHMARKS.map(benchmarkWireName);
+
 function compactBenchmarks(m: Record<string, unknown>): Partial<Record<BenchmarkKey, number | null>> {
   const benchmarks: Partial<Record<BenchmarkKey, number | null>> = {};
   for (const key of BENCHMARK_KEYS) {
-    const raw = numCoerce(m[BENCHMARK_FIELD_OVERRIDES[key] ?? key]);
+    const wire = benchmarkWireName(key);
+    let raw: number | null = null;
+    for (const alias of fieldAliases(wire)) {
+      if (!(alias in m)) continue;
+      raw = numCoerce(m[alias]);
+      break;
+    }
     const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : unclampedPercent(raw);
     if (value != null) benchmarks[key] = value;
   }
@@ -73,12 +171,13 @@ function compactOmniscience(
 
 const MODALITY_FIELD_SUFFIXES = MODALITY_KEYS.map((mo) => mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase());
 
-export const benchmarkWireNames = BENCHMARK_KEYS.map((key) => BENCHMARK_FIELD_OVERRIDES[key] ?? key);
-
 export const modalityWireNames = MODALITY_KEYS.flatMap((mo) => {
   const suffix = mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase();
   return [`inputModality${suffix}`, `outputModality${suffix}`];
 });
+
+// /omniscience serves only the non-text input modalities; /models serves all eight.
+export const omniscienceModalityWireNames = ["inputModalityImage", "inputModalitySpeech", "inputModalityVideo"];
 
 function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unknown>): void {
   for (let i = 0; i < MODALITY_KEYS.length; i++) {

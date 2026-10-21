@@ -1,7 +1,6 @@
 @theme inline {
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
-  --color-bg-tertiary: var(--bg-tertiary);
   --color-bg-card: var(--bg-card);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -18,7 +17,6 @@
   --color-success-light: var(--success-light);
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
-  --color-degraded: var(--degraded);
   --color-info: var(--info);
   --color-info-light: var(--info-light);
 
@@ -45,7 +43,6 @@
   color-scheme: light;
   --bg-primary: #fafbfc;
   --bg-secondary: #f1f4f7;
-  --bg-tertiary: #e3e8ee;
   --bg-card: #ffffff;
   --bg-overlay: #ffffff;
   --text-primary: #1e2430;
@@ -63,7 +60,6 @@
   --success-light: color-mix(in srgb, var(--success) 10%, transparent);
   --warning: #9a6b0a;
   --warning-light: color-mix(in srgb, var(--warning) 10%, transparent);
-  --degraded: color-mix(in srgb, var(--warning) 55%, var(--bg-primary));
   --info: #2f6d8a;
   --info-light: color-mix(in srgb, var(--info) 10%, transparent);
   --chart-1: #365899;
@@ -88,7 +84,6 @@
   color-scheme: dark;
   --bg-primary: #1a1a1a;
   --bg-secondary: #2d2d2d;
-  --bg-tertiary: #3a3a3a;
   --bg-card: #232323;
   --bg-overlay: #2d2d2d;
   --text-primary: #e8edf3;
@@ -106,7 +101,6 @@
   --success-light: color-mix(in srgb, var(--success) 14%, transparent);
   --warning: #d3a24a;
   --warning-light: color-mix(in srgb, var(--warning) 14%, transparent);
-  --degraded: color-mix(in srgb, var(--warning) 55%, var(--bg-primary));
   --info: #6aa5c2;
   --info-light: color-mix(in srgb, var(--info) 14%, transparent);
   --chart-1: #8ba3d6;

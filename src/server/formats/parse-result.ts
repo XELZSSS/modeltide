@@ -4,8 +4,8 @@ export type ParseResult<T> =
 
 export const parseOk = <T>(data: T, warnings: string[] = []): ParseResult<T> => ({ ok: true, data, warnings });
 
-export const parseFail = (error: string, warnings: string[] = []): ParseResult<never> => ({
+export const parseFail = (error: string): ParseResult<never> => ({
   ok: false,
   error,
-  warnings,
+  warnings: [],
 });

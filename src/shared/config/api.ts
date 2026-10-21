@@ -1,10 +1,8 @@
-// Declared before queryKeys, which reads OPEN_SOURCE_MODELS_DEFAULTS at module evaluation time (TDZ).
 export const MAX_ID_CHARS = 500;
 export const MAX_NAME_CHARS = 200;
 
 export const OPEN_SOURCE_MODELS_DEFAULTS = {
   sort: "trendingScore",
-  direction: "-1",
 } as const;
 
 const API_DOMAINS = {
@@ -31,12 +29,8 @@ export function cacheKey(domain: ApiDomain, ...parts: (string | number)[]): stri
 
 export const queryKeys = {
   artificialIndex: [...QUERY_KEY_PREFIX, API_DOMAINS.artificialIndex],
-  openSourceModels: [
-    ...QUERY_KEY_PREFIX,
-    API_DOMAINS.openSourceModels,
-    OPEN_SOURCE_MODELS_DEFAULTS.sort,
-    OPEN_SOURCE_MODELS_DEFAULTS.direction,
-  ],
+  // Keyed by sort so the react-query key can never diverge from the requested URL.
+  openSourceModels: (sort: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.openSourceModels, sort],
   openSourceModel: (id: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.openSourceModel, id],
   news: (category: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.news, category],
   openRouterRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.openRouterRankings],

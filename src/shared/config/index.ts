@@ -1,4 +1,4 @@
-export { API_PREFIX, queryKeys, apiPaths } from "./api";
+export { queryKeys, apiPaths } from "./api";
 export { STORAGE_KEYS, SETTINGS_STORAGE_VERSION } from "./storage";
 export { MAX_ID_CHARS, MAX_NAME_CHARS, OPEN_SOURCE_MODELS_DEFAULTS } from "./api";
 export { MODALITY_KEYS, type ModalityKey } from "./ui";
@@ -16,7 +16,6 @@ export {
   ttlForRatio,
 } from "./time";
 export { DEFAULT_COST_SCENARIO } from "./pricing";
-export { localeOf, FALLBACK_DASH, FALLBACK_NA } from "./ui";
 export { NEWS_CATEGORIES } from "@/shared/types/news";
-export { BENCHMARK_KEYS, type BenchmarkKey, ABSOLUTE_SCORE_BENCHMARKS, BENCHMARK_LABELS } from "./benchmarks";
+export { BENCHMARK_KEYS, type BenchmarkKey, ABSOLUTE_SCORE_BENCHMARKS } from "./benchmarks";
 export { THEME_COLORS } from "./ui";

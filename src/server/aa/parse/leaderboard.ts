@@ -1,6 +1,6 @@
 import { isRecord, numCoerce, str } from "@/server/formats/parser-primitives";
 import { collectModelReleaseLinksFromArrays, scanReleaseIndex, type ReleaseInfo } from "./release-index";
-import { benchmarkWireNames } from "./model-compact";
+import { fieldAliases, leaderboardBenchmarkWireNames } from "./model-compact";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
 import { findNextData, parseRscPayload } from "@/server/formats/rsc-parser";
 
@@ -43,8 +43,13 @@ function normalizeRow(
   const sizeClass = str(row.paramClass).trim();
   if (sizeClass) normalized.sizeClass = sizeClass;
   if (release) normalized.releaseDate = release.releaseDate;
-  for (const wire of benchmarkWireNames) {
-    if (wire in row) normalized[wire] = row[wire];
+  for (const wire of leaderboardBenchmarkWireNames) {
+    for (const alias of fieldAliases(wire)) {
+      if (alias in row) {
+        normalized[wire] = row[alias];
+        break;
+      }
+    }
   }
   return normalized;
 }
@@ -64,15 +69,20 @@ export function parseLeaderboardModels(html: unknown): ParseResult<Record<string
   const kept: Record<string, unknown>[] = [];
   for (const raw of rows) {
     if (!isRecord(raw)) continue;
-    for (const wire of benchmarkWireNames) {
-      if (wire in raw) seenWire.add(wire);
+    for (const wire of leaderboardBenchmarkWireNames) {
+      for (const alias of fieldAliases(wire)) {
+        if (alias in raw) {
+          seenWire.add(wire);
+          break;
+        }
+      }
     }
     const normalized = normalizeRow(raw, releases, links);
     if (normalized !== null) kept.push(normalized);
   }
   if (kept.length === 0) return parseFail("AA leaderboard page yielded no usable model rows");
   const dropped = rows.length - kept.length;
-  const missing = benchmarkWireNames.filter((wire) => !seenWire.has(wire));
+  const missing = leaderboardBenchmarkWireNames.filter((wire) => !seenWire.has(wire));
   const warnings: string[] = [];
   if (dropped > 0) warnings.push(`Skipped ${dropped} deprecated leaderboard rows`);
   if (missing.length > 0)

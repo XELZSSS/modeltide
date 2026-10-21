@@ -24,7 +24,7 @@ function tFor(lang: Lang): TFunction {
 
 export { DOC_META };
 
-export interface Translation {
+interface Translation {
   lang: ComputedRef<Lang>;
   t: TFunction;
   setLang: (lang: Lang) => void;

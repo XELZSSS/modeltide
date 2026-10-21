@@ -10,7 +10,7 @@ import type {
 } from "./types";
 export type { ApiDomain };
 
-export interface ApiContract {
+interface ApiContract {
   artificialIndex: ArtificialAnalysisModel[];
   homeDashboard: HomeDashboardData;
   news: NewsItem[];

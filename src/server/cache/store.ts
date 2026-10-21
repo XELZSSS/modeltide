@@ -63,7 +63,7 @@ interface MemoryEntry<T> {
   t: number;
 }
 
-export class MemoryL1 {
+class MemoryL1 {
   private map = new Map<string, { entry: MemoryEntry<unknown>; bytes: number }>();
   private bytes = 0;
 

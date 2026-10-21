@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from "vue";
-import { Chart, type ChartData, type ChartOptions, type ChartType, type Plugin } from "chart.js";
+import { Chart, type ChartData, type ChartOptions, type ChartType } from "chart.js";
 
 const props = defineProps<{
   type: ChartType;
   data: ChartData;
   options?: ChartOptions;
-  plugins?: Plugin[];
 }>();
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -22,7 +21,6 @@ function create(): void {
     type: props.type,
     data: props.data,
     options: props.options,
-    plugins: props.plugins,
   });
 }
 
@@ -35,17 +33,6 @@ function update(): void {
 }
 
 watch(() => props.type, create, { flush: "post" });
-
-// Callers pass a fresh array literal each render, so compare plugin entries, not the array.
-watch(
-  () => props.plugins,
-  (next, prev) => {
-    if (next === prev) return;
-    if (next != null && prev != null && next.length === prev.length && next.every((p, i) => p === prev[i])) return;
-    create();
-  },
-  { flush: "post" },
-);
 
 // Shallow watching avoids deep-traversing chart data.
 watch([() => props.data, () => props.options], update, { flush: "post" });

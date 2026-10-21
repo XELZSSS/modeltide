@@ -1,6 +1,6 @@
 import type { BenchmarkKey } from "./benchmark";
 
-export interface ModelCreators {
+interface ModelCreators {
   name: string;
   color: string | null;
 }
@@ -12,11 +12,11 @@ export interface ModelPricing {
   cacheWrite: number | null;
 }
 
-export interface ModelSpeed {
+interface ModelSpeed {
   median_output_speed: number | null;
 }
 
-export interface ModelOmniscienceTotal {
+interface ModelOmniscienceTotal {
   accuracy: number | null;
   attempt_rate: number | null;
   hallucination_rate: number | null;

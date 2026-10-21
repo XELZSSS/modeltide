@@ -2,6 +2,7 @@ import {
   FIVE_MINUTES,
   NEWS_TTL_MS,
   ONE_MINUTE,
+  OPEN_SOURCE_MODELS_DEFAULTS,
   PARTIAL_FAIL_TTL_MS,
   SLOW_TTL_MS,
   STATIC_TTL_MS,
@@ -30,11 +31,13 @@ export const qHomeDashboard = createApiQuery("homeDashboard", queryKeys.homeDash
   isPartialData: isPartialPayload,
 });
 
-export const qOpenSourceModelsList = createApiQuery("openSourceModels", queryKeys.openSourceModels, {
+const OPEN_SOURCE_SORT = OPEN_SOURCE_MODELS_DEFAULTS.sort;
+
+export const qOpenSourceModelsList = createApiQuery("openSourceModels", queryKeys.openSourceModels(OPEN_SOURCE_SORT), {
   ttl: SLOW_TTL_MS,
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
-  query: openSourceModelsQueryString(),
+  query: openSourceModelsQueryString(OPEN_SOURCE_SORT),
 });
 
 function memoQuery<K extends string, T>(

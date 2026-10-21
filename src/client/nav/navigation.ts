@@ -57,7 +57,7 @@ export function useNavigation(): Navigation {
   };
 }
 
-export function isNavActive(pathname: string, item: NavItem): boolean {
+function isNavActive(pathname: string, item: NavItem): boolean {
   if (pathname === item.path) return true;
   if (item.activePrefixes) return item.activePrefixes.some((prefix) => pathname.startsWith(prefix));
   return false;

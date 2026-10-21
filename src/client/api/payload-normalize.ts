@@ -24,7 +24,8 @@ export interface NormalizedHomeDashboard {
   partial: boolean;
 }
 
-export function normalizeHomeDashboard(payload: unknown, label = "homeDashboard"): NormalizedHomeDashboard {
+export function normalizeHomeDashboard(payload: unknown): NormalizedHomeDashboard {
+  const label = "homeDashboard";
   const raw = unwrapObject<HomeDashboardData>(payload, label);
   if (!raw || typeof raw !== "object") throw new Error(`${label}: invalid dashboard`);
   return {

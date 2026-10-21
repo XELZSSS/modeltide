@@ -234,9 +234,9 @@ export class HttpClient {
     }));
   }
 
-  async getRsc(base: string, path: string, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
-    const policy = fetchPolicy("rsc");
-    return this.text(upstreamUrl(base, path), { headers: { RSC: "1" }, ...policy }, maxBytes);
+  async getRsc(base: string, path: string): Promise<string> {
+    const policy = fetchPolicy("interactive");
+    return this.text(upstreamUrl(base, path), { headers: { RSC: "1" }, ...policy }, MAX_JSON_BYTES);
   }
 
   async getFeed(url: string, accept: string, maxBytes: number): Promise<string> {

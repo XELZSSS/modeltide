@@ -7,18 +7,17 @@ const props = withDefaults(
   defineProps<{
     variant?: ButtonVariant | null;
     size?: ButtonSize | null;
-    type?: "button" | "submit" | "reset";
     disabled?: boolean;
     class?: string;
   }>(),
-  { variant: "ghost", size: "sm", type: "button", disabled: false },
+  { variant: "ghost", size: "sm", disabled: false },
 );
 
 const classes = computed(() => cn(buttonVariants({ variant: props.variant, size: props.size }), props.class));
 </script>
 
 <template>
-  <button :type="type" :disabled="disabled" :class="classes">
+  <button type="button" :disabled="disabled" :class="classes">
     <slot />
   </button>
 </template>

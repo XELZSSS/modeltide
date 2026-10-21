@@ -23,7 +23,7 @@ export interface DirectoryCacheEntry {
   meta: Record<string, ModelMetaEntry>;
 }
 
-export interface DirectoryParseResult {
+interface DirectoryParseResult {
   entry: DirectoryCacheEntry;
   totalRows: number;
   missingPricing: number;

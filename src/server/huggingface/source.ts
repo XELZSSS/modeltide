@@ -36,8 +36,8 @@ interface HFRaw {
   incomplete: boolean;
 }
 
-function hfListUrl(p: OpenSourceModelsQuery, limit: number): string {
-  const params = new URLSearchParams({ sort: p.sort, direction: p.direction, limit: String(limit) });
+function hfListUrl(sort: string, limit: number): string {
+  const params = new URLSearchParams({ sort, limit: String(limit) });
   for (const field of HF_LIST_FIELDS) params.append("expand[]", field);
   return `${HF_API}?${params.toString()}`;
 }
@@ -48,9 +48,9 @@ async function fetchHFPage(ctx: AppContext, url: string): Promise<{ items: HFMod
   return { items, nextUrl: page.nextUrl };
 }
 
-async function fetchHFModelsAll(ctx: AppContext, p: OpenSourceModelsQuery, maxPages: number): Promise<HFRaw> {
+async function fetchHFModelsAll(ctx: AppContext, sort: string, maxPages: number): Promise<HFRaw> {
   const items: HFModel[] = [];
-  let url: string | null = hfListUrl(p, HF_PAGE_LIMIT);
+  let url: string | null = hfListUrl(sort, HF_PAGE_LIMIT);
   let pageCount = 0;
   let truncated = false;
   const maxRawRows = HF_PAGE_LIMIT * maxPages;
@@ -121,10 +121,10 @@ function parseHFItems(items: HFModel[], ctx: AppContext): OpenSourceModelEntry[]
 
 async function loadHFModels(
   ctx: AppContext,
-  p: OpenSourceModelsQuery,
+  sort: string,
   maxPages: number,
 ): Promise<{ rows: OpenSourceModelEntry[]; incomplete: boolean; pageCount: number; rawCount: number }> {
-  const raw = await fetchHFModelsAll(ctx, p, maxPages);
+  const raw = await fetchHFModelsAll(ctx, sort, maxPages);
   const rows = parseHFItems(raw.items, ctx);
   if (raw.truncated) {
     // Safety ceiling, not a source failure: keep partial=false so the UI doesn't report incomplete data.
@@ -138,30 +138,20 @@ async function loadHFModels(
 }
 
 export const getModels = (ctx: AppContext, p: OpenSourceModelsQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
-  cachedPayload<OpenSourceModelEntry[]>(
-    ctx,
-    cacheKeys.openSourceModels(p.sort, p.direction),
-    SLOW_TTL_MS,
-    async (refreshCtx) => {
-      const { rows, incomplete } = await loadHFModels(refreshCtx, p, HF_MAX_PAGES);
-      return { rows, partial: incomplete };
-    },
-  );
+  cachedPayload<OpenSourceModelEntry[]>(ctx, cacheKeys.openSourceModels(p.sort), SLOW_TTL_MS, async (refreshCtx) => {
+    const { rows, incomplete } = await loadHFModels(refreshCtx, p.sort, HF_MAX_PAGES);
+    return { rows, partial: incomplete };
+  });
 
 // Home slice: own cache key (must not pollute the full-list key) and a small page budget to fit the client timeout.
 export const getHomeOpenSourceModels = (
   ctx: AppContext,
   p: OpenSourceModelsQuery,
 ): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
-  cachedPayload<OpenSourceModelEntry[]>(
-    ctx,
-    cacheKeys.homeOpenSource(p.sort, p.direction),
-    SLOW_TTL_MS,
-    async (refreshCtx) => {
-      const { rows, incomplete } = await loadHFModels(refreshCtx, p, HOME_HF_MAX_PAGES);
-      return { rows, partial: incomplete };
-    },
-  );
+  cachedPayload<OpenSourceModelEntry[]>(ctx, cacheKeys.homeOpenSource(p.sort), SLOW_TTL_MS, async (refreshCtx) => {
+    const { rows, incomplete } = await loadHFModels(refreshCtx, p.sort, HOME_HF_MAX_PAGES);
+    return { rows, partial: incomplete };
+  });
 
 async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
   const encoded = encodeModelIdPath(id);

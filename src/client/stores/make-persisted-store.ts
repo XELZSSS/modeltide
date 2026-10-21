@@ -56,7 +56,7 @@ function scheduleFlush(key: string, write: () => void): void {
 }
 
 /** Drain queued writes; wired to pagehide so no mutation is lost. */
-export function flushPersistedWrites(): void {
+function flushPersistedWrites(): void {
   while (pendingFlushes.size > 0) {
     const entries = [...pendingFlushes.entries()];
     pendingFlushes.clear();

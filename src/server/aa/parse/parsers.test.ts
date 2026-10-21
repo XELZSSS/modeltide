@@ -85,6 +85,17 @@ describe("compact", () => {
   it("drops invalid release dates", () => {
     expect(compact(rawModel({ releaseDate: "not-a-date" })).release_date).toBeNull();
   });
+
+  it("accepts either upstream spelling of the itbench_sre benchmark", () => {
+    // /models spells it `itBenchSre`; /leaderboards and /omniscience spell it `itbenchSre`.
+    expect(compact(rawModel({ itBenchSre: 0.44 })).benchmarks?.itbench_sre).toBe(44);
+    expect(compact(rawModel({ itbenchSre: 0.44 })).benchmarks?.itbench_sre).toBe(44);
+  });
+
+  it("reads gdpval from the normalized ratio, never the raw Elo score", () => {
+    expect(compact(rawModel({ gdpvalNormalized: 0.31 })).benchmarks?.gdpval).toBe(31);
+    expect(compact(rawModel({ gdpval: 1866.27 })).benchmarks?.gdpval).toBeUndefined();
+  });
 });
 
 describe("mergeBySlug", () => {
@@ -293,7 +304,9 @@ describe("parseLeaderboardModels", () => {
       speed: { median_output_speed: 146.5 },
     });
     expect(compact(first).benchmarks).toMatchObject({ terminalbench_v2_1: 60, gpqa: 83 });
-    expect(compact(first).benchmarks?.gdpval).toBeUndefined();
+    // gdpval reads the normalized 0-1 ratio, not the raw Elo score.
+    expect(compact(first).benchmarks?.gdpval).toBe(23);
+    expect(compact(first).benchmarks?.gdpval).not.toBe(0.23);
     const total = compact(first).omniscience_breakdown?.total;
     expect(total?.accuracy).toBe(66);
     expect(total?.attempt_rate).toBeNull();
@@ -308,6 +321,28 @@ describe("parseLeaderboardModels", () => {
       ),
     );
     expect(rows.map((r) => r.slug)).toEqual(["claude-opus-4-5-thinking"]);
+  });
+
+  it("only asks for the benchmarks the leaderboard path serves", () => {
+    // `gdpval` / `briefcaseElo` / `cweBench` live on the /models and /omniscience paths,
+    // never on the leaderboard, so their absence must not be reported as a missing wire name.
+    const result = parseLeaderboardModels(leaderboardHtml([row], links, releases));
+    expect(result.ok).toBe(true);
+    const warnings = result.ok ? result.warnings : [];
+    const wireWarning = warnings.find((w) => w.includes("benchmark wire name")) ?? "";
+    expect(wireWarning).not.toContain("gdpval");
+    expect(wireWarning).not.toContain("briefcaseElo");
+    expect(wireWarning).not.toContain("cweBench");
+    // `hle` is served by the leaderboard, so its absence is reported.
+    expect(wireWarning).toContain("hle");
+  });
+
+  it("warns when a benchmark the leaderboard does serve disappears upstream", () => {
+    const withoutGpqa: Record<string, unknown> = { ...row };
+    delete withoutGpqa.gpqa;
+    const result = parseLeaderboardModels(leaderboardHtml([withoutGpqa], links, releases));
+    const warnings = result.ok ? result.warnings : [];
+    expect(warnings.some((w) => w.includes("gpqa"))).toBe(true);
   });
 
   it("fails when the initialModels prop is missing or not the model matrix", () => {

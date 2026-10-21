@@ -1,6 +1,5 @@
 import { computed, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type { TranslationKey } from "@/shared/i18n";
-import { parseCostFields, type CostFieldValues } from "@/shared/scenario";
 import { usePricingMaps } from "@/client/hooks/use-pricing-maps";
 import { useCostStore } from "@/client/stores";
 
@@ -33,9 +32,7 @@ function useCostEstimator() {
   const values = computed(() => store.values);
   const setField = (id: CostFieldId, v: string): void => store.setField(id, v);
 
-  const calc = computed(() => parseCostFields(values.value as CostFieldValues));
-
-  return { values, setField, calc };
+  return { values, setField };
 }
 
 export function useMonthlyCosts(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>) {

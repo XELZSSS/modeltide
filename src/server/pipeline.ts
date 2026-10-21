@@ -82,7 +82,7 @@ export function cachedPayload<T>(
     .then(({ value, degraded }) => (degraded ? { ...value, partial: true } : value));
 }
 
-export interface SourceSpec<TRaw, TRow> {
+interface SourceSpec<TRaw, TRow> {
   key: string;
   ttl: number;
   scope?: CacheScope;

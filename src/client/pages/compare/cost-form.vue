@@ -13,10 +13,7 @@ interface CostFieldDef {
   unit?: string;
 }
 
-const props = withDefaults(
-  defineProps<{ state: CostInputState; layout?: "input-label" | "label-input-unit"; avgCost?: number | null }>(),
-  { layout: "input-label" },
-);
+const props = defineProps<{ state: CostInputState; avgCost?: number | null }>();
 
 const { t } = useTranslation();
 
@@ -42,25 +39,7 @@ function onFieldChange(field: CostFieldDef, value: string): void {
 
 <template>
   <template v-for="field in fields" :key="field.id">
-    <div v-if="layout === 'label-input-unit'" class="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
-      <label :for="`cost-${field.id}`" class="text-xs text-text-secondary min-w-0">{{ field.label }}</label>
-      <Input
-        :id="`cost-${field.id}`"
-        type="text"
-        inputmode="decimal"
-        autocomplete="off"
-        class="w-20 h-9 shrink-0"
-        :model-value="field.value"
-        :aria-invalid="isInvalid(field.value) ? true : undefined"
-        :aria-describedby="isInvalid(field.value) ? `cost-${field.id}-error` : undefined"
-        @update:model-value="onFieldChange(field, $event)"
-      />
-      <span v-if="field.unit" class="text-xs text-text-secondary shrink-0">{{ field.unit }}</span>
-      <p v-if="isInvalid(field.value)" :id="`cost-${field.id}-error`" class="w-full text-xs text-destructive">
-        {{ t("invalidCostValue") }}
-      </p>
-    </div>
-    <div v-else class="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+    <div class="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
       <Input
         :id="`cost-${field.id}`"
         type="text"
@@ -82,7 +61,7 @@ function onFieldChange(field: CostFieldDef, value: string): void {
       </p>
     </div>
   </template>
-  <div v-if="layout === 'input-label' && avgCost !== undefined" class="flex items-center gap-2">
+  <div v-if="avgCost !== undefined" class="flex items-center gap-2">
     <span class="text-sm text-text-secondary">{{ t("estimatedMonthlyCost") }}:</span>
     <span class="text-lg font-semibold font-mono tabular-nums">
       {{ avgCost == null ? t("notAvailable") : formatDollar(avgCost, t) }}

@@ -1,6 +1,6 @@
 // public/sw.js cannot import TS: build/sw-version.ts injects these entries into PRECACHE_URLS at build time.
 
-export const FONT_FILES = [
+const FONT_FILES = [
   "/fonts/plex-sans-latin.woff2",
   "/fonts/plex-sans-latin-ext.woff2",
   "/fonts/plex-mono-400-latin.woff2",
@@ -8,7 +8,7 @@ export const FONT_FILES = [
   "/fonts/plex-mono-600-latin.woff2",
 ] as const;
 
-export const ICON_FILES = [
+const ICON_FILES = [
   "/icons/app-icon.svg",
   "/icons/icon-192.png",
   "/icons/icon-512.png",

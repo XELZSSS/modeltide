@@ -1,11 +1,11 @@
 import type { AppContext } from "@/server/api/context";
 import { upstreamConfig } from "@/server/upstream/upstream";
 import { ClientAbortError, UpstreamError } from "@/server/api/errors";
-import { logPartial } from "@/server/api/logger";
 import { isRecord } from "@/server/formats/parser-primitives";
 import { parseRscPayload } from "@/server/formats/rsc-parser";
 import { cachedRaw } from "@/server/pipeline";
 import { SLOW_TTL_MS } from "@/shared/config";
+import { fieldAliases } from "./parse/model-compact";
 
 export function fetchAaRsc(ctx: AppContext, path: string): Promise<string> {
   return ctx.http.getRsc(upstreamConfig.artificialAnalysis, path);
@@ -18,7 +18,6 @@ interface EnrichSpec<T> {
   extract: (tree: unknown) => T[] | null;
   /** Audited inside the refresh closure: a cache hit returns already-mapped rows. */
   fields?: readonly string[];
-  absent?: readonly string[];
   map?: (arr: T[]) => T[];
 }
 
@@ -35,17 +34,20 @@ function parseEnrich<T>(spec: EnrichSpec<T>, body: string): T[] {
   return spec.map ? spec.map(parsed.data) : parsed.data;
 }
 
-function missingFields<T>(rows: readonly T[], fields: readonly string[], absent: readonly string[]): readonly string[] {
+function missingFields<T>(rows: readonly T[], fields: readonly string[]): readonly string[] {
   const seen = new Set<string>();
   for (const row of rows) {
     if (!isRecord(row)) continue;
     for (const field of fields) {
-      if (field in row) seen.add(field);
+      for (const alias of fieldAliases(field)) {
+        if (alias in row) {
+          seen.add(field);
+          break;
+        }
+      }
     }
   }
-  // Counting documented-absent fields as missing warns on every refresh.
-  const expectedAbsent = new Set(absent);
-  return fields.filter((field) => !seen.has(field) && !expectedAbsent.has(field));
+  return fields.filter((field) => !seen.has(field));
 }
 
 export async function getAndParseEnrich<T>(
@@ -57,7 +59,7 @@ export async function getAndParseEnrich<T>(
     const { value, degraded } = await cachedRaw<T[]>(ctx, cacheKey, SLOW_TTL_MS, async (refreshCtx) => {
       const rows = parseEnrich(spec, await fetchAaRsc(refreshCtx, spec.path));
       if (spec.fields) {
-        const missing = missingFields(rows, spec.fields, spec.absent ?? []);
+        const missing = missingFields(rows, spec.fields);
         if (missing.length > 0 && rows.length > 0) {
           refreshCtx.log(
             "warn",
@@ -70,7 +72,7 @@ export async function getAndParseEnrich<T>(
     return { rows: value, failed: degraded };
   } catch (err) {
     if (err instanceof ClientAbortError) throw err;
-    logPartial(ctx.log, "artificial", { label: spec.label, failed: true });
+    ctx.log("warn", "[artificial] partial", { label: spec.label, failed: true });
     return { rows: [], failed: true };
   }
 }

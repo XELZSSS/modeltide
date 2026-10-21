@@ -1,7 +1,6 @@
 import { buildContext, type AppContext, type Env } from "./context";
-import { ApiError, ClientAbortError, UpstreamError, errMsg, isTimeoutLike } from "./errors";
-import { keyedThrottleGate } from "@/server/util/throttle";
-import { logger, type Logger } from "./logger";
+import { ApiError, ClientAbortError, UpstreamError, errMsg, isTimeoutLike, ValidationError } from "./errors";
+import { logger } from "./logger";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "./validation";
 import type { ApiDomain, DomainPayload } from "@/shared/contract";
 import { API_VERSION_PARAM } from "@/shared/config/api";
@@ -16,8 +15,7 @@ import {
   payloadEtag,
 } from "./headers";
 
-const UNKNOWN_QUERY_WARN_THROTTLE_MS = 30 * 60 * 1000;
-const UNKNOWN_QUERY_WARN_MAX_PATHS = 64;
+const UNKNOWN_PARAM_MAX_SHOWN = 5;
 
 function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string }): string {
   const browser = override?.browser ?? BROWSER_CACHE_HEADER;
@@ -38,17 +36,6 @@ function errorHeaders(): Headers {
   });
   applyApiHeaders(headers);
   return headers;
-}
-
-const unknownParamWarnGate = keyedThrottleGate(UNKNOWN_QUERY_WARN_THROTTLE_MS, UNKNOWN_QUERY_WARN_MAX_PATHS);
-
-function warnUnknownParams(log: Logger, path: string, unknownKeys: string[]): void {
-  if (!unknownParamWarnGate(path)) return;
-  const shown = unknownKeys
-    .slice(0, 5)
-    .map((key) => key.replace(/\p{C}/gu, ""))
-    .join(", ");
-  log("warn", `[query] ${path} ignoring unknown params: ${shown}`);
 }
 
 function collectQueryParams(url: URL): Record<string, string | string[]> {
@@ -128,7 +115,13 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
     const rawParams = collectQueryParams(url);
     const schemaKeys = new Set(Object.keys(def.query ?? {}));
     const unknownKeys = Object.keys(rawParams).filter((k) => !schemaKeys.has(k) && k !== API_VERSION_PARAM);
-    if (unknownKeys.length > 0) warnUnknownParams(context.log, path, unknownKeys);
+    if (unknownKeys.length > 0) {
+      const shown = unknownKeys
+        .slice(0, UNKNOWN_PARAM_MAX_SHOWN)
+        .map((key) => key.replace(/\p{C}/gu, ""))
+        .join(", ");
+      throw new ValidationError(`Unknown query param(s): ${shown}`);
+    }
     const params = validateQuery(rawParams, (def.query ?? {}) as S);
     const payload = await def.handler(context, params);
     const headers = new Headers({ "content-type": "application/json" });
