@@ -12,15 +12,23 @@ import CardContent from "@/client/components/card-content.vue";
 import CardHeader from "@/client/components/card-header.vue";
 import ChartCanvas from "@/client/components/chart-canvas.vue";
 import ChartFrame from "@/client/components/chart-frame.vue";
-import { CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT } from "@/client/charts/tokens";
+import {
+  AXIS_MAX,
+  AXIS_STEP,
+  CHART_EMPTY_CLASS,
+  FLEX_CHART_HEIGHT,
+  axisTickStyle,
+  cartesianChartOptions,
+  lineSeriesStyle,
+  seriesColor,
+  useChartTheme,
+} from "@/client/charts/theme";
 import EmptyState from "@/client/components/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatIndex } from "@/shared/utils";
 import { modelDisplayName, shortModelId } from "@/shared/utils/models";
 import { FALLBACK_DASH } from "@/shared/config/ui";
 import { cn } from "@/client/utils/cn";
-import { AXIS_MAX, AXIS_STEP, cartesianChartOptions, seriesColor, useChartTheme } from "@/client/charts/theme";
-import { axisTickStyle, lineSeriesStyle } from "@/client/charts/factory";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 const SERIES_KEYS = ["intelligence_index", "coding_index"] as const;

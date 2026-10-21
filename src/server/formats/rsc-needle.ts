@@ -1,6 +1,6 @@
 import { balancedJsonSlice, type ScanSpend } from "./json-balance";
 import { isTrimWhitespace } from "./rsc-text";
-import { MAX_NEEDLE_CANDIDATES, MAX_NEEDLE_WORK_CHARS, MAX_SCAN_CHARS } from "./rsc-limits";
+import { MAX_NEEDLE_CANDIDATES, MAX_NEEDLE_WORK_CHARS, MAX_SCAN_CHARS } from "./limits";
 
 interface NeedleScanOptions {
   prefixChars: number;

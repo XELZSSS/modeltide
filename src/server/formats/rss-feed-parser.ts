@@ -12,9 +12,9 @@ import { parseFail, parseOk, type ParseResult } from "./parse-result";
 import { SOURCE_LIMITS } from "./limits";
 
 const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
-const UNSAFE_LINK_CHARS_RE = /["<>]/;
-const DOCTYPE_RE = /<!DOCTYPE/i;
-const DOCTYPE_ENTITY_RE = /<!ENTITY/i;
+// Control chars are rejected alongside the markup-significant ones; href is rendered client-side.
+// oxlint-disable-next-line no-control-regex
+const UNSAFE_LINK_CHARS_RE = /["<>\u0000-\u001f\u007f]/;
 const SPACE_RE = / /g;
 const MAX_LINK_CHARS = 2048;
 const MAX_ID_CHARS = 2048;
@@ -53,20 +53,10 @@ function cleanTitle(raw: string): string {
   return truncateSafe(clean, MAX_NEWS_TITLE_CHARS).trim();
 }
 
-function hasControlChars(s: string): boolean {
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    if (c < 0x20 || c === 0x7f) return true;
-  }
-  return false;
-}
-
 function linkHref(link: unknown): string | null {
-  if (typeof link === "string") return decodeEntities(link.trim()) || null;
-  if (!isRecord(link)) return null;
-  const href = link["@_href"] ?? link.href ?? link["#text"];
-  if (typeof href !== "string") return null;
-  return decodeEntities(href.trim()) || null;
+  const raw =
+    typeof link === "string" ? link : isRecord(link) ? (link["@_href"] ?? link.href ?? link["#text"]) : undefined;
+  return typeof raw === "string" ? decodeEntities(raw.trim()) || null : null;
 }
 
 function itemLink(item: Record<string, unknown>): string | null {
@@ -103,11 +93,6 @@ export function parseFeed(
   if (bytes > maxBytes) {
     return parseFail(`Feed too large at ${sourceUrlStr} (${bytes} bytes)`);
   }
-  const head = xml.slice(0, 8192);
-  const doctypeAt = head.search(DOCTYPE_RE);
-  if (doctypeAt !== -1 && DOCTYPE_ENTITY_RE.test(head.slice(doctypeAt))) {
-    return parseFail(`Feed with entity-bearing DOCTYPE rejected at ${sourceUrlStr}`);
-  }
   let parsed: unknown;
   try {
     parsed = parser.parse(xml);
@@ -123,12 +108,19 @@ function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
   const rawChannel: unknown = rss?.channel ?? feed.channel ?? feed.feed ?? feed;
   return isRecord(rawChannel) ? rawChannel : undefined;
 }
+function feedDate(item: Record<string, unknown>): string {
+  for (const key of ["pubDate", "published", "updated"] as const) {
+    const value = textOf(item[key])?.trim();
+    if (value) return value.slice(0, MAX_DATE_CHARS);
+  }
+  return "";
+}
 
 function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | null {
   const rawLink = itemLink(item);
   if (!rawLink) return null;
   const link = rawLink.trim().slice(0, MAX_LINK_CHARS).replace(SPACE_RE, "%20");
-  if (UNSAFE_LINK_CHARS_RE.test(link) || hasControlChars(link)) return null;
+  if (UNSAFE_LINK_CHARS_RE.test(link)) return null;
   const rawTitle = textOf(item.title) ?? "";
   const title = cleanTitle(rawTitle);
   if (!isSuitableNewsItem(title, link)) return null;
@@ -136,11 +128,7 @@ function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | n
     id: itemId(item, link, title),
     title,
     link,
-    pubDate:
-      textOf(item.pubDate)?.trim().slice(0, MAX_DATE_CHARS) ??
-      textOf(item.published)?.trim().slice(0, MAX_DATE_CHARS) ??
-      textOf(item.updated)?.trim().slice(0, MAX_DATE_CHARS) ??
-      "",
+    pubDate: feedDate(item),
     source,
   };
 }

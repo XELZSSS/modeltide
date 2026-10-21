@@ -5,15 +5,15 @@ export function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
-export function clampedPercent(value: number | null | undefined): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  const percent = value > 0 && value <= 1 ? value * 100 : value;
-  return Math.max(0, Math.min(100, percent));
+/** Fractions in (0, 1] are scaled to a percentage; anything else is already one. */
+export function unclampedPercent(value: number | null | undefined): number | null {
+  if (!isFiniteNumber(value)) return null;
+  return value > 0 && value <= 1 ? value * 100 : value;
 }
 
-export function unclampedPercent(value: number | null | undefined): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return value > 0 && value <= 1 ? value * 100 : value;
+export function clampedPercent(value: number | null | undefined): number | null {
+  const percent = unclampedPercent(value);
+  return percent == null ? null : Math.max(0, Math.min(100, percent));
 }
 
 export function approxEq(a: number, b: number, eps = 1e-9): boolean {
@@ -87,8 +87,13 @@ export function formatScore(n: number | null | undefined, t: TFunction): string 
   return n.toFixed(2);
 }
 
+/** One decimal percent; `signed` prefixes the "+" a rising figure needs. */
+function percentText(v: number, signed = false): string {
+  return `${signed && v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
 export function formatPercent(v: number | null | undefined, t: TFunction): string {
-  return isFiniteNumber(v) ? `${v.toFixed(1)}%` : t("notAvailable");
+  return isFiniteNumber(v) ? percentText(v) : t("notAvailable");
 }
 
 const INDEX_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
@@ -104,6 +109,5 @@ export function formatSpeed(v: number | null | undefined, t: TFunction): string 
 
 export function formatTrend(change?: number | null, t?: TFunction): string {
   if (!isFiniteNumber(change)) return t ? t("notAvailable") : FALLBACK_NA;
-  if (change === 0) return "0.0%";
-  return `${change > 0 ? "+" : ""}${change.toFixed(1)}%`;
+  return percentText(change, true);
 }

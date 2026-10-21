@@ -184,3 +184,17 @@ export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload
     { memoryOnly: true, staleCapMs: NEGATIVE_STALE_CAP_MS },
   );
 };
+
+/** Single-model lookups ride the list endpoint (`?id=`), so there is one route and one payload shape. */
+export async function getModelsForQuery(
+  ctx: AppContext,
+  p: OpenSourceModelsQuery,
+): Promise<SourcePayload<OpenSourceModelEntry[]>> {
+  if (!p.id) return getModels(ctx, p);
+  const single = await getModelById(ctx, p.id);
+  return {
+    data: single.data == null ? [] : [single.data],
+    fetchedAt: single.fetchedAt,
+    partial: single.partial,
+  };
+}

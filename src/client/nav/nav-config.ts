@@ -1,5 +1,4 @@
 import type { TranslationKey } from "@/shared/i18n";
-import type { NewsCategory } from "@/shared/types";
 import { SEARCH_SOURCE_TO_MODEL_SOURCE, SOURCES } from "./sources";
 
 export { SEARCH_SOURCE_TO_MODEL_SOURCE };
@@ -33,8 +32,4 @@ export const REPO_URL = "https://github.com/XELZSSS/modeltide";
 
 export function isRankingTabId(tabs: readonly string[], value: string): value is RankingTabId {
   return tabs.includes(value);
-}
-
-export function isNewsCategoryValue(value: string, categories: readonly NewsCategory[]): value is NewsCategory {
-  return (categories as readonly string[]).includes(value);
 }

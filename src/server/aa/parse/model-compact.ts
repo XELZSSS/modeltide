@@ -42,6 +42,11 @@ export function fieldAliases(field: string): readonly string[] {
   return FIELD_ALIASES[field] ?? [field];
 }
 
+/** First accepted upstream spelling of `field` present on `row` (`in`-semantics: value may be undefined). */
+export function presentAlias(row: Record<string, unknown>, field: string): string | undefined {
+  return fieldAliases(field).find((alias) => alias in row);
+}
+
 /** Canonical upstream field name for a benchmark key. */
 export function benchmarkWireName(key: BenchmarkKey): string {
   return BENCHMARK_FIELD_OVERRIDES[key] ?? key;
@@ -124,12 +129,8 @@ function compactBenchmarks(m: Record<string, unknown>): Partial<Record<Benchmark
   const benchmarks: Partial<Record<BenchmarkKey, number | null>> = {};
   for (const key of BENCHMARK_KEYS) {
     const wire = benchmarkWireName(key);
-    let raw: number | null = null;
-    for (const alias of fieldAliases(wire)) {
-      if (!(alias in m)) continue;
-      raw = numCoerce(m[alias]);
-      break;
-    }
+    const alias = presentAlias(m, wire);
+    const raw = alias === undefined ? null : numCoerce(m[alias]);
     const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : unclampedPercent(raw);
     if (value != null) benchmarks[key] = value;
   }

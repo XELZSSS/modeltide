@@ -1,17 +1,17 @@
 import { defineStore } from "pinia";
-import { DEFAULT_COST_SCENARIO, STORAGE_KEYS } from "@/shared/config";
+import { STORAGE_KEYS } from "@/shared/config";
 import { loadPersistedState, makeStorageSync } from "./make-persisted-store";
 import type { CostFieldId } from "@/client/pages/compare/cost-inputs";
 
 const COST_STORE_VERSION = 1;
 
 const DEFAULT_VALUES: Record<CostFieldId, string> = {
-  dailyInput: String(DEFAULT_COST_SCENARIO.dailyInputM),
-  dailyOutput: String(DEFAULT_COST_SCENARIO.dailyOutputM),
-  dailyReasoning: String(DEFAULT_COST_SCENARIO.dailyReasoningM),
-  cacheHitRate: String(DEFAULT_COST_SCENARIO.cacheHitRate * 100),
-  cacheWriteRate: String(DEFAULT_COST_SCENARIO.cacheWriteRate * 100),
-  daysPerMonth: String(DEFAULT_COST_SCENARIO.daysPerMonth),
+  dailyInput: "2",
+  dailyOutput: "1",
+  dailyReasoning: "2",
+  cacheHitRate: "50",
+  cacheWriteRate: "5",
+  daysPerMonth: "22",
 };
 
 const COST_FIELD_IDS = Object.keys(DEFAULT_VALUES) as CostFieldId[];

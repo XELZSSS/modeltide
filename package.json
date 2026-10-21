@@ -10,7 +10,7 @@
     "build": "node build/gen-cache-version.cjs && node build/bundle-functions.mjs && vite build",
     "build:ci": "npm run type-check && npm run lint && npm run format:check && npm run gen:cache-version:check && npm run build",
     "preview": "npm run build && vite preview",
-    "type-check": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",
+    "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",
     "lint": "oxlint --vue-plugin --deny-warnings",
     "lint:fix": "oxlint --vue-plugin --fix",
     "format": "oxfmt --write .",
@@ -45,10 +45,9 @@
     "oxfmt": "^0.73.0",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript": "^7.0.2",
     "vite": "^8.2.2",
-    "vitest": "~5.0.1",
-    "vue-tsc": "^3.3.11"
+    "vitest": "~5.0.1"
   },
   "allowScripts": {
     "vue-demi@0.14.10": true,

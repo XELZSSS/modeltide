@@ -7,16 +7,16 @@ import { computed, type VNodeChild } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TFunction } from "@/shared/i18n";
 import SearchableDataTable from "./data-table.vue";
-import type { DataTableColumn } from "./table-columns.ts";
+import type { DataTableColumn, RowAccessors } from "./table-columns.ts";
 
-const props = defineProps<{
-  rows: T[];
-  getRowId: (row: T) => string;
-  getRowName?: (row: T) => string;
-  getSearchFields: (row: T) => (string | null | undefined)[];
-  buildBodyColumns: (t: TFunction) => DataTableColumn<T>[];
-  renderExpandedRow?: (row: T) => VNodeChild;
-}>();
+const props = defineProps<
+  RowAccessors<T> & {
+    rows: T[];
+    getSearchFields: (row: T) => (string | null | undefined)[];
+    buildBodyColumns: (t: TFunction) => DataTableColumn<T>[];
+    renderExpandedRow?: (row: T) => VNodeChild;
+  }
+>();
 
 const { t } = useTranslation();
 

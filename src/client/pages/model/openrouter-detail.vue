@@ -53,6 +53,7 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
           <code class="font-mono text-xs bg-bg-secondary px-1.5 py-0.5">{{ model.id }}</code>
         </InfoRow>
         <InfoRow :label="t('category')">{{ categoryLabel(model.category, t) }}</InfoRow>
+        <InfoRow v-if="model.expiresAt" :label="t('expiresAt')">{{ model.expiresAt }}</InfoRow>
         <InfoRow :label="t('trend')">{{ formatTrend(model.change, t) }}</InfoRow>
         <InfoRow :label="t('totalTokens')">
           {{ formatShortNumber(model.totalTokens, t("notAvailable")) }}

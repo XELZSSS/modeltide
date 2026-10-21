@@ -1,11 +1,9 @@
 import { UpstreamError } from "@/server/api/errors";
 import { utf8ByteLength } from "@/server/util/hash";
-import { MAX_RSC_BYTES, MAX_RSC_LINE_CHARS, STREAM_LINE_RE, type RscExtractor } from "./rsc-limits";
-import { isMarkerBoundaryAt, iterateLines, rscNotFoundMessage } from "./rsc-text";
+import { MAX_RSC_BYTES, MAX_RSC_LINE_CHARS, STREAM_LINE_RE, type RscExtractor } from "./limits";
+import { isMarkerBoundaryAt, iterateLines, markerNeedle, rscNotFoundMessage } from "./rsc-text";
 import { scanOversizedMarkers } from "./rsc-oversized";
 import { parseFail, parseOk, type ParseResult } from "./parse-result";
-
-const MAX_RSC_NODES = 50_000;
 
 function scanStep<T>(step: () => T): ParseResult<T> {
   try {
@@ -18,15 +16,10 @@ function scanStep<T>(step: () => T): ParseResult<T> {
 
 function* traverse(root: unknown): Generator<unknown> {
   const queue: unknown[] = [root];
-  let visited = 0;
   let head = 0;
   while (head < queue.length) {
     const cur = queue[head++]!;
     if (!cur || typeof cur !== "object") continue;
-    visited++;
-    if (visited > MAX_RSC_NODES) {
-      throw new UpstreamError(`RSC payload too complex (>${MAX_RSC_NODES} nodes)`);
-    }
     yield cur;
     const children = Array.isArray(cur) ? cur : Object.values(cur as Record<string, unknown>);
     for (const v of children) {
@@ -62,14 +55,11 @@ function resolveMarkersInLine<T>(
   results: (T[] | null)[],
   extract: RscExtractor<T>,
 ): ParseResult<number> {
-  const boundaries: boolean[] = [];
-  let unresolvedHit = false;
+  const hits: number[] = [];
   for (let mi = 0; mi < markers.length; mi++) {
-    const hit = !results[mi] && isMarkerBoundaryAt(line, needles[mi]!);
-    boundaries.push(hit);
-    if (hit) unresolvedHit = true;
+    if (!results[mi] && isMarkerBoundaryAt(line, needles[mi]!)) hits.push(mi);
   }
-  if (!unresolvedHit) return parseOk(0);
+  if (hits.length === 0) return parseOk(0);
   const raws: string[] = [];
   const prefixed = STREAM_LINE_RE.exec(line)?.[1];
   if (prefixed && prefixed.length <= MAX_RSC_LINE_CHARS) raws.push(prefixed);
@@ -86,16 +76,14 @@ function resolveMarkersInLine<T>(
     return trees.get(raw);
   };
   let resolved = 0;
-  for (let mi = 0; mi < markers.length; mi++) {
-    if (!boundaries[mi]) continue;
+  for (const mi of hits) {
     for (const raw of raws) {
       const tree = treeOf(raw);
       if (tree === undefined) continue;
       const scanned = scanStep(() => extract(tree, markers[mi]!));
       if (!scanned.ok) return scanned;
-      const res = scanned.data;
-      if (res && res.length > 0) {
-        results[mi] = res;
+      if (scanned.data && scanned.data.length > 0) {
+        results[mi] = scanned.data;
         resolved++;
         break;
       }
@@ -119,7 +107,7 @@ export function parseRscPayloads<T>(
     return parseFail(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);
   }
   const results: (T[] | null)[] = markers.map(() => null);
-  const needles = markers.map((m) => `"${m}"`);
+  const needles = markers.map(markerNeedle);
   let unresolved = markers.length;
   let maxLineLen = 0;
   for (const line of iterateLines(body)) {

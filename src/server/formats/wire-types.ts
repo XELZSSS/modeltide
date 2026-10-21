@@ -23,7 +23,6 @@ export interface ModelRow {
   total_tool_calls: number;
   change: number | null;
   rankingMetricValue?: number;
-  total_usage?: number;
   total_byok_prompt_tokens?: number;
   total_byok_completion_tokens?: number;
   num_media_prompt?: number;
@@ -35,6 +34,8 @@ export interface ModelMetaEntry {
   intelligenceIndex?: number;
   agenticIndex?: number;
   codingIndex?: number;
+  /** ISO date the upstream retires this model; absent means no scheduled retirement. */
+  expiresAt?: string | null;
 }
 
 export interface PricingRow {
@@ -52,8 +53,9 @@ export interface PricingRow {
     input_cache_write_1h?: string | number | null;
     web_search?: string | number | null;
     image_output?: string | number | null;
-    overrides?: unknown;
   } | null;
+  /** Set by upstream when the model is scheduled for retirement. */
+  expiration_date?: string | null;
 }
 
 export interface RawEntry {

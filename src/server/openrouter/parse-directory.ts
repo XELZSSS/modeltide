@@ -58,6 +58,7 @@ function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
 
 const DYNAMIC_PRICING = -1;
 
+/** Upstream marks dynamic (non-per-token) pricing as -1/-1; that is intentional, not a gap. */
 function hasDynamicPricing(raw: PricingRow): boolean {
   const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
   return numCoerce(pricing.prompt) === DYNAMIC_PRICING && numCoerce(pricing.completion) === DYNAMIC_PRICING;
@@ -67,7 +68,16 @@ function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMe
     intelligenceIndex: target.intelligenceIndex ?? patch.intelligenceIndex,
     agenticIndex: target.agenticIndex ?? patch.agenticIndex,
     codingIndex: target.codingIndex ?? patch.codingIndex,
+    expiresAt: target.expiresAt ?? patch.expiresAt,
   };
+}
+
+/** Upstream sends an ISO date or null; a malformed value is ignored rather than guessed at. */
+function isoExpiry(raw: unknown): string | null {
+  const value = toStringOrNull(raw);
+  if (!value) return null;
+  const date = value.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
 }
 
 export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
@@ -104,9 +114,7 @@ export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
           if (pricingRecord[index] === undefined) pricingRecord[index] = pricingEntry;
         }
       }
-    } else if (hasDynamicPricing(m)) {
-      // Dynamic pricing is intentional and not a pricing gap.
-    } else {
+    } else if (!hasDynamicPricing(m)) {
       missingPricing++;
     }
     const benchmarks = obj(m.benchmarks);
@@ -114,11 +122,14 @@ export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
     const intelligenceIndex = numCoerce(aaBenchmarks?.intelligence_index);
     const codingIndex = numCoerce(aaBenchmarks?.coding_index);
     const agenticIndex = numCoerce(aaBenchmarks?.agentic_index);
-    if (intelligenceIndex == null && codingIndex == null && agenticIndex == null) continue;
+    // Retirement dates ship on every row, with or without AA benchmarks.
+    const expiresAt = isoExpiry(m.expiration_date);
+    if (intelligenceIndex == null && codingIndex == null && agenticIndex == null && expiresAt == null) continue;
     const metaEntry: ModelMetaEntry = {};
     if (intelligenceIndex != null) metaEntry.intelligenceIndex = intelligenceIndex;
     if (agenticIndex != null) metaEntry.agenticIndex = agenticIndex;
     if (codingIndex != null) metaEntry.codingIndex = codingIndex;
+    if (expiresAt != null) metaEntry.expiresAt = expiresAt;
     const keys = new Set<string>();
     for (const value of [m.name, m.id, m.canonical_slug]) {
       if (typeof value === "string") {

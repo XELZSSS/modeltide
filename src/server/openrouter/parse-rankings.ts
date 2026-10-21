@@ -4,8 +4,10 @@ import {
   compareRanked,
   changePercent,
   groupRows,
+  resolveExpiry,
   resolvePricing,
   usageTotal,
+  type MetaLookup,
   type PricingLookup,
   type RankingScanStats,
 } from "./aggregate";
@@ -98,7 +100,13 @@ function titleFromSlug(permaslug: string): string {
 
 export type { RankingScanStats };
 
-export function mapModels(rows: unknown, pricing: PricingLookup, stats?: RankingScanStats): OpenRouterRankEntry[] {
+export function mapModels(
+  rows: unknown,
+  pricing: PricingLookup,
+  stats?: RankingScanStats,
+  meta?: MetaLookup,
+): OpenRouterRankEntry[] {
+  const today = new Date().toISOString().slice(0, 10);
   const ranked = Array.from(groupRows(rows, stats).values()).map((group) => ({
     group,
     derivedTokens: usageTotal(group.agg),
@@ -111,6 +119,9 @@ export function mapModels(rows: unknown, pricing: PricingLookup, stats?: Ranking
     const id = row.model_permaslug;
     const name = titleFromSlug(id) || id;
     const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
+    const expiresAt = resolveExpiry(meta, id, variantKey);
+    // Upstream retires a model on `expiresAt`; once that date has passed it must not be ranked.
+    if (expiresAt != null && expiresAt <= today) continue;
     const resolved = resolvePricing(pricing, id, variantKey);
     const isFree = resolved
       ? resolved.input === 0 &&
@@ -119,7 +130,7 @@ export function mapModels(rows: unknown, pricing: PricingLookup, stats?: Ranking
         (resolved.cacheWrite == null || resolved.cacheWrite === 0)
       : false;
     out.push({
-      rank: i + 1,
+      rank: out.length + 1,
       id,
       name,
       creator: creatorFromSlug(id),
@@ -135,6 +146,7 @@ export function mapModels(rows: unknown, pricing: PricingLookup, stats?: Ranking
       change: changePercent(latest.change),
       pricing: resolved ?? null,
       isFree,
+      expiresAt,
     });
   }
   return out;

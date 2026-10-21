@@ -18,10 +18,7 @@ export const cacheKeys = {
   homeOpenSource: (sort: string) => cacheKey("homeDashboard", "opensource", sort),
   openSourceModels: (sort: string) => cacheKey("openSourceModels", sort),
 
-  openSourceModel: (id: string) => {
-    const trimmed = id.trim();
-    return cacheKey("openSourceModel", "by-id", `h:${modelIdHash(trimmed)}`);
-  },
+  openSourceModel: (id: string) => cacheKey("openSourceModels", "by-id", `h:${modelIdHash(id.trim())}`),
   news: (category: NewsCategory) => cacheKey("news", category),
   openRouterRankings: cacheKey("openRouterRankings"),
   openRouterPricing: cacheKey("openRouterRankings", "pricing-map", "per-million"),

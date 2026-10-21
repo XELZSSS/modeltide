@@ -15,7 +15,6 @@ export {
   ttlFor,
   ttlForRatio,
 } from "./time";
-export { DEFAULT_COST_SCENARIO } from "./pricing";
 export { NEWS_CATEGORIES } from "@/shared/types/news";
 export { BENCHMARK_KEYS, type BenchmarkKey, ABSOLUTE_SCORE_BENCHMARKS } from "./benchmarks";
 export { THEME_COLORS } from "./ui";

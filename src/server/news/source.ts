@@ -2,10 +2,11 @@ import { parseTs } from "@/server/formats/parser-primitives";
 import { NEWS_TTL_MS, ttlForRatio } from "@/shared/config";
 import { SOURCE_LIMITS } from "@/server/formats/limits";
 import { MAX_FEED_BYTES } from "@/server/upstream/upstream";
-import { NEWS_LEG_CONCURRENCY } from "./concurrency";
 import { cacheKeys } from "@/server/cache/keys";
 import { runLegs } from "@/server/join-legs";
-import type { NewsItem, NewsCategory } from "@/shared/types";
+import type { NewsCategory, NewsItem, SourcePayload } from "@/shared/types";
+import { NEWS_CATEGORIES } from "@/shared/types/news";
+import type { NewsByCategory } from "@/shared/contract";
 import type { AppContext } from "@/server/api/context";
 import { errMsg } from "@/server/api/errors";
 import { FEED_ACCEPT, parseFeed } from "@/server/formats/rss-feed-parser";
@@ -14,8 +15,10 @@ import { rssFeeds } from "./feeds";
 import { dedupeBy } from "@/shared/utils";
 import { normalizeNewsLink } from "@/server/formats/url";
 
-import type { SourcePayload } from "@/shared/types";
 import { cachedPayload, requireParsed, requireRows } from "@/server/pipeline";
+
+// Two legs at a time keeps the feed fan-out inside the per-invocation connection budget.
+const NEWS_LEG_CONCURRENCY = 2;
 
 function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsItem[]): NewsItem[] {
   let invalidDates = 0;
@@ -73,7 +76,7 @@ async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<Ne
   return { items: allItems, failCount: failures.length, total: values.length };
 }
 
-export const getNews = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>
+export const getNewsCategory = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>
   cachedPayload<NewsItem[]>(ctx, cacheKeys.news(category), NEWS_TTL_MS, async (refreshCtx) => {
     const raw = await fetchNewsRaw(refreshCtx, category);
     const rows = requireRows(
@@ -89,3 +92,24 @@ export const getNews = (ctx: AppContext, category: NewsCategory): Promise<Source
       ttl: ttlForRatio(raw.failCount, raw.total, NEWS_TTL_MS),
     };
   });
+
+/** One request serves every tab: categories stay independently cached and keep their own partial flag. */
+export async function getNews(ctx: AppContext): Promise<SourcePayload<NewsByCategory>> {
+  const entries = await Promise.all(
+    NEWS_CATEGORIES.map(async (category) => {
+      try {
+        return [category, await getNewsCategory(ctx, category)] as const;
+      } catch (err) {
+        // A dead category degrades to an empty, partial slice instead of failing the whole tab bar.
+        ctx.log("warn", `[news] category "${category}" unavailable: ${errMsg(err)}`);
+        return [category, { data: [], fetchedAt: new Date().toISOString(), partial: true }] as const;
+      }
+    }),
+  );
+  const byCategory = Object.fromEntries(entries) as NewsByCategory;
+  return {
+    data: byCategory,
+    fetchedAt: new Date().toISOString(),
+    partial: NEWS_CATEGORIES.some((category) => byCategory[category].partial),
+  };
+}

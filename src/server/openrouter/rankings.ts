@@ -55,7 +55,7 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
     return { rows, totalRows, stats, dirData };
   },
   parse: (raw) => {
-    const models = mapModels(raw.rows, raw.dirData.pricing, raw.stats);
+    const models = mapModels(raw.rows, raw.dirData.pricing, raw.stats, raw.dirData.meta);
     if (raw.stats.validRows === 0) {
       throw new UpstreamError(`OpenRouter: all ${raw.totalRows} ranking rows had invalid model_permaslug`);
     }

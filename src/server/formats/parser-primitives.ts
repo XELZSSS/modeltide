@@ -19,24 +19,11 @@ export const numCoerceNonNegative = (v: unknown): number | null => {
   return n != null && n >= 0 ? n : null;
 };
 
-const ISO_LIKE_RE = /^\d{4}-\d{2}-\d{2}(?:[T ]\S*)?$/;
-const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
-
-function isLeapYear(year: number): boolean {
-  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-}
+const ISO_LIKE_RE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:[T ]\S*)?$/;
 
 export const isoDate = (v: unknown): string | null => {
-  if (typeof v !== "string") return null;
-  const trimmed = v.trim();
-  if (!trimmed || !ISO_LIKE_RE.test(trimmed)) return null;
-  const month = Number(trimmed.slice(5, 7));
-  if (month < 1 || month > 12) return null;
-  const day = Number(trimmed.slice(8, 10));
-  if (day < 1) return null;
-  const year = Number(trimmed.slice(0, 4));
-  const maxDay = month === 2 && isLeapYear(year) ? 29 : (DAYS_IN_MONTH[month - 1] as number);
-  return day <= maxDay ? trimmed : null;
+  const t = typeof v === "string" ? v.trim() : "";
+  return ISO_LIKE_RE.test(t) ? t : null;
 };
 
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -48,9 +35,7 @@ export const obj = (v: unknown): Record<string, unknown> | undefined =>
 
 // Upstream label fields occasionally carry a number; render it as text instead of dropping it.
 export function numericLabel(v: unknown): string | null {
-  if (typeof v === "number" && Number.isFinite(v)) return String(v);
-  if (typeof v === "bigint") return String(v);
-  return null;
+  return typeof v === "number" && Number.isFinite(v) ? String(v) : null;
 }
 export const isRecord = (v: unknown): v is Record<string, unknown> => obj(v) !== undefined;
 
@@ -140,35 +125,30 @@ function isPlaceholderText(t: string): boolean {
   return PLACEHOLDER_TEXTS.has(t.toLowerCase());
 }
 
+// `t` must already be trimmed and non-empty.
+function isJunkText(t: string): boolean {
+  return isPlaceholderText(t) || hasGarbageChars(t);
+}
+
 export function isUnsuitableContent(t: string): boolean {
   const trimmed = t.trim();
-  if (!trimmed) return true;
-  if (isPlaceholderText(trimmed)) return true;
-  if (hasGarbageChars(trimmed)) return true;
-  if (UNSUITABLE_RE.test(trimmed)) return true;
-  return false;
+  return !trimmed || isJunkText(trimmed) || UNSUITABLE_RE.test(trimmed);
 }
 
 export function isValidRowId(id: unknown): boolean {
   if (typeof id !== "string") return false;
   const t = id.trim();
-  if (!t || t.length > MAX_ID_CHARS) return false;
-  if (isPlaceholderText(t) || hasGarbageChars(t)) return false;
-  if (ID_BAD_RE.test(t)) return false;
-  return true;
+  return t.length > 0 && t.length <= MAX_ID_CHARS && !isJunkText(t) && !ID_BAD_RE.test(t);
 }
 
 export function hasCatalogIdentity(m: unknown): boolean {
   if (!isRecord(m)) return false;
-  if (!isNonEmptyString(m.slug) || !isNonEmptyString(m.name)) return false;
-  if (isUnsuitableContent(m.slug as string) || isUnsuitableContent(m.name as string)) return false;
-  return true;
+  const { slug, name } = m;
+  return isNonEmptyString(slug) && isNonEmptyString(name);
 }
 
 export function isValidModelIdentity(id: unknown, slug: unknown, name: unknown): boolean {
-  if (!isNonEmptyString(id) || !isNonEmptyString(slug) || !isNonEmptyString(name)) return false;
-  if (isUnsuitableContent(id) || isUnsuitableContent(slug) || isUnsuitableContent(name)) return false;
-  return true;
+  return isNonEmptyString(id) && isNonEmptyString(slug) && isNonEmptyString(name);
 }
 
 export function isValidTextToImageEntry(entry: {
@@ -177,16 +157,11 @@ export function isValidTextToImageEntry(entry: {
   name: unknown;
   elo: number | null | undefined;
 }): boolean {
-  if (!isValidModelIdentity(entry.id, entry.slug, entry.name)) return false;
-  if (entry.elo == null || !Number.isFinite(entry.elo)) return false;
-  return true;
+  return isValidModelIdentity(entry.id, entry.slug, entry.name) && entry.elo != null && Number.isFinite(entry.elo);
 }
 
 export function isValidOpenRouterDirectoryRow(m: unknown): boolean {
-  if (!isRecord(m)) return false;
-  if (!isValidRowId(m.id)) return false;
-  if (m.pricing == null || typeof m.pricing !== "object") return false;
-  return true;
+  return isRecord(m) && isValidRowId(m.id) && m.pricing != null && typeof m.pricing === "object";
 }
 
 export const MAX_NEWS_TITLE_CHARS = 300;
@@ -195,10 +170,6 @@ export function isSuitableNewsItem(title: unknown, link: unknown): boolean {
   if (typeof title !== "string" || typeof link !== "string") return false;
   const t = title.trim();
   const l = link.trim();
-  if (!t || !l) return false;
-  if (t.length > MAX_NEWS_TITLE_CHARS) return false;
-  if (isPlaceholderText(t) || hasGarbageChars(t)) return false;
-  if (NEWS_TITLE_BAD_RE.test(t)) return false;
-  if (!isHttpUrl(l)) return false;
-  return true;
+  if (!t || !l || t.length > MAX_NEWS_TITLE_CHARS) return false;
+  return !isJunkText(t) && !NEWS_TITLE_BAD_RE.test(t) && isHttpUrl(l);
 }

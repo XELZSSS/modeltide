@@ -8,11 +8,11 @@ import { findNextData } from "@/server/formats/rsc-parser";
 import { getModelDirectoryMeta } from "@/server/openrouter/directory";
 import {
   compact,
-  fieldAliases,
   modalityWireNames,
   modelsBenchmarkWireNames,
   omniscienceBenchmarkWireNames,
   omniscienceModalityWireNames,
+  presentAlias,
 } from "./parse/model-compact";
 import { parseLeaderboardModels } from "./parse/leaderboard";
 import { backfillFromMeta, mergeBySlug, type IntelligenceIndexResult } from "./parse/model-enrich";
@@ -71,11 +71,8 @@ function projectFields(fields: readonly string[]): (m: Record<string, unknown>) 
   return (m) => {
     const row: Record<string, unknown> = {};
     for (const field of fields) {
-      for (const alias of fieldAliases(field)) {
-        if (!(alias in m)) continue;
-        row[field] = m[alias];
-        break;
-      }
+      const alias = presentAlias(m, field);
+      if (alias !== undefined) row[field] = m[alias];
     }
     return row;
   };

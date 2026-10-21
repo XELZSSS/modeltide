@@ -3,6 +3,7 @@ import type {
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
   HomeDashboardData,
+  NewsCategory,
   NewsItem,
   OpenSourceModelEntry,
   OpenRouterRankEntry,
@@ -10,14 +11,15 @@ import type {
 } from "./types";
 export type { ApiDomain };
 
+/** One request serves every news tab; each category keeps its own partial flag. */
+export type NewsByCategory = Record<NewsCategory, SourcePayload<NewsItem[]>>;
+
 interface ApiContract {
   artificialIndex: ArtificialAnalysisModel[];
   homeDashboard: HomeDashboardData;
-  news: NewsItem[];
+  news: NewsByCategory;
   openSourceModels: OpenSourceModelEntry[];
-
   closedReleases: ClosedReleaseEntry[];
-  openSourceModel: OpenSourceModelEntry | null;
   openRouterRankings: OpenRouterRankEntry[];
 }
 

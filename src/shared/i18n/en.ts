@@ -214,6 +214,8 @@ export const en = {
   langEn: "EN",
   navReleases: "Releases",
 
+  expiresAt: "Retirement date",
+
   compareStale: "Some selected models are no longer listed and were removed.",
   noData: "No data available yet.",
   invalidCostValue: "Enter a value of 0 or more.",

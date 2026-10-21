@@ -88,14 +88,6 @@ describe("LicenseDropTally + keepOpenSourceRanking", () => {
     });
   });
 
-  it("keeps one tag window of unknown licences at most", () => {
-    const tally = new LicenseDropTally();
-    for (let i = 0; i < 10; i++) tally.record([`unknown-${i}`], null);
-    const drops = tally.drops();
-    expect(drops.unknownTags).toHaveLength(5);
-    expect(drops.declaredNonOpen).toBe(10);
-  });
-
   it("gates ranking by downloads and reports zero-download drops", () => {
     const tally = new LicenseDropTally();
     expect(keepOpenSourceRanking({ downloads: 1 }, tally)).toBe(true);

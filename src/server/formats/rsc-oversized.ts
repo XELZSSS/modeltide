@@ -1,6 +1,6 @@
 import { balancedJsonSlice } from "./json-balance";
-import { isTrimWhitespace } from "./rsc-text";
-import { MAX_NEEDLE_CANDIDATES, MAX_RSC_BYTES, MAX_SCAN_CHARS, STREAM_LINE_RE, type RscExtractor } from "./rsc-limits";
+import { isTrimWhitespace, markerNeedle } from "./rsc-text";
+import { MAX_NEEDLE_CANDIDATES, MAX_RSC_BYTES, MAX_SCAN_CHARS, STREAM_LINE_RE, type RscExtractor } from "./limits";
 
 const MAX_OVERSIZED_WINDOWS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
 
@@ -12,7 +12,7 @@ function collectNeedlePositions(
   const positions: { idx: number; mi: number }[] = [];
   for (let mi = 0; mi < markers.length; mi++) {
     if (results[mi]) continue;
-    const needle = `"${markers[mi]}"`;
+    const needle = markerNeedle(markers[mi]!);
     let from = 0;
     let taken = 0;
     while (taken < MAX_NEEDLE_CANDIDATES) {
@@ -28,7 +28,7 @@ function collectNeedlePositions(
 
 function parseBalancedMarkerValue(line: string, idx: number, marker: string, budgetChars: number): string | null {
   if (budgetChars <= 0) return null;
-  const needle = `"${marker}"`;
+  const needle = markerNeedle(marker);
   const colonAt = line.indexOf(":", idx + needle.length);
   if (colonAt === -1 || colonAt > idx + needle.length + 64) return null;
   let v = colonAt + 1;
@@ -49,7 +49,7 @@ function parseWindowCandidates(
   for (const step of MAX_OVERSIZED_WINDOWS) {
     const chunk = line.slice(start, Math.min(line.length, idx + step));
     const prefixed = STREAM_LINE_RE.exec(chunk)?.[1];
-    for (const raw of [prefixed, chunk]) {
+    for (const raw of prefixed && prefixed !== chunk ? [prefixed, chunk] : [chunk]) {
       if (!raw || raw.length > MAX_RSC_BYTES) continue;
       if (budgetChars - spent <= 0) return { trees: [], spent };
       spent += raw.length;
@@ -87,6 +87,8 @@ function offerTreeToMarkers<T>(
   return anchored;
 }
 
+const countResolved = (results: readonly (unknown[] | null)[]): number => results.reduce((n, r) => (r ? n + 1 : n), 0);
+
 export function scanOversizedMarkers<T>(
   line: string,
   markers: readonly string[],
@@ -95,7 +97,7 @@ export function scanOversizedMarkers<T>(
 ): number {
   const positions = collectNeedlePositions(line, markers, results);
   positions.sort((a, b) => a.idx - b.idx);
-  const before = results.filter(Boolean).length;
+  const before = countResolved(results);
   let workLeft = MAX_SCAN_CHARS;
   for (const { idx, mi } of positions) {
     if (workLeft <= 0) break;
@@ -107,5 +109,5 @@ export function scanOversizedMarkers<T>(
       if (offerTreeToMarkers(tree, markers, results, extract, mi)) break;
     }
   }
-  return results.filter(Boolean).length - before;
+  return countResolved(results) - before;
 }

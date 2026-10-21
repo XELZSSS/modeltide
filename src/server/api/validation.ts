@@ -9,6 +9,8 @@ interface EnumSpec<V extends string = string> {
 interface StringSpec {
   type: "string";
   maxLength?: number;
+  /** Absent params stay absent instead of failing validation. */
+  optional?: boolean;
 }
 type QuerySpec = EnumSpec | StringSpec;
 export type QuerySchema = Record<string, QuerySpec>;
@@ -18,12 +20,12 @@ export const qEnum = <const V extends string>(values: readonly V[], d?: V): Enum
   values,
   ...(d === undefined ? {} : { default: d }),
 });
-export const qStr = (o: { maxLength?: number } = {}): StringSpec => ({
+export const qStr = (o: { maxLength?: number; optional?: boolean } = {}): StringSpec => ({
   type: "string",
   ...o,
 });
 
-type SpecValue<S extends QuerySpec> = S extends EnumSpec<infer V> ? V : string;
+type SpecValue<S extends QuerySpec> = S extends EnumSpec<infer V> ? V : string | undefined;
 export type ValidatedQuery<S extends QuerySchema> = { [K in keyof S]: SpecValue<S[K]> };
 
 function parseSingle(name: string, v: string, spec: QuerySpec): string {
@@ -48,10 +50,13 @@ export function validateQuery<S extends QuerySchema>(
   for (const [name, spec] of Object.entries(schema)) {
     const rawVal = raw[name];
     if (rawVal === undefined) {
-      // String specs carry no default, so they are always required.
-      if (spec.type === "string" || spec.default === undefined) {
-        throw new ValidationError(`Query param "${name}" is required`);
+      // Enum defaults fill in; string specs are required unless marked optional.
+      if (spec.type === "string") {
+        if (!spec.optional) throw new ValidationError(`Query param "${name}" is required`);
+        out[name] = undefined;
+        continue;
       }
+      if (spec.default === undefined) throw new ValidationError(`Query param "${name}" is required`);
       out[name] = parseSingle(name, spec.default, spec);
       continue;
     }

@@ -1,19 +1,28 @@
 import { fnv1aHash } from "@/server/util/hash";
 
-export function isTrimWhitespace(c: number): boolean {
-  return (
-    (c >= 0x09 && c <= 0x0d) ||
-    c === 0x20 ||
-    c === 0xa0 ||
-    c === 0x1680 ||
-    (c >= 0x2000 && c <= 0x200a) ||
-    c === 0x2028 ||
-    c === 0x2029 ||
-    c === 0x202f ||
-    c === 0x205f ||
-    c === 0x3000 ||
-    c === 0xfeff
-  );
+const TRIM_WHITESPACE = new Set([
+  0x09,
+  0x0a,
+  0x0b,
+  0x0c,
+  0x0d,
+  0x20,
+  0xa0,
+  0x1680,
+  0x2028,
+  0x2029,
+  0x202f,
+  0x205f,
+  0x3000,
+  0xfeff,
+  ...Array.from({ length: 11 }, (_, i) => 0x2000 + i),
+]);
+
+export const isTrimWhitespace = (c: number): boolean => TRIM_WHITESPACE.has(c);
+
+/** The RSC needle form of a marker: the JSON key with its surrounding quotes. */
+export function markerNeedle(marker: string): string {
+  return `"${marker}"`;
 }
 
 export function isMarkerBoundaryAt(line: string, needle: string): boolean {

@@ -12,13 +12,18 @@ import CardContent from "@/client/components/card-content.vue";
 import CardHeader from "@/client/components/card-header.vue";
 import ChartCanvas from "@/client/components/chart-canvas.vue";
 import ChartFrame from "@/client/components/chart-frame.vue";
-import { CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT } from "@/client/charts/tokens";
+import {
+  CHART_EMPTY_CLASS,
+  FLEX_CHART_HEIGHT,
+  chartBase,
+  defaultTooltipOptions,
+  legendStyle,
+  useChartTheme,
+} from "@/client/charts/theme";
 import EmptyState from "@/client/components/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatPercent, formatShortNumber } from "@/shared/utils";
 import { cn } from "@/client/utils/cn";
-import { useChartTheme, legendStyle } from "@/client/charts/theme";
-import { chartBase, defaultTooltipOptions } from "@/client/charts/factory";
 import type { HomeBarStat } from "./use-home-stats";
 import RankedListRows from "./ranked-list-rows.vue";
 import { OTHER_TASK_KEY, UNTAGGED_TASK_KEY, aggregateTaskShare, taskLabel, type TaskSlice } from "./task-share";

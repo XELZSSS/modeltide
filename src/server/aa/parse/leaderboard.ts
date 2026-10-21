@@ -1,6 +1,6 @@
 import { isRecord, numCoerce, str } from "@/server/formats/parser-primitives";
 import { collectModelReleaseLinksFromArrays, scanReleaseIndex, type ReleaseInfo } from "./release-index";
-import { fieldAliases, leaderboardBenchmarkWireNames } from "./model-compact";
+import { leaderboardBenchmarkWireNames, presentAlias } from "./model-compact";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
 import { findNextData, parseRscPayload } from "@/server/formats/rsc-parser";
 
@@ -44,12 +44,8 @@ function normalizeRow(
   if (sizeClass) normalized.sizeClass = sizeClass;
   if (release) normalized.releaseDate = release.releaseDate;
   for (const wire of leaderboardBenchmarkWireNames) {
-    for (const alias of fieldAliases(wire)) {
-      if (alias in row) {
-        normalized[wire] = row[alias];
-        break;
-      }
-    }
+    const alias = presentAlias(row, wire);
+    if (alias !== undefined) normalized[wire] = row[alias];
   }
   return normalized;
 }
@@ -70,12 +66,7 @@ export function parseLeaderboardModels(html: unknown): ParseResult<Record<string
   for (const raw of rows) {
     if (!isRecord(raw)) continue;
     for (const wire of leaderboardBenchmarkWireNames) {
-      for (const alias of fieldAliases(wire)) {
-        if (alias in raw) {
-          seenWire.add(wire);
-          break;
-        }
-      }
+      if (presentAlias(raw, wire) !== undefined) seenWire.add(wire);
     }
     const normalized = normalizeRow(raw, releases, links);
     if (normalized !== null) kept.push(normalized);

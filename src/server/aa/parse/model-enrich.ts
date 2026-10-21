@@ -1,45 +1,39 @@
 import { hasCatalogIdentity, isRecord, obj, str } from "@/server/formats/parser-primitives";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { MAX_DIRECTORY_ROWS } from "@/server/formats/limits";
 import { normalizeModelKey } from "@/shared/utils";
 import type { ModelMetaEntry } from "@/server/formats/wire-types";
-
-const PROTO_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 const TRAILING_VERSION_DIGITS_RE = /\d{4,8}$/;
 
 function mergeEntry(cur: Record<string, unknown>, patch: Record<string, unknown>): void {
-  for (const [key, value] of Object.entries(patch)) {
-    if (PROTO_KEYS.has(key)) continue;
-    if (value !== null && value !== undefined && value !== "") cur[key] = value;
-  }
+  const assign = (target: Record<string, unknown>, source: Record<string, unknown>): void => {
+    for (const [key, value] of Object.entries(source)) {
+      if (value === null || value === undefined || value === "") continue;
+      target[key] = value;
+    }
+  };
+  assign(cur, patch);
   if (cur.omniscienceBreakdown && patch.omniscienceBreakdown) {
     const next: Record<string, unknown> = { ...obj(cur.omniscienceBreakdown) };
-    for (const [key, value] of Object.entries(obj(patch.omniscienceBreakdown) ?? {})) {
-      if (PROTO_KEYS.has(key)) continue;
-      if (value !== null && value !== undefined && value !== "") next[key] = value;
-    }
+    assign(next, obj(patch.omniscienceBreakdown) ?? {});
     cur.omniscienceBreakdown = next;
   }
 }
 
 export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<string, unknown>[] {
   const merged = new Map<string, Record<string, unknown>>();
-  const catalogArr = Array.isArray(catalog) ? catalog.slice(0, MAX_DIRECTORY_ROWS) : [];
-  for (const raw of catalogArr) {
+  for (const raw of Array.isArray(catalog) ? catalog : []) {
     if (!hasCatalogIdentity(raw)) continue;
     const slug = str(raw.slug);
     if (!merged.has(slug)) merged.set(slug, { ...raw });
   }
   for (const group of enrich) {
     if (!Array.isArray(group)) continue;
-    for (const raw of (group as unknown[]).slice(0, MAX_DIRECTORY_ROWS)) {
+    for (const raw of group) {
       if (!isRecord(raw)) continue;
       const slug = str(raw.slug);
-      if (!slug) continue;
-      const current = merged.get(slug);
-      if (current === undefined) continue;
-      mergeEntry(current, raw);
+      const current = slug ? merged.get(slug) : undefined;
+      if (current !== undefined) mergeEntry(current, raw);
     }
   }
   return [...merged.values()];
@@ -49,11 +43,6 @@ export interface IntelligenceIndexResult {
   models: ArtificialAnalysisModel[];
   enrichFailed: boolean;
   fetchedAt: string;
-}
-
-function metaEntry(meta: Record<string, ModelMetaEntry>, key: string): ModelMetaEntry | undefined {
-  if (!Object.hasOwn(meta, key)) return undefined;
-  return meta[key];
 }
 
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {
@@ -66,7 +55,7 @@ function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEnt
   const valued = (e: ModelMetaEntry): boolean => e.intelligenceIndex != null || e.agenticIndex != null;
   let looseHit: ModelMetaEntry | undefined;
   for (const key of keys) {
-    const e = metaEntry(meta, key);
+    const e = meta[key];
     if (!e) continue;
     if (valued(e)) return e;
     looseHit ??= e;
@@ -75,7 +64,7 @@ function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEnt
   for (const key of keys) {
     const stripped = key.replace(TRAILING_VERSION_DIGITS_RE, "");
     if (!stripped || stripped === key) continue;
-    const e = metaEntry(meta, stripped);
+    const e = meta[stripped];
     if (e) return e;
   }
   return undefined;

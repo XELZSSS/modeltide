@@ -12,11 +12,15 @@ export interface DataTableColumn<T> {
   mobilePrimary?: boolean;
 }
 
-export interface RowListProps<T> {
-  pagedData: T[];
-  columns: DataTableColumn<T>[];
+/** Row identity accessors shared by the data table, its row lists and the generic wrapper. */
+export interface RowAccessors<T> {
   getRowId: (row: T) => string;
   getRowName?: (row: T) => string;
+}
+
+export interface RowListProps<T> extends RowAccessors<T> {
+  pagedData: T[];
+  columns: DataTableColumn<T>[];
   isExpandable: boolean;
   expandedRowId?: string | null;
   renderExpandedRow?: (row: T) => VNodeChild;

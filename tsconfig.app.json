@@ -6,7 +6,6 @@
   },
   "include": [
     "src/client/**/*.ts",
-    "src/client/**/*.vue",
     "src/shared/**/*.ts",
     "build/**/*.ts",
     "vite.config.ts",

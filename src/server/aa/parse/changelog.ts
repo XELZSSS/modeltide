@@ -1,5 +1,5 @@
 import { isRecord, isUnsuitableContent, str } from "@/server/formats/parser-primitives";
-import { MAX_SCAN_CHARS } from "@/server/formats/rsc-limits";
+import { MAX_SCAN_CHARS } from "@/server/formats/limits";
 import type { ChangelogModelEntry } from "@/server/formats/wire-types";
 import { scanReleaseIndex, type ReleaseInfo } from "./release-index";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";

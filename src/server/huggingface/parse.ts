@@ -19,8 +19,6 @@ interface LicenseDrops {
   noDownloads: number;
 }
 
-const MAX_UNKNOWN_LICENSE_TAGS = 5;
-
 export class LicenseDropTally {
   private withoutTag = 0;
   private declaredNonOpen = 0;
@@ -35,9 +33,7 @@ export class LicenseDropTally {
     if (license != null) return;
     this.declaredNonOpen += 1;
     for (const id of ids) {
-      if (isRecognizedNonOpenLicense(id) || this.unknownTags.has(id)) continue;
-      if (this.unknownTags.size >= MAX_UNKNOWN_LICENSE_TAGS) break;
-      this.unknownTags.add(id);
+      if (!isRecognizedNonOpenLicense(id)) this.unknownTags.add(id);
     }
   }
 

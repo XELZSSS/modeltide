@@ -1,6 +1,6 @@
 import { isRecord, str } from "@/server/formats/parser-primitives";
 import { extractNeedleJsonArrays } from "@/server/formats/rsc-needle";
-import { MAX_SCAN_CHARS } from "@/server/formats/rsc-limits";
+import { MAX_SCAN_CHARS } from "@/server/formats/limits";
 import { fnv1aHash } from "@/server/util/hash";
 
 const CANDIDATE_PREFIX_CHARS = 256;
@@ -19,7 +19,6 @@ export interface ReleaseInfo {
   name: string;
   releaseDate: string;
   creatorName: string;
-  creatorColor: string;
 }
 
 function releaseInfo(raw: unknown): { slug: string; info: ReleaseInfo } | null {
@@ -32,7 +31,7 @@ function releaseInfo(raw: unknown): { slug: string; info: ReleaseInfo } | null {
   if (!slug || !name || !releaseDate || !creatorName) return null;
   return {
     slug,
-    info: { name, releaseDate, creatorName, creatorColor: creator ? str(creator.color).trim() : "" },
+    info: { name, releaseDate, creatorName },
   };
 }
 

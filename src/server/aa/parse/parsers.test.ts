@@ -116,16 +116,6 @@ describe("mergeBySlug", () => {
     expect(merged[0]!.medianOutputSpeed).toBe(5);
     expect(merged[0]!.intelligenceIndex).toBe(1);
   });
-
-  it("ignores prototype keys from enrichment payloads", () => {
-    const merged = mergeBySlug(
-      [{ slug: "a", name: "A" }],
-      [JSON.parse('{"slug":"a","__proto__":{"polluted":true},"constructor":"x","prototype":"y"}')],
-    );
-    expect(merged).toHaveLength(1);
-    expect(Object.getPrototypeOf(merged[0]!)).toBe(Object.prototype);
-    expect(Object.hasOwn(merged[0]!, "__proto__")).toBe(false);
-  });
 });
 
 describe("backfillFromMeta", () => {

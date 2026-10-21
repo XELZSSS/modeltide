@@ -215,6 +215,8 @@ export const zh = {
   langEn: "EN",
   navReleases: "发布",
 
+  expiresAt: "下线日期",
+
   compareStale: "部分已选模型已下线，已自动移除。",
   noData: "暂无数据。",
   invalidCostValue: "请填写 0 或更大的数值。",

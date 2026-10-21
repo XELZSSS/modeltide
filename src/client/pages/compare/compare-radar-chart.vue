@@ -9,13 +9,20 @@ import { computed } from "vue";
 import type { ChartData, ChartOptions } from "chart.js";
 import { useTranslation } from "@/client/i18n";
 import { hexToRgba } from "@/shared/utils/color";
-import { AXIS_STEP, legendStyle, seriesColor, useChartTheme } from "@/client/charts/theme";
+import {
+  AXIS_STEP,
+  RADAR_CHART_HEIGHT,
+  axisTickStyle,
+  chartBase,
+  defaultTooltipOptions,
+  legendStyle,
+  seriesColor,
+  useChartTheme,
+} from "@/client/charts/theme";
 import Card from "@/client/components/card.vue";
 import CardContent from "@/client/components/card-content.vue";
 import ChartCanvas from "@/client/components/chart-canvas.vue";
 import ChartFrame from "@/client/components/chart-frame.vue";
-import { RADAR_CHART_HEIGHT } from "@/client/charts/tokens";
-import { axisTickStyle, chartBase, defaultTooltipOptions } from "@/client/charts/factory";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName, modelId } from "@/shared/utils/models";
 import { buildRadarData, radarMaxFor } from "@/client/utils/compare-logic";

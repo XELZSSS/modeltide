@@ -8,7 +8,6 @@ export const OPEN_SOURCE_MODELS_DEFAULTS = {
 const API_DOMAINS = {
   artificialIndex: "artificial-analysis-index",
   openSourceModels: "open-source-models",
-  openSourceModel: "open-source-model",
   news: "news",
   openRouterRankings: "openrouter-rankings",
   closedReleases: "closed-releases",
@@ -29,10 +28,10 @@ export function cacheKey(domain: ApiDomain, ...parts: (string | number)[]): stri
 
 export const queryKeys = {
   artificialIndex: [...QUERY_KEY_PREFIX, API_DOMAINS.artificialIndex],
-  // Keyed by sort so the react-query key can never diverge from the requested URL.
-  openSourceModels: (sort: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.openSourceModels, sort],
-  openSourceModel: (id: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.openSourceModel, id],
-  news: (category: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.news, category],
+  // Keyed by sort (and by id for single-model lookups) so the react-query key can never
+  // diverge from the requested URL.
+  openSourceModels: (sort: string, id = "") => [...QUERY_KEY_PREFIX, API_DOMAINS.openSourceModels, sort, id],
+  news: [...QUERY_KEY_PREFIX, API_DOMAINS.news],
   openRouterRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.openRouterRankings],
   closedReleases: [...QUERY_KEY_PREFIX, API_DOMAINS.closedReleases],
   homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],
@@ -41,7 +40,6 @@ export const queryKeys = {
 export const apiPaths = {
   artificialIndex: `${API_PREFIX}/${API_DOMAINS.artificialIndex}`,
   openSourceModels: `${API_PREFIX}/${API_DOMAINS.openSourceModels}`,
-  openSourceModel: `${API_PREFIX}/${API_DOMAINS.openSourceModel}`,
   news: `${API_PREFIX}/${API_DOMAINS.news}`,
   openRouterRankings: `${API_PREFIX}/${API_DOMAINS.openRouterRankings}`,
   closedReleases: `${API_PREFIX}/${API_DOMAINS.closedReleases}`,

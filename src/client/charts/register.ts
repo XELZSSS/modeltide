@@ -13,7 +13,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { applyChartDefaults } from "./factory";
+import { applyChartDefaults } from "./theme";
 
 applyChartDefaults(ChartJS);
 

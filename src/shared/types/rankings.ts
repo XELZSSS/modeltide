@@ -19,6 +19,8 @@ export interface OpenRouterRankEntry {
   change: number | null;
   pricing: ModelPricing | null;
   isFree: boolean;
+  /** ISO date upstream retires this model; null when no retirement is scheduled. */
+  expiresAt: string | null;
 }
 
 export interface OpenSourceModelEntry {

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { infoGridClasses } from "./grid-classes";
+import { cn } from "@/client/utils/cn";
 
 const props = defineProps<{ class?: string }>();
-const classes = computed(() => infoGridClasses(props.class));
+const classes = computed(() => cn("grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2", props.class));
 </script>
 
 <template>

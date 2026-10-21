@@ -6,19 +6,19 @@ import { useTranslation } from "@/client/i18n";
 import { useDevice } from "@/client/device";
 import { filterByTerm, foldSearchStr } from "@/client/search/match";
 import { useRouteSearchTerm } from "@/client/stores";
-import type { DataTableColumn } from "./table-columns.ts";
+import type { DataTableColumn, RowAccessors } from "./table-columns.ts";
 import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "./paging";
 import TableBody, { TableHeader } from "./desktop.vue";
 import MobileTableBody from "./mobile.vue";
 
-const props = defineProps<{
-  data: T[];
-  columns: DataTableColumn<T>[];
-  getRowId: (row: T) => string;
-  getRowName?: (row: T) => string;
-  getSearchFields: (row: T) => (string | null | undefined)[];
-  renderExpandedRow?: (row: T) => VNodeChild;
-}>();
+const props = defineProps<
+  RowAccessors<T> & {
+    data: T[];
+    columns: DataTableColumn<T>[];
+    getSearchFields: (row: T) => (string | null | undefined)[];
+    renderExpandedRow?: (row: T) => VNodeChild;
+  }
+>();
 
 defineSlots<{ expandedRow?: (props: { row: T }) => VNodeChild }>();
 

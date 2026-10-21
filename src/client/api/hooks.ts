@@ -7,21 +7,22 @@ import type {
   NewsItem,
   OpenRouterRankEntry,
   OpenSourceModelEntry,
+  SourcePayload,
 } from "@/shared/types";
+import type { NewsByCategory } from "@/shared/contract";
 import { dedupeBy } from "@/shared/utils";
 import { buildHallucinationRankings } from "@/shared/utils/hallucination";
 import {
   normalizeHomeDashboard,
   unwrapList,
   unwrapListPartial,
-  unwrapObject,
   type NormalizedHomeDashboard,
 } from "./payload-normalize";
 import {
   qArtificialList,
   qClosedReleasesList,
   qHomeDashboard,
-  qNewsList,
+  qNews,
   qOpenSourceModelById,
   qOpenSourceModelsList,
   qOpenRouterList,
@@ -46,20 +47,43 @@ async function suspenseState<T>(query: SuspenseQueryLike, label: string): Promis
   });
 }
 
-export function useArtificialRankings(enabled: MaybeRefOrGetter<boolean> = true) {
-  const query = qArtificialList.use(enabled);
-  const unwrapped = computed(() => unwrapListPartial<ArtificialAnalysisModel>(query.data.value, "artificialIndex"));
+interface ListQueryLike {
+  data: { value: unknown };
+  isPending: { value: boolean };
+  isError: { value: boolean };
+  error: { value: Error | null };
+}
+
+interface ListFlags<T> {
+  data: ComputedRef<T[]>;
+  isPending: ComputedRef<boolean>;
+  isError: ComputedRef<boolean>;
+  error: ComputedRef<Error | null>;
+}
+
+/**
+ * Empty-list gating shared by the list queries: an empty list is only "pending" while the request
+ * is in flight, and an error once the request failed or the payload came back malformed.
+ */
+function listFlags<T>(query: ListQueryLike, label: string, enabled: MaybeRefOrGetter<boolean>): ListFlags<T> {
+  const unwrapped = computed(() => unwrapListPartial<T>(query.data.value, label));
   const data = computed(() => unwrapped.value.data);
+  const isPending = computed(
+    () => toValue(enabled) && data.value.length === 0 && !unwrapped.value.malformed && query.isPending.value,
+  );
   const isError = computed(
     () =>
       toValue(enabled) &&
       data.value.length === 0 &&
-      !query.isPending.value &&
-      (query.isError.value || unwrapped.value.malformed),
+      (query.isError.value || (unwrapped.value.malformed && !query.isPending.value)),
   );
-  const error = computed(() =>
-    isError.value ? (query.error.value ?? new Error("Malformed artificialIndex payload")) : null,
-  );
+  const error = computed(() => (isError.value ? (query.error.value ?? new Error(`Malformed ${label} payload`)) : null));
+  return { data, isPending, isError, error };
+}
+
+export function useArtificialRankings(enabled: MaybeRefOrGetter<boolean> = true) {
+  const query = qArtificialList.use(enabled);
+  const { data, isError, error } = listFlags<ArtificialAnalysisModel>(query, "artificialIndex", enabled);
   return { ...query, data, isError, error };
 }
 
@@ -108,42 +132,32 @@ export const useSuspenseOpenSourceModelsState = () =>
 export async function useSuspenseOpenSourceModel(id: string): Promise<ComputedRef<OpenSourceModelEntry | null>> {
   const query = qOpenSourceModelById(id).use();
   await query.suspense();
-  return computed(() => unwrapObject<OpenSourceModelEntry | null>(query.data.value, "openSourceModel") ?? null);
+  return computed(() => unwrapList<OpenSourceModelEntry>(query.data.value, "openSourceModels")[0] ?? null);
 }
 
 export const useSuspenseClosedReleasesState = () =>
   suspenseState<ClosedReleaseEntry>(qClosedReleasesList.use(), "closedReleases");
 
-export const useSuspenseNewsState = (category: NewsCategory) =>
-  suspenseState<NewsItem>(qNewsList(category).use(), `news:${category}`);
+export async function useSuspenseNewsState(category: NewsCategory): Promise<ComputedRef<ListState<NewsItem>>> {
+  const query = qNews.use();
+  await query.suspense();
+  return computed(() => {
+    const byCategory = (query.data.value as SourcePayload<NewsByCategory> | null)?.data;
+    const { data, partial, malformed } = unwrapListPartial<NewsItem>(byCategory?.[category], `news:${category}`);
+    return { items: data, partial, malformed };
+  });
+}
 
-export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true): {
-  data: ComputedRef<OpenSourceModelEntry[]>;
-  isPending: ComputedRef<boolean>;
-  isError: ComputedRef<boolean>;
-  error: ComputedRef<Error | null>;
-} {
+export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true): ListFlags<OpenSourceModelEntry> {
   const trending = qOpenSourceModelsList.use(enabled);
-  const unwrapped = computed(() => unwrapListPartial<OpenSourceModelEntry>(trending.data.value, "openSourceModels"));
+  const flags = listFlags<OpenSourceModelEntry>(trending, "openSourceModels", enabled);
   const data = computed(() =>
     dedupeBy(
-      unwrapped.value.data.filter((model) => model.id),
+      flags.data.value.filter((model) => model.id),
       (model) => model.id,
     ),
   );
-  const isPending = computed(
-    () => toValue(enabled) && data.value.length === 0 && !unwrapped.value.malformed && trending.isPending.value,
-  );
-  const isError = computed(
-    () =>
-      toValue(enabled) &&
-      data.value.length === 0 &&
-      (trending.isError.value || (unwrapped.value.malformed && !trending.isPending.value)),
-  );
-  const error = computed(() =>
-    isError.value ? (trending.error.value ?? new Error("Malformed open-source payload")) : null,
-  );
-  return { data, isPending, isError, error };
+  return { ...flags, data };
 }
 
 export function useHallucinationRankings(

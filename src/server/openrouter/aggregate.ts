@@ -3,7 +3,7 @@ import { MAX_DIRECTORY_ROWS } from "@/server/formats/limits";
 import { pruneBounded } from "@/server/util/throttle";
 import { normalizeModelKey } from "@/shared/utils";
 
-import type { ModelRow } from "@/server/formats/wire-types";
+import type { ModelMetaEntry, ModelRow } from "@/server/formats/wire-types";
 import type { PricingEntry } from "./parse-directory";
 
 const SUM_KEYS = [
@@ -81,6 +81,20 @@ function resolvePricing(pricing: PricingLookup, id: string, variantKey: string |
 export interface RankingScanStats {
   scannedRows: number;
   validRows: number;
+}
+
+export type MetaLookup = Map<string, ModelMetaEntry> | Record<string, ModelMetaEntry>;
+
+/** Scheduled retirement date for `id` (or its variant), resolved with the pricing lookup's keys. */
+export function resolveExpiry(meta: MetaLookup | undefined, id: string, variantKey: string | undefined): string | null {
+  if (!meta) return null;
+  const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
+  const candidates = [...keys.map((key) => key.toLowerCase()), ...keys.map(normalizeKeyCached)];
+  for (const key of candidates) {
+    const hit = meta instanceof Map ? meta.get(key) : Object.hasOwn(meta, key) ? meta[key] : undefined;
+    if (hit?.expiresAt) return hit.expiresAt;
+  }
+  return null;
 }
 
 function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> {

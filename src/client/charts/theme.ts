@@ -1,9 +1,99 @@
 import { ref, type Ref } from "vue";
-import type { LegendOptions, ScaleOptions, TooltipCallbacks, TooltipItem, TooltipModel } from "chart.js";
-import { axisDashedBorderStyle, axisGridStyle, chartBase, defaultTooltipOptions } from "./factory";
-import { DONUT_FALLBACK, FALLBACK_THEME, type ChartTheme } from "./tokens";
+import type {
+  Chart as ChartJS,
+  LegendOptions,
+  ScaleOptions,
+  TooltipCallbacks,
+  TooltipItem,
+  TooltipModel,
+  TooltipOptions,
+} from "chart.js";
 
-export type { ChartTheme };
+export interface ChartTheme {
+  grid: string;
+  tick: string;
+  tickSecondary: string;
+  tooltipBg: string;
+  tooltipText: string;
+  palette: string[];
+  donut: string[];
+}
+
+export const DONUT_FALLBACK = ["#365899", "#1e2430", "#2f6d8a", "#2f7a4d", "#9a6b0a", "#9aa5b4"];
+
+export const FALLBACK_THEME: ChartTheme = {
+  grid: "rgba(30, 36, 48, 0.14)",
+  tick: "#8b96a5",
+  tickSecondary: "#5b6675",
+  tooltipBg: "#f1f4f7",
+  tooltipText: "#1e2430",
+  palette: [
+    "#365899",
+    "#1e2430",
+    "#5b6675",
+    "#9aa5b4",
+    "#2f7a4d",
+    "#2f6d8a",
+    "#9a6b0a",
+    "#c03a30",
+    "#6d7a99",
+    "#c3ccd6",
+  ],
+  donut: DONUT_FALLBACK,
+};
+
+export const CHART_HEIGHT = "h-[160px] sm:h-[180px]";
+
+export const FLEX_CHART_HEIGHT = `flex-1 min-h-[160px] ${CHART_HEIGHT}`;
+
+export const RADAR_CHART_HEIGHT = "h-[280px] sm:h-[400px]";
+
+export const CHART_EMPTY_CLASS = "flex items-center justify-center text-center ui-body-secondary";
+
+const CHART_FONT_FAMILY =
+  "'IBM Plex Sans', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif";
+const CHART_FONT_SIZE = 12;
+
+export function applyChartDefaults(chart: typeof ChartJS): void {
+  chart.defaults.font.family = CHART_FONT_FAMILY;
+  chart.defaults.font.size = CHART_FONT_SIZE;
+}
+
+export const chartBase = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: false,
+} as const;
+
+export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tick, font: { size: 10 } });
+
+export const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
+
+export const axisDashedBorderStyle = (theme: ChartTheme) => ({ color: theme.grid, dash: [3, 3] as [number, number] });
+
+export const lineSeriesStyle = {
+  borderWidth: 2,
+  pointRadius: 0,
+  pointHoverRadius: 4,
+  pointStyle: "rect",
+  cubicInterpolationMode: "monotone",
+  spanGaps: false,
+} as const;
+
+export function defaultTooltipOptions(
+  theme: ChartTheme,
+): Partial<TooltipOptions<"line" | "radar" | "bar" | "doughnut">> {
+  return {
+    backgroundColor: theme.tooltipBg,
+    titleColor: theme.tooltipText,
+    bodyColor: theme.tooltipText,
+    borderColor: theme.grid,
+    borderWidth: 1,
+    cornerRadius: 0,
+    titleFont: { size: 12 },
+    bodyFont: { size: 12 },
+  };
+}
 
 function resolveChartTheme(): ChartTheme {
   const styles = getComputedStyle(document.documentElement);
@@ -44,7 +134,7 @@ function themeSignature(theme: ChartTheme): string {
   ].join("\u0000");
 }
 
-const theme = ref<ChartTheme>(currentTheme());
+let themeRef: Ref<ChartTheme> | null = null;
 
 function ensureObserver(): void {
   if (observing) return;
@@ -60,7 +150,7 @@ function ensureObserver(): void {
       if (signature === sharedSignature) return;
       sharedSignature = signature;
       sharedTheme = next;
-      theme.value = next;
+      if (themeRef) themeRef.value = next;
     });
   };
   const media = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -71,7 +161,9 @@ function ensureObserver(): void {
 
 export function useChartTheme(): Ref<ChartTheme> {
   ensureObserver();
-  return theme;
+  // Resolved lazily so importing this module never touches the DOM before the app mounts.
+  themeRef ??= ref(currentTheme());
+  return themeRef;
 }
 
 export const AXIS_MAX = 100;
