@@ -3,21 +3,27 @@ import { cacheKeys } from "@/server/cache/keys";
 import { upstreamConfig } from "@/server/upstream/upstream";
 import type { ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/api/context";
-import { errMsg, UpstreamError } from "@/server/api/errors";
+import { UpstreamError } from "@/server/api/errors";
 import { getChangelogModels } from "@/server/aa/changelog";
 import { getIntelligenceIndexResult } from "@/server/aa";
-import { runLegs } from "@/server/join-legs";
+import { fanOut } from "@/server/fan-out";
 import { toClosedReleases, toClosedReleasesFromIndex } from "./parse";
-import type { SourcePayload } from "@/shared/types";
-import { cachedPayload, requireRows } from "@/server/pipeline";
+import { defineSource, requireRows } from "@/server/pipeline";
 
-async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedReleaseEntry[]; partial: boolean }> {
-  const { values } = await runLegs(
+interface ClosedReleasesRaw {
+  entries: ClosedReleaseEntry[];
+  partial: boolean;
+  counts: { changelog: number; index: number };
+}
+
+async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> {
+  const { values } = await fanOut(
+    ctx,
     [
       { label: "index", run: () => getIntelligenceIndexResult(ctx) },
       { label: "changelog", run: () => getChangelogModels(ctx) },
     ],
-    { onFailure: (f) => ctx.log("warn", `[closed-releases] ${f.label} leg failed: ${errMsg(f.reason)}`) },
+    { tag: "closed-releases" },
   );
   const [index, changelog] = values;
   const models = index?.models ?? [];
@@ -36,14 +42,23 @@ async function fetchClosedReleases(ctx: AppContext): Promise<{ entries: ClosedRe
     finalEntries = toClosedReleasesFromIndex(models, upstreamConfig.artificialAnalysis);
     ctx.log("warn", `[closed-releases] changelog empty, index fallback rows=${finalEntries.length}`);
   }
-  requireRows(finalEntries, "Releases", "rows", `changelog=${changelogModels.length}, index=${models.length}`);
   const partial = index == null || index.enrichFailed || indexFallback || changelog?.degraded === true;
   if (partial) ctx.log("warn", "[closed-releases] serving partial (degraded enrichment)");
-  return { entries: finalEntries, partial };
+  return {
+    entries: finalEntries,
+    partial,
+    counts: { changelog: changelogModels.length, index: models.length },
+  };
 }
 
-export const getClosedReleases = (ctx: AppContext): Promise<SourcePayload<ClosedReleaseEntry[]>> =>
-  cachedPayload(ctx, cacheKeys.closedReleases, STATIC_TTL_MS, async (ctx) => {
-    const { entries: finalEntries, partial } = await fetchClosedReleases(ctx);
-    return { rows: finalEntries, partial };
-  });
+export const getClosedReleases = defineSource<ClosedReleasesRaw, ClosedReleaseEntry>({
+  key: cacheKeys.closedReleases,
+  ttl: STATIC_TTL_MS,
+  label: "Releases",
+  fetch: (ctx) => fetchClosedReleases(ctx),
+  parse: (raw) => {
+    requireRows(raw.entries, "Releases", "rows", `changelog=${raw.counts.changelog}, index=${raw.counts.index}`);
+    return raw.entries;
+  },
+  partialWhen: ({ raw }) => ({ partial: raw.partial }),
+});

@@ -12,7 +12,6 @@ export function loadableView(load: () => Promise<LazyModule>): Component {
         resolved = module.default;
       })
       .catch((err: unknown) => {
-        // Drop the rejected promise so an ErrorBoundary retry remounts and refetches.
         pending = null;
         throw err;
       });
@@ -30,7 +29,6 @@ export function loadableView(load: () => Promise<LazyModule>): Component {
   });
 }
 
-/** Fire a lazy view's chunk request in the background; a failed preload is retried by the real navigation. */
 export function preloadChunk(load: (() => Promise<unknown>) | undefined): void {
   if (load) void load().then(undefined, () => {});
 }

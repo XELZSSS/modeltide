@@ -38,7 +38,6 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
   for (const locator of locators) {
     let from = 0;
     for (;;) {
-      // Bound upfront: a full candidate set on multi-MB bodies keeps scanning the tail.
       if (candidates.length >= cap) break;
       const at = text.indexOf(locator, from);
       if (at === -1) break;
@@ -48,7 +47,8 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
     }
   }
   candidates.sort((a, b) => a.start - b.start);
-  return candidates.slice(0, cap);
+  if (candidates.length > cap) candidates.length = cap;
+  return candidates;
 }
 
 function scanNeedleRange(

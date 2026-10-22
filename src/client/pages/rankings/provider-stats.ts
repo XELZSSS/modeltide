@@ -13,7 +13,8 @@ export function useProviderStats(
   return computed<ProviderStats[]>(() => {
     const stats = computeProviderStats(toValue(models), t("unknown"));
     if (sortBy === "speed") {
-      return [...stats].sort((a, b) => (b.avgSpeed ?? -Infinity) - (a.avgSpeed ?? -Infinity));
+      const speedOf = (provider: ProviderStats) => provider.avgSpeed ?? -Infinity;
+      return [...stats].sort((a, b) => speedOf(b) - speedOf(a) || a.name.localeCompare(b.name));
     }
     return stats;
   });

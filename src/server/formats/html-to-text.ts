@@ -26,20 +26,33 @@ const BLOCK_TAGS = new Set([
   "tbody",
 ]);
 
-const TAG_NAME_RE = /^\/?[a-zA-Z][a-zA-Z0-9-]*/;
 const WHITESPACE_RUN_RE = /\s+/g;
+const SCRIPT_CLOSE_RE = /<\/script\s*>/gi;
+const STYLE_CLOSE_RE = /<\/style\s*>/gi;
 
+const isAsciiLetter = (c: number): boolean => (c >= 0x61 && c <= 0x7a) || (c >= 0x41 && c <= 0x5a);
+
+const isTagNameChar = (c: number): boolean => isAsciiLetter(c) || (c >= 0x30 && c <= 0x39) || c === 0x2d;
+
+/**
+ * Reads the tag name between `<` and `>` by scanning. The previous `trim()` + regex + `replace()` built three
+ * intermediate strings per tag, and a page body runs this once for every tag it contains.
+ */
 function tagNameOf(tagInner: string): string {
-  const m = TAG_NAME_RE.exec(tagInner.trim());
-  return (m?.[0] ?? "").toLowerCase().replace(/^\//, "");
+  let i = 0;
+  while (i < tagInner.length && tagInner.charCodeAt(i) <= 0x20) i++;
+  if (tagInner.charCodeAt(i) === 0x2f) i++;
+  const start = i;
+  if (!isAsciiLetter(tagInner.charCodeAt(i))) return "";
+  i++;
+  while (i < tagInner.length && isTagNameChar(tagInner.charCodeAt(i))) i++;
+  const name = tagInner.slice(start, i);
+  return name === name.toLowerCase() ? name : name.toLowerCase();
 }
 
 export function stripHtml(s: unknown): string {
   if (typeof s !== "string" || !s) return "";
   const parts: string[] = [];
-  // Local instances: a shared /g regex carries lastIndex state and is not reentrant.
-  const scriptCloseRe = /<\/script\s*>/gi;
-  const styleCloseRe = /<\/style\s*>/gi;
   let i = 0;
   while (i < s.length) {
     if (s.startsWith("<!--", i)) {
@@ -48,8 +61,7 @@ export function stripHtml(s: unknown): string {
       i = end + 3;
       continue;
     }
-    const ch = s[i]!;
-    if (ch !== "<") {
+    if (s.charCodeAt(i) !== 0x3c) {
       const next = s.indexOf("<", i + 1);
       const end = next === -1 ? s.length : next;
       parts.push(s.slice(i, end));
@@ -87,7 +99,7 @@ export function stripHtml(s: unknown): string {
       continue;
     }
     if (name === "script" || name === "style") {
-      const closeRe = name === "script" ? scriptCloseRe : styleCloseRe;
+      const closeRe = name === "script" ? SCRIPT_CLOSE_RE : STYLE_CLOSE_RE;
       closeRe.lastIndex = end + 1;
       const m = closeRe.exec(s);
       parts.push(" ");

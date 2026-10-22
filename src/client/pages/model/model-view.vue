@@ -3,7 +3,8 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { SOURCES } from "@/client/nav/sources";
 import type { ModelSource } from "@/shared/types";
-import NotFound from "@/client/components/not-found.vue";
+import NotFound from "@/client/components/feedback/not-found.vue";
+import { useSoftNotFound } from "@/client/router/document-meta";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import OpenSourceDetail from "./open-source-detail.vue";
 import HallucinationDetail from "./hallucination-detail.vue";
@@ -27,11 +28,13 @@ const decodedId = computed(() => {
   const at = rawId.value.indexOf("/");
   return at < 0 ? "" : rawId.value.slice(at + 1);
 });
+
+useSoftNotFound(computed(() => !source.value || !decodedId.value));
 </script>
 
 <template>
   <SuspenseQuery>
-    <NotFound v-if="!source || !decodedId" />
+    <NotFound v-if="!source || !decodedId" heading-key="modelNotFoundTitle" body-key="modelNotFound" :code="null" />
     <AaDetailView v-else-if="source === 'aa'" :key="decodedId" :decoded-id="decodedId" />
     <OrDetailView v-else-if="source === 'or'" :key="decodedId" :decoded-id="decodedId" />
     <OpenSourceDetail v-else-if="source === 'os'" :key="decodedId" :decoded-id="decodedId" />

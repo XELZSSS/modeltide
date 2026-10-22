@@ -58,7 +58,6 @@ export function useHomeStats(
     ),
   );
 
-  // Shared with the provider-compare tab; keep at setup top level, not inside computed.
   const providerRows = useProviderStats(artificialData, t, "speed");
   const providerStats = computed<HomeProviderStat[]>(() =>
     providerRows.value

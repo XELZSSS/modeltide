@@ -1,6 +1,6 @@
 import type { AppContext } from "@/server/api/context";
 import { upstreamConfig } from "@/server/upstream/upstream";
-import { ClientAbortError, UpstreamError } from "@/server/api/errors";
+import { rethrowIfClientAbort, UpstreamError } from "@/server/api/errors";
 import { isRecord } from "@/server/formats/parser-primitives";
 import { parseRscPayload } from "@/server/formats/rsc-parser";
 import { cachedRaw } from "@/server/pipeline";
@@ -16,7 +16,6 @@ interface EnrichSpec<T> {
   path: string;
   marker: string;
   extract: (tree: unknown) => T[] | null;
-  /** Audited inside the refresh closure: a cache hit returns already-mapped rows. */
   fields?: readonly string[];
   map?: (arr: T[]) => T[];
 }
@@ -71,7 +70,7 @@ export async function getAndParseEnrich<T>(
     });
     return { rows: value, failed: degraded };
   } catch (err) {
-    if (err instanceof ClientAbortError) throw err;
+    rethrowIfClientAbort(err);
     ctx.log("warn", "[artificial] partial", { label: spec.label, failed: true });
     return { rows: [], failed: true };
   }

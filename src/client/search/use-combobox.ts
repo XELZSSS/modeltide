@@ -29,7 +29,6 @@ export function useCombobox({
   const listboxId = useId();
   const statusId = useId();
   const { inputValue, debounced, setDebouncedDirect, composing } = useDebouncedTerm(initialValue, 200);
-  // Controlled mode: sync external term changes (e.g. history navigation) back into the input.
   if (externalValue !== undefined) {
     watch(
       () => toValue(externalValue),
@@ -66,9 +65,7 @@ export function useCombobox({
         listRef.value
           ?.querySelector(`#${escapeSelectorId(`${listboxId}-option-${activeIndex.value}`)}`)
           ?.scrollIntoView({ block: "nearest" });
-      } catch {
-        // selector edge-case: skip scroll, selection still works
-      }
+      } catch {}
     },
     { flush: "post" },
   );
@@ -152,8 +149,6 @@ export type ComboboxController = ReturnType<typeof useCombobox>;
 function escapeSelectorId(id: string): string {
   try {
     if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(id);
-  } catch {
-    // fall through to manual escape
-  }
+  } catch {}
   return id.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
 }

@@ -1,4 +1,5 @@
 import { isRecord, isValidRowId, numCoerce, parseTs } from "@/server/formats/parser-primitives";
+import { isModelRow } from "@/server/formats/wire-guards";
 import { MAX_DIRECTORY_ROWS } from "@/server/formats/limits";
 import { pruneBounded } from "@/server/util/throttle";
 import { normalizeModelKey } from "@/shared/utils";
@@ -16,15 +17,14 @@ const SUM_KEYS = [
 ] as const;
 
 function usageTotal(row: ModelRow): number {
-  const rec = row as unknown as Record<string, unknown>;
-  const p = numCoerce(rec?.total_prompt_tokens);
-  const c = numCoerce(rec?.total_completion_tokens);
+  const p = numCoerce(row.total_prompt_tokens);
+  const c = numCoerce(row.total_completion_tokens);
   if (p == null && c == null) return -1;
   return (p ?? 0) + (c ?? 0);
 }
 
 function rankingMetric(row: ModelRow): number | null {
-  return numCoerce((row as unknown as Record<string, unknown>).rankingMetricValue);
+  return numCoerce(row.rankingMetricValue);
 }
 
 interface Group {
@@ -37,7 +37,6 @@ interface Group {
   metric: number | null;
 }
 
-// Upstream `change` is a ratio (0.005 = +0.5%) but percent values also appear; |v| < 1 means ratio.
 function changePercent(value: unknown): number | null {
   const n = numCoerce(value);
   if (n == null) return null;
@@ -51,7 +50,6 @@ function lookupPricing(pricing: PricingLookup, key: string): PricingEntry | unde
   return Object.hasOwn(pricing, key) ? pricing[key] : undefined;
 }
 
-// Memoized: normalizeModelKey costs far more than a lowercase pass and rows repeat the same slugs.
 const NORMALIZED_KEY_CACHE_MAX = 8192;
 const normalizedKeyCache = new Map<string, string>();
 
@@ -81,11 +79,11 @@ function resolvePricing(pricing: PricingLookup, id: string, variantKey: string |
 export interface RankingScanStats {
   scannedRows: number;
   validRows: number;
+  expiredRows: number;
 }
 
 export type MetaLookup = Map<string, ModelMetaEntry> | Record<string, ModelMetaEntry>;
 
-/** Scheduled retirement date for `id` (or its variant), resolved with the pricing lookup's keys. */
 export function resolveExpiry(meta: MetaLookup | undefined, id: string, variantKey: string | undefined): string | null {
   if (!meta) return null;
   const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
@@ -105,11 +103,10 @@ function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> 
   for (let i = 0; i < count; i++) {
     const raw: unknown = rows[i];
     if (!isRecord(raw)) continue;
-    const idRaw = (raw as unknown as ModelRow).model_permaslug;
-    if (!isValidRowId(idRaw)) continue;
+    if (!isModelRow(raw) || !isValidRowId(raw.model_permaslug)) continue;
     valid += 1;
-    const row = raw as unknown as ModelRow;
-    const id = (idRaw as string).trim();
+    const row = raw;
+    const id = row.model_permaslug.trim();
     const tokens = usageTotal(row);
     const ts = parseTs(row.date);
     const metric = rankingMetric(row);
@@ -147,6 +144,7 @@ function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> 
   if (stats) {
     stats.scannedRows = count;
     stats.validRows = valid;
+    stats.expiredRows = 0;
   }
   return grouped;
 }

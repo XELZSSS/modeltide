@@ -12,6 +12,7 @@ import { errMsg } from "@/server/api/errors";
 import { fnv1aHashUint32, utf8ByteLength } from "@/server/util/hash";
 import { ONE_DAY } from "@/shared/config";
 import type { KvStore } from "./kv";
+import { noteCacheStat } from "./stats";
 
 const STALE_WINDOW_MS = ONE_DAY;
 const MAX_STALE_EXTRA_MS = 60 * 60_000;
@@ -27,6 +28,21 @@ export interface StaleEnvelope<T> {
   t?: number;
 }
 
+interface DecodedEnvelope<T> {
+  env: StaleEnvelope<T>;
+  bytes: number;
+}
+
+/**
+ * Concurrent reads of one versioned key share a single KV round trip. The refresh path was already single-flighted;
+ * the read path was not, so a burst on a cold key issued one KV read per request.
+ */
+const inflightReads = new Map<string, Promise<DecodedEnvelope<unknown> | undefined>>();
+
+export function clearInflightReads(): void {
+  inflightReads.clear();
+}
+
 function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
   if (typeof v !== "object" || v === null || !("d" in v) || !("e" in v)) return false;
   const e = (v as StaleEnvelope<T>).e;
@@ -35,7 +51,6 @@ function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
 
 function jitteredTtl(vk: string, ttl: number): number {
   const base = Number.isFinite(ttl) && ttl > 0 ? ttl : 60_000;
-  // ±10% spread keyed on the cache key so one refresh's entries don't all expire at once.
   const factor = 0.9 + (fnv1aHashUint32(vk) % 201) / 1000;
   if (base < 60_000) return Math.max(1000, Math.round(base * factor));
   return Math.max(60_000, Math.round(base * factor));
@@ -45,7 +60,7 @@ function encodeEnvelope<T>(data: T, ttl: number): string {
   return JSON.stringify({ d: data, e: Date.now() + ttl, t: ttl });
 }
 
-function decodeEnvelope<T>(raw: string, k: string, log: Logger): { env: StaleEnvelope<T>; bytes: number } | undefined {
+function decodeEnvelope<T>(raw: string, k: string, log: Logger): DecodedEnvelope<T> | undefined {
   let env: StaleEnvelope<T>;
   try {
     env = JSON.parse(raw) as StaleEnvelope<T>;
@@ -86,6 +101,9 @@ class MemoryL1 {
     this.delete(vk);
     const bytes = serializedBytes * L1_RESIDENT_BYTES_FACTOR;
     if (bytes > MEMORY_CACHE_MAX_BYTES) return false;
+    // Reclaim entries that are already past every stale budget before evicting one that can still be served: they
+    // hold resident bytes without being reachable through `usableStale`, so they are dead weight under pressure.
+    if (this.bytes + bytes > MEMORY_CACHE_MAX_BYTES) this.sweepDead(Date.now());
     while (this.map.size >= MEMORY_CACHE_MAX_KEYS || this.bytes + bytes > MEMORY_CACHE_MAX_BYTES) {
       const oldest = this.map.keys().next();
       if (oldest.done) break;
@@ -94,6 +112,12 @@ class MemoryL1 {
     this.map.set(vk, { entry: { d: data, e: Date.now() + ttl, t: effectiveTtl }, bytes });
     this.bytes += bytes;
     return true;
+  }
+
+  private sweepDead(now: number): void {
+    for (const [key, item] of this.map) {
+      if (now - item.entry.e > maxStaleMs(item.entry.t)) this.delete(key);
+    }
   }
 
   clear(): void {
@@ -130,16 +154,34 @@ export class TierStore {
     return `${this.version}:${k}`;
   }
 
-  async getVersioned<T>(kv: KvStore, k: string): Promise<{ env: StaleEnvelope<T>; bytes: number } | undefined> {
-    let raw: string | null;
+  async getVersioned<T>(kv: KvStore, k: string): Promise<DecodedEnvelope<T> | undefined> {
+    const vk = this.vk(k);
+    const pending = inflightReads.get(vk) as Promise<DecodedEnvelope<T> | undefined> | undefined;
+    if (pending) {
+      noteCacheStat("kvReadsCoalesced");
+      return pending;
+    }
+    const work = this.readVersioned<T>(kv, vk);
+    inflightReads.set(vk, work as Promise<DecodedEnvelope<unknown> | undefined>);
     try {
-      raw = await kv.get(this.vk(k));
+      return await work;
+    } finally {
+      if (inflightReads.get(vk) === (work as unknown)) inflightReads.delete(vk);
+    }
+  }
+
+  private async readVersioned<T>(kv: KvStore, vk: string): Promise<DecodedEnvelope<T> | undefined> {
+    let raw: string | null;
+    noteCacheStat("kvReads");
+    try {
+      raw = await kv.get(vk);
     } catch (err) {
+      noteCacheStat("kvReadFailures");
       warnKvReadFailure(this.log, err);
       return undefined;
     }
     if (!raw) return undefined;
-    return decodeEnvelope<T>(raw, this.vk(k), this.log);
+    return decodeEnvelope<T>(raw, vk, this.log);
   }
 
   async storeCurrent<T>(kv: KvStore | undefined, vk: string, data: T, ttl: number): Promise<void> {
@@ -151,7 +193,9 @@ export class TierStore {
       this.log("warn", `[cache] serialize failed for ${vk}: ${errMsg(err)}`);
     }
     if (serialized === undefined) return;
-    const cached = this.l1.set(vk, data, kv ? l1TtlFor(effective) : effective, utf8ByteLength(serialized), effective);
+    // The L1 lifetime must not depend on whether KV is bound: without KV an entry kept its full TTL (up to
+    // 6 h) in the same isolate instead of being re-read. Cap it, and keep the jittered TTL as the stale budget.
+    const cached = this.l1.set(vk, data, l1TtlFor(effective), utf8ByteLength(serialized), effective);
     if (!cached) this.log("warn", `[cache] L1 skipped oversized entry for ${vk}`);
     if (!kv) return;
     const put = this.setSerialized(kv, vk, serialized, effective).catch((err: unknown) => {
@@ -163,6 +207,7 @@ export class TierStore {
 
   private async setSerialized(kv: KvStore, k: string, serialized: string, ttl: number): Promise<void> {
     const expirationTtl = Math.min(Math.max(Math.ceil((ttl + maxStaleMs(ttl)) / 1000), 60), CACHE_ENTRY_KV_TTL_S);
+    noteCacheStat("kvWrites");
     await kv.put(k, serialized, { expirationTtl });
   }
 }

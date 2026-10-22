@@ -98,13 +98,15 @@ export function parseRscPayloads<T>(
   extract: RscExtractor<T>,
 ): ParseResult<T[][]> {
   if (typeof body !== "string") return parseFail("RSC body is not a string");
-  // Empty or blank markers would never match a needle `"m"` boundary.
   if (markers.length === 0 || markers.some((m) => !m)) {
     return parseFail("RSC markers are invalid");
   }
-  const byteLength = utf8ByteLength(body);
-  if (byteLength > MAX_RSC_BYTES) {
-    return parseFail(`RSC body too large (${byteLength} bytes, limit ${MAX_RSC_BYTES})`);
+  // `body.length` counts UTF-16 code units and one costs at most 3 UTF-8 bytes, so the exact O(n) byte count is only
+  // needed in the band where the cheap bounds cannot decide.
+  const oversized =
+    body.length > MAX_RSC_BYTES || (body.length * 3 > MAX_RSC_BYTES && utf8ByteLength(body) > MAX_RSC_BYTES);
+  if (oversized) {
+    return parseFail(`RSC body too large (${body.length} chars, limit ${MAX_RSC_BYTES} bytes)`);
   }
   const results: (T[] | null)[] = markers.map(() => null);
   const needles = markers.map(markerNeedle);

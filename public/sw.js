@@ -8,7 +8,7 @@ const OTHER_CACHE_MAX = 100;
 
 const PRECACHE_SHELL = [];
 
-// @generated-from src/shared/pwa.ts by build/plugins/sw-version.ts — do not edit by hand
+// @generated-from src/shared/pwa.ts by build/sw-version.ts — do not edit by hand
 const PRECACHE_URLS = [...PRECACHE_SHELL];
 
 self.addEventListener("install", (event) => {

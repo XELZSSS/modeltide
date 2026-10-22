@@ -1,4 +1,3 @@
-// Wrangler's Functions bundler cannot resolve the @ -> src alias, so the checked-in source stays in src/server and this bundle is gitignored.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

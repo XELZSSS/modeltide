@@ -52,13 +52,14 @@ npm run dev    # http://localhost:5173
 
 ## Commands
 
-| Command          | Description      |
-| ---------------- | ---------------- |
-| `npm run dev`    | Dev server       |
-| `npm run build`  | Production build |
-| `npm run test`   | Run tests        |
-| `npm run lint`   | Lint             |
-| `npm run format` | Format           |
+| Command           | Description                                        |
+| ----------------- | -------------------------------------------------- |
+| `npm run dev`     | Dev server                                         |
+| `npm run build`   | Full gate: types, lint, tests, production build    |
+| `npm run preview` | Serve the built `dist` (run `npm run build` first) |
+| `npm run test`    | Tests only (`test:watch` to watch)                 |
+| `npm run lint`    | Lint                                               |
+| `npm run format`  | Format                                             |
 
 ## Deployment
 

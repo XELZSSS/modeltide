@@ -31,7 +31,7 @@ export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpan
           },
           h("div", { class: cellInnerClasses(col) }, [
             props.isExpandable && colIdx === 0 ? h("span", { class: "w-7 shrink-0", "aria-hidden": "true" }) : null,
-            col.header ? h("span", { class: "truncate uppercase tracking-caps", title: col.header }, col.header) : null,
+            col.header ? h("span", { class: "truncate", title: col.header }, col.header) : null,
           ]),
         ),
       ),
@@ -45,6 +45,7 @@ import { CellView, type RowListEmits } from "./cell-view";
 import ExpandToggle from "./expand-toggle.vue";
 import { ExpandedRowPanel } from "./expanded-row-panel.ts";
 import { useRowList } from "./use-row-list";
+import { staggerStyle } from "@/client/motion";
 
 const props = defineProps<RowListProps<T>>();
 
@@ -55,15 +56,18 @@ const { rows, renderExpanded } = useRowList(props);
 
 <template>
   <tbody>
-    <template v-for="item in rows" :key="item.id">
+    <template v-for="(item, index) in rows" :key="item.id">
       <tr
         :class="
           cn(
-            'border-b border-border last:border-b-0 transition-colors duration-fast bg-bg-card',
+            'border-b border-border last:border-b-0 ui-motion bg-bg-card',
+            props.stagger !== false && 'ui-anim-rows',
+            props.stagger === false && 'ui-anim-swap',
             'hoverable:hover:bg-hover',
             item.expanded && 'bg-bg-secondary/60',
           )
         "
+        :style="staggerStyle(index)"
       >
         <td v-for="(col, colIdx) in columns" :key="col.id" :class="cellClasses(col)" :style="{ width: col.width }">
           <div :class="cellInnerClasses(col)">
@@ -78,13 +82,15 @@ const { rows, renderExpanded } = useRowList(props);
           </div>
         </td>
       </tr>
-      <tr v-if="item.expanded && isExpandable" class="border-b border-border last:border-b-0 bg-bg-secondary/60">
-        <td :colspan="columns.length">
-          <ExpandedRowPanel :row-id="item.id" :row-name="item.name">
-            <CellView :render="renderExpanded" :row="item.row" />
-          </ExpandedRowPanel>
-        </td>
-      </tr>
+      <Transition name="ui-fade">
+        <tr v-if="item.expanded && isExpandable" class="border-b border-border last:border-b-0 bg-bg-secondary/60">
+          <td :colspan="columns.length">
+            <ExpandedRowPanel :row-id="item.id" :row-name="item.name">
+              <CellView :render="renderExpanded" :row="item.row" />
+            </ExpandedRowPanel>
+          </td>
+        </tr>
+      </Transition>
     </template>
   </tbody>
 </template>

@@ -57,6 +57,15 @@ function timeoutResponse(): Response {
   return errorJson(504, "Upstream request timed out");
 }
 
+const RATE_LIMIT_FALLBACK_S = 60;
+
+function rateLimitedResponse(retryAfterMs: number | undefined): Response {
+  const seconds = retryAfterMs == null ? RATE_LIMIT_FALLBACK_S : Math.max(1, Math.ceil(retryAfterMs / 1000));
+  const res = errorJson(503, "Upstream rate limited, retry shortly");
+  res.headers.set("Retry-After", String(seconds));
+  return res;
+}
+
 export function methodNotAllowedResponse(): Response {
   const res = errorJson(405, "Method not allowed");
   res.headers.set("Allow", "GET, HEAD, OPTIONS");
@@ -75,13 +84,16 @@ export function stripBodyForHead(res: Response): Response {
 }
 
 function mapApiError(err: unknown, method: string, path: string, clientAborted: boolean): Response {
-  // A dropped request is not an upstream failure: report 499, not a timeout.
   if (clientAborted || err instanceof ClientAbortError) {
     return errorJson(499, "Client closed request");
   }
   if (isTimeoutLike(err)) {
     logger("warn", `[upstream-timeout] ${method} ${path} ${errMsg(err)}`);
     return timeoutResponse();
+  }
+  if (err instanceof UpstreamError && err.statusCode === 429) {
+    logger("warn", `[upstream-rate-limit] ${method} ${path} retryAfterMs=${err.retryAfterMs ?? "none"}`);
+    return rateLimitedResponse(err.retryAfterMs);
   }
   if (err instanceof ApiError) {
     const status = clampStatus(err.status);
@@ -128,7 +140,10 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
     const browserCache = applyCacheHeaders(headers, payload.partial ? PARTIAL_CACHE_HEADERS : def.cache);
     applyApiHeaders(headers);
     if (!browserCache.includes("no-store")) {
-      const etag = payloadEtag(payload.fetchedAt, Array.isArray(payload.data) ? payload.data.length : undefined);
+      const etag = payloadEtag(payload.fetchedAt, {
+        rows: Array.isArray(payload.data) ? payload.data.length : undefined,
+        partial: payload.partial,
+      });
       headers.set("ETag", etag);
       if (ifNoneMatchSatisfied(req.headers.get("if-none-match"), etag)) {
         headers.delete("content-type");

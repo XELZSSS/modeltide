@@ -14,7 +14,7 @@ export const ExpandedRowPanel: FunctionalComponent<{ rowId: string; rowName: str
       id: rowPanelId(props.rowId),
       role: "region",
       "aria-label": props.rowName,
-      class: cn("animate-enter", ROW_PADDING, props.class),
+      class: cn(ROW_PADDING, props.class),
     },
     slots.default?.(),
   );

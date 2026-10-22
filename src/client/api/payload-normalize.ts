@@ -13,7 +13,7 @@ export function unwrapList<T>(payload: unknown, label: string): T[] {
   throw new Error(`${label}: payload.data is not an array`);
 }
 
-export function unwrapObject<T>(payload: unknown, label: string): T {
+function unwrapObject<T>(payload: unknown, label: string): T {
   return payloadData(payload, label) as T;
 }
 
@@ -22,17 +22,31 @@ export interface NormalizedHomeDashboard {
   textToImage: HomeDashboardData["textToImage"];
   opensource: HomeOpenSourceEntry[];
   partial: boolean;
+  malformed: boolean;
+}
+
+function listField<T>(value: unknown): T[] | null {
+  return Array.isArray(value) ? (value as T[]) : null;
 }
 
 export function normalizeHomeDashboard(payload: unknown): NormalizedHomeDashboard {
   const label = "homeDashboard";
-  const raw = unwrapObject<HomeDashboardData>(payload, label);
-  if (!raw || typeof raw !== "object") throw new Error(`${label}: invalid dashboard`);
+  let raw: HomeDashboardData | null = null;
+  try {
+    raw = unwrapObject<HomeDashboardData>(payload, label);
+    if (raw == null || typeof raw !== "object") raw = null;
+  } catch (err) {
+    console.warn(`[api] dropping malformed ${label} payload:`, err);
+  }
+  const orRankings = raw ? listField<HomeDashboardData["orRankings"][number]>(raw.orRankings) : null;
+  const textToImage = raw ? listField<HomeDashboardData["textToImage"][number]>(raw.textToImage) : null;
+  const opensource = raw ? listField<HomeOpenSourceEntry>(raw.opensource) : null;
   return {
-    orRankings: Array.isArray(raw.orRankings) ? raw.orRankings : [],
-    textToImage: Array.isArray(raw.textToImage) ? raw.textToImage : [],
-    opensource: Array.isArray(raw.opensource) ? raw.opensource : [],
+    orRankings: orRankings ?? [],
+    textToImage: textToImage ?? [],
+    opensource: opensource ?? [],
     partial: isPartialPayload(payload),
+    malformed: raw == null || orRankings == null || textToImage == null || opensource == null,
   };
 }
 
@@ -42,8 +56,8 @@ export function unwrapListPartial<T>(
   payload: unknown,
   label: string,
 ): { data: T[]; partial: boolean; malformed: boolean } {
+  if (payload === undefined) return { data: [] as T[], partial: false, malformed: false };
   const partial = isPartialPayload(payload);
-  if (payload == null) return { data: [] as T[], partial, malformed: false };
   try {
     return { data: unwrapList<T>(payload, label), partial, malformed: false };
   } catch (err) {
@@ -54,4 +68,10 @@ export function unwrapListPartial<T>(
 
 export function assertPayloadShape(malformed: boolean, label: string): void {
   if (malformed) throw new Error(`${label}: malformed payload`);
+}
+
+export function readFetchedAt(payload: unknown): string | undefined {
+  if (payload == null || typeof payload !== "object") return undefined;
+  const value = (payload as { fetchedAt?: unknown }).fetchedAt;
+  return typeof value === "string" ? value : undefined;
 }

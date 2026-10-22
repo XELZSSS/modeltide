@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useSuspenseArtificialRankingsState } from "@/client/api/hooks";
-import TabStateShell from "@/client/components/tab-state-shell.vue";
+import TabStateShell from "@/client/components/navigation/tab-state-shell.vue";
 import ArtificialAnalysisView from "./aa-view.vue";
 
 const state = await useSuspenseArtificialRankingsState();

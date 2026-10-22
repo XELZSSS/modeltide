@@ -20,15 +20,12 @@
   --color-info: var(--info);
   --color-info-light: var(--info-light);
 
-  --duration-fast: 150ms;
-  --duration-base: 200ms;
-  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
-
   --tracking-text: 0.01em;
   --tracking-label: 0.025em;
   --tracking-caps: 0.14em;
   --tracking-title: -0.01em;
   --tracking-display: -0.02em;
+  --leading-text: 1.6;
 
   --font-sans:
     "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Symbol", "PingFang SC",
@@ -49,7 +46,7 @@
   --text-secondary: #5b6675;
   --text-tertiary: #8b96a5;
   --border: rgba(30, 36, 48, 0.14);
-  --accent: #365899;
+  --accent: #36577d;
   --accent-light: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-contrast: #ffffff;
   --hover: color-mix(in srgb, var(--accent) 7%, transparent);
@@ -62,7 +59,7 @@
   --warning-light: color-mix(in srgb, var(--warning) 10%, transparent);
   --info: #2f6d8a;
   --info-light: color-mix(in srgb, var(--info) 10%, transparent);
-  --chart-1: #365899;
+  --chart-1: #36577d;
   --chart-2: #1e2430;
   --chart-3: #5b6675;
   --chart-4: #9aa5b4;
@@ -70,9 +67,9 @@
   --chart-6: #2f6d8a;
   --chart-7: #9a6b0a;
   --chart-8: #c03a30;
-  --chart-9: #6d7a99;
+  --chart-9: #6d85a2;
   --chart-10: #c3ccd6;
-  --donut-1: #365899;
+  --donut-1: #36577d;
   --donut-2: #1e2430;
   --donut-3: #2f6d8a;
   --donut-4: #2f7a4d;
@@ -90,7 +87,7 @@
   --text-secondary: #9aa5b4;
   --text-tertiary: #6e7887;
   --border: rgba(232, 237, 243, 0.16);
-  --accent: #8ba3d6;
+  --accent: #8faed1;
   --accent-light: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-contrast: #1a1a1a;
   --hover: color-mix(in srgb, var(--accent) 9%, transparent);
@@ -103,7 +100,7 @@
   --warning-light: color-mix(in srgb, var(--warning) 14%, transparent);
   --info: #6aa5c2;
   --info-light: color-mix(in srgb, var(--info) 14%, transparent);
-  --chart-1: #8ba3d6;
+  --chart-1: #8faed1;
   --chart-2: #e8edf3;
   --chart-3: #9aa5b4;
   --chart-4: #6e7887;
@@ -111,9 +108,9 @@
   --chart-6: #6aa5c2;
   --chart-7: #d3a24a;
   --chart-8: #dd6f66;
-  --chart-9: #8b96c9;
+  --chart-9: #8f9cbd;
   --chart-10: #4a5462;
-  --donut-1: #8ba3d6;
+  --donut-1: #8faed1;
   --donut-2: #e8edf3;
   --donut-3: #6aa5c2;
   --donut-4: #6fae7e;

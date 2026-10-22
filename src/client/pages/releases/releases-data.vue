@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, h, type VNodeChild } from "vue";
+import { computed, h, watch, type VNodeChild } from "vue";
 import { ExternalLink } from "@lucide/vue";
 import { col, rightCol, RightAlignedText, type DataTableColumn } from "@/client/components/table/table-columns.ts";
 import SearchableDataTable from "@/client/components/table/data-table.vue";
-import PartialNotice from "@/client/components/partial-notice.vue";
+import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import { useTranslation } from "@/client/i18n";
 import { useSuspenseClosedReleasesState } from "@/client/api/hooks";
+import { assertPayloadShape } from "@/client/api/payload-normalize";
 import { formatDate, safeHref } from "@/shared/utils";
 import {
   buildClosedReleaseRows,
@@ -17,6 +18,14 @@ import {
 const { t: translate, lang } = useTranslation();
 
 const state = await useSuspenseClosedReleasesState();
+
+// A degraded/changelog-fallback list already arrives as `partial`; a malformed payload is a different failure and
+// must reach the error boundary instead of rendering as an empty table.
+watch(
+  () => state.value.malformed,
+  (malformed) => assertPayloadShape(malformed, "closedReleases"),
+  { immediate: true },
+);
 
 const rows = computed(() => buildClosedReleaseRows(state.value.items));
 
@@ -59,13 +68,13 @@ function renderExpandedRow(row: ReleaseRow): VNodeChild {
         target: "_blank",
         rel: "noopener noreferrer",
         class:
-          "group inline-flex items-center gap-1.5 text-sm text-accent w-fit underline-offset-4 transition-colors duration-fast hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          "group inline-flex items-center gap-1.5 text-sm text-accent w-fit underline-offset-4 ui-motion hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
       },
       [
         translate("aaModelPage"),
         h(ExternalLink, {
           size: 14,
-          class: "md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-fast",
+          class: "md:opacity-0 md:group-hover:opacity-100 ui-motion",
         }),
       ],
     ),

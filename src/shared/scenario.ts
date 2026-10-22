@@ -1,13 +1,15 @@
 import type { CostScenario } from "./utils/cost";
 
-export type CostFieldValues = {
-  dailyInput: string;
-  dailyOutput: string;
-  dailyReasoning: string;
-  cacheHitRate: string;
-  cacheWriteRate: string;
-  daysPerMonth: string;
-};
+/** Ids of the cost-estimator inputs; the single list the store, the form and the parser all key off. */
+export type CostFieldId =
+  | "dailyInput"
+  | "dailyOutput"
+  | "dailyReasoning"
+  | "cacheHitRate"
+  | "cacheWriteRate"
+  | "daysPerMonth";
+
+export type CostFieldValues = Record<CostFieldId, string>;
 
 const numOr = (v: string, fallback: number): number => {
   const n = Number(v);

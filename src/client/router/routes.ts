@@ -2,12 +2,11 @@ import type { RouteRecordRaw } from "vue-router";
 import { Award, Home, Megaphone, Newspaper } from "@lucide/vue";
 import { qArtificialList, qClosedReleasesList, qHomeDashboard, qNews, qOpenRouterList } from "@/client/api/catalog";
 import { DEFAULT_RANKING_TAB } from "@/client/nav/nav-config";
-import { loadableView } from "./lazy-view";
-import { preloadChunk } from "./lazy-view";
+import { loadableView, preloadChunk } from "./lazy-view";
 import { RANKING_TAB_LOADS, RANKING_TAB_QUERIES } from "@/client/pages/rankings/tab-loaders";
-import HomeView from "@/client/pages/home/home-view.vue";
 import type { Prefetchable } from "./route-meta";
 
+const loadHomeView = () => import("@/client/pages/home/home-view.vue");
 const loadRankingsHubView = () => {
   preloadChunk(RANKING_TAB_LOADS[DEFAULT_RANKING_TAB]);
   return import("@/client/pages/rankings/rankings-hub-view.vue");
@@ -18,6 +17,7 @@ const loadPriceCompareView = () => import("@/client/pages/compare/price-compare-
 const loadReleasesView = () => import("@/client/pages/releases/releases-view.vue");
 const loadNewsView = () => import("@/client/pages/news/news-view.vue");
 
+const HomeView = loadableView(loadHomeView);
 const RankingsHubView = loadableView(loadRankingsHubView);
 const ModelDetailView = loadableView(loadModelView);
 const CompareView = loadableView(loadCompareView);
@@ -36,6 +36,7 @@ export const ROUTES: RouteRecordRaw[] = [
     component: HomeView,
     meta: {
       titleKey: "home",
+      load: loadHomeView,
       prefetch: [qArtificialList, qHomeDashboard, qClosedReleasesList],
       nav: { group: "primary", labelKey: "home", icon: Home },
     },
@@ -99,8 +100,7 @@ export const ROUTES: RouteRecordRaw[] = [
   {
     path: "/:pathMatch(.*)*",
     name: "notFound",
-    // Lazy-load to break the import cycle routes -> not-found -> safe-link -> router/index (ROUTES TDZ at boot).
-    component: loadableView(() => import("@/client/components/not-found.vue")),
+    component: loadableView(() => import("@/client/components/feedback/not-found.vue")),
     meta: { titleKey: "notFound" },
   },
 ];

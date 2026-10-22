@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { Loader2 } from "@lucide/vue";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
-import { useRouteSearchTerm } from "@/client/stores";
+import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
 import { navigate } from "@/client/router";
 import { MIN_QUERY, useSearchAllRankings } from "./use-search";
 import Combobox from "./combobox.vue";
@@ -17,8 +17,8 @@ const isFocused = ref(false);
 
 const { term: searchTerm, setTerm: setSearchTerm } = useRouteSearchTerm();
 
-const { results, isPending, isError } = useSearchAllRankings(searchTerm, {
-  suspended: computed(() => !isOpen.value),
+const { results, isPending, isError, partial } = useSearchAllRankings(searchTerm, {
+  defer: computed(() => !isOpen.value),
   warm: isFocused,
 });
 
@@ -41,7 +41,6 @@ watch([debounced, searchTerm], () => {
   if (debounced.value !== searchTerm.value) setSearchTerm(debounced.value);
 });
 
-// History navigation updates the store term; mirror it into the unfocused input.
 watch(searchTerm, (next) => {
   if (next !== debounced.value && next !== inputValue.value && document.activeElement?.tagName !== "INPUT") {
     inputValue.value = next;
@@ -62,7 +61,7 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
         v-if="pending && results.length === 0"
         class="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary"
       >
-        <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+        <Loader2 class="size-4 ui-spin" aria-hidden="true" />
         {{ t("searching") }}
       </div>
       <div v-else-if="isError && results.length === 0" class="p-4 text-sm text-text-secondary" role="alert">
@@ -70,6 +69,9 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
       </div>
       <div v-else-if="results.length === 0" class="p-4 text-sm text-text-secondary" role="status">
         {{ t("noResults") }}
+      </div>
+      <div v-else-if="partial" class="px-3 pt-2 text-xs text-text-tertiary" role="status">
+        {{ t("partialDataNotice") }}
       </div>
     </template>
     <div
@@ -80,7 +82,7 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
       :aria-selected="activeIndex === index"
       :class="
         cn(
-          'w-full text-left p-2.5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
+          'w-full text-left p-2.5 cursor-pointer ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
           activeIndex === index ? 'bg-hover' : 'hoverable:hover:bg-hover',
         )
       "

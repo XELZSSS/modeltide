@@ -5,7 +5,7 @@ import { ArrowLeft } from "@lucide/vue";
 import type { TranslationKey } from "@/shared/i18n";
 import { useTranslation } from "@/client/i18n";
 import { canGoBack, historyFrom, navigate } from "@/client/router";
-import Button from "@/client/components/button.vue";
+import Button from "@/client/components/ui/button.vue";
 
 const props = defineProps<{ labelKey: TranslationKey; to: string }>();
 
@@ -13,7 +13,6 @@ const router = useRouter();
 const route = useRoute();
 const { t } = useTranslation();
 
-// historyFrom() reads untracked history.state; touching route.fullPath re-derives the label once per navigation.
 const label = computed(() => {
   void route.fullPath;
   const previous = historyFrom();

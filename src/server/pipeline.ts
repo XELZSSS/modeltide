@@ -17,10 +17,10 @@ export function requireRows<T>(rows: T[], label: string, unit: string, detail?: 
   return rows;
 }
 
-export function requireArrayBody(url: string, body: unknown, label: string): unknown[] {
+export function requireArrayBody<T = unknown>(url: string, body: unknown, label: string): T[] {
   if (!Array.isArray(body)) throw zeroUpstream(label, "rows", `non-array body from ${url}`);
   if (body.length === 0) throw zeroUpstream(label, "rows", `empty body from ${url}`);
-  return body;
+  return body as T[];
 }
 
 export function toPartial<T extends { partial: boolean }>(value: T, degraded: boolean): T {

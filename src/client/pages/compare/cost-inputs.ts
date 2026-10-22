@@ -1,5 +1,6 @@
 import { computed, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type { TranslationKey } from "@/shared/i18n";
+import type { CostFieldId } from "@/shared/scenario";
 import { usePricingMaps } from "@/client/hooks/use-pricing-maps";
 import { useCostStore } from "@/client/stores";
 
@@ -14,13 +15,7 @@ export const COST_FIELDS = [
   { id: "daysPerMonth", labelKey: "daysPerMonth", unit: undefined },
 ] as const satisfies readonly { id: CostFieldId; labelKey: TranslationKey; unit?: string }[];
 
-export type CostFieldId =
-  | "dailyInput"
-  | "dailyOutput"
-  | "dailyReasoning"
-  | "cacheHitRate"
-  | "cacheWriteRate"
-  | "daysPerMonth";
+export type { CostFieldId };
 
 export interface CostInputState {
   values: ComputedRef<Record<CostFieldId, string>>;
@@ -41,4 +36,9 @@ export function useMonthlyCosts(models: MaybeRefOrGetter<ArtificialAnalysisModel
   const { monthlyCosts } = usePricingMaps(models, () => estimator.values.value);
 
   return { ...estimator, monthlyCosts };
+}
+
+export function isCostFieldInput(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed === "" || /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed);
 }

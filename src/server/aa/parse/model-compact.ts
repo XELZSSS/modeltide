@@ -10,7 +10,7 @@ import {
 } from "@/server/formats/parser-primitives";
 import { BENCHMARK_KEYS, MODALITY_KEYS, ABSOLUTE_SCORE_BENCHMARKS, type BenchmarkKey } from "@/shared/config";
 import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
-import { clampedPercent, unclampedPercent } from "@/shared/utils";
+import { ratioToPercent } from "@/shared/utils";
 
 const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   apex_agents: "apexAgents",
@@ -19,8 +19,6 @@ const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   cwe_bench: "cweBench",
   cyber_index: "cyberIndex",
   deepsec_bench: "deepsecBench",
-  // `gdpval` upstream is the raw Elo score (1076-1866); `gdpvalNormalized` is the 0-1 ratio
-  // on the same scale as gpqa/hle and is the value that belongs in the benchmark.
   gdpval: "gdpvalNormalized",
   itbench_sre: "itbenchSre",
   mmmu_pro: "mmmuPro",
@@ -31,30 +29,28 @@ const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   terminalbench_v4_0: "terminalBench40",
 };
 
-// Upstream spells the same benchmark differently per path: /models serves `itBenchSre`,
-// /leaderboards and /omniscience serve `itbenchSre`. The canonical name wins downstream.
 const FIELD_ALIASES: Record<string, readonly string[]> = {
   itbenchSre: ["itbenchSre", "itBenchSre"],
 };
 
-/** Every upstream spelling accepted for a canonical field name. */
 export function fieldAliases(field: string): readonly string[] {
   return FIELD_ALIASES[field] ?? [field];
 }
 
-/** First accepted upstream spelling of `field` present on `row` (`in`-semantics: value may be undefined). */
+/**
+ * Called once per benchmark field per row, so it deliberately skips `fieldAliases`: that built a one-element array
+ * for every field without an alias, which is all but one of them.
+ */
 export function presentAlias(row: Record<string, unknown>, field: string): string | undefined {
-  return fieldAliases(field).find((alias) => alias in row);
+  const aliases = FIELD_ALIASES[field];
+  if (aliases === undefined) return field in row ? field : undefined;
+  return aliases.find((alias) => alias in row);
 }
 
-/** Canonical upstream field name for a benchmark key. */
 export function benchmarkWireName(key: BenchmarkKey): string {
   return BENCHMARK_FIELD_OVERRIDES[key] ?? key;
 }
 
-// Which benchmarks each Artificial Analysis path serves, verified against the live payloads.
-// A benchmark a path does not serve is contributed by another path and merged in, so its
-// absence from that path is not drift and must not be reported as a missing field.
 const LEADERBOARD_BENCHMARKS = [
   "gpqa",
   "hle",
@@ -95,8 +91,6 @@ const MODELS_BENCHMARKS = [
   "omniscience",
 ] as const satisfies readonly BenchmarkKey[];
 
-// /omniscience serves the raw `gdpval` Elo score but not `gdpvalNormalized`, so gdpval is
-// contributed by the leaderboard and /models instead.
 const OMNISCIENCE_BENCHMARKS = [
   "gpqa",
   "hle",
@@ -125,21 +119,31 @@ export const leaderboardBenchmarkWireNames = LEADERBOARD_BENCHMARKS.map(benchmar
 export const modelsBenchmarkWireNames = MODELS_BENCHMARKS.map(benchmarkWireName);
 export const omniscienceBenchmarkWireNames = OMNISCIENCE_BENCHMARKS.map(benchmarkWireName);
 
-function compactBenchmarks(m: Record<string, unknown>): Partial<Record<BenchmarkKey, number | null>> {
+/** Reports a field that is declared as a 0-1 ratio but arrived on another scale, so a drop is never silent. */
+export type RatioWarn = (field: string, value: number) => void;
+
+function ratioScore(field: string, raw: number | null, warn?: RatioWarn): number | null {
+  const percent = ratioToPercent(raw);
+  if (percent == null && raw != null) warn?.(field, raw);
+  return percent;
+}
+
+function compactBenchmarks(m: Record<string, unknown>, warn?: RatioWarn): Partial<Record<BenchmarkKey, number | null>> {
   const benchmarks: Partial<Record<BenchmarkKey, number | null>> = {};
   for (const key of BENCHMARK_KEYS) {
     const wire = benchmarkWireName(key);
     const alias = presentAlias(m, wire);
     const raw = alias === undefined ? null : numCoerce(m[alias]);
-    const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : unclampedPercent(raw);
+    // Briefcase Elo, the Cyber index and the signed omniscience index are already on their own scale.
+    const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : ratioScore(wire, raw, warn);
     if (value != null) benchmarks[key] = value;
   }
   return benchmarks;
 }
 
-function compactCodingIndex(m: Record<string, unknown>): number | null {
-  const tb = clampedPercent(numCoerce(m.terminalBench21));
-  const sc = clampedPercent(numCoerce(m.scicode));
+function compactCodingIndex(m: Record<string, unknown>, warn?: RatioWarn): number | null {
+  const tb = ratioScore("terminalBench21", numCoerce(m.terminalBench21), warn);
+  const sc = ratioScore("scicode", numCoerce(m.scicode), warn);
   if (tb == null && sc == null) return null;
   const values = [tb, sc].filter((v): v is number => v != null);
   return values.reduce((a, b) => a + b, 0) / values.length;
@@ -158,40 +162,47 @@ function compactOmniscience(
   omniscienceBreakdown: Record<string, unknown> | undefined,
   omniscience: number | null,
   hallucinationRate: number | null,
+  warn?: RatioWarn,
 ): ModelOmniscienceBreakdown | null {
   if (omniscienceBreakdown == null && omniscience == null && hallucinationRate == null) return null;
   return {
     total: {
-      accuracy: clampedPercent(numCoerce(omniscienceBreakdown?.accuracy)),
-      attempt_rate: clampedPercent(numCoerce(omniscienceBreakdown?.attemptRate)),
-      hallucination_rate: clampedPercent(numCoerce(omniscienceBreakdown?.hallucinationRate) ?? hallucinationRate),
-      omniscience: unclampedPercent(omniscience),
+      accuracy: ratioScore("omniscienceBreakdown.accuracy", numCoerce(omniscienceBreakdown?.accuracy), warn),
+      attempt_rate: ratioScore("omniscienceBreakdown.attemptRate", numCoerce(omniscienceBreakdown?.attemptRate), warn),
+      hallucination_rate: ratioScore(
+        "omniscienceBreakdown.hallucinationRate",
+        numCoerce(omniscienceBreakdown?.hallucinationRate) ?? hallucinationRate,
+        warn,
+      ),
+      // A signed index, not a percentage: it is negative for models that hallucinate more than they know.
+      omniscience: numCoerce(omniscience),
     },
   };
 }
 
-const MODALITY_FIELD_SUFFIXES = MODALITY_KEYS.map((mo) => mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase());
-
-export const modalityWireNames = MODALITY_KEYS.flatMap((mo) => {
+/**
+ * Wire names are fixed per modality, so they are built once: `assignModalities` used to rebuild eight template
+ * strings for every row, and a refresh hands it a few hundred rows.
+ */
+const MODALITY_WIRES = MODALITY_KEYS.map((mo) => {
   const suffix = mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase();
-  return [`inputModality${suffix}`, `outputModality${suffix}`];
+  return { key: mo, input: `inputModality${suffix}`, output: `outputModality${suffix}` };
 });
 
-// /omniscience serves only the non-text input modalities; /models serves all eight.
+export const modalityWireNames = MODALITY_WIRES.flatMap((wire) => [wire.input, wire.output]);
+
 export const omniscienceModalityWireNames = ["inputModalityImage", "inputModalitySpeech", "inputModalityVideo"];
 
 function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unknown>): void {
-  for (let i = 0; i < MODALITY_KEYS.length; i++) {
-    const mo = MODALITY_KEYS[i]!;
-    const suffix = MODALITY_FIELD_SUFFIXES[i]!;
-    const inputMo = bool(m[`inputModality${suffix}`]);
-    if (inputMo !== undefined) model[`input_modality_${mo}`] = inputMo;
-    const outputMo = bool(m[`outputModality${suffix}`]);
-    if (outputMo !== undefined) model[`output_modality_${mo}`] = outputMo;
+  for (const wire of MODALITY_WIRES) {
+    const inputMo = bool(m[wire.input]);
+    if (inputMo !== undefined) model[`input_modality_${wire.key}`] = inputMo;
+    const outputMo = bool(m[wire.output]);
+    if (outputMo !== undefined) model[`output_modality_${wire.key}`] = outputMo;
   }
 }
 
-export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
+export function compact(m: Record<string, unknown>, warn?: RatioWarn): ArtificialAnalysisModel {
   const rec = m;
   const creator = obj(rec.creator);
   const creatorName = creator ? str(creator.name).trim() : "";
@@ -209,11 +220,10 @@ export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
     release_date: isoDate(strOr(rec.releaseDate)),
     is_open_weights: bool(rec.isOpenWeights) ?? false,
     parameters: parameters != null && parameters > 0 ? parameters : null,
-    // sizeClass arrives upstream as a label or a bare number; keep both forms.
     size_class: strOr(rec.sizeClass) ?? numericLabel(rec.sizeClass),
-    coding_index: compactCodingIndex(rec),
-    agentic_index: clampedPercent(numCoerce(rec.analystAgent)),
-    benchmarks: compactBenchmarks(rec),
+    coding_index: compactCodingIndex(rec, warn),
+    agentic_index: ratioScore("analystAgent", numCoerce(rec.analystAgent), warn),
+    benchmarks: compactBenchmarks(rec, warn),
     pricing: compactPricing(rec),
     speed: speed == null ? null : { median_output_speed: speed },
     input_modality_text: true,
@@ -228,6 +238,7 @@ export function compact(m: Record<string, unknown>): ArtificialAnalysisModel {
       obj(rec.omniscienceBreakdown),
       numCoerce(rec.omniscience),
       numCoerce(rec.omniscienceHallucinationRate),
+      warn,
     ),
   };
   assignModalities(model, rec);

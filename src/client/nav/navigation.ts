@@ -18,7 +18,6 @@ interface Navigation {
   all: ComputedRef<NavItem[]>;
   mobilePrimary: ComputedRef<NavItem[]>;
   mobileMore: ComputedRef<NavItem[]>;
-  /** Memoized against the current pathname — O(items) per route change, O(1) per render. */
   isActive: (item: NavItem) => boolean;
 }
 

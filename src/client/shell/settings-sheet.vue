@@ -3,9 +3,9 @@ import { computed } from "vue";
 import { Languages, SunMoon } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { useSettingsStore } from "@/client/stores";
-import Sheet from "@/client/components/sheet.vue";
-import SheetBody from "@/client/components/sheet-body.vue";
-import SheetHeader from "@/client/components/sheet-header.vue";
+import Sheet from "@/client/components/ui/sheet.vue";
+import SheetBody from "@/client/components/ui/sheet-body.vue";
+import SheetHeader from "@/client/components/ui/sheet-header.vue";
 import SettingsSegmented from "./settings-segmented.vue";
 
 defineProps<{ open: boolean }>();

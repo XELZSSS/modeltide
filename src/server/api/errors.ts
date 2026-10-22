@@ -4,9 +4,16 @@ export { errMsg };
 
 export function isTimeoutLike(err: unknown): boolean {
   if (err instanceof UpstreamError) return err.causedByTimeout;
-  // DOMException (e.g. AbortSignal.timeout) is not `instanceof Error` in some runtimes, so match on name.
   const name = (err as { name?: unknown } | null | undefined)?.name;
   return name === "TimeoutError" || name === "AbortError";
+}
+
+export function isTimeoutReason(reason: unknown): boolean {
+  return (reason as { name?: unknown } | null | undefined)?.name === "TimeoutError";
+}
+
+export function isCallerAbort(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true && !isTimeoutReason(signal.reason);
 }
 
 export class ApiError extends Error {
@@ -36,6 +43,10 @@ export function rethrowIfAllAborted(legs: readonly PromiseSettledResult<unknown>
   if (legs.length === 0) return;
   if (!legs.every((leg) => leg.status === "rejected" && leg.reason instanceof ClientAbortError)) return;
   throw (legs[0] as PromiseRejectedResult).reason as Error;
+}
+
+export function rethrowIfClientAbort(err: unknown): void {
+  if (err instanceof ClientAbortError) throw err;
 }
 
 export class UpstreamError extends ApiError {

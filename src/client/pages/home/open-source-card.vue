@@ -7,11 +7,11 @@ registerDoughnut();
 <script setup lang="ts">
 import { computed } from "vue";
 import type { ChartData, ChartOptions } from "chart.js";
-import Card from "@/client/components/card.vue";
-import CardContent from "@/client/components/card-content.vue";
-import CardHeader from "@/client/components/card-header.vue";
-import ChartCanvas from "@/client/components/chart-canvas.vue";
-import ChartFrame from "@/client/components/chart-frame.vue";
+import Card from "@/client/components/layout/card.vue";
+import CardContent from "@/client/components/layout/card-content.vue";
+import CardHeader from "@/client/components/layout/card-header.vue";
+import ChartCanvas from "@/client/components/charts/chart-canvas.vue";
+import ChartFrame from "@/client/components/charts/chart-frame.vue";
 import {
   CHART_EMPTY_CLASS,
   FLEX_CHART_HEIGHT,
@@ -20,7 +20,7 @@ import {
   legendStyle,
   useChartTheme,
 } from "@/client/charts/theme";
-import EmptyState from "@/client/components/empty-state.vue";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatPercent, formatShortNumber } from "@/shared/utils";
 import { cn } from "@/client/utils/cn";
@@ -36,7 +36,6 @@ const aggregated = computed(() => aggregateTaskShare(props.models));
 const slices = computed(() => aggregated.value.slices);
 const total = computed(() => aggregated.value.total);
 
-// The donut palette has 6 colours but the breakdown can hold 7 slices; extend with the wider palette.
 const sliceColors = computed<string[]>(() => {
   const { donut, palette } = theme.value;
   const available = [...donut];
@@ -87,7 +86,7 @@ const options = computed<ChartOptions<"doughnut">>(() => ({
 const caption = computed(() =>
   slices.value
     .map((s) => `${sliceLabel(s)}: ${formatShortNumber(s.total, t("notAvailable"))} (${percentOf(s.total)})`)
-    .join(""),
+    .join("; "),
 );
 </script>
 

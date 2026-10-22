@@ -11,11 +11,9 @@ export function perMillionOrNull(rate: number | null): number | null {
   return rate == null ? null : rate * PER_MILLION;
 }
 
-// Shared by the upstream client and the pure parsers: neither may import the other's config.
 export const MAX_JSON_BYTES = 5 * 1024 * 1024;
 export const MAX_FEED_BYTES = 2 * 1024 * 1024;
 
-// RSC stream ceilings, mirroring the JSON/feed caps above.
 export const MAX_RSC_BYTES = 5 * 1024 * 1024;
 export const MAX_RSC_LINE_CHARS = 2 * 1024 * 1024;
 export const MAX_SCAN_CHARS = 8_000_000;

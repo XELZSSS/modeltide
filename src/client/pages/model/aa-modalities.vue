@@ -4,8 +4,8 @@ import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
 import { MODALITY_KEYS, type ModalityKey } from "@/shared/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import Badge from "@/client/components/badge.vue";
-import PageSection from "@/client/components/page-section.vue";
+import Badge from "@/client/components/ui/badge.vue";
+import PageSection from "@/client/components/layout/page-section.vue";
 import { cn } from "@/client/utils/cn";
 
 const MODALITY_STYLES: Record<ModalityKey, { className: string; labelKey: TranslationKey }> = {

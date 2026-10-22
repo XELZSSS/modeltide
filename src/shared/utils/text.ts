@@ -15,20 +15,37 @@ export function toStringOrNull(v: unknown): string | null {
 
 const QUALIFIER_TOKENS = new Set(["adaptive", "effort", "xhigh", "extended"]);
 
+/**
+ * Concatenates the alphanumeric runs of a segment, dropping qualifier words. Scanning replaces `split` + `filter` +
+ * `join`, which allocated a token array for every model id in a 20k-row directory.
+ */
 function tokensOf(segment: string): string {
-  return segment
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t && !QUALIFIER_TOKENS.has(t))
-    .join("");
+  let out = "";
+  let runStart = -1;
+  for (let i = 0; i <= segment.length; i++) {
+    const c = i < segment.length ? segment.charCodeAt(i) : -1;
+    const isTokenChar = (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39);
+    if (isTokenChar) {
+      if (runStart === -1) runStart = i;
+      continue;
+    }
+    if (runStart === -1) continue;
+    const token = segment.slice(runStart, i);
+    runStart = -1;
+    if (!QUALIFIER_TOKENS.has(token)) out += token;
+  }
+  return out;
 }
 
+const PAREN_GROUP_RE = /\([^)]*\)/g;
+
 export function normalizeModelKey(raw: string): string {
-  const lowered = raw.toLowerCase().replace(/\([^)]*\)/g, " ");
-  const lastSep = Math.max(lowered.lastIndexOf(":"), lowered.lastIndexOf("/"));
-  // A tail with no usable token (e.g. ":free") would collapse to a bare qualifier and collide across models, so fall back to the whole string.
-  const tail = tokensOf(lastSep >= 0 ? lowered.slice(lastSep + 1) : lowered);
+  const lowered = raw.toLowerCase();
+  const stripped = lowered.includes("(") ? lowered.replace(PAREN_GROUP_RE, " ") : lowered;
+  const lastSep = Math.max(stripped.lastIndexOf(":"), stripped.lastIndexOf("/"));
+  const tail = tokensOf(lastSep >= 0 ? stripped.slice(lastSep + 1) : stripped);
   if (tail) return tail;
-  return tokensOf(lowered);
+  return tokensOf(stripped);
 }
 
 export function errMsg(e: unknown): string {

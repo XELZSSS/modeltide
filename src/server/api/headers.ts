@@ -24,9 +24,15 @@ const CORS_HEADERS: Record<string, string> = {
 const WEAK_ETAG_PREFIX_RE = /^W\//;
 const CORS_ENTRIES = Object.entries(CORS_HEADERS);
 
-export function payloadEtag(fetchedAt: string, variant?: number): string {
-  const suffix = variant === undefined ? "" : `-${variant}`;
-  return `W/"${CACHE_VERSION}-${fetchedAt}${suffix}"`;
+export interface EtagVariant {
+  rows?: number;
+  partial?: boolean;
+}
+
+export function payloadEtag(fetchedAt: string, variant: EtagVariant = {}): string {
+  const rows = variant.rows === undefined ? "" : `-${variant.rows}`;
+  const partial = variant.partial === true ? "-p" : "";
+  return `W/"${fetchedAt}${rows}${partial}"`;
 }
 
 export function ifNoneMatchSatisfied(ifNoneMatch: string | null, etag: string): boolean {

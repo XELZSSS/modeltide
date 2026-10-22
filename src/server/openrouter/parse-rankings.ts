@@ -12,7 +12,6 @@ import {
   type RankingScanStats,
 } from "./aggregate";
 
-// Branded owner names; owners outside this map fall back to a title-cased slug.
 const CREATORS: Record<string, string> = {
   anthropic: "Anthropic",
   "arcee-ai": "Arcee AI",
@@ -58,7 +57,6 @@ const CREATORS: Record<string, string> = {
 export function creatorFromSlug(slug: unknown): string {
   if (typeof slug !== "string" || !slug.trim()) return "Unknown";
   const slashAt = slug.indexOf("/");
-  // Some rows carry a bare model id with no `owner/` prefix; titling it would invent a publisher.
   if (slashAt <= 0) return "Unknown";
   const owner = slug.slice(0, slashAt).trim();
   if (!owner) return "Unknown";
@@ -120,8 +118,10 @@ export function mapModels(
     const name = titleFromSlug(id) || id;
     const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
     const expiresAt = resolveExpiry(meta, id, variantKey);
-    // Upstream retires a model on `expiresAt`; once that date has passed it must not be ranked.
-    if (expiresAt != null && expiresAt <= today) continue;
+    if (expiresAt != null && expiresAt <= today) {
+      if (stats) stats.expiredRows += 1;
+      continue;
+    }
     const resolved = resolvePricing(pricing, id, variantKey);
     const isFree = resolved
       ? resolved.input === 0 &&

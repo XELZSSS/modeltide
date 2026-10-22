@@ -3,7 +3,7 @@ import { Settings } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { REPO_URL } from "@/client/nav/nav-config";
 import { useNavigation, usePrefetch } from "@/client/nav/navigation";
-import SafeLink from "@/client/components/safe-link.vue";
+import SafeLink from "@/client/components/ui/safe-link.vue";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";
 
 const emit = defineEmits<{ settingsOpen: [] }>();
@@ -13,7 +13,7 @@ const { t } = useTranslation();
 const { hover, cancel } = usePrefetch();
 
 const ICON_BUTTON =
-  "p-1.5 text-text-secondary hoverable:hover:text-text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
+  "p-1.5 text-text-secondary hoverable:hover:text-text-primary ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
 
 const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
 </script>
@@ -32,7 +32,7 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           :aria-label="item.label"
           :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
-            'relative px-3 py-1.5 text-sm font-medium transition-colors duration-fast whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1',
+            'relative px-3 py-1.5 text-sm font-medium ui-motion whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1',
             isActive(item) ? 'text-text-primary' : 'text-text-secondary hoverable:hover:text-text-primary',
           ]"
           @mouseenter="hover(item.path)"
@@ -44,7 +44,7 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           <span
             aria-hidden="true"
             :class="[
-              'absolute inset-x-3 -bottom-px h-px bg-accent transition-transform duration-base origin-left',
+              'absolute inset-x-3 -bottom-px h-px bg-accent ui-motion-underline origin-left',
               isActive(item) ? 'scale-x-100' : 'scale-x-0',
             ]"
           />

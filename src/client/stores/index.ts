@@ -1,4 +1,4 @@
-export { useRouteSearchTerm } from "../hooks/use-route-search-term";
+export { useSearchStore } from "./search-store";
 export { initSettingsStorageSync, useSettingsStore } from "./settings-store";
-export { initCompareStorageSync, useCompareModels, useCompareStore, usePruneCompareIds } from "./compare-store";
+export { initCompareStorageSync, useCompareStore } from "./compare-store";
 export { initCostStorageSync, useCostStore } from "./cost-store";

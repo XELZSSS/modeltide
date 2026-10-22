@@ -35,15 +35,18 @@ const KNOWN_NON_OPEN = new Set([
 
 export const isRecognizedNonOpenLicense = (id: string): boolean => KNOWN_NON_OPEN.has(id) || hasDeniedCcClause(id);
 
-// Caller (licenseTagId) already lowercases and trims; only structural normalization remains.
 function normalizeLicenseId(raw: string): string {
   return raw.replace(/_+/g, "-").replace(/\s+/g, "");
 }
 
+const LICENSE_PREFIX = "license:";
+
 export function licenseTagId(tag: string): string | null {
-  const lower = tag.toLowerCase().trim();
-  if (!lower.startsWith("license:")) return null;
-  return normalizeLicenseId(lower.slice(8)) || null;
+  // HF rows carry ~20 tags and only a couple are licenses, so the prefix test happens before copying the whole tag.
+  const trimmed = tag.trim();
+  if (trimmed.length <= LICENSE_PREFIX.length) return null;
+  if (trimmed.slice(0, LICENSE_PREFIX.length).toLowerCase() !== LICENSE_PREFIX) return null;
+  return normalizeLicenseId(trimmed.slice(LICENSE_PREFIX.length).toLowerCase()) || null;
 }
 
 export const getOpenLicenseId = (ids: readonly string[]): string | null => {

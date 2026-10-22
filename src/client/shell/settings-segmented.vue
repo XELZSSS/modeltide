@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import SegmentedGroup from "@/client/components/segmented-group.vue";
-import TabButton from "@/client/components/tab-button.vue";
-import { useRovingRadio } from "@/client/components/tabs";
+import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
+import TabButton from "@/client/components/navigation/tab-button.vue";
+import { useRovingRadio } from "@/client/components/navigation/tabs";
 
 const props = defineProps<{
   value: string;

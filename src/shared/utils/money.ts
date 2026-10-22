@@ -12,7 +12,7 @@ function usdString(v: number): string {
   const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
   const out = abs.toFixed(priceDisplayPrecision(abs));
-  if (abs > 0 && Number(out) === 0) return `${sign}<$0.0001`;
+  if (abs > 0 && Number(out) === 0) return v < 0 ? ">-$0.0001" : "<$0.0001";
   return `${sign}$${out}`;
 }
 

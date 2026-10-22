@@ -245,7 +245,7 @@ describe("getOpenLicenseId", () => {
 });
 
 describe("feed guard", () => {
-  it("rejects DOCTYPE/ENTITY bombs before parsing", () => {
+  it("does not expand entities and rejects documents that are not feeds", () => {
     expect(parseFeedResult(`<?xml?><!DOCTYPE foo [<!ENTITY x "y">]><rss/>`, "https://x").ok).toBe(false);
   });
 });

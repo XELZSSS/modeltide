@@ -49,12 +49,19 @@ function parseWindowCandidates(
   for (const step of MAX_OVERSIZED_WINDOWS) {
     const chunk = line.slice(start, Math.min(line.length, idx + step));
     const prefixed = STREAM_LINE_RE.exec(chunk)?.[1];
-    for (const raw of prefixed && prefixed !== chunk ? [prefixed, chunk] : [chunk]) {
-      if (!raw || raw.length > MAX_RSC_BYTES) continue;
+    // Stream prefix first, then the raw window, without the two-element array the old loop allocated per window.
+    if (prefixed && prefixed !== chunk && prefixed.length <= MAX_RSC_BYTES) {
       if (budgetChars - spent <= 0) return { trees: [], spent };
-      spent += raw.length;
+      spent += prefixed.length;
       try {
-        return { trees: [JSON.parse(raw)], spent };
+        return { trees: [JSON.parse(prefixed)], spent };
+      } catch {}
+    }
+    if (chunk.length <= MAX_RSC_BYTES) {
+      if (budgetChars - spent <= 0) return { trees: [], spent };
+      spent += chunk.length;
+      try {
+        return { trees: [JSON.parse(chunk)], spent };
       } catch {}
     }
   }

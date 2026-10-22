@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { ChevronRight } from "@lucide/vue";
-import Button from "@/client/components/button.vue";
+import Button from "@/client/components/ui/button.vue";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import type { RowListEmits } from "./cell-view";
@@ -33,7 +33,7 @@ function onToggle(event: MouseEvent): void {
     :aria-controls="isExpanded ? rowPanelId(rowId) : undefined"
     @click="onToggle"
   >
-    <span :class="cn('shrink-0 text-text-secondary transition-transform duration-fast', isExpanded && 'rotate-90')">
+    <span :class="cn('shrink-0 text-text-secondary ui-motion', isExpanded && 'rotate-90')">
       <ChevronRight :size="size" />
     </span>
   </Button>

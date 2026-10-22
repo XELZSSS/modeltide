@@ -38,12 +38,10 @@ function writePersisted<T>(storage: Storage | null, key: string, version: number
   }
 }
 
-// One queued microtask per key: a burst of mutations (the cost form writes per keystroke) collapses into one write.
 const pendingFlushes = new Map<string, () => void>();
 
 function scheduleFlush(key: string, write: () => void): void {
   if (pendingFlushes.has(key)) {
-    // The queued task reads the store live, so replacing the callback keeps the final write current.
     pendingFlushes.set(key, write);
     return;
   }
@@ -55,7 +53,6 @@ function scheduleFlush(key: string, write: () => void): void {
   });
 }
 
-/** Drain queued writes; wired to pagehide so no mutation is lost. */
 function flushPersistedWrites(): void {
   while (pendingFlushes.size > 0) {
     const entries = [...pendingFlushes.entries()];

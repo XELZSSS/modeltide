@@ -11,6 +11,7 @@ import {
 import { openSourceModelsQueryString } from "@/shared/query-schemas";
 import { isPartialPayload } from "./payload-normalize";
 import { createApiQuery } from "./factory";
+import { LruCache } from "@/client/utils/lru";
 
 export const qArtificialList = createApiQuery("artificialIndex", queryKeys.artificialIndex, {
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
@@ -43,26 +44,13 @@ function memoQuery<K extends string, T>(
   resolveKey: (input: string) => K,
   create: (key: K) => T,
 ): (input: string) => T {
-  const entries = new Map<K, T>();
+  const cache = new LruCache<K, T>(max);
   return (input: string) => {
     const key = resolveKey(input);
-    const existing = entries.get(key);
-    if (existing !== undefined) {
-      entries.delete(key);
-      entries.set(key, existing);
-      return existing;
-    }
-    const created = create(key);
-    entries.set(key, created);
-    if (entries.size > max) {
-      const oldest = entries.keys().next().value;
-      if (oldest !== undefined) entries.delete(oldest);
-    }
-    return created;
+    return cache.get(key) ?? cache.set(key, create(key));
   };
 }
 
-/** Every news category ships in one payload, so a single query backs all four tabs. */
 export const qNews = createApiQuery("news", queryKeys.news, {
   ttl: NEWS_TTL_MS,
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
@@ -77,13 +65,14 @@ export const qClosedReleasesList = createApiQuery("closedReleases", queryKeys.cl
 
 type OpenSourceModelQuery = ReturnType<typeof createApiQuery<"openSourceModels">>;
 
-/** Single-model lookup rides the list endpoint (`?id=`), so both share one payload shape. */
 export const qOpenSourceModelById: (id: string) => OpenSourceModelQuery = memoQuery<string, OpenSourceModelQuery>(
   64,
   (id) => id,
   (id: string): OpenSourceModelQuery =>
     createApiQuery("openSourceModels", queryKeys.openSourceModels(OPEN_SOURCE_SORT, id), {
       ttl: ONE_MINUTE,
+      partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+      isPartialData: isPartialPayload,
       query: openSourceModelsQueryString(OPEN_SOURCE_SORT, id),
     }),
 );

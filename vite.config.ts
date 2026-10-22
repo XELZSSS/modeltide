@@ -4,6 +4,7 @@ import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import { consistencyGuard } from "./build/consistency-guard.ts";
 import { localApi } from "./build/local-api.ts";
+import { motionGuard } from "./build/motion-guard.ts";
 import { serviceWorkerVersion } from "./build/sw-version.ts";
 import { srcAlias } from "./vite.shared.ts";
 
@@ -19,6 +20,7 @@ const SFC_TYPE_FS = {
 export default defineConfig({
   plugins: [
     consistencyGuard(),
+    motionGuard(),
     vue({ script: { fs: SFC_TYPE_FS } }),
     tailwindcss(),
     localApi(),

@@ -1,10 +1,10 @@
 import { isValidRowId } from "@/server/formats/parser-primitives";
-import { MAX_NAME_CHARS, ONE_MINUTE, SLOW_TTL_MS } from "@/shared/config";
+import { MAX_MODEL_ID_CHARS, ONE_MINUTE, SLOW_TTL_MS } from "@/shared/config";
 import { upstreamConfig } from "@/server/upstream/upstream";
 import { cacheKeys } from "@/server/cache/keys";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/api/context";
-import { ClientAbortError, UpstreamError, ValidationError, isTimeoutLike } from "@/server/api/errors";
+import { UpstreamError, ValidationError, isTimeoutLike, rethrowIfClientAbort } from "@/server/api/errors";
 import { dedupeBy, errMsg } from "@/shared/utils";
 import { encodeModelIdPath } from "@/shared/utils/models";
 import { LicenseDropTally, keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
@@ -17,7 +17,7 @@ import { cachedPayload, requireArrayBody, requireRows } from "@/server/pipeline"
 const HF_API = upstreamConfig.huggingface;
 const HF_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,96}(?:\/[A-Za-z0-9][A-Za-z0-9._-]{0,96})?$/;
 function isValidHFModelId(value: string): boolean {
-  return value.length <= MAX_NAME_CHARS && isValidRowId(value) && HF_MODEL_ID_RE.test(value);
+  return value.length <= MAX_MODEL_ID_CHARS && isValidRowId(value) && HF_MODEL_ID_RE.test(value);
 }
 
 const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", "createdAt", "lastModified"];
@@ -26,7 +26,6 @@ const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", 
 const HF_PAGE_LIMIT = 100;
 const HF_MAX_PAGES = 15;
 
-// Home dashboard needs only a sample; the full list exceeds the 35s cold-cache client timeout.
 const HOME_HF_MAX_PAGES = 5;
 
 interface HFRaw {
@@ -44,7 +43,7 @@ function hfListUrl(sort: string, limit: number): string {
 
 async function fetchHFPage(ctx: AppContext, url: string): Promise<{ items: HFModel[]; nextUrl: string | null }> {
   const page = await ctx.http.getJsonPage<unknown>(url);
-  const items = requireArrayBody(url, page.data, "HuggingFace") as HFModel[];
+  const items = requireArrayBody<HFModel>(url, page.data, "HuggingFace");
   return { items, nextUrl: page.nextUrl };
 }
 
@@ -59,9 +58,9 @@ async function fetchHFModelsAll(ctx: AppContext, sort: string, maxPages: number)
     try {
       page = await fetchHFPage(ctx, url);
     } catch (err) {
-      // Keep the pages already fetched on abort/timeout: a degraded payload beats a failed leg.
+      rethrowIfClientAbort(err);
       if (items.length === 0) throw err;
-      if (err instanceof ClientAbortError || isTimeoutLike(err)) {
+      if (isTimeoutLike(err)) {
         ctx.log(
           "warn",
           `[huggingface] pagination stopped early after ${pageCount} pages, using ${items.length} rows: ${errMsg(err)}`,
@@ -113,7 +112,6 @@ function parseHFItems(items: HFModel[], ctx: AppContext): OpenSourceModelEntry[]
   requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
   const dropped = items.length - kept.length;
   if (dropped > 0) {
-    // Intentional filtering, not missing data: log at info so it isn't a partial-data warning.
     ctx.log("info", `[huggingface] filtered ${dropped}/${items.length} rows (non-open license or zero downloads)`);
   }
   return bucket;
@@ -123,34 +121,35 @@ async function loadHFModels(
   ctx: AppContext,
   sort: string,
   maxPages: number,
-): Promise<{ rows: OpenSourceModelEntry[]; incomplete: boolean; pageCount: number; rawCount: number }> {
+): Promise<{ rows: OpenSourceModelEntry[]; partial: boolean; pageCount: number; rawCount: number }> {
   const raw = await fetchHFModelsAll(ctx, sort, maxPages);
   const rows = parseHFItems(raw.items, ctx);
   if (raw.truncated) {
-    // Safety ceiling, not a source failure: keep partial=false so the UI doesn't report incomplete data.
     ctx.log("info", "[huggingface] pagination stopped at safety ceiling", {
       pages: raw.pageCount,
       raw: raw.items.length,
       ceiling: HF_PAGE_LIMIT * maxPages,
     });
   }
-  return { rows, incomplete: raw.incomplete, pageCount: raw.pageCount, rawCount: raw.items.length };
+  // Reaching the page ceiling is by design: it bounds one invocation's subrequest/timeout budget and always yields the
+  // same top-N ranking, so it is not a degradation. Only an aborted fetch (timeout/error mid-pagination) leaves the list
+  // genuinely incomplete, and only that is reported as partial.
+  return { rows, partial: raw.incomplete, pageCount: raw.pageCount, rawCount: raw.items.length };
 }
 
 export const getModels = (ctx: AppContext, p: OpenSourceModelsQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
   cachedPayload<OpenSourceModelEntry[]>(ctx, cacheKeys.openSourceModels(p.sort), SLOW_TTL_MS, async (refreshCtx) => {
-    const { rows, incomplete } = await loadHFModels(refreshCtx, p.sort, HF_MAX_PAGES);
-    return { rows, partial: incomplete };
+    const { rows, partial } = await loadHFModels(refreshCtx, p.sort, HF_MAX_PAGES);
+    return { rows, partial };
   });
 
-// Home slice: own cache key (must not pollute the full-list key) and a small page budget to fit the client timeout.
 export const getHomeOpenSourceModels = (
   ctx: AppContext,
   p: OpenSourceModelsQuery,
 ): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
   cachedPayload<OpenSourceModelEntry[]>(ctx, cacheKeys.homeOpenSource(p.sort), SLOW_TTL_MS, async (refreshCtx) => {
-    const { rows, incomplete } = await loadHFModels(refreshCtx, p.sort, HOME_HF_MAX_PAGES);
-    return { rows, partial: incomplete };
+    const { rows, partial } = await loadHFModels(refreshCtx, p.sort, HOME_HF_MAX_PAGES);
+    return { rows, partial };
   });
 
 async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
@@ -180,12 +179,10 @@ export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload
       const model = await fetchHFModelById(ctx, trimmed);
       return model == null ? { rows: model, ttl: ONE_MINUTE } : { rows: model };
     },
-    // Memory-only: ids are caller-supplied, so persisting them would burn the KV write quota.
-    { memoryOnly: true, staleCapMs: NEGATIVE_STALE_CAP_MS },
+    { staleCapMs: NEGATIVE_STALE_CAP_MS },
   );
 };
 
-/** Single-model lookups ride the list endpoint (`?id=`), so there is one route and one payload shape. */
 export async function getModelsForQuery(
   ctx: AppContext,
   p: OpenSourceModelsQuery,

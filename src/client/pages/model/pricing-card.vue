@@ -3,8 +3,8 @@ import { useTranslation } from "@/client/i18n";
 import type { ModelPricing } from "@/shared/types/catalog";
 import type { EffectivePricing } from "@/shared/utils/pricing";
 import { formatPricePerMillion } from "@/shared/utils/money";
-import InfoCard from "@/client/components/info-card.vue";
-import InfoRow from "@/client/components/info-row.vue";
+import InfoCard from "@/client/components/layout/info-card.vue";
+import InfoRow from "@/client/components/layout/info-row.vue";
 import { usePricing } from "./use-pricing";
 
 const props = withDefaults(

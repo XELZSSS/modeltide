@@ -1,13 +1,14 @@
 <script setup lang="ts" generic="T extends object">
 import { computed, ref, useSlots, watch, type VNodeChild } from "vue";
-import EmptyState from "@/client/components/empty-state.vue";
-import Pagination from "@/client/components/pagination.vue";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
+import Pagination from "@/client/components/navigation/pagination.vue";
 import { useTranslation } from "@/client/i18n";
 import { useDevice } from "@/client/device";
 import { filterByTerm, foldSearchStr } from "@/client/search/match";
-import { useRouteSearchTerm } from "@/client/stores";
+import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
 import type { DataTableColumn, RowAccessors } from "./table-columns.ts";
 import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "./paging";
+import { rowKeyOf } from "./use-row-list";
 import TableBody, { TableHeader } from "./desktop.vue";
 import MobileTableBody from "./mobile.vue";
 
@@ -43,8 +44,16 @@ const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(
   () => term.value,
 );
 
+const datasetSignature = computed(() => dedupedData.value.map((row) => props.getRowId(row)).join("\u0000"));
+const staggerRows = ref(true);
+watch(datasetSignature, () => {
+  staggerRows.value = true;
+});
+
 const expandedRowGone = computed(
-  () => expandedId.value != null && !dedupedData.value.some((row) => props.getRowId(row) === expandedId.value),
+  () =>
+    expandedId.value != null &&
+    !pagedData.value.some((row, index) => rowKeyOf(props.getRowId, row, index) === expandedId.value),
 );
 
 watch(
@@ -59,8 +68,9 @@ function setExpandedId(rowId: string | null): void {
   expandedId.value = rowId;
 }
 
-function handlePageChange(p: number): void {
-  goToPage(p);
+function handlePageChange(next: number): void {
+  if (next !== page.value) staggerRows.value = false;
+  goToPage(next);
   expandedId.value = null;
   bodyEl.value?.focus({ preventScroll: true });
 }
@@ -80,6 +90,7 @@ function handlePageChange(p: number): void {
           :is-expandable="isExpandable"
           :expanded-row-id="expandedId"
           :render-expanded-row="renderExpanded"
+          :stagger="staggerRows"
           @toggle-expand="setExpandedId"
         />
         <div v-else class="ui-card overflow-x-auto">
@@ -93,6 +104,7 @@ function handlePageChange(p: number): void {
               :is-expandable="isExpandable"
               :expanded-row-id="expandedId"
               :render-expanded-row="renderExpanded"
+              :stagger="staggerRows"
               @toggle-expand="setExpandedId"
             />
           </table>

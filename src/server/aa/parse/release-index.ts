@@ -57,7 +57,6 @@ let cachedFingerprint = "";
 let cachedScan: ReleaseIndexScan | null = null;
 
 export function scanReleaseIndex(html: string): ReleaseIndexScan {
-  // Memo on a fingerprint: retaining the multi-MB payload doubled the isolate's footprint.
   const fingerprint = `${html.length}:${fnv1aHash(html)}`;
   if (cachedScan && cachedFingerprint === fingerprint) return cachedScan;
   const scan: ReleaseIndexScan = {

@@ -3,9 +3,13 @@ import { BENCHMARK_KEYS, type BenchmarkKey } from "@/shared/types/benchmark";
 
 export { BENCHMARK_KEYS, type BenchmarkKey };
 
-// briefcaseElo (832-1817) and cyberIndex (12.7-56.4) are absolute scores, not 0-1 ratios, so they skip the ratio->percent conversion.
-// gdpval reads upstream `gdpvalNormalized` (0.00-0.68), the same scale as gpqa/hle, so it goes through the normal percent conversion.
-export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["briefcase_elo", "cyber_index"]);
+/**
+ * Benchmarks whose upstream value is already on its own scale and must not be run through `ratioToPercent`:
+ * Briefcase Elo (832-1817), the Cyber index (12-56, a 0-100 style score) and omniscience, which is a *signed* index
+ * (down to about -89 for models that hallucinate more than they know). Verified against the live leaderboard,
+ * /models and /evaluations/omniscience payloads: every other benchmark arrives as a 0-1 ratio.
+ */
+export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["briefcase_elo", "cyber_index", "omniscience"]);
 
 export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
   gpqa: "benchmarkGpqa",

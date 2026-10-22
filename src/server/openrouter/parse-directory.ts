@@ -1,9 +1,5 @@
-import {
-  isValidOpenRouterDirectoryRow,
-  numCoerce,
-  numCoerceNonNegative,
-  obj,
-} from "@/server/formats/parser-primitives";
+import { numCoerce, numCoerceNonNegative, obj } from "@/server/formats/parser-primitives";
+import { isPricingRow } from "@/server/formats/wire-guards";
 import { MAX_DIRECTORY_ROWS, PER_MILLION, perMillionOrNull } from "@/server/formats/limits";
 import { normalizeModelKey, toStringOrNull } from "@/shared/utils";
 
@@ -46,7 +42,6 @@ function buildPricingEntry(
 
 function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
   const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
-  // Many live rows omit input_cache_write but provide the _1h form; only text pricing is tracked.
   const cacheWriteRaw = pricing.input_cache_write ?? pricing.input_cache_write_1h;
   return buildPricingEntry(
     numCoerceNonNegative(pricing.prompt),
@@ -58,7 +53,6 @@ function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
 
 const DYNAMIC_PRICING = -1;
 
-/** Upstream marks dynamic (non-per-token) pricing as -1/-1; that is intentional, not a gap. */
 function hasDynamicPricing(raw: PricingRow): boolean {
   const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
   return numCoerce(pricing.prompt) === DYNAMIC_PRICING && numCoerce(pricing.completion) === DYNAMIC_PRICING;
@@ -72,7 +66,6 @@ function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMe
   };
 }
 
-/** Upstream sends an ISO date or null; a malformed value is ignored rather than guessed at. */
 function isoExpiry(raw: unknown): string | null {
   const value = toStringOrNull(raw);
   if (!value) return null;
@@ -89,13 +82,16 @@ export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
   const totalRows = rows.length;
   const count = Math.min(totalRows, MAX_DIRECTORY_ROWS);
   let missingPricing = 0;
+  // Reused across rows: a fresh Set (and two throwaway array literals) per row cost a few allocations per directory
+  // entry, and the directory allows 20k rows.
+  const seen = new Set<string>();
   for (let i = 0; i < count; i++) {
     const raw: unknown = rows[i];
-    if (!isValidOpenRouterDirectoryRow(raw)) {
+    if (!isPricingRow(raw)) {
       missingPricing++;
       continue;
     }
-    const m = raw as unknown as PricingRow;
+    const m = raw;
     const pricingEntry = pricingOfValidRow(m);
     if (pricingEntry) {
       const idKey = toStringOrNull(m.id);
@@ -105,10 +101,11 @@ export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
         const variantAt = idKey.lastIndexOf(":");
         if (variantAt > 0) variantSlugKey = `${slugKey}${idKey.slice(variantAt)}`;
       }
-      const seen = new Set<string>();
+      seen.clear();
       for (const key of [idKey, slugKey, variantSlugKey]) {
         if (!key) continue;
-        for (const index of [key.toLowerCase(), normalizeModelKey(key)]) {
+        for (let form = 0; form < 2; form++) {
+          const index = form === 0 ? key.toLowerCase() : normalizeModelKey(key);
           if (!index || seen.has(index)) continue;
           seen.add(index);
           if (pricingRecord[index] === undefined) pricingRecord[index] = pricingEntry;
@@ -122,7 +119,6 @@ export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
     const intelligenceIndex = numCoerce(aaBenchmarks?.intelligence_index);
     const codingIndex = numCoerce(aaBenchmarks?.coding_index);
     const agenticIndex = numCoerce(aaBenchmarks?.agentic_index);
-    // Retirement dates ship on every row, with or without AA benchmarks.
     const expiresAt = isoExpiry(m.expiration_date);
     if (intelligenceIndex == null && codingIndex == null && agenticIndex == null && expiresAt == null) continue;
     const metaEntry: ModelMetaEntry = {};

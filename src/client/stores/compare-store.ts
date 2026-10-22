@@ -4,8 +4,6 @@ import { STORAGE_KEYS } from "@/shared/config";
 import { modelId } from "@/shared/utils/models";
 import { loadPersistedState, makeStorageSync } from "./make-persisted-store";
 
-export { useCompareModels, usePruneCompareIds } from "@/client/hooks/use-compare-models";
-
 const MAX_COMPARE = 2;
 const COMPARE_STORE_VERSION = 0;
 

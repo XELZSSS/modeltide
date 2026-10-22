@@ -16,7 +16,7 @@ import { useDocumentTitle } from "@/client/router/document-meta";
 import { useTranslation } from "@/client/i18n";
 import { SOURCES } from "@/client/nav/sources";
 import type { ModelSource } from "@/shared/types";
-import DetailPageLayout from "@/client/components/detail-page-layout.vue";
+import DetailPageLayout from "@/client/components/layout/detail-page-layout.vue";
 
 const props = defineProps<{ source: ModelSource; title: string }>();
 

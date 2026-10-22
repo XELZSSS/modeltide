@@ -59,7 +59,6 @@ function decideRowWinners<T>(
   getKey: (m: T, index: number) => string,
 ): Map<string, Winner> | null {
   const values = collectNumeric(row, models, getKey);
-  // values != null ⟹ row.bestIs lives in collectNumeric, not in the types; this guard must stay.
   if (!values || !row.bestIs) return null;
   const best = pickExtreme(values, row.bestIs);
   if (values.every((v) => approxEq(v.val, best))) return null;
@@ -89,7 +88,6 @@ function radarMetricGetters(
     { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.intelligence_index) },
     { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.coding_index) },
     { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.agentic_index) },
-    // Benchmarks arrive percent-converted (relative) or raw (absolute), so rescaling here would magnify small values.
     { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.gpqa ?? null },
     { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.hle ?? null },
     { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.scicode ?? null },

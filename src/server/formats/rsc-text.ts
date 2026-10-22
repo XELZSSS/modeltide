@@ -20,7 +20,6 @@ const TRIM_WHITESPACE = new Set([
 
 export const isTrimWhitespace = (c: number): boolean => TRIM_WHITESPACE.has(c);
 
-/** The RSC needle form of a marker: the JSON key with its surrounding quotes. */
 export function markerNeedle(marker: string): string {
   return `"${marker}"`;
 }

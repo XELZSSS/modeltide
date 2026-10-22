@@ -17,18 +17,24 @@ export function matchFolded(folded: string[], needle: string): { matched: boolea
   return { matched: best > 0, score: best };
 }
 
-// Per-item cache: folding is pure, so repeated keystrokes reuse it.
-const preparedFieldsCache = new WeakMap<object, PreparedFields>();
+interface CachedFields {
+  accessor: unknown;
+  prepared: PreparedFields;
+}
+
+const preparedFieldsCache = new WeakMap<object, CachedFields>();
 
 export function preparedFieldsFor<T extends object>(
   item: T,
   getFields: (item: T) => (string | null | undefined)[],
 ): PreparedFields {
-  let prepared = preparedFieldsCache.get(item);
-  if (prepared == null) {
-    prepared = prepareFields(getFields(item));
-    preparedFieldsCache.set(item, prepared);
-  }
+  // Keyed by row because folding is the expensive half, but the accessor is part of the entry: two tables can filter
+  // the same row objects through different field sets, and serving the first set's fields to the second made one of
+  // them search the wrong columns.
+  const cached = preparedFieldsCache.get(item);
+  if (cached != null && cached.accessor === getFields) return cached.prepared;
+  const prepared = prepareFields(getFields(item));
+  preparedFieldsCache.set(item, { accessor: getFields, prepared });
   return prepared;
 }
 
@@ -75,7 +81,6 @@ function levenshteinWithin(a: string, b: string, max: number): number {
 const WORD_SPLIT = /[^\p{L}\p{N}]+/u;
 const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 
-// Cap per-word CJK bigrams: a 40-char name would otherwise flood the Levenshtein pass, keeping the leading bigrams.
 const MAX_CJK_BIGRAMS = 8;
 
 function tokenize(text: string): string[] {

@@ -3,7 +3,6 @@ import { titleCase } from "@/shared/utils/text";
 
 const TASK_SLICE_LIMIT = 5;
 export const OTHER_TASK_KEY = "__other__";
-// Missing task data and the ranked tail are different things: keep separate slices.
 export const UNTAGGED_TASK_KEY = "__untagged__";
 
 export interface TaskSlice {
@@ -48,7 +47,6 @@ export function aggregateTaskShare(models: { task: string | null | undefined }[]
     counts.set(task, (counts.get(task) ?? 0) + 1);
   }
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  // total counts every model so slice shares keep the original denominator.
   let total = untagged;
   const slices: TaskSlice[] = ranked.slice(0, TASK_SLICE_LIMIT).map(([key, count]) => {
     total += count;

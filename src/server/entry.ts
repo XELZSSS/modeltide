@@ -9,7 +9,6 @@ const ROUTES = new Map<string, RouteEntry>(SOURCES.map((source) => [source.path,
 
 function normalizePathname(pathname: string): string {
   if (pathname.length <= 1) return pathname;
-  // The route table is keyed by exact path, so a trailing slash would 404.
   const trimmed = pathname.replace(/\/+$/, "");
   return trimmed === "" ? "/" : trimmed;
 }

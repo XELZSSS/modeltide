@@ -5,12 +5,9 @@ import {
   useHallucinationRankings,
   useOpenRouterRankings,
 } from "@/client/api/hooks";
-import { unwrapListPartial } from "@/client/api/payload-normalize";
 import type { SearchResult } from "@/client/search/types";
-import type { OpenRouterRankEntry } from "@/shared/types";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { foldSearchStr } from "@/client/search/match";
-import type { ArtificialAnalysisModel, OpenSourceModelEntry } from "@/shared/types";
 import { defineSource, collect, detailLink, rankSearchHits, type SourceConfig } from "@/client/search/search-rank";
 
 export const MIN_QUERY = 2;
@@ -20,35 +17,30 @@ interface SearchState {
   isPending: ComputedRef<boolean>;
   isError: ComputedRef<boolean>;
   error: ComputedRef<Error | null>;
+  partial: ComputedRef<boolean>;
 }
 
 export function useSearchAllRankings(
   searchTerm: MaybeRefOrGetter<string>,
-  opts?: { suspended?: MaybeRefOrGetter<boolean>; warm?: MaybeRefOrGetter<boolean> },
+  // `defer` is true while the queries should stay idle even with a long enough term (the combobox is closed);
+  // naming it after the effect removes the double negative call sites had to write against `suspended`.
+  opts?: { defer?: MaybeRefOrGetter<boolean>; warm?: MaybeRefOrGetter<boolean> },
 ): SearchState {
   const baseEnabled = computed(() => toValue(searchTerm).trim().length >= MIN_QUERY);
   const warmEnabled = computed(() => toValue(opts?.warm) === true && baseEnabled.value);
-  const enabled = computed(() => warmEnabled.value || (baseEnabled.value && toValue(opts?.suspended) !== true));
+  const enabled = computed(() => warmEnabled.value || (baseEnabled.value && toValue(opts?.defer) !== true));
   const artificialQ = useArtificialRankings(enabled);
   const openSourceQ = useAllOpenSourceModels(enabled);
   const orQ = useOpenRouterRankings(enabled);
 
-  const artificialData = computed(() => artificialQ.data.value ?? ([] as ArtificialAnalysisModel[]));
-  const openSourceRankings = computed(() => openSourceQ.data.value ?? ([] as OpenSourceModelEntry[]));
-  const openRouter = computed(() => {
-    const unwrapped = unwrapListPartial<OpenRouterRankEntry>(orQ.data.value, "openRouterRankings");
-    return { data: unwrapped.data, malformed: unwrapped.malformed };
-  });
+  const artificialData = computed(() => artificialQ.state.value.items);
+  const openSourceRankings = computed(() => openSourceQ.state.value.items);
+  const openRouter = computed(() => orQ.state.value);
   const hallucinationRankings = useHallucinationRankings(artificialData, enabled);
 
-  const orMalformedError = computed(() =>
-    openRouter.value.malformed && openRouter.value.data.length === 0
-      ? new Error("Malformed openRouterRankings payload")
-      : null,
-  );
   const error = computed(
     () =>
-      [artificialQ.error.value, openSourceQ.error.value, orQ.error.value ?? orMalformedError.value].find(
+      [artificialQ.state.value.error, openSourceQ.state.value.error, openRouter.value.error].find(
         (e): e is Error => e != null,
       ) ?? null,
   );
@@ -65,7 +57,7 @@ export function useSearchAllRankings(
       })),
     ),
     or: computed<SourceConfig>(() =>
-      defineSource(openRouter.value.data, SEARCH_FIELDS.or, (e) => ({
+      defineSource(openRouter.value.items, SEARCH_FIELDS.or, (e) => ({
         id: e.id,
         name: e.name,
         source: "openRouterRankings",
@@ -99,7 +91,6 @@ export function useSearchAllRankings(
   const results = computed(() => {
     const needle = foldSearchStr(toValue(searchTerm));
     if (!enabled.value || !baseEnabled.value || !needle) return [];
-    // Independent per-source computeds: one dataset update rebuilds only its entries.
     return rankSearchHits([
       ...collect(sources.aa.value, needle),
       ...collect(sources.or.value, needle),
@@ -111,13 +102,20 @@ export function useSearchAllRankings(
   return {
     results,
     isPending: computed(
-      () => enabled.value && (artificialQ.isPending.value || openSourceQ.isPending.value || orQ.isPending.value),
+      () =>
+        enabled.value &&
+        (artificialQ.state.value.pending || openSourceQ.state.value.pending || openRouter.value.pending),
     ),
     isError: computed(
       () =>
         enabled.value &&
-        (artificialQ.isError.value || openSourceQ.isError.value || orQ.isError.value || orMalformedError.value != null),
+        (artificialQ.state.value.error != null ||
+          openSourceQ.state.value.error != null ||
+          openRouter.value.error != null),
     ),
     error,
+    partial: computed(
+      () => artificialQ.state.value.partial || openSourceQ.state.value.partial || openRouter.value.partial,
+    ),
   };
 }

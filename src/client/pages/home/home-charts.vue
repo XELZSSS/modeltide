@@ -7,11 +7,11 @@ registerLine();
 <script setup lang="ts">
 import { computed } from "vue";
 import type { ChartData, ChartOptions } from "chart.js";
-import Card from "@/client/components/card.vue";
-import CardContent from "@/client/components/card-content.vue";
-import CardHeader from "@/client/components/card-header.vue";
-import ChartCanvas from "@/client/components/chart-canvas.vue";
-import ChartFrame from "@/client/components/chart-frame.vue";
+import Card from "@/client/components/layout/card.vue";
+import CardContent from "@/client/components/layout/card-content.vue";
+import CardHeader from "@/client/components/layout/card-header.vue";
+import ChartCanvas from "@/client/components/charts/chart-canvas.vue";
+import ChartFrame from "@/client/components/charts/chart-frame.vue";
 import {
   AXIS_MAX,
   AXIS_STEP,
@@ -23,7 +23,7 @@ import {
   seriesColor,
   useChartTheme,
 } from "@/client/charts/theme";
-import EmptyState from "@/client/components/empty-state.vue";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatIndex } from "@/shared/utils";
 import { modelDisplayName, shortModelId } from "@/shared/utils/models";
@@ -75,7 +75,6 @@ const data = computed<ChartData<"line">>(() => ({
       backgroundColor: color,
       fill: false,
       ...lineSeriesStyle,
-      // lineSeriesStyle opts into monotone smoothing; straight segments are wanted here.
       cubicInterpolationMode: "default",
       tension: 0,
       pointRadius: AXIS_POINT_RADIUS,

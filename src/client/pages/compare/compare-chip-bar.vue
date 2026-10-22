@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import { ArrowLeftRight, Trash2, X } from "@lucide/vue";
-import Button from "@/client/components/button.vue";
-import Badge from "@/client/components/badge.vue";
+import Button from "@/client/components/ui/button.vue";
+import Badge from "@/client/components/ui/badge.vue";
 import { useTranslation } from "@/client/i18n";
 import { useCompareStore } from "@/client/stores";
 import { modelDisplayName } from "@/shared/utils/models";
@@ -44,7 +44,7 @@ watch(
       <Badge
         v-for="(model, index) in models"
         :key="modelKeyOf(model, index)"
-        class="pl-3 pr-1 py-1 text-sm normal-case tracking-normal text-text-primary hoverable:hover:border-text-tertiary/40"
+        class="pl-3 pr-1 py-1 text-sm normal-case tracking-normal text-text-primary hoverable:hover:border-text-tertiary/40 ui-anim-pop"
       >
         <span class="font-medium truncate max-w-36" :title="modelDisplayName(model)">{{
           modelDisplayName(model)
@@ -52,7 +52,7 @@ watch(
         <button
           type="button"
           :aria-label="t('removeModel', { name: modelDisplayName(model) })"
-          class="shrink-0 p-1 text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          class="shrink-0 p-1 text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           @click="emit('remove', model)"
         >
           <X :size="14" />
@@ -75,7 +75,7 @@ watch(
       </Button>
     </div>
     <p v-if="hasCompare && !canCompare && models.length > 0" class="ui-caption w-full">{{ t("compareLimit") }}</p>
-    <p v-if="showLimit" class="ui-caption text-warning w-full animate-enter" role="alert">
+    <p v-if="showLimit" class="ui-caption text-warning w-full ui-anim-rise" role="alert">
       {{ t("compareLimitTwo") }}
     </p>
   </div>

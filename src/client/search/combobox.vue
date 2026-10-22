@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { Search, X } from "@lucide/vue";
 import { cn } from "@/client/utils/cn";
-import Input from "@/client/components/input.vue";
+import Input from "@/client/components/ui/input.vue";
 import { useTranslation } from "@/client/i18n";
 import type { ComboboxController } from "./use-combobox";
 
@@ -62,7 +62,7 @@ function setListEl(el: unknown): void {
   <div :ref="setContainerEl" :class="classes">
     <label :for="inputId" class="sr-only">{{ t("searchPlaceholder") }}</label>
     <div
-      class="flex h-9 items-center gap-2 min-w-0 max-w-full ui-card px-3 transition-colors duration-fast focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-ring/30"
+      class="flex h-9 items-center gap-2 min-w-0 max-w-full ui-card px-3 ui-motion focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-ring/30"
     >
       <Search :size="16" class="text-text-secondary shrink-0" aria-hidden="true" />
       <Input
@@ -98,18 +98,19 @@ function setListEl(el: unknown): void {
       </button>
     </div>
 
-    <div
-      v-if="isOpen && canSearch"
-      class="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay z-40 animate-enter"
-    >
-      <div class="p-1.5">
-        <!-- Non-option content (empty/error/loading copy) lives outside the listbox. -->
-        <slot name="status" />
-        <div :id="listboxId" :ref="setListEl" role="listbox">
-          <slot />
+    <Transition name="ui-pop">
+      <div
+        v-if="isOpen && canSearch"
+        class="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay z-40"
+      >
+        <div class="p-1.5">
+          <slot name="status" />
+          <div :id="listboxId" :ref="setListEl" role="listbox">
+            <slot />
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
     <div :id="statusId" role="status" aria-live="polite" aria-atomic="true" class="sr-only">
       {{ isOpen && canSearch ? status : "" }}
     </div>

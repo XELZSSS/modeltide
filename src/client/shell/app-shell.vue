@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useSettingsStore } from "@/client/stores";
 import { useTranslation } from "@/client/i18n";
 import DesktopNav from "./desktop-nav.vue";
 import MobileNav from "./mobile-nav.vue";
-import ErrorBoundary from "@/client/components/error-boundary.vue";
+import ErrorBoundary from "@/client/components/feedback/error-boundary.vue";
 import SettingsSheet from "./settings-sheet.vue";
 import MobileMoreSheet from "./mobile-more-sheet.vue";
-import ContractSkewNotice from "@/client/components/contract-skew-notice.vue";
+import ContractSkewNotice from "@/client/components/feedback/contract-skew-notice.vue";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";
 import { THEME_COLORS } from "@/shared/config";
 import { useScrollRestoreMain } from "@/client/hooks/use-scroll-restore";
@@ -39,20 +39,23 @@ watch(
   () => route.fullPath,
   (now, was) => {
     openSheet.value = null;
-    // fullPath closes sheets on every navigation, but scroll restores only on path changes (a ?tab= move keeps scroll).
     const pathOf = (fullPath: string): string => fullPath.split("?")[0]!.split("#")[0]!;
     if (pathOf(now) !== pathOf(was)) restoreScroll();
   },
   { flush: "post" },
 );
 
+let mainEl: HTMLElement | null = null;
+
 onMounted(() => {
-  mainRef.value?.addEventListener("scroll", recordScroll, { passive: true });
+  mainEl = mainRef.value;
+  mainEl?.addEventListener("scroll", recordScroll, { passive: true });
   restoreScroll();
 });
 
-onUnmounted(() => {
-  mainRef.value?.removeEventListener("scroll", recordScroll);
+onBeforeUnmount(() => {
+  mainEl?.removeEventListener("scroll", recordScroll);
+  mainEl = null;
 });
 </script>
 
@@ -70,7 +73,7 @@ onUnmounted(() => {
       id="main-content"
       tabindex="-1"
       :aria-label="t('mainContent')"
-      class="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0 focus:outline-none"
+      class="flex-1 min-h-0 overflow-y-scroll overscroll-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0 focus:outline-none"
     >
       <div :class="[PAGE_WIDTH, PAGE_GUTTER]">
         <ContractSkewNotice />
@@ -78,11 +81,11 @@ onUnmounted(() => {
       <slot />
     </main>
     <MobileNav @more-open="openSheet = 'more'" @settings-open="openSheet = 'settings'" />
-    <ErrorBoundary v-if="openSheet === 'settings'" key="settings">
-      <SettingsSheet :open="true" @close="closeSheet" />
+    <ErrorBoundary key="settings">
+      <SettingsSheet :open="openSheet === 'settings'" @close="closeSheet" />
     </ErrorBoundary>
-    <ErrorBoundary v-if="openSheet === 'more'" key="more">
-      <MobileMoreSheet :open="true" @close="closeSheet" />
+    <ErrorBoundary key="more">
+      <MobileMoreSheet :open="openSheet === 'more'" @close="closeSheet" />
     </ErrorBoundary>
   </div>
 </template>

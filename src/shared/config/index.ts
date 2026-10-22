@@ -1,6 +1,6 @@
 export { queryKeys, apiPaths } from "./api";
 export { STORAGE_KEYS, SETTINGS_STORAGE_VERSION } from "./storage";
-export { MAX_ID_CHARS, MAX_NAME_CHARS, OPEN_SOURCE_MODELS_DEFAULTS } from "./api";
+export { MAX_ID_CHARS, MAX_MODEL_ID_CHARS, MAX_NAME_CHARS, OPEN_SOURCE_MODELS_DEFAULTS } from "./api";
 export { MODALITY_KEYS, type ModalityKey } from "./ui";
 export {
   ONE_MINUTE,

@@ -7,7 +7,6 @@ import type { AppContext } from "@/server/api/context";
 import { UpstreamError, wrapUpstream } from "@/server/api/errors";
 
 import { mapModels, type RankingScanStats } from "./parse-rankings";
-import type { ModelRow } from "@/server/formats/wire-types";
 import { getModelDirectory, type DirectoryCacheEntryWithPartial } from "./directory";
 import { runLegs } from "@/server/join-legs";
 import { defineSource, requireArrayBody } from "@/server/pipeline";
@@ -15,7 +14,7 @@ import { defineSource, requireArrayBody } from "@/server/pipeline";
 const RANKINGS_DRIFT_RATIO = 0.1;
 
 interface OpenRouterRaw {
-  rows: ModelRow[];
+  rows: unknown[];
   totalRows: number;
   stats: RankingScanStats;
   dirData: DirectoryCacheEntryWithPartial;
@@ -30,7 +29,7 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
       {
         label: "rankings",
         run: () =>
-          ctx.http.getJson<{ data: ModelRow[] }>(
+          ctx.http.getJson<{ data: unknown[] }>(
             upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterRankings),
           ),
       },
@@ -40,18 +39,14 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
     if (rankingsFailure) {
       throw wrapUpstream("OpenRouter: rankings fetch failed", rankingsFailure.reason);
     }
-    const rankings = values[0] as unknown as { data?: unknown };
+    const rankings: unknown = values[0];
     if (!isRecord(rankings)) {
       throw new UpstreamError("OpenRouter: rankings upstream returned a non-array response");
     }
-    const rows = requireArrayBody(
-      upstreamEndpoints.openRouterRankings,
-      rankings.data,
-      "OpenRouter rankings",
-    ) as ModelRow[];
+    const rows = requireArrayBody(upstreamEndpoints.openRouterRankings, rankings.data, "OpenRouter rankings");
     const totalRows = rows.length;
     const dirData = values[1] ?? ({ pricing: {}, meta: {}, partial: true } as DirectoryCacheEntryWithPartial);
-    const stats: RankingScanStats = { scannedRows: 0, validRows: 0 };
+    const stats: RankingScanStats = { scannedRows: 0, validRows: 0, expiredRows: 0 };
     return { rows, totalRows, stats, dirData };
   },
   parse: (raw) => {
@@ -59,8 +54,9 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
     if (raw.stats.validRows === 0) {
       throw new UpstreamError(`OpenRouter: all ${raw.totalRows} ranking rows had invalid model_permaslug`);
     }
-    if (models.length === 0 && raw.stats.validRows > 0) {
-      throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${raw.stats.validRows} rows`);
+    const liveRows = raw.stats.validRows - raw.stats.expiredRows;
+    if (models.length === 0 && liveRows > 0) {
+      throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${liveRows} live rows`);
     }
     return models;
   },

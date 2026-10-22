@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { STORAGE_KEYS } from "@/shared/config";
 import { loadPersistedState, makeStorageSync } from "./make-persisted-store";
-import type { CostFieldId } from "@/client/pages/compare/cost-inputs";
+import type { CostFieldId } from "@/shared/scenario";
 
 const COST_STORE_VERSION = 1;
 
@@ -49,11 +49,7 @@ export const initCostStorageSync = makeStorageSync({
   snapshot: (store) => ({ values: store.values }),
   onStorageEvent: (store, parsed) => {
     const values = cleanValues((parsed as { state?: { values?: unknown } }).state?.values);
-    for (const id of COST_FIELD_IDS) {
-      if (values[id] !== store.values[id]) {
-        store.values = values;
-        break;
-      }
-    }
+    const changed = COST_FIELD_IDS.some((id) => values[id] !== store.values[id]);
+    if (changed) store.values = values;
   },
 });

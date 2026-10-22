@@ -1,7 +1,7 @@
 import { rethrowIfAllAborted, UpstreamError } from "./api/errors";
 import { runCapped } from "./upstream/task-pool";
 
-interface Leg<T> {
+export interface Leg<T> {
   label: string;
   run: () => Promise<T>;
 }
@@ -19,13 +19,16 @@ interface RunLegsOptions {
 
 type LegValue<L> = L extends Leg<infer T> ? T : never;
 
-type LegValues<L extends readonly Leg<unknown>[]> = { [K in keyof L]: LegValue<L[K]> | undefined };
+export type LegValues<L extends readonly Leg<unknown>[]> = { [K in keyof L]: LegValue<L[K]> | undefined };
 
 export async function runLegs<L extends readonly Leg<unknown>[]>(
   legs: readonly [...L],
   opts: RunLegsOptions = {},
 ): Promise<{ values: LegValues<L>; failures: LegFailure[] }> {
   const tasks = legs.map((leg) => leg.run);
+  // Legs default to unbounded: each one is a single upstream call and the shared slot pool (6 connections) already
+  // queues them. Bulk fan-outs whose legs are themselves feeds (news) pass an explicit `concurrency` to keep the
+  // queue short.
   const settled = await runCapped(tasks, opts.concurrency ?? tasks.length);
 
   const failures: LegFailure[] = [];

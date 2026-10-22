@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import Card from "@/client/components/card.vue";
-import CardContent from "@/client/components/card-content.vue";
-import CardHeader from "@/client/components/card-header.vue";
+import Card from "@/client/components/layout/card.vue";
+import CardContent from "@/client/components/layout/card-content.vue";
+import CardHeader from "@/client/components/layout/card-header.vue";
 import { useTranslation } from "@/client/i18n";
-import EmptyState from "@/client/components/empty-state.vue";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
 import RankedListRows from "./ranked-list-rows.vue";
 import type { HomeBarStat } from "./use-home-stats";
 

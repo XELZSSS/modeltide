@@ -34,7 +34,6 @@ export interface ModelMetaEntry {
   intelligenceIndex?: number;
   agenticIndex?: number;
   codingIndex?: number;
-  /** ISO date the upstream retires this model; absent means no scheduled retirement. */
   expiresAt?: string | null;
 }
 
@@ -54,7 +53,6 @@ export interface PricingRow {
     web_search?: string | number | null;
     image_output?: string | number | null;
   } | null;
-  /** Set by upstream when the model is scheduled for retirement. */
   expiration_date?: string | null;
 }
 

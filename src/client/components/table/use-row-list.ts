@@ -8,13 +8,16 @@ interface RowListItem<T> {
   expanded: boolean;
 }
 
-/** Derives ids/names/expansion once per row instead of calling the accessors repeatedly in the template. */
+export function rowKeyOf<T extends object>(getRowId: (row: T) => string, row: T, index: number): string {
+  return getRowId(row) || `row-${index}`;
+}
+
 export function useRowList<T extends object>(
   props: RowListProps<T>,
 ): { rows: ComputedRef<RowListItem<T>[]>; renderExpanded: (row: T) => VNodeChild } {
   const rows = computed<RowListItem<T>[]>(() =>
-    props.pagedData.map((row) => {
-      const id = props.getRowId(row);
+    props.pagedData.map((row, index) => {
+      const id = rowKeyOf(props.getRowId, row, index);
       return {
         row,
         id,

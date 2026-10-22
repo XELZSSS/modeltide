@@ -1,0 +1,270 @@
+:root {
+  --motion-duration-instant: 70ms;
+  --motion-duration-fast: 130ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-slow: 260ms;
+
+  --motion-duration-spin: 900ms;
+
+  --motion-stagger-step: 22ms;
+  --motion-stagger-max: 8;
+
+  --motion-stagger-step-rows: 34ms;
+  --motion-stagger-max-rows: 10;
+
+  --motion-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --motion-ease-in: cubic-bezier(0.55, 0, 0.85, 0.3);
+  --motion-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --motion-rise: 6px;
+  --motion-pop: 4px;
+  --motion-sheet: 100%;
+  --motion-scale: 0.98;
+}
+
+@utility ease-motion-out {
+  --ui-motion-easing: var(--motion-ease-out);
+  transition-timing-function: var(--motion-ease-out);
+}
+
+@utility ease-motion-in {
+  --ui-motion-easing: var(--motion-ease-in);
+  transition-timing-function: var(--motion-ease-in);
+}
+
+@utility ease-motion-in-out {
+  --ui-motion-easing: var(--motion-ease-in-out);
+  transition-timing-function: var(--motion-ease-in-out);
+}
+
+@utility ease-motion-emphasized {
+  --ui-motion-easing: var(--motion-ease-emphasized);
+  transition-timing-function: var(--motion-ease-emphasized);
+}
+
+@utility duration-motion-instant {
+  --ui-motion-duration: var(--motion-duration-instant);
+  transition-duration: var(--motion-duration-instant);
+}
+
+@utility duration-motion-fast {
+  --ui-motion-duration: var(--motion-duration-fast);
+  transition-duration: var(--motion-duration-fast);
+}
+
+@utility duration-motion-base {
+  --ui-motion-duration: var(--motion-duration-base);
+  transition-duration: var(--motion-duration-base);
+}
+
+@utility duration-motion-slow {
+  --ui-motion-duration: var(--motion-duration-slow);
+  transition-duration: var(--motion-duration-slow);
+}
+
+@utility ui-motion {
+  transition-property: var(
+    --ui-motion-properties,
+    color,
+    background-color,
+    border-color,
+    text-decoration-color,
+    fill,
+    stroke,
+    box-shadow,
+    opacity,
+    transform,
+    translate,
+    scale,
+    rotate
+  );
+  transition-duration: var(--ui-motion-duration, var(--motion-duration-fast));
+  transition-timing-function: var(--ui-motion-easing, var(--motion-ease-out));
+}
+
+@utility ui-press {
+  &:active {
+    scale: var(--ui-motion-press-scale, var(--motion-scale));
+  }
+}
+
+@utility ui-motion-indicator {
+  &::after {
+    transition:
+      transform var(--ui-motion-duration, var(--motion-duration-base))
+        var(--ui-motion-easing, var(--motion-ease-emphasized)),
+      scale var(--ui-motion-duration, var(--motion-duration-base))
+        var(--ui-motion-easing, var(--motion-ease-emphasized));
+  }
+}
+
+@utility ui-motion-underline {
+  transition:
+    transform var(--ui-motion-duration, var(--motion-duration-base))
+      var(--ui-motion-easing, var(--motion-ease-emphasized)),
+    scale var(--ui-motion-duration, var(--motion-duration-base)) var(--ui-motion-easing, var(--motion-ease-emphasized));
+}
+
+@keyframes ui-motion-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--motion-rise), 0);
+  }
+}
+
+@keyframes ui-motion-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ui-motion-pop {
+  from {
+    opacity: 0;
+    transform: scale(var(--motion-scale));
+  }
+}
+
+@utility ui-anim-rise {
+  animation: ui-motion-rise var(--motion-duration-base) var(--motion-ease-out) both;
+  animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
+}
+
+@utility ui-anim-fade {
+  animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) both;
+  animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
+}
+
+@utility ui-anim-pop {
+  animation: ui-motion-pop var(--motion-duration-base) var(--motion-ease-out) both;
+  animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
+}
+
+@utility ui-anim-rows {
+  animation: ui-motion-fade var(--motion-duration-base) var(--motion-ease-out) both;
+  animation-delay: calc(
+    min(var(--motion-stagger-index, 0), var(--motion-stagger-max-rows)) * var(--motion-stagger-step-rows)
+  );
+}
+
+@utility ui-anim-swap {
+  animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) both;
+}
+
+@keyframes ui-motion-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@utility ui-spin {
+  animation: ui-motion-spin var(--motion-duration-spin) linear infinite;
+}
+
+.ui-fade-enter-active {
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ui-fade-leave-active {
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-in);
+}
+
+.ui-fade-enter-from,
+.ui-fade-leave-to {
+  opacity: 0;
+}
+
+.ui-rise-enter-active {
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-out),
+    transform var(--motion-duration-base) var(--motion-ease-out);
+}
+
+.ui-rise-leave-active {
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-in),
+    transform var(--motion-duration-fast) var(--motion-ease-in);
+}
+
+.ui-rise-enter-from {
+  opacity: 0;
+  transform: translate3d(0, var(--motion-rise), 0);
+}
+
+.ui-rise-leave-to {
+  opacity: 0;
+  transform: translate3d(0, calc(-1 * var(--motion-rise)), 0);
+}
+
+.ui-pop-enter-active {
+  transform-origin: top center;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-emphasized),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized);
+}
+
+.ui-pop-leave-active {
+  transform-origin: top center;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-in),
+    transform var(--motion-duration-fast) var(--motion-ease-in);
+}
+
+.ui-pop-enter-from,
+.ui-pop-leave-to {
+  opacity: 0;
+  transform: translate3d(0, calc(-1 * var(--motion-pop)), 0) scale(var(--motion-scale));
+}
+
+.ui-sheet-enter-active {
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-emphasized),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized);
+}
+
+.ui-sheet-leave-active {
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-in),
+    transform var(--motion-duration-fast) var(--motion-ease-in);
+}
+
+@media (width < 640px) {
+  .ui-sheet-enter-from,
+  .ui-sheet-leave-to {
+    transform: translate3d(0, var(--motion-sheet), 0);
+  }
+}
+
+@media (width >= 640px) {
+  .ui-sheet-enter-from,
+  .ui-sheet-leave-to {
+    opacity: 0;
+    transform: scale(var(--motion-scale));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-instant: 1ms;
+    --motion-duration-fast: 1ms;
+    --motion-duration-base: 1ms;
+    --motion-duration-slow: 1ms;
+    --motion-stagger-step: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .ui-spin {
+    animation: none !important;
+  }
+}

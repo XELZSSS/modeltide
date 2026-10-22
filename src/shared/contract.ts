@@ -11,7 +11,6 @@ import type {
 } from "./types";
 export type { ApiDomain };
 
-/** One request serves every news tab; each category keeps its own partial flag. */
 export type NewsByCategory = Record<NewsCategory, SourcePayload<NewsItem[]>>;
 
 interface ApiContract {

@@ -8,6 +8,7 @@ import type {
   TooltipModel,
   TooltipOptions,
 } from "chart.js";
+import { FONT_STACK_SANS } from "@/shared/config/typography";
 
 export interface ChartTheme {
   grid: string;
@@ -19,16 +20,16 @@ export interface ChartTheme {
   donut: string[];
 }
 
-export const DONUT_FALLBACK = ["#365899", "#1e2430", "#2f6d8a", "#2f7a4d", "#9a6b0a", "#9aa5b4"];
+const DONUT_FALLBACK = ["#36577d", "#1e2430", "#2f6d8a", "#2f7a4d", "#9a6b0a", "#9aa5b4"];
 
-export const FALLBACK_THEME: ChartTheme = {
+const FALLBACK_THEME: ChartTheme = {
   grid: "rgba(30, 36, 48, 0.14)",
   tick: "#8b96a5",
   tickSecondary: "#5b6675",
   tooltipBg: "#f1f4f7",
   tooltipText: "#1e2430",
   palette: [
-    "#365899",
+    "#36577d",
     "#1e2430",
     "#5b6675",
     "#9aa5b4",
@@ -36,7 +37,7 @@ export const FALLBACK_THEME: ChartTheme = {
     "#2f6d8a",
     "#9a6b0a",
     "#c03a30",
-    "#6d7a99",
+    "#6d85a2",
     "#c3ccd6",
   ],
   donut: DONUT_FALLBACK,
@@ -50,12 +51,16 @@ export const RADAR_CHART_HEIGHT = "h-[280px] sm:h-[400px]";
 
 export const CHART_EMPTY_CLASS = "flex items-center justify-center text-center ui-body-secondary";
 
-const CHART_FONT_FAMILY =
-  "'IBM Plex Sans', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', sans-serif";
+function chartFontFamily(): string {
+  if (typeof document === "undefined" || typeof getComputedStyle !== "function") return FONT_STACK_SANS;
+  const fromCss = getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim();
+  return fromCss || FONT_STACK_SANS;
+}
+
 const CHART_FONT_SIZE = 12;
 
 export function applyChartDefaults(chart: typeof ChartJS): void {
-  chart.defaults.font.family = CHART_FONT_FAMILY;
+  chart.defaults.font.family = chartFontFamily();
   chart.defaults.font.size = CHART_FONT_SIZE;
 }
 
@@ -67,9 +72,9 @@ export const chartBase = {
 
 export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tick, font: { size: 10 } });
 
-export const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
+const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
 
-export const axisDashedBorderStyle = (theme: ChartTheme) => ({ color: theme.grid, dash: [3, 3] as [number, number] });
+const axisDashedBorderStyle = (theme: ChartTheme) => ({ color: theme.grid, dash: [3, 3] as [number, number] });
 
 export const lineSeriesStyle = {
   borderWidth: 2,
@@ -161,7 +166,6 @@ function ensureObserver(): void {
 
 export function useChartTheme(): Ref<ChartTheme> {
   ensureObserver();
-  // Resolved lazily so importing this module never touches the DOM before the app mounts.
   themeRef ??= ref(currentTheme());
   return themeRef;
 }
@@ -174,7 +178,6 @@ export function ceilToStep(peak: number, step = AXIS_STEP): number {
 }
 
 export function seriesColor(theme: ChartTheme, index: number): string {
-  // Palette entries are always non-empty; `||` only guards a blank/missing slot.
   return theme.palette[index % theme.palette.length] || "#888888";
 }
 

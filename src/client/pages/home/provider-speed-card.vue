@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import Card from "@/client/components/card.vue";
-import CardContent from "@/client/components/card-content.vue";
-import CardHeader from "@/client/components/card-header.vue";
-import LabeledDot from "@/client/components/labeled-dot.vue";
+import Card from "@/client/components/layout/card.vue";
+import CardContent from "@/client/components/layout/card-content.vue";
+import CardHeader from "@/client/components/layout/card-header.vue";
+import LabeledDot from "@/client/components/ui/labeled-dot.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatSpeed } from "@/shared/utils";
-import EmptyState from "@/client/components/empty-state.vue";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
 import RankedListRows from "./ranked-list-rows.vue";
 import type { HomeProviderStat } from "./use-home-stats";
 

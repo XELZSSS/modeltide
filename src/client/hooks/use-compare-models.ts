@@ -32,6 +32,7 @@ export function usePruneCompareIds(
   watch(
     validIds,
     (ids) => {
+      if (ids.size === 0) return;
       const removed = store.pruneCompare(ids);
       if (removed.length > 0) onPruned?.(removed);
     },

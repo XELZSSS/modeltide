@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, type Component } from "vue";
-import TabbedPage from "@/client/components/tabbed-page.vue";
-import type { TabItem } from "@/client/components/tabs";
+import TabbedPage from "@/client/components/navigation/tabbed-page.vue";
+import type { TabItem } from "@/client/components/navigation/tabs";
 import SearchInput from "@/client/search/search-input.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { loadableView } from "@/client/router/lazy-view";

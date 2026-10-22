@@ -3,7 +3,6 @@ import { UpstreamError, errMsg } from "@/server/api/errors";
 
 const CONTENT_LENGTH_DIGITS_RE = /^\d+$/;
 
-// A bare abort() carries no reason, which makes errMsg() print "undefined".
 function readAbortError(signal: AbortSignal): unknown {
   return signal.reason ?? new Error("Body read aborted");
 }
@@ -55,14 +54,12 @@ async function readBodyText(
   }
   const reader = body.getReader();
   const parts: string[] = [];
-  // Decode incrementally: buffering all chunks first peaked at ~2x the body budget.
   const decoder = new TextDecoder();
   let total = 0;
   try {
     for (;;) {
       if (signal.aborted) throw readAbortError(signal);
       const readPromise = reader.read();
-      // Race the read against abort so a stalled upstream can't outlive timeoutMs.
       const { done, value } = await new Promise<Awaited<ReturnType<typeof reader.read>>>((resolve, reject) => {
         const onAbort = (): void => reject(readAbortError(signal));
         if (signal.aborted) {
@@ -101,9 +98,7 @@ async function readBodyText(
   } finally {
     try {
       reader.releaseLock();
-    } catch {
-      // The reader may already be closed after cancel(); releaseLock throws then.
-    }
+    } catch {}
   }
   parts.push(decoder.decode());
   return { text: parts.join(""), bytes: total };

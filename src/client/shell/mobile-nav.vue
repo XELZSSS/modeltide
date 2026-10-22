@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { MoreHorizontal, Settings } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { useNavigation, usePrefetch } from "@/client/nav/navigation";
-import SafeLink from "@/client/components/safe-link.vue";
+import SafeLink from "@/client/components/ui/safe-link.vue";
 
 const emit = defineEmits<{ moreOpen: []; settingsOpen: [] }>();
 
@@ -12,7 +12,7 @@ const { mobilePrimary, mobileMore, isActive } = useNavigation();
 const { touch } = usePrefetch();
 
 const BAR_BUTTON =
-  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 min-h-16 py-2";
+  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium ui-motion ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 min-h-16 py-2";
 
 const barItemClass = (active: boolean) => `${BAR_BUTTON} relative ${active ? "text-accent" : "text-text-secondary"}`;
 
@@ -33,12 +33,20 @@ const isMoreActive = computed(() => mobileMore.value.some(isActive));
       :class="barItemClass(isActive(item))"
       @touchstart="touch(item.path)"
     >
-      <span v-if="isActive(item)" class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />
+      <span
+        class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent ui-motion-underline origin-center"
+        :class="isActive(item) ? 'scale-x-100' : 'scale-x-0'"
+        aria-hidden="true"
+      />
       <component :is="item.icon" :size="18" />
       <span>{{ item.label }}</span>
     </SafeLink>
     <button type="button" :aria-label="t('more')" :class="barItemClass(isMoreActive)" @click="emit('moreOpen')">
-      <span v-if="isMoreActive" class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent" aria-hidden="true" />
+      <span
+        class="absolute top-0 left-1/4 right-1/4 h-0.5 bg-accent ui-motion-underline origin-center"
+        :class="isMoreActive ? 'scale-x-100' : 'scale-x-0'"
+        aria-hidden="true"
+      />
       <MoreHorizontal :size="18" />
       <span>{{ t("more") }}</span>
     </button>

@@ -10,7 +10,6 @@ export const router: Router = createRouter({
 });
 
 let popstateNavigation = false;
-// Popstate also drives genuine traversals: keep the flag true for them, flush only on programmatic navs.
 let traversing = false;
 
 window.addEventListener("popstate", () => {
@@ -23,7 +22,6 @@ router.afterEach(() => {
     traversing = false;
     return;
   }
-  // Programmatic navigation must not count as a traversal, even when it bypasses navigate().
   popstateNavigation = false;
 });
 
@@ -60,7 +58,6 @@ export function navigate(to: string, replace = false): void {
   popstateNavigation = false;
   const target = `${url.pathname}${url.search}${url.hash}`;
   const task = replace ? router.replace(target) : router.push(target);
-  // Router navigation failures (e.g. aborted) shouldn't crash callers.
   if (task && typeof (task as Promise<unknown>).catch === "function") {
     (task as Promise<unknown>).catch((err: unknown) => {
       console.warn("[router] navigation failed:", err);

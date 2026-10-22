@@ -4,14 +4,14 @@ import { navigate } from "@/client/router";
 import { useTranslation } from "@/client/i18n";
 import { useClientTab } from "@/client/hooks/use-client-tab";
 import { AGENT_VIEW_PARAM } from "@/client/nav/nav-config";
-import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
-import { useCostStore } from "@/client/stores";
+import { useCompareStore, useCostStore } from "@/client/stores";
+import { useCompareModels, usePruneCompareIds } from "@/client/hooks/use-compare-models";
 import { usePricingMaps } from "@/client/hooks/use-pricing-maps";
 import CompareChipBar from "@/client/pages/compare/compare-chip-bar.vue";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
-import SegmentedGroup from "@/client/components/segmented-group.vue";
-import TabButton from "@/client/components/tab-button.vue";
-import { useRovingRadio } from "@/client/components/tabs";
+import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
+import TabButton from "@/client/components/navigation/tab-button.vue";
+import { useRovingRadio } from "@/client/components/navigation/tabs";
 import SearchableDataTable from "@/client/components/table/data-table.vue";
 import ModelExpandedDetail from "./aa/aa-cells.vue";
 import { buildRankingColumns } from "./aa/aa-rank-columns";
@@ -19,8 +19,6 @@ import { buildPricingColumns, type PricingRow } from "./aa/aa-price-columns";
 import { modelId } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
-// Frozen empty array so the pricing-mode computed keeps a stable ComputedRef
-// identity across mode switches. MUST NOT be mutated.
 const EMPTY_MODELS: ArtificialAnalysisModel[] = [];
 Object.freeze(EMPTY_MODELS);
 

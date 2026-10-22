@@ -65,13 +65,13 @@ describe("compact", () => {
       accuracy: 88,
       attempt_rate: 70,
       hallucination_rate: 10,
-      omniscience: 90,
+      omniscience: 0.9,
     });
     expect(compact(rawModel()).benchmarks).toMatchObject({
       terminalbench_v2_1: 80,
       terminalbench_hard: 70,
       terminalbench_v4_0: 90,
-      omniscience: 90,
+      omniscience: 0.9,
     });
     expect(compact(rawModel({ omniscience: -5.3 })).benchmarks?.omniscience).toBe(-5.3);
     expect(compact(rawModel({ omniscience: -5.3 })).omniscience_breakdown?.total?.omniscience).toBe(-5.3);
@@ -87,7 +87,6 @@ describe("compact", () => {
   });
 
   it("accepts either upstream spelling of the itbench_sre benchmark", () => {
-    // /models spells it `itBenchSre`; /leaderboards and /omniscience spell it `itbenchSre`.
     expect(compact(rawModel({ itBenchSre: 0.44 })).benchmarks?.itbench_sre).toBe(44);
     expect(compact(rawModel({ itbenchSre: 0.44 })).benchmarks?.itbench_sre).toBe(44);
   });
@@ -232,9 +231,6 @@ describe("parseChangelogModels", () => {
 });
 
 function leaderboardHtml(rows: unknown[], links: unknown[], releases: unknown[]): string {
-  // Upstream layout: the model matrix rides in an RSC JSON line under the
-  // `initialModels` component prop, while the `"models"` script only carries
-  // the slug/name/releaseSlug release links.
   const linksPayload = JSON.stringify({ models: links, modelsAndReleases: { releases } });
   return `<script>push([1,${linksPayload}])</script>\n2:${JSON.stringify({ initialModels: rows })}\n`;
 }
@@ -294,7 +290,6 @@ describe("parseLeaderboardModels", () => {
       speed: { median_output_speed: 146.5 },
     });
     expect(compact(first).benchmarks).toMatchObject({ terminalbench_v2_1: 60, gpqa: 83 });
-    // gdpval reads the normalized 0-1 ratio, not the raw Elo score.
     expect(compact(first).benchmarks?.gdpval).toBe(23);
     expect(compact(first).benchmarks?.gdpval).not.toBe(0.23);
     const total = compact(first).omniscience_breakdown?.total;
@@ -314,8 +309,6 @@ describe("parseLeaderboardModels", () => {
   });
 
   it("only asks for the benchmarks the leaderboard path serves", () => {
-    // `gdpval` / `briefcaseElo` / `cweBench` live on the /models and /omniscience paths,
-    // never on the leaderboard, so their absence must not be reported as a missing wire name.
     const result = parseLeaderboardModels(leaderboardHtml([row], links, releases));
     expect(result.ok).toBe(true);
     const warnings = result.ok ? result.warnings : [];
@@ -323,7 +316,6 @@ describe("parseLeaderboardModels", () => {
     expect(wireWarning).not.toContain("gdpval");
     expect(wireWarning).not.toContain("briefcaseElo");
     expect(wireWarning).not.toContain("cweBench");
-    // `hle` is served by the leaderboard, so its absence is reported.
     expect(wireWarning).toContain("hle");
   });
 
@@ -337,9 +329,7 @@ describe("parseLeaderboardModels", () => {
 
   it("fails when the initialModels prop is missing or not the model matrix", () => {
     const linksPayload = JSON.stringify({ models: [], modelsAndReleases: { releases } });
-    // No initialModels prop at all.
     expect(parseLeaderboardModels(`<script>push([1,${linksPayload}])</script>\n`).ok).toBe(false);
-    // Prop exists but resembles the release-link identifier list instead.
     expect(parseLeaderboardModels(leaderboardHtml([{ slug: "a", name: "A", releaseSlug: "a" }], [], releases)).ok).toBe(
       false,
     );

@@ -27,7 +27,7 @@ export function keyedThrottleGate(intervalMs: number, maxKeys: number): (key: st
 
 const SINGLE_GATE_KEY = "gate";
 
-function throttleGate(intervalMs: number): { open: () => boolean } {
+export function throttleGate(intervalMs: number): { open: () => boolean } {
   const gate = keyedThrottleGate(intervalMs, 1);
   return { open: () => gate(SINGLE_GATE_KEY) };
 }

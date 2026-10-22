@@ -50,7 +50,6 @@ function normalizeRow(
   return normalized;
 }
 
-/** Model matrix is the `initialModels` RSC prop; the `"models"` array holds only ids. */
 export function parseLeaderboardModels(html: unknown): ParseResult<Record<string, unknown>[]> {
   if (typeof html !== "string" || !html) return parseFail("AA leaderboard page is not a string");
   const { releases, modelArrays } = scanReleaseIndex(html);
@@ -60,7 +59,6 @@ export function parseLeaderboardModels(html: unknown): ParseResult<Record<string
   if (rows.length === 0 || !rows.some((raw) => isRecord(raw) && "intelligenceIndex" in raw)) {
     return parseFail("AA leaderboard page yielded no usable model rows");
   }
-  // Track seen wire names so an upstream rename surfaces as a warning, not blank columns.
   const seenWire = new Set<string>();
   const kept: Record<string, unknown>[] = [];
   for (const raw of rows) {

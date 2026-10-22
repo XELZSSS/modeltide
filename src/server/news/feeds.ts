@@ -10,7 +10,6 @@ const PYTORCH_BLOG = "https://pytorch.org/feed/";
 const SIMON_WILLISON = "https://simonwillison.net/atom/everything/";
 const OLLAMA_BLOG = "https://ollama.com/blog/rss.xml";
 const NVIDIA_BLOG = "https://blogs.nvidia.com/feed/";
-// nextplatform.com is excluded: it serves a JS proof-of-work challenge page instead of RSS.
 const SERVE_THE_HOME = "https://www.servethehome.com/feed/";
 const GOOGLE_RESEARCH = "https://research.google/blog/rss/";
 const BAIR_BLOG = "https://bair.berkeley.edu/blog/feed.xml";

@@ -8,5 +8,4 @@ export const DETAIL_BLOCK_GAP = "flex flex-col gap-6 sm:gap-8";
 
 export const ROW_PADDING = "px-4 py-3.5";
 
-// Densest tier: the compare table sits beside the cost estimator, still on one screen.
 export const ROW_PADDING_ULTRA_COMPACT = "px-4 py-1.5";

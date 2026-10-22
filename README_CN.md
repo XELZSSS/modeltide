@@ -52,13 +52,14 @@ npm run dev    # http://localhost:5173
 
 ## 命令
 
-| 命令             | 说明       |
-| ---------------- | ---------- |
-| `npm run dev`    | 开发服务器 |
-| `npm run build`  | 生产构建   |
-| `npm run test`   | 运行测试   |
-| `npm run lint`   | 静态检查   |
-| `npm run format` | 代码格式化 |
+| 命令              | 说明                                            |
+| ----------------- | ----------------------------------------------- |
+| `npm run dev`     | 开发服务器                                      |
+| `npm run build`   | 全量门禁：类型、lint、测试、生产构建            |
+| `npm run preview` | 本地预览已构建的 `dist`（先跑 `npm run build`） |
+| `npm run test`    | 仅跑测试（`test:watch` 可监听）                 |
+| `npm run lint`    | 静态检查                                        |
+| `npm run format`  | 代码格式化                                      |
 
 ## 部署
 

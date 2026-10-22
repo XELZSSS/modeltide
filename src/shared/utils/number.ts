@@ -5,15 +5,17 @@ export function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
-/** Fractions in (0, 1] are scaled to a percentage; anything else is already one. */
-export function unclampedPercent(value: number | null | undefined): number | null {
-  if (!isFiniteNumber(value)) return null;
-  return value > 0 && value <= 1 ? value * 100 : value;
-}
-
-export function clampedPercent(value: number | null | undefined): number | null {
-  const percent = unclampedPercent(value);
-  return percent == null ? null : Math.max(0, Math.min(100, percent));
+/**
+ * Scales a figure that upstream sends as a 0-1 ratio onto a 0-100 scale. The unit is declared by the caller and
+ * never sniffed from the value: anything outside 0-1 is not a ratio, so it is dropped (`null`) rather than rescaled
+ * by a guess. A field that silently changed units then shows up as missing data, not as a plausible 100x error.
+ *
+ * Fields that legitimately leave 0-1 (the signed omniscience index, Briefcase Elo, the Cyber index) are declared in
+ * `ABSOLUTE_SCORE_BENCHMARKS` and must not come through here.
+ */
+export function ratioToPercent(value: number | null | undefined): number | null {
+  if (!isFiniteNumber(value) || value < 0 || value > 1) return null;
+  return value * 100;
 }
 
 export function approxEq(a: number, b: number, eps = 1e-9): boolean {
@@ -81,22 +83,30 @@ export function formatTokens(n: number | null | undefined, t?: TFunction): strin
   return String(parseFloat(n.toFixed(1)));
 }
 
-export function formatScore(n: number | null | undefined, t: TFunction): string {
-  if (!isFiniteNumber(n)) return t("notAvailable");
-  if (Math.abs(n) > 1_000_000) return t("notAvailable");
-  return n.toFixed(2);
-}
-
-/** One decimal percent; `signed` prefixes the "+" a rising figure needs. */
-function percentText(v: number, signed = false): string {
-  return `${signed && v > 0 ? "+" : ""}${v.toFixed(1)}%`;
-}
-
 export function formatPercent(v: number | null | undefined, t: TFunction): string {
   return isFiniteNumber(v) ? percentText(v) : t("notAvailable");
 }
 
+function percentText(v: number, signed = false): string {
+  return `${signed && v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
+// Scores span several scales at once: percentages sit in 0-100, index scores a bit above, and Briefcase Elo around
+// 1500. Decimals are kept where they carry signal and dropped where they are noise, so a column stays readable
+// without inventing a unit suffix.
+const SCORE_ONE_DECIMAL_AT = 100;
+const SCORE_INTEGER_AT = 1000;
+
 const INDEX_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+
+export function formatScore(n: number | null | undefined, t: TFunction): string {
+  if (!isFiniteNumber(n)) return t("notAvailable");
+  const magnitude = Math.abs(n);
+  if (magnitude > 1_000_000) return t("notAvailable");
+  if (magnitude >= SCORE_INTEGER_AT) return n.toFixed(0);
+  if (magnitude >= SCORE_ONE_DECIMAL_AT) return n.toFixed(1);
+  return n.toFixed(2);
+}
 
 export function formatIndex(v: number, fallback = FALLBACK_DASH): string {
   if (!isFiniteNumber(v)) return fallback;

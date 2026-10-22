@@ -29,9 +29,7 @@ describe("mapListModel", () => {
       license: "apache-2.0",
       task: "text-generation",
     });
-    // The full ISO timestamp is preserved, not truncated to the date part.
     expect((entry as OpenSourceModelEntry).createdAt).toBe("2025-06-01T00:00:00.000Z");
-    // List rows drop tags on purpose — they stay a directory-only concern.
     expect((entry as OpenSourceModelEntry).tags).toEqual([]);
   });
 
@@ -43,7 +41,6 @@ describe("mapListModel", () => {
 
   it("falls back to the id prefix when author is missing", () => {
     expect(mapListModel(hfRow({ author: null }))?.author).toBe("acme");
-    // A bare id without an owner prefix falls back to the whole id.
     expect(mapListModel(hfRow({ id: "model-7b", author: null }))?.author).toBe("model-7b");
   });
 
@@ -77,9 +74,9 @@ describe("mapModel", () => {
 describe("LicenseDropTally + keepOpenSourceRanking", () => {
   it("separates licenceless rows from declared non-open licences and names unknown tags", () => {
     const tally = new LicenseDropTally();
-    tally.record([], null); // no licence tag at all
-    tally.record(["other"], null); // known non-open
-    tally.record(["made-up-lab-license"], null); // unknown non-open
+    tally.record([], null);
+    tally.record(["other"], null);
+    tally.record(["made-up-lab-license"], null);
     expect(tally.drops()).toEqual({
       withoutTag: 1,
       declaredNonOpen: 2,

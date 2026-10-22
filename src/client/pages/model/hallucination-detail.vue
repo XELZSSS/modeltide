@@ -6,13 +6,14 @@ import type { ArtificialAnalysisModel, HallucinationRankingEntry } from "@/share
 import { formatIndex, formatPercent } from "@/shared/utils";
 import { normalizeModelKey } from "@/shared/utils";
 import { useSuspenseArtificialRankings, useSuspenseHallucinationRankings } from "@/client/api/hooks";
-import StatGrid from "@/client/components/stat-grid.vue";
-import InfoCard from "@/client/components/info-card.vue";
-import InfoRow from "@/client/components/info-row.vue";
-import StatCard from "@/client/components/stat-card.vue";
-import PageSection from "@/client/components/page-section.vue";
+import StatGrid from "@/client/components/layout/stat-grid.vue";
+import InfoCard from "@/client/components/layout/info-card.vue";
+import InfoRow from "@/client/components/layout/info-row.vue";
+import StatCard from "@/client/components/layout/stat-card.vue";
+import PageSection from "@/client/components/layout/page-section.vue";
 import { DETAIL_BLOCK_GAP } from "@/client/nav/layout";
-import NotFound from "@/client/components/not-found.vue";
+import NotFound from "@/client/components/feedback/not-found.vue";
+import { useSoftNotFound } from "@/client/router/document-meta";
 import ModelDetailContent from "./aa-detail.vue";
 import DetailShell, { findModel } from "./detail-views.vue";
 
@@ -52,6 +53,8 @@ const [aaData, hallucinationRankings] = await Promise.all([
 ]);
 
 const entry = computed(() => findModel(hallucinationRankings.value, props.decodedId, "id", "slug"));
+
+useSoftNotFound(computed(() => !entry.value));
 const directAa = computed(() => findModel(aaData.value, props.decodedId, "id", "slug"));
 const fallbackAa = computed(() =>
   !directAa.value && entry.value ? findAaModelForHall(indexAaModels(aaData.value), entry.value) : undefined,
@@ -71,7 +74,7 @@ const hallStats = computed<[TranslationKey, string][]>(() =>
 </script>
 
 <template>
-  <NotFound v-if="!entry" />
+  <NotFound v-if="!entry" heading-key="modelNotFoundTitle" body-key="modelNotFound" :code="null" />
   <DetailShell v-else source="hall" :title="entry.model">
     <div :class="DETAIL_BLOCK_GAP">
       <StatGrid :columns="4">

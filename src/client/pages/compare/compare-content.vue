@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onUnmounted, ref } from "vue";
 import { useTranslation } from "@/client/i18n";
-import EmptyState from "@/client/components/empty-state.vue";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
 import BackButton from "@/client/shell/back-button.vue";
-import DetailPageLayout from "@/client/components/detail-page-layout.vue";
-import PageContainer from "@/client/components/page-container.vue";
+import DetailPageLayout from "@/client/components/layout/detail-page-layout.vue";
+import PageContainer from "@/client/components/layout/page-container.vue";
 import { useSuspenseArtificialRankings } from "@/client/api/hooks";
-import { useCompareModels, useCompareStore, usePruneCompareIds } from "@/client/stores";
+import { useCompareStore } from "@/client/stores";
+import { useCompareModels, usePruneCompareIds } from "@/client/hooks/use-compare-models";
 import { navigate } from "@/client/router";
 import CompareChipBar from "./compare-chip-bar.vue";
 
@@ -41,7 +42,7 @@ function clearAndBack(): void {
 
 <template>
   <PageContainer v-if="models.length < 2">
-    <div class="flex flex-col gap-3 items-center py-16 text-center animate-enter">
+    <div class="flex flex-col gap-3 items-center py-16 text-center ui-anim-rise">
       <div class="w-full">
         <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
       </div>

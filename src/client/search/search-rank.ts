@@ -22,7 +22,6 @@ export interface SourceConfig {
   map(item: SearchItem): SearchResult;
 }
 
-// Declared before `collect`: its `limit` default reads MAX_PER_SOURCE, so a later declaration would be a TDZ error.
 const MAX_RESULTS = 20;
 const MAX_PER_SOURCE = 50;
 

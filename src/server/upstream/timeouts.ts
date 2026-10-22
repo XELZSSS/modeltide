@@ -1,5 +1,4 @@
 // Free plan: 50 external subrequests and 6 simultaneous connections per invocation.
-// Per-call timeouts stay short so one slow upstream cannot wedge the slot pool.
 const UPSTREAM_TIMEOUT_MS = 12_000;
 
 export const BACKOFF_MAX_MS = 2_000;

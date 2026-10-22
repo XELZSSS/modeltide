@@ -1,6 +1,5 @@
 import { ref, type Ref } from "vue";
 
-// Tailwind's `md` breakpoint is 768px, so the JS mobile query must stop one pixel below it.
 const MOBILE_MAX_WIDTH_PX = 767;
 const MOBILE_QUERY = `(max-width: ${MOBILE_MAX_WIDTH_PX}px)`;
 

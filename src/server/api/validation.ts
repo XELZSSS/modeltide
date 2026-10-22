@@ -9,7 +9,6 @@ interface EnumSpec<V extends string = string> {
 interface StringSpec {
   type: "string";
   maxLength?: number;
-  /** Absent params stay absent instead of failing validation. */
   optional?: boolean;
 }
 type QuerySpec = EnumSpec | StringSpec;
@@ -50,7 +49,6 @@ export function validateQuery<S extends QuerySchema>(
   for (const [name, spec] of Object.entries(schema)) {
     const rawVal = raw[name];
     if (rawVal === undefined) {
-      // Enum defaults fill in; string specs are required unless marked optional.
       if (spec.type === "string") {
         if (!spec.optional) throw new ValidationError(`Query param "${name}" is required`);
         out[name] = undefined;

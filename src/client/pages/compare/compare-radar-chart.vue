@@ -19,10 +19,10 @@ import {
   seriesColor,
   useChartTheme,
 } from "@/client/charts/theme";
-import Card from "@/client/components/card.vue";
-import CardContent from "@/client/components/card-content.vue";
-import ChartCanvas from "@/client/components/chart-canvas.vue";
-import ChartFrame from "@/client/components/chart-frame.vue";
+import Card from "@/client/components/layout/card.vue";
+import CardContent from "@/client/components/layout/card-content.vue";
+import ChartCanvas from "@/client/components/charts/chart-canvas.vue";
+import ChartFrame from "@/client/components/charts/chart-frame.vue";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName, modelId } from "@/shared/utils/models";
 import { buildRadarData, radarMaxFor } from "@/client/utils/compare-logic";
@@ -86,7 +86,7 @@ const caption = computed(() =>
       });
       return `${row.metric} — ${values.join(", ")}`;
     })
-    .join(""),
+    .join("; "),
 );
 </script>
 

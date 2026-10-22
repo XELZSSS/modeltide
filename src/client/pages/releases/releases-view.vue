@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import PageContainer from "@/client/components/page-container.vue";
-import PageHeader from "@/client/components/page-header.vue";
+import PageContainer from "@/client/components/layout/page-container.vue";
+import PageHeader from "@/client/components/layout/page-header.vue";
 import { PAGE_BLOCK_GAP } from "@/client/nav/layout";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import SearchInput from "@/client/search/search-input.vue";

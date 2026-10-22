@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
-import TabbedPage from "@/client/components/tabbed-page.vue";
+import TabbedPage from "@/client/components/navigation/tabbed-page.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { useClientTab } from "@/client/hooks/use-client-tab";
-import type { TabItem } from "@/client/components/tabs";
+import type { TabItem } from "@/client/components/navigation/tabs";
 import type { TranslationKey } from "@/shared/i18n";
 import type { NewsCategory } from "@/shared/types";
 import { NEWS_CATEGORIES } from "@/shared/types/news";

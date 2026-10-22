@@ -2,10 +2,10 @@
 import { ChevronRight } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { useNavigation, usePrefetch } from "@/client/nav/navigation";
-import Sheet from "@/client/components/sheet.vue";
-import SheetBody from "@/client/components/sheet-body.vue";
-import SheetHeader from "@/client/components/sheet-header.vue";
-import SafeLink from "@/client/components/safe-link.vue";
+import Sheet from "@/client/components/ui/sheet.vue";
+import SheetBody from "@/client/components/ui/sheet-body.vue";
+import SheetHeader from "@/client/components/ui/sheet-header.vue";
+import SafeLink from "@/client/components/ui/safe-link.vue";
 
 defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -27,7 +27,7 @@ const prefetch = usePrefetch();
           :href="item.path"
           :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
-            'flex items-center justify-between gap-3 px-4 py-3 transition-colors duration-fast focus-visible:outline-none focus-visible:bg-hover',
+            'flex items-center justify-between gap-3 px-4 py-3 ui-motion focus-visible:outline-none focus-visible:bg-hover',
             isActive(item) ? 'text-accent' : 'text-text-primary hoverable:hover:bg-hover',
           ]"
           @click="emit('close')"

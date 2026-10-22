@@ -1,6 +1,5 @@
 export {
   approxEq,
-  clampedPercent,
   formatIndex,
   formatPercent,
   formatScore,
@@ -8,7 +7,7 @@ export {
   formatSpeed,
   formatTokens,
   formatTrend,
-  unclampedPercent,
+  ratioToPercent,
 } from "./number";
 export { formatDollar, formatPricePerMillion } from "./money";
 export { formatDate, formatRelativeTime } from "./time";

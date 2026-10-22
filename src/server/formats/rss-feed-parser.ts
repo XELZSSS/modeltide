@@ -12,7 +12,6 @@ import { parseFail, parseOk, type ParseResult } from "./parse-result";
 import { SOURCE_LIMITS } from "./limits";
 
 const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
-// Control chars are rejected alongside the markup-significant ones; href is rendered client-side.
 // oxlint-disable-next-line no-control-regex
 const UNSAFE_LINK_CHARS_RE = /["<>\u0000-\u001f\u007f]/;
 const SPACE_RE = / /g;

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, h } from "vue";
 import { useSuspenseArtificialRankingsState } from "@/client/api/hooks";
-import TabStateShell from "@/client/components/tab-state-shell.vue";
+import TabStateShell from "@/client/components/navigation/tab-state-shell.vue";
 import SearchableDataTable from "@/client/components/table/data-table.vue";
 import { col, monoCol, rightCol, type DataTableColumn } from "@/client/components/table/table-columns.ts";
-import LabeledDot from "@/client/components/labeled-dot.vue";
+import LabeledDot from "@/client/components/ui/labeled-dot.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatPricePerMillion, formatScore, formatSpeed } from "@/shared/utils";
 import { type ProviderStats } from "@/shared/utils/models";

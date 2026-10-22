@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useQueryClient } from "@tanstack/vue-query";
-import ErrorBoundary from "@/client/components/error-boundary.vue";
-import PageContainer from "@/client/components/page-container.vue";
-import Spinner from "@/client/components/spinner.vue";
+import ErrorBoundary from "@/client/components/feedback/error-boundary.vue";
+import PageContainer from "@/client/components/layout/page-container.vue";
+import Spinner from "@/client/components/ui/spinner.vue";
 
 const queryClient = useQueryClient();
 

@@ -5,12 +5,12 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { OpenRouterRankEntry } from "@/shared/types";
 import { categoryLabel, formatPricePerMillion, formatShortNumber, formatTrend, orNA } from "@/shared/utils";
 import { PRICE_LEGS, type PriceLegId } from "@/shared/utils/pricing";
-import StatGrid from "@/client/components/stat-grid.vue";
-import InfoGrid from "@/client/components/info-grid.vue";
-import InfoCard from "@/client/components/info-card.vue";
-import InfoRow from "@/client/components/info-row.vue";
-import Badge from "@/client/components/badge.vue";
-import StatCard from "@/client/components/stat-card.vue";
+import StatGrid from "@/client/components/layout/stat-grid.vue";
+import InfoGrid from "@/client/components/layout/info-grid.vue";
+import InfoCard from "@/client/components/layout/info-card.vue";
+import InfoRow from "@/client/components/layout/info-row.vue";
+import Badge from "@/client/components/ui/badge.vue";
+import StatCard from "@/client/components/layout/stat-card.vue";
 import { DETAIL_BLOCK_GAP } from "@/client/nav/layout";
 
 const PRICE_ROW_LEGS = ["cacheHitPrice", "promptPrice", "completionPrice"] as const satisfies readonly PriceLegId[];

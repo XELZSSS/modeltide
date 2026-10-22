@@ -17,12 +17,11 @@ import {
 import { parseLeaderboardModels } from "./parse/leaderboard";
 import { backfillFromMeta, mergeBySlug, type IntelligenceIndexResult } from "./parse/model-enrich";
 import { fetchAaRsc, getAndParseEnrich } from "./fetch";
-import type { SourcePayload } from "@/shared/types";
 import { upstreamEndpoints } from "@/server/upstream/upstream";
 import type { CacheResult } from "@/server/cache/service";
 import { errMsg, UpstreamError } from "@/server/api/errors";
-import { cachedPayload, cachedRaw, requireParsed, requireRows } from "@/server/pipeline";
-import { runLegs } from "@/server/join-legs";
+import { cachedRaw, defineSource, requireParsed, requireRows } from "@/server/pipeline";
+import { fanOut } from "@/server/fan-out";
 
 export function getAaLeaderboardBody(ctx: AppContext): Promise<CacheResult<string>> {
   return cachedRaw(ctx, cacheKeys.aaLeaderboardBody, DEFAULT_TTL_MS, (ctx) =>
@@ -30,7 +29,6 @@ export function getAaLeaderboardBody(ctx: AppContext): Promise<CacheResult<strin
   );
 }
 
-// Fields every enrich path serves.
 const ENRICH_BASE_FIELDS = [
   "id",
   "slug",
@@ -50,8 +48,6 @@ const ENRICH_BASE_FIELDS = [
   "creator",
 ];
 
-// Per-path allow-lists of exactly what each RSC path returns; a field a path does not serve
-// is contributed by another path and merged in, so it is never reported as missing.
 const MODELS_PATH_FIELDS = [
   ...ENRICH_BASE_FIELDS,
   "omniscienceHallucinationRate",
@@ -92,7 +88,8 @@ async function fetchIntelligenceIndex(
       map: (arr) => arr.map(project),
     });
   };
-  const { values, failures } = await runLegs(
+  const { values, failures } = await fanOut(
+    ctx,
     [
       { label: "leaderboard", run: () => getAaLeaderboardBody(ctx) },
       {
@@ -118,9 +115,7 @@ async function fetchIntelligenceIndex(
           }),
       },
     ] as const,
-    {
-      onFailure: (f) => ctx.log("warn", `[artificial] ${f.label} leg failed: ${errMsg(f.reason)}`),
-    },
+    { tag: "artificial" },
   );
   const [indexBody, modelsEnrich, omniscienceEnrich, directoryMeta] = values;
   const leaderboardFailure = failures.find((f) => f.label === "leaderboard");
@@ -137,14 +132,22 @@ async function fetchIntelligenceIndex(
 
   const enrichFailures =
     [modelsEnrich, omniscienceEnrich].filter((leg) => leg?.failed).length + (openRouterMeta === null ? 1 : 0);
+  // Declared-ratio fields that arrive on another scale are dropped by `compact`; surface them instead of losing data
+  // silently (the parse is cached, so this logs at most once per refresh).
+  const outOfRatio = new Set<string>();
+  const warnRatio = (field: string, value: number): void => {
+    if (outOfRatio.size < 8) outOfRatio.add(`${field}=${value}`);
+  };
   const merged = mergeBySlug(
     indexModels,
     (modelsEnrich?.rows ?? []) as Record<string, unknown>[],
     (omniscienceEnrich?.rows ?? []) as Record<string, unknown>[],
   )
-    .map(compact)
+    .map((row) => compact(row, warnRatio))
     .filter((m) => isValidModelIdentity(m.id, m.slug, m.name));
-  // Backfill before ranking: an -Infinity sort key would keep that slot once filled.
+  if (outOfRatio.size > 0) {
+    ctx.log("warn", `[artificial] dropped out-of-range ratio field(s): ${[...outOfRatio].join(", ")}`);
+  }
   const backfilled = backfillFromMeta(merged, openRouterMeta ?? {});
   if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
   const models = merged.sort(byNumberDesc((m) => m.intelligence_index));
@@ -157,11 +160,17 @@ async function fetchIntelligenceIndex(
   return { models, partial: enrichFailures > 0 || indexBody.degraded || directoryPartial };
 }
 
-export const getIntelligenceIndex = (ctx: AppContext): Promise<SourcePayload<ArtificialAnalysisModel[]>> =>
-  cachedPayload<ArtificialAnalysisModel[]>(ctx, cacheKeys.intelligenceIndex, DEFAULT_TTL_MS, async (ctx) => {
-    const { models, partial } = await fetchIntelligenceIndex(ctx);
-    return { rows: models, partial };
-  });
+export const getIntelligenceIndex = defineSource<
+  { models: ArtificialAnalysisModel[]; partial: boolean },
+  ArtificialAnalysisModel
+>({
+  key: cacheKeys.intelligenceIndex,
+  ttl: DEFAULT_TTL_MS,
+  label: "Artificial Analysis parsing",
+  fetch: (ctx) => fetchIntelligenceIndex(ctx),
+  parse: (raw) => raw.models,
+  partialWhen: ({ raw }) => ({ partial: raw.partial }),
+});
 
 export const getIntelligenceIndexResult = async (ctx: AppContext): Promise<IntelligenceIndexResult> => {
   const { data, fetchedAt, partial } = await getIntelligenceIndex(ctx);

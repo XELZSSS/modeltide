@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import { useRoute } from "vue-router";
-import { syncDocumentMeta, useTranslation } from "./i18n";
-import { useDocumentMeta } from "./router/document-meta";
+import { useTranslation } from "./i18n";
+import { syncDocumentMeta, useDocumentMeta } from "./router/document-meta";
 import AppShell from "./shell/app-shell.vue";
 import SuspenseQuery from "./router/suspense-query.vue";
 
 const { lang } = useTranslation();
 const route = useRoute();
-const routeKey = computed(() => String(route.name ?? "notFound"));
+const routeKey = computed(() => {
+  const name = String(route.name ?? "notFound");
+  const id = typeof route.params.id === "string" ? route.params.id : "";
+  return id ? `${name}:${id}` : name;
+});
 
 useDocumentMeta();
 

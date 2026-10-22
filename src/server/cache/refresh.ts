@@ -1,31 +1,45 @@
 import { INFLIGHT_HANG_GUARD_MS } from "@/server/upstream/timeouts";
 import { ClientAbortError, UpstreamError, isTimeoutLike } from "@/server/api/errors";
 import { pruneBounded } from "@/server/util/throttle";
+import { noteCacheStat } from "./stats";
 import type { KvStore } from "./kv";
 import type { TierStore } from "./store";
 
 export const FAILURE_COOLDOWN_MS = 45_000;
 const FAILURE_COOLDOWN_MAX_KEYS = 512;
 
-class FailureCooldown {
-  private lastFail = new Map<string, { at: number; timeout: boolean; windowMs?: number }>();
+interface CooldownEntry {
+  at: number;
+  timeout: boolean;
+  statusCode?: number;
+  retryAfterMs?: number;
+  windowMs?: number;
+}
 
-  shouldSkip(key: string, windowMs: number): { skip: boolean; wasTimeout: boolean } {
+class FailureCooldown {
+  private lastFail = new Map<string, CooldownEntry>();
+
+  shouldSkip(key: string, windowMs: number): { skip: false } | { skip: true; entry: CooldownEntry } {
     const entry = this.lastFail.get(key);
-    if (entry == null) return { skip: false, wasTimeout: false };
-    if (Date.now() - entry.at < (entry.windowMs ?? windowMs)) {
-      return { skip: true, wasTimeout: entry.timeout };
-    }
+    if (entry == null) return { skip: false };
+    if (Date.now() - entry.at < (entry.windowMs ?? windowMs)) return { skip: true, entry };
     this.lastFail.delete(key);
-    return { skip: false, wasTimeout: false };
+    return { skip: false };
   }
 
+  // Everything that shapes the response is kept: remembering only "was it a timeout" turned the first 429
+  // (503 + Retry-After) into a generic 502 for the rest of the cooldown window.
   record(key: string, err?: unknown): void {
     const now = Date.now();
-    const timeout = isTimeoutLike(err);
-    const windowMs = err instanceof UpstreamError ? err.retryAfterMs : undefined;
+    const upstream = err instanceof UpstreamError ? err : undefined;
+    const entry: CooldownEntry = { at: now, timeout: isTimeoutLike(err) };
+    if (upstream?.statusCode != null) entry.statusCode = upstream.statusCode;
+    if (upstream?.retryAfterMs != null) {
+      entry.retryAfterMs = upstream.retryAfterMs;
+      entry.windowMs = upstream.retryAfterMs;
+    }
     this.lastFail.delete(key);
-    this.lastFail.set(key, windowMs != null ? { at: now, timeout, windowMs } : { at: now, timeout });
+    this.lastFail.set(key, entry);
     pruneBounded(this.lastFail, FAILURE_COOLDOWN_MAX_KEYS, (t) => now - t.at >= (t.windowMs ?? FAILURE_COOLDOWN_MS));
   }
 
@@ -81,15 +95,18 @@ export class RefreshRunner {
     if (existing) return existing;
     const cooldown = refreshFailureCooldown.shouldSkip(vk, this.failureCooldownMs);
     if (cooldown.skip) {
+      const { entry } = cooldown;
       throw new UpstreamError(`Upstream refresh skipped (failure cooldown) for ${vk}`, {
-        timeout: cooldown.wasTimeout,
+        ...(entry.timeout ? { timeout: true } : {}),
+        ...(entry.statusCode != null ? { status: entry.statusCode } : {}),
+        ...(entry.retryAfterMs != null ? { retryAfterMs: entry.retryAfterMs } : {}),
       });
     }
 
     let p!: Promise<T>;
     const work = (async (): Promise<T> => {
+      noteCacheStat("refreshes");
       const { data, ttl: t } = await fn();
-      // Still valid data if the hang guard released the key, unless a newer refresh owns it.
       const owner = this.inflight.get(vk);
       if (owner !== undefined && owner !== p) return data;
       await this.tier.storeCurrent(kv, vk, data, t ?? ttl);

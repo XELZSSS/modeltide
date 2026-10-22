@@ -6,6 +6,7 @@ import { CellView, type RowListEmits } from "./cell-view";
 import ExpandToggle from "./expand-toggle.vue";
 import { ExpandedRowPanel } from "./expanded-row-panel.ts";
 import { useRowList } from "./use-row-list";
+import { staggerStyle } from "@/client/motion";
 
 const props = defineProps<RowListProps<T>>();
 
@@ -33,15 +34,18 @@ const { rows, renderExpanded } = useRowList(props);
 
 <template>
   <div v-if="layout" class="flex flex-col gap-3">
-    <template v-for="item in rows" :key="item.id">
+    <template v-for="(item, index) in rows" :key="item.id">
       <div
         :class="
           cn(
-            'ui-card p-4 overflow-hidden transition-colors duration-fast',
+            'ui-card p-4 overflow-hidden ui-motion',
+            props.stagger !== false && 'ui-anim-rows',
+            props.stagger === false && 'ui-anim-swap',
             'hoverable:hover:border-text-tertiary/40',
             item.expanded && 'border-text-tertiary/40',
           )
         "
+        :style="staggerStyle(index)"
       >
         <div class="flex items-center gap-2 min-w-0">
           <ExpandToggle
@@ -80,14 +84,16 @@ const { rows, renderExpanded } = useRowList(props);
           </div>
         </div>
       </div>
-      <ExpandedRowPanel
-        v-if="item.expanded && isExpandable"
-        :row-id="item.id"
-        :row-name="item.name"
-        class="border border-t-0 border-border bg-bg-secondary/60 overflow-hidden"
-      >
-        <CellView :render="renderExpanded" :row="item.row" />
-      </ExpandedRowPanel>
+      <Transition name="ui-rise">
+        <ExpandedRowPanel
+          v-if="item.expanded && isExpandable"
+          :row-id="item.id"
+          :row-name="item.name"
+          class="border border-t-0 border-border bg-bg-secondary/60 overflow-hidden"
+        >
+          <CellView :render="renderExpanded" :row="item.row" />
+        </ExpandedRowPanel>
+      </Transition>
     </template>
   </div>
 </template>

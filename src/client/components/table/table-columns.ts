@@ -12,7 +12,6 @@ export interface DataTableColumn<T> {
   mobilePrimary?: boolean;
 }
 
-/** Row identity accessors shared by the data table, its row lists and the generic wrapper. */
 export interface RowAccessors<T> {
   getRowId: (row: T) => string;
   getRowName?: (row: T) => string;
@@ -24,6 +23,7 @@ export interface RowListProps<T> extends RowAccessors<T> {
   isExpandable: boolean;
   expandedRowId?: string | null;
   renderExpandedRow?: (row: T) => VNodeChild;
+  stagger?: boolean;
 }
 
 interface ColOpts {
@@ -37,7 +37,6 @@ export function col<T>(id: string, header: string, cell: (row: T) => VNodeChild,
   return { id, header, cell, ...opts };
 }
 
-// Only caller passes the raw change percent; zero/absent renders muted.
 export function trendClass(change: number | null | undefined): string {
   if (change == null || change === 0) return "text-text-tertiary";
   return change > 0 ? "text-success" : "text-destructive";

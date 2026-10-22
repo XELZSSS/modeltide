@@ -1,3 +1,4 @@
+import { ref } from "vue";
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
 import { API_VERSION_PARAM } from "@/shared/config/api";
 import type { SourcePayload } from "@/shared/types";
@@ -23,30 +24,19 @@ export function isAbortError(err: unknown): boolean {
   return name === "AbortError" || name === "TimeoutError";
 }
 
-let contractSkew = false;
-const skewListeners = new Set<() => void>();
+export const contractSkew = ref(false);
 
-export function hasContractSkew(): boolean {
-  return contractSkew;
-}
-
-export function subscribeContractSkew(listener: () => void): () => void {
-  skewListeners.add(listener);
-  return () => {
-    skewListeners.delete(listener);
-  };
-}
-
+/**
+ * Every response from our own function carries the header, on success and on error paths alike, so an absent
+ * header means the response came from something we cannot verify (service worker copy, middlebox). Treat that as
+ * "no information" instead of pinning a previous mismatch, which used to leave the notice up indefinitely.
+ */
 function noteContractVersion(res: Response): void {
   const served = res.headers.get(CONTRACT_VERSION_HEADER);
-  if (!served) return;
-  const skewed = served !== CACHE_VERSION;
-  if (skewed === contractSkew) return;
-  contractSkew = skewed;
-  for (const listener of skewListeners) listener();
+  contractSkew.value = served !== null && served !== CACHE_VERSION;
 }
 
-const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/+$/, "") ?? "";
+const apiBase = import.meta.env.VITE_API_BASE?.replace(/\/+$/, "") ?? "";
 
 function buildApiUrl(path: string): string {
   const url = apiBase && path.startsWith("/") ? apiBase + path : path;
@@ -58,7 +48,6 @@ function buildApiUrl(path: string): string {
 
 function timeoutSignal(ms: number): AbortSignal {
   if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
-  // Older Safari/Chrome lack AbortSignal.timeout; emulate it so queries don't throw a TypeError.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(new DOMException("Timed out", "TimeoutError")), ms);
   ctrl.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
@@ -69,7 +58,6 @@ function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
   const timeout = timeoutSignal(ms);
   if (!signal) return timeout;
   if (typeof AbortSignal.any === "function") return AbortSignal.any([signal, timeout]);
-  // Fallback for browsers without AbortSignal.any (older Safari): forward both.
   if (signal.aborted) return signal;
   if (timeout.aborted) return timeout;
   const ctrl = new AbortController();

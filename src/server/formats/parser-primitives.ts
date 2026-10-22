@@ -33,7 +33,6 @@ export const bool = (v: unknown): boolean | undefined => (typeof v === "boolean"
 export const obj = (v: unknown): Record<string, unknown> | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 
-// Upstream label fields occasionally carry a number; render it as text instead of dropping it.
 export function numericLabel(v: unknown): string | null {
   return typeof v === "number" && Number.isFinite(v) ? String(v) : null;
 }
@@ -45,7 +44,6 @@ export const numIntCoerceNonNegative = (v: unknown): number | null => {
 };
 
 export const titleCase = (s: string): string =>
-  // Single-token legacy variant (preserves ALL-CAPS); use titleCase from @/shared/utils/text for multi-word.
   s ? (s.length >= 2 && s === s.toUpperCase() ? s : s[0]!.toUpperCase() + s.slice(1).toLowerCase()) : s;
 
 export function truncateSafe(s: string, max: number): string {
@@ -62,7 +60,6 @@ export function parseTs(v: unknown, positiveOnly = false): number {
   return t;
 }
 
-/** Sort in place by descending date; unparseable dates sink to the end. */
 export function sortByDateDesc<T>(items: T[], getDate: (item: T) => unknown): T[] {
   const stamped = items.map((item) => ({ item, ts: parseTs(getDate(item)) }));
   stamped.sort((a, b) => (a.ts === b.ts ? 0 : b.ts - a.ts));
@@ -120,12 +117,14 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
 }
 
+/** The longest placeholder is "undefined", so anything longer skips the lowercase copy entirely. */
+const MAX_PLACEHOLDER_CHARS = 9;
+
 function isPlaceholderText(t: string): boolean {
-  // Callers must pass an already-trimmed string.
+  if (t.length > MAX_PLACEHOLDER_CHARS) return false;
   return PLACEHOLDER_TEXTS.has(t.toLowerCase());
 }
 
-// `t` must already be trimmed and non-empty.
 function isJunkText(t: string): boolean {
   return isPlaceholderText(t) || hasGarbageChars(t);
 }
