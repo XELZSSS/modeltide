@@ -1,49 +1,8 @@
-import { hasCatalogIdentity, isRecord, obj, str } from "@/server/formats/parser-primitives";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { normalizeModelKey } from "@/shared/utils";
 import type { ModelMetaEntry } from "@/server/formats/wire-types";
 
 const TRAILING_VERSION_DIGITS_RE = /\d{4,8}$/;
-
-function mergeEntry(cur: Record<string, unknown>, patch: Record<string, unknown>): void {
-  const assign = (target: Record<string, unknown>, source: Record<string, unknown>): void => {
-    for (const [key, value] of Object.entries(source)) {
-      if (value === null || value === undefined || value === "") continue;
-      target[key] = value;
-    }
-  };
-  assign(cur, patch);
-  if (cur.omniscienceBreakdown && patch.omniscienceBreakdown) {
-    const next: Record<string, unknown> = { ...obj(cur.omniscienceBreakdown) };
-    assign(next, obj(patch.omniscienceBreakdown) ?? {});
-    cur.omniscienceBreakdown = next;
-  }
-}
-
-export function mergeBySlug(catalog: unknown, ...enrich: unknown[]): Record<string, unknown>[] {
-  const merged = new Map<string, Record<string, unknown>>();
-  for (const raw of Array.isArray(catalog) ? catalog : []) {
-    if (!hasCatalogIdentity(raw)) continue;
-    const slug = str(raw.slug);
-    if (!merged.has(slug)) merged.set(slug, { ...raw });
-  }
-  for (const group of enrich) {
-    if (!Array.isArray(group)) continue;
-    for (const raw of group) {
-      if (!isRecord(raw)) continue;
-      const slug = str(raw.slug);
-      const current = slug ? merged.get(slug) : undefined;
-      if (current !== undefined) mergeEntry(current, raw);
-    }
-  }
-  return [...merged.values()];
-}
-
-export interface IntelligenceIndexResult {
-  models: ArtificialAnalysisModel[];
-  enrichFailed: boolean;
-  fetchedAt: string;
-}
 
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {
   const keys: string[] = [];
@@ -70,6 +29,7 @@ function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEnt
   return undefined;
 }
 
+/** Fills index fields that the leaderboard left empty from OpenRouter directory metadata. */
 export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record<string, ModelMetaEntry>): number {
   let filled = 0;
   for (const m of models) {

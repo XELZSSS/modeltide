@@ -10,7 +10,7 @@ import type {
 } from "chart.js";
 import { FONT_STACK_SANS } from "@/shared/config/typography";
 
-export interface ChartTheme {
+interface ChartTheme {
   grid: string;
   tick: string;
   tickSecondary: string;
@@ -47,7 +47,9 @@ export const CHART_HEIGHT = "h-[160px] sm:h-[180px]";
 
 export const FLEX_CHART_HEIGHT = `flex-1 min-h-[160px] ${CHART_HEIGHT}`;
 
-export const RADAR_CHART_HEIGHT = "h-[280px] sm:h-[400px]";
+// A radar's plot is square, so it is the shorter side that decides the size. On a phone the card is about 300px wide, so
+// the height has to reach that before the polygon stops growing — 240px left it a ~150px circle in a box twice as tall.
+export const RADAR_CHART_HEIGHT = "h-[320px] sm:h-[400px]";
 
 export const CHART_EMPTY_CLASS = "flex items-center justify-center text-center ui-body-secondary";
 
@@ -59,8 +61,11 @@ function chartFontFamily(): string {
 
 const CHART_FONT_SIZE = 12;
 
-/** Chart.js glides the tooltip over its own default duration; on a panel that follows the cursor that reads as lag. */
-const TOOLTIP_ANIMATION_MS = 150;
+/**
+ * A fade long enough to read as an arrival, short enough that a panel following the cursor never feels laggy. Only opacity
+ * is animated — see the geometry note below.
+ */
+const TOOLTIP_FADE_MS = 150;
 
 export function applyChartDefaults(chart: typeof ChartJS): void {
   chart.defaults.font.family = chartFontFamily();
@@ -72,8 +77,12 @@ export function applyChartDefaults(chart: typeof ChartJS): void {
     | { animations?: { numbers?: { duration?: number }; opacity?: { duration?: number } } }
     | undefined;
   if (!tooltip?.animations?.numbers || !tooltip.animations.opacity) return;
-  tooltip.animations.numbers.duration = TOOLTIP_ANIMATION_MS;
-  tooltip.animations.opacity.duration = TOOLTIP_ANIMATION_MS;
+  // Chart.js tweens the tooltip's own geometry (`x`, `y`, `width`, `height`, `caretX`, `caretY`). On a duration the panel
+  // glides after the cursor and, worse, the box resizes while the labels are already laid out against the old width, so the
+  // text visibly drifts inside the card. The geometry snaps and only the fade is animated: the panel still arrives softly,
+  // nothing inside it slides.
+  tooltip.animations.numbers.duration = 0;
+  tooltip.animations.opacity.duration = TOOLTIP_FADE_MS;
 }
 
 export const chartBase = {
@@ -85,7 +94,7 @@ export const chartBase = {
   animation: { duration: 0 },
 } as const;
 
-export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tick, font: { size: 10 } });
+export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tick, font: { size: 11 } });
 
 const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
 

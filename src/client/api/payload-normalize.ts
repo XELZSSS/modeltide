@@ -85,9 +85,3 @@ export function unwrapListPartial<T>(
 export function assertPayloadShape(malformed: boolean, label: string): void {
   if (malformed) throw new Error(`${label}: malformed payload`);
 }
-
-export function readFetchedAt(payload: unknown): string | undefined {
-  if (payload == null || typeof payload !== "object") return undefined;
-  const value = (payload as { fetchedAt?: unknown }).fetchedAt;
-  return typeof value === "string" ? value : undefined;
-}

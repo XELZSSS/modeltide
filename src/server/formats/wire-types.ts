@@ -23,11 +23,6 @@ export interface ModelRow {
   total_tool_calls: number;
   change: number | null;
   rankingMetricValue?: number;
-  total_byok_prompt_tokens?: number;
-  total_byok_completion_tokens?: number;
-  num_media_prompt?: number;
-  num_media_completion?: number;
-  image_output_requests?: number;
 }
 
 export interface ModelMetaEntry {

@@ -1,6 +1,6 @@
-import { byNumberDesc } from "@/server/formats/parser-primitives";
+import { byNumberDesc } from "@/server/formats/ordering";
 import type { AppContext } from "@/server/api/context";
-import { DEFAULT_TTL_MS } from "@/shared/config";
+import { ONE_HOUR } from "@/shared/config";
 import { cacheKeys } from "@/server/cache/keys";
 import { upstreamConfig, upstreamEndpoints } from "@/server/upstream/upstream";
 import { MAX_LEADERBOARD_ROWS } from "@/server/formats/limits";
@@ -10,9 +10,9 @@ import { dedupeBy } from "@/shared/utils";
 import { parseTextToImageRows } from "./parse/text-to-image";
 import { defineSource, requireParsed, requireRows } from "@/server/pipeline";
 
-export const getTextToImageLeaderboard = defineSource<string, TextToImageModel>({
+export const getTextToImageLeaderboard = defineSource<string, TextToImageModel[]>({
   key: cacheKeys.textToImage,
-  ttl: DEFAULT_TTL_MS,
+  ttl: ONE_HOUR,
   label: "Text-to-image",
   fetch: (ctx: AppContext) => ctx.http.getRsc(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaTextToImage),
   parse: (body, ctx) => {
@@ -23,7 +23,7 @@ export const getTextToImageLeaderboard = defineSource<string, TextToImageModel>(
       `raw=0, kept=0, body=${body.length}B`,
     );
     const ranked = dedupeBy(mapped.sort(byNumberDesc((m) => m.elo)), (m) => m.slug);
-    return ranked.map((m, i) => ({ ...m, rank: i + 1 }));
+    return ranked;
   },
   cap: MAX_LEADERBOARD_ROWS,
 });

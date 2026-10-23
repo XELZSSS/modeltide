@@ -1,8 +1,10 @@
-import { isRecord, numCoerce, str } from "@/server/formats/parser-primitives";
+import { isRecord, numCoerce, str } from "@/server/formats/scalars";
+import { mapRows } from "@/server/formats/parse-rows";
 import { collectModelReleaseLinksFromArrays, scanReleaseIndex, type ReleaseInfo } from "./release-index";
-import { leaderboardBenchmarkWireNames, presentAlias } from "./model-compact";
+import { leaderboardBenchmarkWireNames, presentAlias } from "./benchmark-fields";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
-import { findNextData, parseRscPayload } from "@/server/formats/rsc-parser";
+import { findNextData } from "@/server/formats/rsc-data";
+import { parseRscPayload } from "@/server/formats/rsc-parser";
 
 function hallucinationRate(nonHallucination: unknown): number | null {
   const value = numCoerce(nonHallucination);
@@ -26,7 +28,6 @@ function normalizeRow(
     isOpenWeights: row.isOpenWeights,
     creator: { name: str(row.modelCreatorName), color: str(row.modelCreatorColor) },
     intelligenceIndex: row.intelligenceIndex,
-    intelligenceIndexIsEstimated: row.intelligenceIndexIsEstimated,
     omniscience: row.omniscience,
     omniscienceBreakdown: {
       accuracy: row.omniscienceAccuracy,
@@ -60,17 +61,13 @@ export function parseLeaderboardModels(html: unknown): ParseResult<Record<string
     return parseFail("AA leaderboard page yielded no usable model rows");
   }
   const seenWire = new Set<string>();
-  const kept: Record<string, unknown>[] = [];
-  for (const raw of rows) {
-    if (!isRecord(raw)) continue;
+  const { rows: kept, dropped } = mapRows(rows, (raw) => {
     for (const wire of leaderboardBenchmarkWireNames) {
       if (presentAlias(raw, wire) !== undefined) seenWire.add(wire);
     }
-    const normalized = normalizeRow(raw, releases, links);
-    if (normalized !== null) kept.push(normalized);
-  }
+    return normalizeRow(raw, releases, links);
+  });
   if (kept.length === 0) return parseFail("AA leaderboard page yielded no usable model rows");
-  const dropped = rows.length - kept.length;
   const missing = leaderboardBenchmarkWireNames.filter((wire) => !seenWire.has(wire));
   const warnings: string[] = [];
   if (dropped > 0) warnings.push(`Skipped ${dropped} deprecated leaderboard rows`);

@@ -7,13 +7,10 @@ import type {
   NewsItem,
   OpenRouterRankEntry,
   OpenSourceModelEntry,
-  SourcePayload,
 } from "@/shared/types";
-import type { NewsByCategory } from "@/shared/contract";
 import { buildHallucinationRankings } from "@/shared/utils/hallucination";
 import {
   normalizeHomeDashboard,
-  readFetchedAt,
   unwrapList,
   unwrapListPartial,
   type NormalizedHomeDashboard,
@@ -22,13 +19,13 @@ import {
   qArtificialList,
   qClosedReleasesList,
   qHomeDashboard,
-  qNews,
+  qNewsByCategory,
   qOpenSourceModelById,
   qOpenSourceModelsList,
   qOpenRouterList,
 } from "./catalog";
 
-export interface ListState<T> {
+interface ListState<T> {
   readonly items: T[];
   readonly partial: boolean;
   readonly malformed: boolean;
@@ -114,17 +111,13 @@ export function useOpenRouterRankings(enabled: MaybeRefOrGetter<boolean> = true)
   return { query, state };
 }
 
-export interface OpenRouterRankingsState extends ListState<OpenRouterRankEntry> {
-  readonly fetchedAt: string | undefined;
-}
-
-function decodeOpenRouterState(payload: unknown): OpenRouterRankingsState {
-  const decoded = unwrapListPartial<OpenRouterRankEntry>(payload, "openRouterRankings");
-  return { ...suspendedListState(decoded, "openRouterRankings"), fetchedAt: readFetchedAt(payload) };
-}
-
-export const useSuspenseOpenRouterRankings = (): Promise<ComputedRef<OpenRouterRankingsState>> =>
-  suspenseDecode(qOpenRouterList.use(), decodeOpenRouterState);
+export const useSuspenseOpenRouterRankings = () =>
+  suspenseDecode(qOpenRouterList.use(), (payload) =>
+    suspendedListState<OpenRouterRankEntry>(
+      unwrapListPartial<OpenRouterRankEntry>(payload, "openRouterRankings"),
+      "openRouterRankings",
+    ),
+  );
 
 export const useSuspenseOpenSourceModelsState = () =>
   suspenseDecode(qOpenSourceModelsList.use(), (payload) =>
@@ -155,14 +148,9 @@ export const useSuspenseClosedReleasesState = () =>
   );
 
 export const useSuspenseNewsState = (category: NewsCategory) =>
-  suspenseDecode(qNews.use(), (payload) => {
-    const byCategory = (payload as SourcePayload<NewsByCategory> | null | undefined)?.data;
-    const rawForCategory = byCategory != null && typeof byCategory === "object" ? (byCategory[category] ?? null) : null;
-    return suspendedListState<NewsItem>(
-      unwrapListPartial<NewsItem>(rawForCategory, `news:${category}`),
-      `news:${category}`,
-    );
-  });
+  suspenseDecode(qNewsByCategory(category).use(), (payload) =>
+    suspendedListState<NewsItem>(unwrapListPartial<NewsItem>(payload, `news:${category}`), `news:${category}`),
+  );
 
 export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true): {
   query: ReturnType<typeof qOpenSourceModelsList.use>;

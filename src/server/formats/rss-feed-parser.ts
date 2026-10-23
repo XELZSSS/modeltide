@@ -1,23 +1,13 @@
-import { isSuitableNewsItem, isRecord, truncateSafe, MAX_NEWS_TITLE_CHARS } from "./parser-primitives";
 import { XMLParser } from "fast-xml-parser";
 import type { NewsItem } from "@/shared/types";
-import { MAX_FEED_BYTES } from "./limits";
-import { fnv1aHash, utf8ByteLength } from "@/server/util/hash";
-import { sourceNameFromUrl as channelHost } from "./url";
+import { isRecord } from "./scalars";
+import { MAX_FEED_BYTES, SOURCE_LIMITS } from "./limits";
+import { utf8ByteLength } from "@/server/util/hash";
 import { zeroUpstreamMessage, errMsg } from "@/server/api/errors";
-
-import { decodeEntities } from "./html-entities";
-import { stripHtml } from "./html-to-text";
+import { channelTitle, toNewsItem } from "./feed-fields";
 import { parseFail, parseOk, type ParseResult } from "./parse-result";
-import { SOURCE_LIMITS } from "./limits";
 
 const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
-// oxlint-disable-next-line no-control-regex
-const UNSAFE_LINK_CHARS_RE = /["<>\u0000-\u001f\u007f]/;
-const SPACE_RE = / /g;
-const MAX_LINK_CHARS = 2048;
-const MAX_ID_CHARS = 2048;
-const MAX_DATE_CHARS = 64;
 
 export const FEED_ACCEPT = "application/rss+xml,application/xml,text/xml,*/*";
 
@@ -28,55 +18,6 @@ const parser = new XMLParser({
   htmlEntities: false,
 });
 
-function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string {
-  const text = textOf(channel.title) ?? "";
-  return cleanTitle(text) || channelHost(sourceUrl);
-}
-
-function textOf(v: unknown): string | null {
-  if (Array.isArray(v)) v = v[0];
-  if (typeof v === "string") return v.trim() ? v : null;
-  if (typeof v === "number" && Number.isFinite(v)) return String(v);
-  if (isRecord(v)) {
-    const t = v["#text"] ?? v.text;
-    if (typeof t === "string" && t.trim()) return t;
-    if (typeof t === "number" && Number.isFinite(t)) return String(t);
-  }
-  return null;
-}
-
-function cleanTitle(raw: string): string {
-  const stripped = raw.includes("<") ? stripHtml(raw) : raw;
-  const decoded = decodeEntities(stripped);
-  const clean = decoded.includes("<") ? stripHtml(decoded) : decoded;
-  return truncateSafe(clean, MAX_NEWS_TITLE_CHARS).trim();
-}
-
-function linkHref(link: unknown): string | null {
-  const raw =
-    typeof link === "string" ? link : isRecord(link) ? (link["@_href"] ?? link.href ?? link["#text"]) : undefined;
-  return typeof raw === "string" ? decodeEntities(raw.trim()) || null : null;
-}
-
-function itemLink(item: Record<string, unknown>): string | null {
-  const rawLink = item.link;
-  if (!Array.isArray(rawLink)) return linkHref(rawLink);
-  const alternate = rawLink.find((l) => isRecord(l) && l["@_rel"] === "alternate");
-  const alternateHref = alternate === undefined ? null : linkHref(alternate);
-  if (alternateHref) return alternateHref;
-  for (const l of rawLink) {
-    const href = linkHref(l);
-    if (href) return href;
-  }
-  return null;
-}
-
-function itemId(item: Record<string, unknown>, link: string | null, title: string): string {
-  const guid = textOf(item.guid ?? item.id)?.trim();
-  if (!guid) return link ?? `title:${title}`;
-  return guid.length > MAX_ID_CHARS ? fnv1aHash(guid) : guid;
-}
-
 export function parseFeed(
   xml: unknown,
   sourceUrl: unknown,
@@ -86,19 +27,18 @@ export function parseFeed(
   if (typeof xml !== "string") {
     return parseFail(`Feed with non-string body rejected at ${urlLabel}`);
   }
-  const sourceUrlStr = urlLabel;
   const bytes = utf8ByteLength(xml);
   const maxBytes = opts?.maxBytes ?? MAX_FEED_BYTES;
   if (bytes > maxBytes) {
-    return parseFail(`Feed too large at ${sourceUrlStr} (${bytes} bytes)`);
+    return parseFail(`Feed too large at ${urlLabel} (${bytes} bytes)`);
   }
   let parsed: unknown;
   try {
     parsed = parser.parse(xml);
   } catch (err) {
-    return parseFail(`Unparseable feed at ${sourceUrlStr}: ${errMsg(err)}`);
+    return parseFail(`Unparseable feed at ${urlLabel}: ${errMsg(err)}`);
   }
-  return parseChannel(parsed, sourceUrlStr, opts?.maxItems ?? MAX_ITEMS_PER_FEED);
+  return parseChannel(parsed, urlLabel, opts?.maxItems ?? MAX_ITEMS_PER_FEED);
 }
 
 function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
@@ -106,30 +46,6 @@ function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
   const rss = isRecord(feed.rss) ? (feed.rss as Record<string, unknown>) : undefined;
   const rawChannel: unknown = rss?.channel ?? feed.channel ?? feed.feed ?? feed;
   return isRecord(rawChannel) ? rawChannel : undefined;
-}
-function feedDate(item: Record<string, unknown>): string {
-  for (const key of ["pubDate", "published", "updated"] as const) {
-    const value = textOf(item[key])?.trim();
-    if (value) return value.slice(0, MAX_DATE_CHARS);
-  }
-  return "";
-}
-
-function toNewsItem(item: Record<string, unknown>, source: string): NewsItem | null {
-  const rawLink = itemLink(item);
-  if (!rawLink) return null;
-  const link = rawLink.trim().slice(0, MAX_LINK_CHARS).replace(SPACE_RE, "%20");
-  if (UNSAFE_LINK_CHARS_RE.test(link)) return null;
-  const rawTitle = textOf(item.title) ?? "";
-  const title = cleanTitle(rawTitle);
-  if (!isSuitableNewsItem(title, link)) return null;
-  return {
-    id: itemId(item, link, title),
-    title,
-    link,
-    pubDate: feedDate(item),
-    source,
-  };
 }
 
 function parseChannel(feed: unknown, sourceUrl: string, maxItems: number): ParseResult<NewsItem[]> {

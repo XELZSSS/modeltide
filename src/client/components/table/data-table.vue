@@ -35,8 +35,6 @@ const isExpandable = computed(() => props.renderExpandedRow != null || slots.exp
 const renderExpanded = computed<(row: T) => VNodeChild>(
   () => props.renderExpandedRow ?? ((row: T) => slots.expandedRow?.({ row }) ?? null),
 );
-const bodyEl = ref<HTMLDivElement | null>(null);
-
 const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(
   () => filtered.value,
   (row: T) => props.getRowId(row),
@@ -68,11 +66,13 @@ function setExpandedId(rowId: string | null): void {
   expandedId.value = rowId;
 }
 
+// Focus stays on the pager. The page number is already announced by the control's own `aria-live`, while moving focus
+// into the table body meant Enter on the pager did nothing afterwards and a keyboard user had to Tab through the
+// whole new page to reach it again.
 function handlePageChange(next: number): void {
   if (next !== page.value) staggerRows.value = false;
   goToPage(next);
   expandedId.value = null;
-  bodyEl.value?.focus({ preventScroll: true });
 }
 </script>
 
@@ -80,7 +80,7 @@ function handlePageChange(next: number): void {
   <div class="flex flex-col gap-4 min-w-0">
     <EmptyState v-if="dedupedData.length === 0" :message="emptyMessage" />
     <template v-else>
-      <div ref="bodyEl" tabindex="-1" class="flex flex-col gap-4 min-w-0 outline-none">
+      <div class="flex flex-col gap-4 min-w-0">
         <MobileTableBody
           v-if="isMobile"
           :paged-data="pagedData"

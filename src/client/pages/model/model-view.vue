@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { SOURCES } from "@/client/nav/sources";
 import type { ModelSource } from "@/shared/types";
+import { MAX_MODEL_ID_CHARS } from "@/shared/config/api";
 import NotFound from "@/client/components/feedback/not-found.vue";
 import { useSoftNotFound } from "@/client/router/document-meta";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
@@ -26,7 +27,10 @@ const source = computed<ModelSource | null>(() => {
 
 const decodedId = computed(() => {
   const at = rawId.value.indexOf("/");
-  return at < 0 ? "" : rawId.value.slice(at + 1);
+  const id = at < 0 ? "" : rawId.value.slice(at + 1);
+  // The API answers 400 for an id past MAX_MODEL_ID_CHARS and the page cannot recover from that, so a URL over the
+  // limit takes the missing-model path instead of becoming a dead error boundary.
+  return id.length > MAX_MODEL_ID_CHARS ? "" : id;
 });
 
 useSoftNotFound(computed(() => !source.value || !decodedId.value));

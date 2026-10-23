@@ -21,7 +21,7 @@ const { t } = useTranslation();
 
 <template>
   <PageContainer>
-    <div class="flex flex-col items-center justify-center gap-4 py-24 text-center ui-anim-rise">
+    <div class="flex flex-col items-center justify-center gap-4 py-16 text-center ui-anim-rise sm:py-24">
       <div v-if="props.code" class="border border-border bg-bg-secondary px-4 py-2 ui-display">{{ props.code }}</div>
       <h1 class="ui-section-title">{{ t(props.headingKey) }}</h1>
       <p class="ui-body-secondary max-w-md text-balance">{{ t(props.bodyKey) }}</p>

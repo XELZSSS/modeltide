@@ -1,25 +1,45 @@
+/*
+ * Motion tokens. Every animation in the app resolves to one of these — no component carries its own duration or curve
+ * (see build/motion-guard.ts) — so the whole system is softened here and nowhere else: durations run a touch longer than
+ * a "snappy" default, the curves spend more time decelerating instead of yanking out of the start and stopping hard, and
+ * the travel distances stay small so an entrance reads as a settle rather than a jump.
+ */
 :root {
-  --motion-duration-instant: 70ms;
-  --motion-duration-fast: 130ms;
-  --motion-duration-base: 180ms;
-  --motion-duration-slow: 260ms;
+  --motion-duration-instant: 90ms;
+  --motion-duration-fast: 160ms;
+  --motion-duration-base: 220ms;
+  --motion-duration-slow: 300ms;
 
-  --motion-duration-spin: 900ms;
+  --motion-duration-dots: 1400ms;
+  --motion-dot-size: 0.375rem;
+  --motion-dot-gap: 0.3125rem;
+  --motion-dot-lift: 3px;
 
-  --motion-stagger-step: 22ms;
+  --motion-stagger-step: 18ms;
   --motion-stagger-max: 8;
 
-  --motion-stagger-step-rows: 34ms;
-  --motion-stagger-max-rows: 10;
+  --motion-stagger-step-rows: 26ms;
+  --motion-stagger-max-rows: 8;
 
-  --motion-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --motion-ease-in: cubic-bezier(0.55, 0, 0.85, 0.3);
-  --motion-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
+  --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-ease-emphasized: cubic-bezier(0.33, 1, 0.68, 1);
 
-  --motion-rise: 6px;
-  --motion-pop: 4px;
+  --motion-rise: 5px;
+  --motion-pop: 3px;
   --motion-sheet: 100%;
+}
+
+/* Touch adaptation for the shared stagger tokens. Under a coarse pointer one item sits under a finger and the rest of
+   the list is usually off-screen, so a long desktop tail buys nothing and only delays the content the reader came for. */
+@media (pointer: coarse) {
+  :root {
+    --motion-stagger-step: 12ms;
+    --motion-stagger-max: 4;
+    --motion-stagger-step-rows: 18ms;
+    --motion-stagger-max-rows: 5;
+  }
 }
 
 @utility ease-motion-out {
@@ -79,7 +99,9 @@
     rotate
   );
   transition-duration: var(--ui-motion-duration, var(--motion-duration-fast));
-  transition-timing-function: var(--ui-motion-easing, var(--motion-ease-out));
+  /* Colour/border/press changes ease in both directions: a pure ease-out snaps to the target on the first frame and the
+     rest of the transition is spent crawling, which reads as a flick rather than a change. */
+  transition-timing-function: var(--ui-motion-easing, var(--motion-ease-in-out));
 }
 
 /* A pressed control only recolours its label: no background, no border, and no `scale` — so the box never shifts and the
@@ -157,14 +179,41 @@
   animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) backwards;
 }
 
-@keyframes ui-motion-spin {
-  to {
-    transform: rotate(1turn);
+@keyframes ui-motion-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.25;
+    transform: translate3d(0, 0, 0);
+  }
+  35% {
+    opacity: 1;
+    transform: translate3d(0, calc(-1 * var(--motion-dot-lift)), 0);
   }
 }
 
-@utility ui-spin {
-  animation: ui-motion-spin var(--motion-duration-spin) linear infinite;
+/* The loading indicator: three dots on a shared timeline, each offset by a sixth of it. Child-based so the caller only
+   supplies colour and box padding; sizing comes from `--motion-dot-size`. */
+@utility ui-dots {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: var(--motion-dot-gap);
+
+  & > * {
+    width: var(--motion-dot-size);
+    height: var(--motion-dot-size);
+    border-radius: 9999px;
+    background-color: currentColor;
+    animation: ui-motion-dot var(--motion-duration-dots) var(--motion-ease-in-out) infinite;
+  }
+
+  & > :nth-child(2) {
+    animation-delay: calc(var(--motion-duration-dots) / 6);
+  }
+
+  & > :nth-child(3) {
+    animation-delay: calc(var(--motion-duration-dots) / 3);
+  }
 }
 
 .ui-fade-enter-active {
@@ -177,6 +226,22 @@
 
 .ui-fade-enter-from,
 .ui-fade-leave-to {
+  opacity: 0;
+}
+
+/* The fetch indicator: it fades in like everything else, but it leaves the frame it was cancelled in. A request that
+   settles puts its content on screen at that moment, and a slow fade-out would leave the dots sitting over data that has
+   already arrived — which reads as the loader and the fetch running side by side rather than one after the other. */
+.ui-loader-enter-active {
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ui-loader-leave-active {
+  transition: opacity var(--motion-duration-instant) var(--motion-ease-in);
+}
+
+.ui-loader-enter-from,
+.ui-loader-leave-to {
   opacity: 0;
 }
 
@@ -237,14 +302,27 @@
     transform var(--motion-duration-fast) var(--motion-ease-in);
 }
 
-@media (width < 640px) {
+/* The bottom sheet changes between a slide-up and a fade at the same width the shell switches to its bottom nav
+   (768px, see src/client/device.ts). At 640–767 the app was already a bottom-bar layout whose sheets faded in from the
+   centre instead of rising from the edge the thumb reaches for. */
+@media (width < 768px) {
   .ui-sheet-enter-from,
   .ui-sheet-leave-to {
     transform: translate3d(0, var(--motion-sheet), 0);
   }
+
+  /* A sheet that travels its own height needs longer than a small fade-up to read as one movement, and the tail of the
+     ride is where the softness shows; closing is a little quicker than opening so dismissal never feels sluggish. */
+  .ui-sheet-enter-active {
+    transition-duration: var(--motion-duration-slow);
+  }
+
+  .ui-sheet-leave-active {
+    transition-duration: var(--motion-duration-base);
+  }
 }
 
-@media (width >= 640px) {
+@media (width >= 768px) {
   .ui-sheet-enter-from,
   .ui-sheet-leave-to {
     opacity: 0;
@@ -272,7 +350,8 @@
     scroll-behavior: auto !important;
   }
 
-  .ui-spin {
+  .ui-dots > * {
     animation: none !important;
+    opacity: 0.6;
   }
 }

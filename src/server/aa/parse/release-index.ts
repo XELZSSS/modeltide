@@ -1,4 +1,4 @@
-import { isRecord, str } from "@/server/formats/parser-primitives";
+import { isRecord, str } from "@/server/formats/scalars";
 import { extractNeedleJsonArrays } from "@/server/formats/rsc-needle";
 import { MAX_SCAN_CHARS } from "@/server/formats/limits";
 import { fnv1aHash } from "@/server/util/hash";

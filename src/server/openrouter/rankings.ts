@@ -1,5 +1,5 @@
-import { isRecord } from "@/server/formats/parser-primitives";
-import { DEFAULT_TTL_MS } from "@/shared/config";
+import { isRecord } from "@/server/formats/scalars";
+import { ONE_HOUR } from "@/shared/config";
 import { cacheKeys } from "@/server/cache/keys";
 import { upstreamConfig, upstreamEndpoints, upstreamUrl } from "@/server/upstream/upstream";
 import type { OpenRouterRankEntry, SourcePayload } from "@/shared/types";
@@ -7,9 +7,10 @@ import type { AppContext } from "@/server/api/context";
 import { UpstreamError, wrapUpstream } from "@/server/api/errors";
 
 import { mapModels, type RankingScanStats } from "./parse-rankings";
-import { getModelDirectory, type DirectoryCacheEntryWithPartial } from "./directory";
+import { getModelDirectory } from "./directory";
+import type { DirectoryCacheEntry } from "./parse-directory";
 import { runLegs } from "@/server/join-legs";
-import { defineSource, requireArrayBody } from "@/server/pipeline";
+import { defineSource, requireArrayBody, requireRows } from "@/server/pipeline";
 
 const RANKINGS_DRIFT_RATIO = 0.1;
 
@@ -17,12 +18,12 @@ interface OpenRouterRaw {
   rows: unknown[];
   totalRows: number;
   stats: RankingScanStats;
-  dirData: DirectoryCacheEntryWithPartial;
+  directory: SourcePayload<DirectoryCacheEntry> | undefined;
 }
 
-const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
+const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry[]>({
   key: cacheKeys.openRouterRankings,
-  ttl: DEFAULT_TTL_MS,
+  ttl: ONE_HOUR,
   label: "OpenRouter rankings",
   fetch: async (ctx) => {
     const { values, failures } = await runLegs([
@@ -45,12 +46,12 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
     }
     const rows = requireArrayBody(upstreamEndpoints.openRouterRankings, rankings.data, "OpenRouter rankings");
     const totalRows = rows.length;
-    const dirData = values[1] ?? ({ pricing: {}, meta: {}, partial: true } as DirectoryCacheEntryWithPartial);
     const stats: RankingScanStats = { scannedRows: 0, validRows: 0, expiredRows: 0 };
-    return { rows, totalRows, stats, dirData };
+    return { rows, totalRows, stats, directory: values[1] };
   },
   parse: (raw) => {
-    const models = mapModels(raw.rows, raw.dirData.pricing, raw.stats, raw.dirData.meta);
+    const directory = raw.directory?.data;
+    const models = mapModels(raw.rows, directory?.pricing ?? {}, raw.stats, directory?.meta);
     if (raw.stats.validRows === 0) {
       throw new UpstreamError(`OpenRouter: all ${raw.totalRows} ranking rows had invalid model_permaslug`);
     }
@@ -58,13 +59,14 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
     if (models.length === 0 && liveRows > 0) {
       throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${liveRows} live rows`);
     }
-    return models;
+    return requireRows(models, "OpenRouter rankings", "rows");
   },
   partialWhen: ({ raw }) => {
     const droppedRows = raw.totalRows - raw.stats.validRows;
     const drift = droppedRows >= Math.max(1, Math.ceil(raw.totalRows * RANKINGS_DRIFT_RATIO));
-    const pricingCount = Object.keys(raw.dirData.pricing).length;
-    const partial = pricingCount === 0 || drift || raw.dirData.partial;
+    const pricingCount = Object.keys(raw.directory?.data.pricing ?? {}).length;
+    const directoryPartial = raw.directory == null || raw.directory.partial;
+    const partial = pricingCount === 0 || drift || directoryPartial;
     return {
       partial,
       log: partial
@@ -72,7 +74,7 @@ const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry>({
             pricing: pricingCount,
             dropped: droppedRows,
             totalRows: raw.totalRows,
-            directoryPartial: raw.dirData.partial,
+            directoryPartial,
           }
         : undefined,
     };

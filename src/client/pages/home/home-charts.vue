@@ -29,6 +29,7 @@ import { formatIndex } from "@/shared/utils";
 import { shortModelId } from "@/shared/utils/models";
 import { FALLBACK_DASH } from "@/shared/config/ui";
 import { cn } from "@/client/utils/cn";
+import { useDevice } from "@/client/device";
 import type { HomeChartPoint } from "@/shared/types";
 
 const SERIES_KEYS = ["intelligence", "coding"] as const;
@@ -40,6 +41,9 @@ const AXIS_POINT_HOVER_RADIUS = 7;
 type IndexSeriesKey = (typeof SERIES_KEYS)[number];
 
 const AXIS_LABEL_MAX_CHARS = 12;
+const MOBILE_AXIS_LABEL_MAX_CHARS = 9;
+const AXIS_TICK_LIMIT = 6;
+const MOBILE_AXIS_TICK_LIMIT = 5;
 type IndexRow = HomeChartPoint & Record<IndexSeriesKey, number>;
 
 function buildIndexRows(models: readonly HomeChartPoint[]): IndexRow[] {
@@ -52,17 +56,21 @@ function buildIndexRows(models: readonly HomeChartPoint[]): IndexRow[] {
 
 const tickLabel = (value: string | number): string => formatIndex(Number(value));
 
-function axisLabel(value: string): string {
-  return value.length > AXIS_LABEL_MAX_CHARS ? `${value.slice(0, AXIS_LABEL_MAX_CHARS - 1)}…` : value;
+function axisLabel(value: string, maxChars: number): string {
+  return value.length > maxChars ? `${value.slice(0, maxChars - 1)}…` : value;
 }
 
 const props = defineProps<{ models: HomeChartPoint[] }>();
 
 const { t } = useTranslation();
 const theme = useChartTheme();
+const isMobile = useDevice();
 const rows = computed(() => buildIndexRows(props.models));
 const fullLabels = computed(() => rows.value.map((m) => m.shortName || shortModelId(m.name) || m.id || FALLBACK_DASH));
-const labels = computed(() => fullLabels.value.map(axisLabel));
+const labels = computed(() => {
+  const maxChars = isMobile.value ? MOBILE_AXIS_LABEL_MAX_CHARS : AXIS_LABEL_MAX_CHARS;
+  return fullLabels.value.map((label) => axisLabel(label, maxChars));
+});
 
 const data = computed<ChartData<"line">>(() => ({
   labels: labels.value,
@@ -92,9 +100,15 @@ const options = computed<ChartOptions<"line">>(() =>
     interaction: { mode: "index", intersect: false },
     x: {
       type: "category",
-      // Ten long labels cannot fit a 160px-tall chart: let Chart.js drop ticks that would collide.
-      // The tooltip title still carries the full model name.
-      ticks: { ...axisTickStyle(theme.value), autoSkip: true, maxTicksLimit: 6, maxRotation: 0, minRotation: 0 },
+      // A phone leaves the plot about 290px: fewer, shorter labels fit instead of colliding. The tooltip title still
+      // carries the full model name.
+      ticks: {
+        ...axisTickStyle(theme.value),
+        autoSkip: true,
+        maxTicksLimit: isMobile.value ? MOBILE_AXIS_TICK_LIMIT : AXIS_TICK_LIMIT,
+        maxRotation: 0,
+        minRotation: 0,
+      },
     },
     y: {
       min: 0,

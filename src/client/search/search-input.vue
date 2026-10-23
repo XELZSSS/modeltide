@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { Loader2 } from "@lucide/vue";
+import LoadingDots from "@/client/components/ui/loading-dots.vue";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
@@ -61,8 +61,8 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
         v-if="pending && results.length === 0"
         class="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary"
       >
-        <Loader2 class="size-4 ui-spin" aria-hidden="true" />
-        {{ t("searching") }}
+        <LoadingDots size="sm" :label="t('searching')" />
+        <span aria-hidden="true">{{ t("searching") }}</span>
       </div>
       <div v-else-if="isError && results.length === 0" class="p-4 text-sm text-text-secondary" role="alert">
         {{ t("searchFailed") }}

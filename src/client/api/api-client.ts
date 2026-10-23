@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/query-core";
 import { ref } from "vue";
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
 import { API_VERSION_PARAM } from "@/shared/config/api";
@@ -5,9 +6,28 @@ import type { SourcePayload } from "@/shared/types";
 
 const CLIENT_FETCH_TIMEOUT_MS = 35_000;
 const CONTRACT_VERSION_HEADER = "x-contract-version";
+const NOT_MODIFIED = 304;
+
+/**
+ * Last `ETag` per request URL. The API answers a matching `If-None-Match` with a bodiless 304, so a refetch whose data
+ * did not change costs no transfer and no parse. Bounded because per-model detail queries mint a key per id.
+ */
+const ETAG_STORE_MAX = 96;
+const etagByUrl = new Map<string, string>();
+
+function rememberEtag(url: string, etag: string | null): void {
+  if (etag === null) return;
+  etagByUrl.delete(url);
+  etagByUrl.set(url, etag);
+  if (etagByUrl.size <= ETAG_STORE_MAX) return;
+  const oldest = etagByUrl.keys().next();
+  if (!oldest.done) etagByUrl.delete(oldest.value);
+}
 
 interface QueryCtx {
   signal?: AbortSignal;
+  client: QueryClient;
+  queryKey: readonly unknown[];
 }
 
 export class ApiClientError extends Error {
@@ -89,13 +109,28 @@ async function parseErrorMessage(res: Response): Promise<string> {
   return message;
 }
 
-async function apiFetch<T>(path: string, signal?: AbortSignal): Promise<SourcePayload<T>> {
+/**
+ * `previous` is the payload the query cache already holds for this key. It is what makes `If-None-Match` answerable:
+ * the API replies to a matching tag with a bodiless 304, so a revalidation that changed nothing costs no transfer, no
+ * JSON parse and no re-render (the caller gets its own object back, which structural sharing recognises).
+ */
+async function apiFetch<T>(
+  path: string,
+  signal: AbortSignal | undefined,
+  previous: SourcePayload<T> | undefined,
+): Promise<SourcePayload<T>> {
   const url = buildApiUrl(path);
+  const etag = previous === undefined ? undefined : etagByUrl.get(url);
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (etag !== undefined) headers["if-none-match"] = etag;
   const res = await fetch(url, {
-    headers: { accept: "application/json" },
+    headers,
     signal: withTimeout(signal, CLIENT_FETCH_TIMEOUT_MS),
   });
   noteContractVersion(res);
+  // Only sent when `previous` exists, so this branch always has a body to hand back; the status is a success signal
+  // here, not the failure `res.ok` treats it as.
+  if (res.status === NOT_MODIFIED && previous !== undefined) return previous;
   if (!res.ok) throw new ApiClientError(await parseErrorMessage(res), res.status);
   const ct = res.headers.get("content-type") ?? "";
   if (!ct.includes("application/json")) {
@@ -105,10 +140,11 @@ async function apiFetch<T>(path: string, signal?: AbortSignal): Promise<SourcePa
   if (body == null || typeof body !== "object" || !("data" in body)) {
     throw new ApiClientError("Malformed payload: missing data field", res.status);
   }
+  rememberEtag(url, res.headers.get("etag"));
   return body as SourcePayload<T>;
 }
 
 export const fetcher =
   <T>(path: string) =>
-  ({ signal }: QueryCtx) =>
-    apiFetch<T>(path, signal);
+  ({ signal, client, queryKey }: QueryCtx) =>
+    apiFetch<T>(path, signal, client.getQueryData<SourcePayload<T>>(queryKey));

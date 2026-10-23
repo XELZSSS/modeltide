@@ -9,7 +9,9 @@ import {
 } from "./config";
 import { KvStore } from "./kv";
 import { resetModuleCachesForTests } from "./service";
-import { l1TtlFor, maxStaleMs, sharedL1, TierStore } from "./store";
+import { l1TtlFor, sharedL1 } from "./l1";
+import { maxStaleMs } from "./stale";
+import { TierStore } from "./tier-store";
 
 const VERSION = "v-test";
 const MAX_STALE_EXTRA_MS = 60 * 60_000;

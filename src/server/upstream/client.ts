@@ -1,5 +1,5 @@
 import { MAX_JSON_BYTES, USER_AGENT, upstreamUrl } from "./upstream";
-import { FAST_FETCH_OPTS, UPSTREAM_FETCH_OPTS } from "./timeouts";
+import { FEED_FETCH_OPTS, UPSTREAM_FETCH_OPTS } from "./timeouts";
 import { ClientAbortError, UpstreamError, errMsg } from "@/server/api/errors";
 import { acquireSlot, createSlotPool, releaseSlot, type SlotPool } from "./pools";
 import { fetchBodyText, parseJsonBody } from "./body-readers";
@@ -7,10 +7,10 @@ import { parseRetryAfterMs, computeBackoff, sleepAbortable } from "./retry";
 
 type FetchPolicyName = "interactive" | "slowFeed";
 
-// Interactive calls may retry once; feed reads are one-shot so a slow feed cannot stack attempts.
+// Interactive calls may retry once; feed reads get their own single retry with a shorter per-attempt budget.
 const FETCH_POLICIES = {
   interactive: UPSTREAM_FETCH_OPTS,
-  slowFeed: FAST_FETCH_OPTS,
+  slowFeed: FEED_FETCH_OPTS,
 } as const;
 
 function fetchPolicy(name: FetchPolicyName): { timeoutMs: number; retries: number } {

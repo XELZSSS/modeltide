@@ -1,178 +1,101 @@
-import { byNumberDesc, isValidModelIdentity } from "@/server/formats/parser-primitives";
 import type { AppContext } from "@/server/api/context";
-import { DEFAULT_TTL_MS } from "@/shared/config";
+import { ONE_HOUR } from "@/shared/config";
 import { cacheKeys } from "@/server/cache/keys";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { findNextData } from "@/server/formats/rsc-parser";
+import { findNextData } from "@/server/formats/rsc-data";
 
-import { getModelDirectoryMeta } from "@/server/openrouter/directory";
-import {
-  compact,
-  modalityWireNames,
-  modelsBenchmarkWireNames,
-  omniscienceBenchmarkWireNames,
-  omniscienceModalityWireNames,
-  presentAlias,
-} from "./parse/model-compact";
+import { getModelDirectory } from "@/server/openrouter/directory";
 import { parseLeaderboardModels } from "./parse/leaderboard";
-import { backfillFromMeta, mergeBySlug, type IntelligenceIndexResult } from "./parse/model-enrich";
-import { fetchAaRsc, getAndParseEnrich } from "./fetch";
+import { MODELS_PATH_FIELDS, OMNISCIENCE_PATH_FIELDS, projectFields } from "./parse/enrich-fields";
+import { assembleModels } from "./parse/assemble";
+import { defineEnrichSource, fetchAaRsc } from "./fetch";
 import { upstreamEndpoints } from "@/server/upstream/upstream";
-import type { CacheResult } from "@/server/cache/service";
-import { errMsg, UpstreamError } from "@/server/api/errors";
-import { cachedRaw, defineSource, requireParsed, requireRows } from "@/server/pipeline";
+import { UpstreamError } from "@/server/api/errors";
+import { defineSource, requireParsed, requireRows } from "@/server/pipeline";
 import { fanOut } from "@/server/fan-out";
 
-export function getAaLeaderboardBody(ctx: AppContext): Promise<CacheResult<string>> {
-  return cachedRaw(ctx, cacheKeys.aaLeaderboardBody, DEFAULT_TTL_MS, (ctx) =>
-    fetchAaRsc(ctx, upstreamEndpoints.aaLeaderboard),
-  );
-}
+const leaderboardBodySource = defineSource<string, string>({
+  key: cacheKeys.aaLeaderboardBody,
+  ttl: ONE_HOUR,
+  label: "AA leaderboard body",
+  fetch: (ctx) => fetchAaRsc(ctx, upstreamEndpoints.aaLeaderboard),
+  parse: (body) => body,
+});
 
-const ENRICH_BASE_FIELDS = [
-  "id",
-  "slug",
-  "name",
-  "shortName",
-  "intelligenceIndex",
-  "isReasoning",
-  "analystAgent",
-  "releaseDate",
-  "isOpenWeights",
-  "parameters",
-  "sizeClass",
-  "price1mInputTokens",
-  "price1mOutputTokens",
-  "cacheHitPrice",
-  "cacheWritePrice",
-  "creator",
-];
+export const getAaLeaderboardBody = leaderboardBodySource;
 
-const MODELS_PATH_FIELDS = [
-  ...ENRICH_BASE_FIELDS,
-  "omniscienceHallucinationRate",
-  ...modelsBenchmarkWireNames,
-  ...modalityWireNames,
-];
+const modelsEnrichSource = defineEnrichSource<Record<string, unknown>>({
+  key: cacheKeys.aaModelsEnrich,
+  label: "/models",
+  path: upstreamEndpoints.aaModels,
+  marker: "initialModels",
+  extract: (tree) => findNextData(tree, "initialModels"),
+  fields: MODELS_PATH_FIELDS,
+  map: (arr) => arr.map(projectFields(MODELS_PATH_FIELDS)),
+});
 
-const OMNISCIENCE_PATH_FIELDS = [
-  ...ENRICH_BASE_FIELDS,
-  "medianCanonicalAnswerOutputSpeed",
-  "omniscienceBreakdown",
-  ...omniscienceBenchmarkWireNames,
-  ...omniscienceModalityWireNames,
-];
-
-function projectFields(fields: readonly string[]): (m: Record<string, unknown>) => Record<string, unknown> {
-  return (m) => {
-    const row: Record<string, unknown> = {};
-    for (const field of fields) {
-      const alias = presentAlias(m, field);
-      if (alias !== undefined) row[field] = m[alias];
-    }
-    return row;
-  };
-}
+const omniscienceEnrichSource = defineEnrichSource<Record<string, unknown>>({
+  key: cacheKeys.aaOmniscienceEnrich,
+  label: "/omniscience",
+  path: upstreamEndpoints.aaOmniscience,
+  marker: "initialModels",
+  extract: (tree) => findNextData(tree, "initialModels"),
+  fields: OMNISCIENCE_PATH_FIELDS,
+  map: (arr) => arr.map(projectFields(OMNISCIENCE_PATH_FIELDS)),
+});
 
 async function fetchIntelligenceIndex(
   ctx: AppContext,
 ): Promise<{ models: ArtificialAnalysisModel[]; partial: boolean }> {
-  const enrichLeg = (cacheKey: string, label: string, path: string, fields: readonly string[]) => {
-    const project = projectFields(fields);
-    return getAndParseEnrich<Record<string, unknown>>(ctx, cacheKey, {
-      label,
-      path,
-      marker: "initialModels",
-      extract: (tree) => findNextData(tree, "initialModels"),
-      fields,
-      map: (arr) => arr.map(project),
-    });
-  };
-  const { values, failures } = await fanOut(
+  const { values } = await fanOut(
     ctx,
     [
-      { label: "leaderboard", run: () => getAaLeaderboardBody(ctx) },
-      {
-        label: "models-enrich",
-        run: () => enrichLeg(cacheKeys.aaModelsEnrich, "/models", upstreamEndpoints.aaModels, MODELS_PATH_FIELDS),
-      },
-      {
-        label: "omniscience-enrich",
-        run: () =>
-          enrichLeg(
-            cacheKeys.aaOmniscienceEnrich,
-            "/omniscience",
-            upstreamEndpoints.aaOmniscience,
-            OMNISCIENCE_PATH_FIELDS,
-          ),
-      },
-      {
-        label: "directory-meta",
-        run: () =>
-          getModelDirectoryMeta(ctx).catch((err: unknown) => {
-            ctx.log("warn", `[artificial] OpenRouter directory metadata leg failed: ${errMsg(err)}`);
-            return { meta: {}, partial: true as const, failed: true as const };
-          }),
-      },
+      { label: "leaderboard", run: () => leaderboardBodySource(ctx) },
+      { label: "models-enrich", run: () => modelsEnrichSource(ctx) },
+      { label: "omniscience-enrich", run: () => omniscienceEnrichSource(ctx) },
+      { label: "directory-meta", run: () => getModelDirectory(ctx) },
     ] as const,
     { tag: "artificial" },
   );
-  const [indexBody, modelsEnrich, omniscienceEnrich, directoryMeta] = values;
-  const leaderboardFailure = failures.find((f) => f.label === "leaderboard");
-  if (leaderboardFailure || indexBody == null) {
+  const [indexBody, modelsEnrich, omniscienceEnrich, directory] = values;
+  if (indexBody == null) {
     throw new UpstreamError("Artificial Analysis: leaderboard fetch failed", { retryable: true });
   }
-  const openRouterMeta = directoryMeta == null ? null : directoryMeta.meta;
-  const directoryPartial =
-    directoryMeta == null ||
-    ("failed" in directoryMeta && directoryMeta.failed) ||
-    ("partial" in directoryMeta && directoryMeta.partial === true);
+  const openRouterMeta = directory?.data.meta ?? null;
+  const directoryPartial = directory == null || directory.partial;
 
-  const indexModels = requireParsed(parseLeaderboardModels(indexBody.value), ctx.log, "aa-leaderboard");
+  const indexModels = requireParsed(parseLeaderboardModels(indexBody.data), ctx.log, "aa-leaderboard");
 
   const enrichFailures =
-    [modelsEnrich, omniscienceEnrich].filter((leg) => leg?.failed).length + (openRouterMeta === null ? 1 : 0);
-  // Declared-ratio fields that arrive on another scale are dropped by `compact`; surface them instead of losing data
-  // silently (the parse is cached, so this logs at most once per refresh).
-  const outOfRatio = new Set<string>();
-  const warnRatio = (field: string, value: number): void => {
-    if (outOfRatio.size < 8) outOfRatio.add(`${field}=${value}`);
-  };
-  const merged = mergeBySlug(
+    [modelsEnrich, omniscienceEnrich].filter((leg) => leg == null || leg.partial).length +
+    (openRouterMeta === null ? 1 : 0);
+  const { models, outOfRatio, backfilled } = assembleModels({
     indexModels,
-    (modelsEnrich?.rows ?? []) as Record<string, unknown>[],
-    (omniscienceEnrich?.rows ?? []) as Record<string, unknown>[],
-  )
-    .map((row) => compact(row, warnRatio))
-    .filter((m) => isValidModelIdentity(m.id, m.slug, m.name));
-  if (outOfRatio.size > 0) {
-    ctx.log("warn", `[artificial] dropped out-of-range ratio field(s): ${[...outOfRatio].join(", ")}`);
+    modelsEnrich: modelsEnrich?.data ?? [],
+    omniscienceEnrich: omniscienceEnrich?.data ?? [],
+    meta: openRouterMeta,
+  });
+  if (outOfRatio.length > 0) {
+    ctx.log("warn", `[artificial] dropped out-of-range ratio field(s): ${outOfRatio.join(", ")}`);
   }
-  const backfilled = backfillFromMeta(merged, openRouterMeta ?? {});
   if (backfilled > 0) ctx.log("info", `[artificial] backfilled ${backfilled} missing field(s)`);
-  const models = merged.sort(byNumberDesc((m) => m.intelligence_index));
   requireRows(
     models,
     "Artificial Analysis parsing",
     "models",
     `raw=${indexModels.length}, kept=0, enrichFailures=${enrichFailures}`,
   );
-  return { models, partial: enrichFailures > 0 || indexBody.degraded || directoryPartial };
+  return { models, partial: enrichFailures > 0 || indexBody.partial || directoryPartial };
 }
 
 export const getIntelligenceIndex = defineSource<
   { models: ArtificialAnalysisModel[]; partial: boolean },
-  ArtificialAnalysisModel
+  ArtificialAnalysisModel[]
 >({
   key: cacheKeys.intelligenceIndex,
-  ttl: DEFAULT_TTL_MS,
+  ttl: ONE_HOUR,
   label: "Artificial Analysis parsing",
   fetch: (ctx) => fetchIntelligenceIndex(ctx),
   parse: (raw) => raw.models,
   partialWhen: ({ raw }) => ({ partial: raw.partial }),
 });
-
-export const getIntelligenceIndexResult = async (ctx: AppContext): Promise<IntelligenceIndexResult> => {
-  const { data, fetchedAt, partial } = await getIntelligenceIndex(ctx);
-  return { models: data, enrichFailed: partial, fetchedAt };
-};

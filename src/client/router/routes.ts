@@ -1,6 +1,13 @@
 import type { RouteRecordRaw } from "vue-router";
 import { Award, Home, Megaphone, Newspaper } from "@lucide/vue";
-import { qArtificialList, qClosedReleasesList, qHomeDashboard, qNews, qOpenRouterList } from "@/client/api/catalog";
+import {
+  qArtificialList,
+  qClosedReleasesList,
+  qHomeDashboard,
+  qNewsByCategory,
+  qOpenRouterList,
+} from "@/client/api/catalog";
+import { NEWS_CATEGORIES } from "@/shared/types/news";
 import { DEFAULT_RANKING_TAB } from "@/client/nav/nav-config";
 import { loadableView, preloadChunk } from "./lazy-view";
 import { RANKING_TAB_LOADS, RANKING_TAB_QUERIES } from "@/client/pages/rankings/tab-loaders";
@@ -25,7 +32,7 @@ const PriceCompareView = loadableView(loadPriceCompareView);
 const ReleasesView = loadableView(loadReleasesView);
 const NewsView = loadableView(loadNewsView);
 
-const newsPrefetch: readonly Prefetchable[] = [qNews];
+const newsPrefetch: readonly Prefetchable[] = [qNewsByCategory(NEWS_CATEGORIES[0]!)];
 
 export { RANKING_TAB_QUERIES };
 

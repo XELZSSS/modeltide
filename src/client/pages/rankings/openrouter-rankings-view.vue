@@ -29,11 +29,9 @@ function buildOpenRouterBodyColumns(t: TFunction): DataTableColumn<OpenRouterRan
       emphasis: "strong",
     }),
     monoCol("inputTokens", t("inputTokens"), (item) => formatShortNumber(item.promptTokens, t("notAvailable")), {
-      hiddenMd: true,
       emphasis: "strong",
     }),
     monoCol("outputTokens", t("outputTokens"), (item) => formatShortNumber(item.completionTokens, t("notAvailable")), {
-      hiddenMd: true,
       emphasis: "strong",
     }),
     monoCol("requests", t("requests"), (item) => formatShortNumber(item.requestCount, t("notAvailable")), {

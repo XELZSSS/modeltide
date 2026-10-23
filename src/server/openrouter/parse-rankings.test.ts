@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/cache/service";
-import { categoryFrom, creatorFromSlug, mapModels } from "./parse-rankings";
+import { categoryFrom, creatorFromSlug } from "./naming";
+import { mapModels } from "./parse-rankings";
 import type { PricingEntry } from "./parse-directory";
 import type { ModelRow } from "@/server/formats/wire-types";
 import type { MetaLookup, RankingScanStats } from "./aggregate";
@@ -136,7 +137,6 @@ describe("mapModels", () => {
     );
     expect(models.map((m) => m.id)).toEqual(["b/day", "a/window"]);
     expect(models.map((m) => m.totalTokens)).toEqual([700, 1000]);
-    expect(models.map((m) => m.rank)).toEqual([1, 2]);
   });
 
   it("keeps metric-less groups below metric-bearing ones and breaks metric ties by the derived total", () => {
@@ -238,7 +238,7 @@ describe("mapModels retirement accounting", () => {
     expect(stats.expiredRows).toBe(0);
   });
 
-  it("keeps ranking positions contiguous after a model is dropped", () => {
+  it("keeps the surviving models in order after one is dropped", () => {
     const models = mapModels(
       [expiryRow("old-model"), expiryRow("live-model"), expiryRow("other-model")],
       {},
@@ -246,6 +246,6 @@ describe("mapModels retirement accounting", () => {
       metaWith({ "old-model": { expiresAt: "2020-01-01" } }),
     );
 
-    expect(models.map((model) => model.rank)).toEqual([1, 2]);
+    expect(models.map((model) => model.id)).toEqual(["live-model", "other-model"]);
   });
 });

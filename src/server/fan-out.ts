@@ -2,18 +2,18 @@ import type { AppContext } from "./api/context";
 import { errMsg, rethrowIfClientAbort } from "./api/errors";
 import { runLegs, type Leg, type LegValues } from "./join-legs";
 
-export interface FanOutOptions {
+interface FanOutOptions {
   tag: string;
   concurrency?: number;
   allFailedMessage?: string;
 }
 
-export interface FanOutFailure {
+interface FanOutFailure {
   label: string;
   reason: unknown;
 }
 
-export interface FanOutResult<L extends readonly Leg<unknown>[]> {
+interface FanOutResult<L extends readonly Leg<unknown>[]> {
   values: LegValues<L>;
   failures: FanOutFailure[];
   partial: boolean;

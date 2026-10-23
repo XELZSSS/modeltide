@@ -3,7 +3,6 @@ import type { ModelPricing } from "./catalog";
 type OpenRouterCategory = "coding" | "reasoning" | "general";
 
 export interface OpenRouterRankEntry {
-  rank: number;
   id: string;
   name: string;
   creator: string;

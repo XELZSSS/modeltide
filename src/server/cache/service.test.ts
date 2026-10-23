@@ -3,7 +3,8 @@ import { ONE_MINUTE } from "@/shared/config/time";
 import { UpstreamError } from "@/server/api/errors";
 import { KvStore } from "./kv";
 import { CacheService, resetModuleCachesForTests } from "./service";
-import { maxStaleMs, sharedL1 } from "./store";
+import { sharedL1 } from "./l1";
+import { maxStaleMs } from "./stale";
 
 const VERSION = "svc-test";
 const silentLog = (): void => {};

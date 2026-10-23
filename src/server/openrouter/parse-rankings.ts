@@ -1,5 +1,6 @@
-import { numOr, titleCase } from "@/server/formats/parser-primitives";
+import { numOr } from "@/server/formats/scalars";
 import type { OpenRouterRankEntry } from "@/shared/types";
+import { categoryFrom, creatorFromSlug, titleFromSlug } from "./naming";
 import {
   compareRanked,
   changePercent,
@@ -11,90 +12,6 @@ import {
   type PricingLookup,
   type RankingScanStats,
 } from "./aggregate";
-
-const CREATORS: Record<string, string> = {
-  anthropic: "Anthropic",
-  "arcee-ai": "Arcee AI",
-  assemblyai: "AssemblyAI",
-  baai: "BAAI",
-  bytedance: "ByteDance",
-  "bytedance-seed": "ByteDance Seed",
-  canopylabs: "Canopy Labs",
-  cerebras: "Cerebras",
-  cohere: "Cohere",
-  deepseek: "DeepSeek",
-  elevenlabs: "ElevenLabs",
-  fireworks: "Fireworks",
-  google: "Google",
-  groq: "Groq",
-  heygen: "HeyGen",
-  "ibm-granite": "IBM Granite",
-  inclusionai: "InclusionAI",
-  intfloat: "intfloat",
-  "meta-llama": "Meta",
-  minimax: "MiniMax",
-  moonshot: "Moonshot",
-  moonshotai: "Moonshot AI",
-  "nace-ai": "Nace AI",
-  "nex-agi": "Nex AGI",
-  nvidia: "NVIDIA",
-  openai: "OpenAI",
-  "prism-ml": "Prism ML",
-  qwen: "Qwen",
-  rekaai: "Reka",
-  scaledown: "ScaleDown",
-  stepfun: "StepFun",
-  thedrummer: "TheDrummer",
-  thinkingmachines: "Thinking Machines",
-  togethercomputer: "Together",
-  voyageai: "Voyage AI",
-  "x-ai": "xAI",
-  xai: "xAI",
-  xiaomi: "Xiaomi",
-  "z-ai": "Z.ai",
-  zhipu: "Zhipu",
-};
-export function creatorFromSlug(slug: unknown): string {
-  if (typeof slug !== "string" || !slug.trim()) return "Unknown";
-  const slashAt = slug.indexOf("/");
-  if (slashAt <= 0) return "Unknown";
-  const owner = slug.slice(0, slashAt).trim();
-  if (!owner) return "Unknown";
-  const lower = owner.toLowerCase();
-  if (Object.hasOwn(CREATORS, lower)) return CREATORS[lower]!;
-  return owner.split(/[-_]/).filter(Boolean).map(titleCase).join(" ");
-}
-const CODING_RE = /\b(?:coder|coding|code|codex)\b/;
-const REASONING_RE = /\b(?:reasoning|thought)\b/;
-const REASONING_SUFFIX_RE = /-(?:r1|o1)\b/;
-
-function categoryOf(text: string): OpenRouterRankEntry["category"] | null {
-  const v = text.toLowerCase();
-  if (CODING_RE.test(v)) return "coding";
-  if (REASONING_RE.test(v) || REASONING_SUFFIX_RE.test(v)) return "reasoning";
-  return null;
-}
-
-export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry["category"] {
-  if (typeof slug === "string" && slug) {
-    const fromSlug = categoryOf(slug);
-    if (fromSlug) return fromSlug;
-  }
-  if (typeof name === "string" && name) {
-    const fromName = categoryOf(name);
-    if (fromName) return fromName;
-  }
-  return "general";
-}
-function titleFromSlug(permaslug: string): string {
-  const raw = permaslug.split("/").slice(1).join("/") || permaslug;
-  return raw
-    .replace(/[:/_]/g, " ")
-    .split(/[-\s]+/)
-    .filter(Boolean)
-    .map((p) => (/^\d/.test(p) ? p.toLowerCase() : p.length <= 3 ? p.toUpperCase() : titleCase(p)))
-    .join(" ");
-}
 
 export type { RankingScanStats };
 
@@ -110,10 +27,9 @@ export function mapModels(
     derivedTokens: usageTotal(group.agg),
   }));
   ranked.sort(compareRanked);
-  const merged = ranked;
   const out: OpenRouterRankEntry[] = [];
-  for (let i = 0; i < merged.length; i++) {
-    const { agg: row, dominant, latest } = merged[i]!.group;
+  for (let i = 0; i < ranked.length; i++) {
+    const { agg: row, dominant, latest } = ranked[i]!.group;
     const id = row.model_permaslug;
     const name = titleFromSlug(id) || id;
     const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
@@ -130,7 +46,6 @@ export function mapModels(
         (resolved.cacheWrite == null || resolved.cacheWrite === 0)
       : false;
     out.push({
-      rank: out.length + 1,
       id,
       name,
       creator: creatorFromSlug(id),

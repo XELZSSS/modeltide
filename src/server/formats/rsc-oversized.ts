@@ -1,5 +1,5 @@
 import { balancedJsonSlice } from "./json-balance";
-import { isTrimWhitespace, markerNeedle } from "./rsc-text";
+import { findNeedlePositions, markerNeedle, skipTrimWhitespace } from "./rsc-text";
 import { MAX_NEEDLE_CANDIDATES, MAX_RSC_BYTES, MAX_SCAN_CHARS, STREAM_LINE_RE, type RscExtractor } from "./limits";
 
 const MAX_OVERSIZED_WINDOWS = [64 * 1024, 512 * 1024, MAX_RSC_BYTES] as const;
@@ -12,15 +12,8 @@ function collectNeedlePositions(
   const positions: { idx: number; mi: number }[] = [];
   for (let mi = 0; mi < markers.length; mi++) {
     if (results[mi]) continue;
-    const needle = markerNeedle(markers[mi]!);
-    let from = 0;
-    let taken = 0;
-    while (taken < MAX_NEEDLE_CANDIDATES) {
-      const idx = line.indexOf(needle, from);
-      if (idx === -1) break;
+    for (const idx of findNeedlePositions(line, markerNeedle(markers[mi]!), MAX_NEEDLE_CANDIDATES)) {
       positions.push({ idx, mi });
-      taken += 1;
-      from = idx + 1;
     }
   }
   return positions;
@@ -31,8 +24,7 @@ function parseBalancedMarkerValue(line: string, idx: number, marker: string, bud
   const needle = markerNeedle(marker);
   const colonAt = line.indexOf(":", idx + needle.length);
   if (colonAt === -1 || colonAt > idx + needle.length + 64) return null;
-  let v = colonAt + 1;
-  while (v < line.length && isTrimWhitespace(line.charCodeAt(v))) v++;
+  const v = skipTrimWhitespace(line, colonAt + 1);
   const open = line.charAt(v);
   if (open !== "[" && open !== "{") return null;
   return balancedJsonSlice(line, v, Math.min(MAX_SCAN_CHARS, budgetChars));

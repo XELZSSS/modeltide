@@ -13,9 +13,11 @@ const tabButtonVariants = cva(
         true: "text-text-primary after:scale-x-100",
         false: "text-text-secondary after:scale-x-0 hoverable:hover:text-text-primary",
       },
+      // `pt`/`px` rather than `py`: the base `pb-2.5` is the gap the active underline sits in, so growing the button
+      // for fingers has to come from the top and sides or the rule drifts away from the label.
       size: {
-        sm: "px-1 py-1.5 text-xs tracking-label",
-        md: "px-1 py-2 text-sm tracking-label",
+        sm: "px-2 pt-3 text-xs tracking-label md:px-1 md:pt-1.5",
+        md: "px-2 pt-3.5 text-sm tracking-label md:px-1 md:pt-2",
       },
     },
     defaultVariants: { active: false, size: "md" },

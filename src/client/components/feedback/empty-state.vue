@@ -21,7 +21,7 @@ const classes = computed(() =>
     : cn(
         props.compact
           ? "flex flex-col items-center justify-center gap-2 p-6 text-center ui-anim-fade"
-          : "flex flex-col items-center justify-center gap-3 p-10 text-center min-h-[240px] ui-anim-fade",
+          : "flex flex-col items-center justify-center gap-3 p-8 text-center min-h-[200px] sm:p-10 sm:min-h-[240px] ui-anim-fade",
         props.class,
       ),
 );

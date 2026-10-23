@@ -1,4 +1,5 @@
-import { isRecord, isValidOpenRouterDirectoryRow } from "./parser-primitives";
+import { isRecord } from "./scalars";
+import { isValidOpenRouterDirectoryRow } from "./content-guards";
 import type { ModelRow, PricingRow } from "./wire-types";
 
 export function isModelRow(value: unknown): value is ModelRow {

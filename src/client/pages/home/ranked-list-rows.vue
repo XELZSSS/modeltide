@@ -10,7 +10,7 @@ defineProps<{ rows: RankedRow[] }>();
 
 <template>
   <div class="flex flex-1 flex-col gap-1 justify-between">
-    <div v-for="(row, i) in rows" :key="`${row.label}#${i + 1}`" class="flex h-9 items-center gap-3 min-w-0">
+    <div v-for="(row, i) in rows" :key="`${row.label}#${i + 1}`" class="flex min-h-9 items-center gap-3 py-0.5 min-w-0">
       <span class="text-xs font-medium text-text-tertiary w-6 text-center shrink-0 tabular-nums">
         {{ i + 1 }}
       </span>

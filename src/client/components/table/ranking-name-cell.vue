@@ -6,7 +6,9 @@ defineProps<{ name: string; title?: string }>();
 
 <template>
   <div class="flex items-center min-w-0 gap-2">
-    <p class="truncate flex-1 min-w-0 ui-body font-medium" :title="title ?? name">{{ name || FALLBACK_DASH }}</p>
+    <p class="flex-1 min-w-0 ui-body font-medium break-words md:truncate" :title="title ?? name">
+      {{ name || FALLBACK_DASH }}
+    </p>
     <slot name="suffix" />
   </div>
 </template>

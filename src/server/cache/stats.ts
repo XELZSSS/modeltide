@@ -12,19 +12,7 @@ const STATS_LOG_INTERVAL_MS = 30 * ONE_MINUTE;
 
 const statsLogGate = throttleGate(STATS_LOG_INTERVAL_MS);
 
-export interface CacheStats {
-  l1Hits: number;
-  kvHits: number;
-  cacheMisses: number;
-  staleServed: number;
-  refreshes: number;
-  kvReads: number;
-  kvReadsCoalesced: number;
-  kvWrites: number;
-  kvReadFailures: number;
-}
-
-export const cacheStats: CacheStats = {
+const ZERO_STATS = {
   l1Hits: 0,
   kvHits: 0,
   cacheMisses: 0,
@@ -34,12 +22,16 @@ export const cacheStats: CacheStats = {
   kvReadsCoalesced: 0,
   kvWrites: 0,
   kvReadFailures: 0,
-};
+} satisfies Record<string, number>;
 
-const STAT_KEYS = Object.keys(cacheStats) as (keyof CacheStats)[];
+type CacheStats = Record<keyof typeof ZERO_STATS, number>;
+
+const cacheStats: CacheStats = { ...ZERO_STATS };
+
+const STAT_KEYS = Object.keys(ZERO_STATS) as (keyof CacheStats)[];
 
 export function resetCacheStats(): void {
-  for (const key of STAT_KEYS) cacheStats[key] = 0;
+  Object.assign(cacheStats, ZERO_STATS);
 }
 
 export function noteCacheStat(key: keyof CacheStats, by = 1): void {

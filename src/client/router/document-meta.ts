@@ -12,6 +12,14 @@ const ROBOTS_SELECTOR = 'meta[name="robots"]';
 const softNotFound = ref(false);
 
 /**
+ * Title a detail view wants instead of the route's generic one — a model name, so the tab keeps it across a
+ * language switch. Owned here for the same reason as `softNotFound`: `useDocumentMeta` is the only writer of
+ * `document.title`, so nothing else may overwrite the model name with the generic route title.
+ */
+const detailTitle = ref<string | null>(null);
+let detailOwner = 0;
+
+/**
  * Detail views call this when the URL is routable but the thing it points at is missing. The URL is preserved,
  * while the title falls back to the not-found copy and `robots` gets `noindex`, so a soft 404 is not published to
  * crawlers as a real page.
@@ -26,6 +34,25 @@ export function useSoftNotFound(missing: MaybeRefOrGetter<boolean>): void {
   );
   onScopeDispose(() => {
     softNotFound.value = false;
+  });
+}
+
+/**
+ * Registers the title the current detail view shows. The incoming detail view mounts before the outgoing one
+ * unmounts, so both the write and the clear are keyed by owner: a stale instance can neither clear nor set it.
+ */
+export function useDocumentViewTitle(title: MaybeRefOrGetter<string>): void {
+  const owner = ++detailOwner;
+  watch(
+    () => toValue(title),
+    (value) => {
+      if (owner === detailOwner) detailTitle.value = value;
+    },
+    { immediate: true },
+  );
+  onScopeDispose(() => {
+    if (owner !== detailOwner) return;
+    detailTitle.value = null;
   });
 }
 
@@ -45,7 +72,7 @@ export function syncDocumentMeta(lang: Lang): void {
   document.querySelector('meta[property="og:locale:alternate"]')?.setAttribute("content", locale.ogAlternate);
 }
 
-export function useDocumentTitle(): (title: string) => void {
+function useDocumentTitle(): (title: string) => void {
   const { t } = useTranslation();
   return (title) => {
     document.title = `${title} · ${t("appName")}`;
@@ -57,12 +84,12 @@ export function useDocumentMeta(): void {
   const { t, lang } = useTranslation();
   const setDocumentTitle = useDocumentTitle();
   watch(
-    () => [route.name, route.meta.titleKey, lang.value, softNotFound.value],
+    () => [route.name, route.meta.titleKey, lang.value, softNotFound.value, detailTitle.value],
     () => {
       if (route.name == null) return;
       const known = route.name !== "notFound" && !softNotFound.value;
       const titleKey = (route.meta.titleKey ?? "notFound") as TranslationKey;
-      setDocumentTitle(t(known ? titleKey : "notFound"));
+      setDocumentTitle(known ? (detailTitle.value ?? t(titleKey)) : t("notFound"));
       const robots = document.querySelector(ROBOTS_SELECTOR);
       if (known) {
         robots?.remove();

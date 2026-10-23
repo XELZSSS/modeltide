@@ -12,7 +12,7 @@ export function pruneBounded<K, V>(map: Map<K, V>, maxKeys: number, isExpired: (
   }
 }
 
-export function keyedThrottleGate(intervalMs: number, maxKeys: number): (key: string) => boolean {
+function keyedThrottleGate(intervalMs: number, maxKeys: number): (key: string) => boolean {
   const last = new Map<string, number>();
   return (key) => {
     const now = Date.now();

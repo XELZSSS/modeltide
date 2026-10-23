@@ -1,8 +1,9 @@
-import { isRecord, isValidRowId, numCoerce, parseTs } from "@/server/formats/parser-primitives";
+import { isRecord, numCoerce } from "@/server/formats/scalars";
+import { parseTs } from "@/server/formats/dates";
+import { isValidRowId } from "@/server/formats/content-guards";
 import { isModelRow } from "@/server/formats/wire-guards";
 import { MAX_DIRECTORY_ROWS } from "@/server/formats/limits";
-import { pruneBounded } from "@/server/util/throttle";
-import { normalizeModelKey } from "@/shared/utils";
+import { lookupHit, normalizeKeyCached, type Lookup } from "./lookup";
 
 import type { ModelMetaEntry, ModelRow } from "@/server/formats/wire-types";
 import type { PricingEntry } from "./parse-directory";
@@ -43,25 +44,7 @@ function changePercent(value: unknown): number | null {
   return Math.abs(n) < 1 ? n * 100 : n;
 }
 
-export type PricingLookup = Map<string, PricingEntry> | Record<string, PricingEntry>;
-
-function lookupPricing(pricing: PricingLookup, key: string): PricingEntry | undefined {
-  if (pricing instanceof Map) return pricing.get(key);
-  return Object.hasOwn(pricing, key) ? pricing[key] : undefined;
-}
-
-const NORMALIZED_KEY_CACHE_MAX = 8192;
-const normalizedKeyCache = new Map<string, string>();
-
-function normalizeKeyCached(raw: string): string {
-  let normalized = normalizedKeyCache.get(raw);
-  if (normalized === undefined) {
-    normalized = normalizeModelKey(raw);
-    normalizedKeyCache.set(raw, normalized);
-    pruneBounded(normalizedKeyCache, NORMALIZED_KEY_CACHE_MAX, () => false);
-  }
-  return normalized;
-}
+export type PricingLookup = Lookup<PricingEntry>;
 
 function resolvePricing(pricing: PricingLookup, id: string, variantKey: string | undefined): PricingEntry | undefined {
   const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
@@ -70,7 +53,7 @@ function resolvePricing(pricing: PricingLookup, id: string, variantKey: string |
     ...keys.map(normalizeKeyCached).filter((key): key is string => key !== ""),
   ];
   for (const key of candidates) {
-    const hit = lookupPricing(pricing, key);
+    const hit = lookupHit(pricing, key);
     if (hit) return hit;
   }
   return undefined;
@@ -82,14 +65,14 @@ export interface RankingScanStats {
   expiredRows: number;
 }
 
-export type MetaLookup = Map<string, ModelMetaEntry> | Record<string, ModelMetaEntry>;
+export type MetaLookup = Lookup<ModelMetaEntry>;
 
 export function resolveExpiry(meta: MetaLookup | undefined, id: string, variantKey: string | undefined): string | null {
   if (!meta) return null;
   const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
   const candidates = [...keys.map((key) => key.toLowerCase()), ...keys.map(normalizeKeyCached)];
   for (const key of candidates) {
-    const hit = meta instanceof Map ? meta.get(key) : Object.hasOwn(meta, key) ? meta[key] : undefined;
+    const hit = lookupHit(meta, key);
     if (hit?.expiresAt) return hit.expiresAt;
   }
   return null;

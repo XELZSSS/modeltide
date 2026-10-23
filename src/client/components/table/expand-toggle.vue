@@ -27,7 +27,7 @@ function onToggle(event: MouseEvent): void {
   <Button
     variant="ghost"
     size="icon"
-    class="shrink-0 size-7"
+    class="-ml-2 -mt-2 shrink-0 size-10 md:ml-0 md:mt-0 md:size-7"
     :aria-expanded="isExpanded"
     :aria-label="label"
     :aria-controls="isExpanded ? rowPanelId(rowId) : undefined"

@@ -138,11 +138,11 @@ onUnmounted(unlock);
 
 <template>
   <Teleport to="body">
-    <Transition name="ui-fade">
+    <Transition name="ui-fade" appear>
       <div v-if="open" class="fixed inset-0 z-40 bg-black/50" aria-hidden="true" @click="emit('close')" />
     </Transition>
-    <Transition name="ui-sheet">
-      <div v-if="open" class="fixed inset-0 z-50 flex items-end justify-center pointer-events-none sm:items-center">
+    <Transition name="ui-sheet" appear>
+      <div v-if="open" class="fixed inset-0 z-50 flex items-end justify-center pointer-events-none md:items-center">
         <div
           ref="panelRef"
           role="dialog"

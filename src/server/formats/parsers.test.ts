@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { decodeEntities } from "./html-entities";
 import { stripHtml } from "./html-to-text";
 import { parseFeed as parseFeedResult } from "./rss-feed-parser";
-import { findNextData, findLongestData, parseRscPayload, parseRscPayloads } from "./rsc-parser";
+import { findNextData, findLongestData } from "./rsc-data";
+import { parseRscPayload, parseRscPayloads } from "./rsc-parser";
 import { isMarkerBoundaryAt } from "./rsc-text";
 import { getOpenLicenseId, licenseTagId } from "./licenses";
-import { sortByDateDesc, isoDate, numCoerce } from "./parser-primitives";
+import { sortByDateDesc, isoDate } from "./dates";
+import { numCoerce } from "./scalars";
 
 function readFeed(xml: string, url = "https://x.example/feed") {
   const res = parseFeedResult(xml, url);

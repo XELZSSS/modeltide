@@ -1,4 +1,4 @@
-import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
+import { computed, ref, toValue, type MaybeRefOrGetter } from "vue";
 
 export function useListKeyboard(
   itemCount: MaybeRefOrGetter<number>,
@@ -9,9 +9,9 @@ export function useListKeyboard(
   const count = computed(() => toValue(itemCount));
   const activeIndex = computed(() => (index.value < 0 ? -1 : Math.min(index.value, count.value - 1)));
 
-  watch(count, () => {
-    index.value = -1;
-  });
+  // Results arrive from several model sources in waves, so the count changes while the panel is open. The clamp above
+  // keeps the highlight inside the new range; resetting on every change dropped it mid-navigation, which left Enter
+  // doing nothing at all. A new term resets the index explicitly (use-combobox's onChange/onFocus/onClear).
 
   function setActiveIndex(value: number): void {
     index.value = value;

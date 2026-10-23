@@ -6,13 +6,15 @@ import { useTranslation } from "@/client/i18n";
 import DesktopNav from "./desktop-nav.vue";
 import MobileNav from "./mobile-nav.vue";
 import ErrorBoundary from "@/client/components/feedback/error-boundary.vue";
+import FetchIndicator from "./fetch-indicator.vue";
+import { loadMobileMoreSheet, loadSettingsSheet } from "./sheet-loaders";
 import ContractSkewNotice from "@/client/components/feedback/contract-skew-notice.vue";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";
 import { THEME_COLORS } from "@/shared/config";
 import { useScrollRestoreMain } from "@/client/hooks/use-scroll-restore";
 
-const SettingsSheet = defineAsyncComponent(() => import("./settings-sheet.vue"));
-const MobileMoreSheet = defineAsyncComponent(() => import("./mobile-more-sheet.vue"));
+const SettingsSheet = defineAsyncComponent(loadSettingsSheet);
+const MobileMoreSheet = defineAsyncComponent(loadMobileMoreSheet);
 
 const route = useRoute();
 const settings = useSettingsStore();
@@ -77,13 +79,17 @@ onBeforeUnmount(() => {
       {{ t("skipToContent") }}
     </a>
     <DesktopNav @settings-open="openSheet = 'settings'" />
+    <!-- `scrollbar-gutter: stable` reserves the thin scrollbar's 10px whether or not the page scrolls. Now that the
+         scrollport is `auto`, switching between ranking tabs of different heights used to add and remove that strip,
+         which shifted the centred content sideways on every switch. -->
     <main
       ref="mainRef"
       id="main-content"
       tabindex="-1"
       :aria-label="t('mainContent')"
-      class="flex-1 min-h-0 overflow-y-scroll overscroll-contain pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0 focus:outline-none"
+      class="flex-1 min-h-0 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0 focus:outline-none"
     >
+      <FetchIndicator />
       <div :class="[PAGE_WIDTH, PAGE_GUTTER]">
         <ContractSkewNotice />
       </div>

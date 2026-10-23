@@ -1,14 +1,25 @@
 import type { ApiRouteDef } from "./api/router";
+import { cacheHeadersForTtl } from "./api/headers";
 import { qEnum, qStr, type QuerySchema } from "./api/validation";
 import type { ApiDomain } from "@/shared/contract";
-import { apiPaths, MAX_MODEL_ID_CHARS, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
+import {
+  apiPaths,
+  FIVE_MINUTES,
+  MAX_MODEL_ID_CHARS,
+  NEWS_CATEGORIES,
+  NEWS_TTL_MS,
+  OPEN_SOURCE_MODELS_DEFAULTS,
+  ONE_HOUR,
+  SLOW_TTL_MS,
+  STATIC_TTL_MS,
+} from "@/shared/config";
 import { OPEN_SOURCE_SORTS } from "@/shared/query-schemas";
 import { getIntelligenceIndex } from "./aa";
 
 import { getClosedReleases } from "./releases/source";
 import { getHomeDashboard } from "./home/source";
 import { getNews } from "./news/source";
-import { getModelsForQuery } from "./huggingface/source";
+import { getOpenSourceModels } from "./huggingface/source";
 import { getOpenRouterRankings } from "./openrouter/rankings";
 
 interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends ApiRouteDef<D, Q> {
@@ -25,13 +36,17 @@ function defineRoute<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
 
 const ENTRIES = {
   artificialIndex: defineRoute("artificialIndex", {
-    handler: (ctx) => getIntelligenceIndex(ctx),
+    cache: cacheHeadersForTtl(ONE_HOUR),
+    handler: getIntelligenceIndex,
   }),
   homeDashboard: defineRoute("homeDashboard", {
-    handler: (ctx) => getHomeDashboard(ctx),
+    cache: cacheHeadersForTtl(FIVE_MINUTES),
+    handler: getHomeDashboard,
   }),
   news: defineRoute("news", {
-    handler: (ctx) => getNews(ctx),
+    query: { category: qEnum(NEWS_CATEGORIES) },
+    cache: cacheHeadersForTtl(NEWS_TTL_MS),
+    handler: getNews,
   }),
 
   openSourceModels: defineRoute("openSourceModels", {
@@ -39,13 +54,16 @@ const ENTRIES = {
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
       id: qStr({ maxLength: MAX_MODEL_ID_CHARS, optional: true }),
     },
-    handler: (ctx, params) => getModelsForQuery(ctx, params),
+    cache: cacheHeadersForTtl(SLOW_TTL_MS),
+    handler: getOpenSourceModels,
   }),
   closedReleases: defineRoute("closedReleases", {
-    handler: (ctx) => getClosedReleases(ctx),
+    cache: cacheHeadersForTtl(STATIC_TTL_MS),
+    handler: getClosedReleases,
   }),
   openRouterRankings: defineRoute("openRouterRankings", {
-    handler: (ctx) => getOpenRouterRankings(ctx),
+    cache: cacheHeadersForTtl(ONE_HOUR),
+    handler: getOpenRouterRankings,
   }),
 } satisfies Record<ApiDomain, unknown>;
 

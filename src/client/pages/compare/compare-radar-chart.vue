@@ -8,6 +8,7 @@ registerRadar();
 import { computed } from "vue";
 import type { ChartData, ChartOptions } from "chart.js";
 import { useTranslation } from "@/client/i18n";
+import { useDevice } from "@/client/device";
 import { hexToRgba } from "@/shared/utils/color";
 import {
   AXIS_STEP,
@@ -31,6 +32,7 @@ const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
 
 const { t } = useTranslation();
 const theme = useChartTheme();
+const isMobile = useDevice();
 
 const radarData = computed(() => buildRadarData(t, props.models));
 const radarMax = computed(() => radarMaxFor(radarData.value));
@@ -56,7 +58,7 @@ const data = computed<ChartData<"radar">>(() => ({
 const options = computed<ChartOptions<"radar">>(() => ({
   ...chartBase,
   interaction: { mode: "index", intersect: false },
-  layout: { padding: 8 },
+  layout: { padding: isMobile.value ? 0 : 8 },
   scales: {
     r: {
       min: 0,
@@ -68,7 +70,7 @@ const options = computed<ChartOptions<"radar">>(() => ({
       },
       grid: { color: theme.value.grid },
       angleLines: { color: theme.value.grid },
-      pointLabels: { color: theme.value.tickSecondary, font: { size: 11 } },
+      pointLabels: { color: theme.value.tickSecondary, font: { size: isMobile.value ? 10 : 11 }, padding: 2 },
     },
   },
   plugins: {
@@ -92,7 +94,7 @@ const caption = computed(() =>
 
 <template>
   <Card class="w-full">
-    <CardContent class="h-full flex items-center justify-center">
+    <CardContent class="h-full flex items-center justify-center p-3 sm:p-6">
       <ChartFrame :height="RADAR_CHART_HEIGHT">
         <ChartCanvas type="radar" :data="data" :options="options" role="img" :aria-label="t('modelComparison')" />
         <figcaption class="sr-only">{{ caption }}</figcaption>

@@ -11,8 +11,8 @@ export function findModel<T>(data: T[], id: string, ...keys: StringKey<T>[]): T 
 </script>
 
 <script setup lang="ts">
-import { computed, watch } from "vue";
-import { useDocumentTitle } from "@/client/router/document-meta";
+import { computed } from "vue";
+import { useDocumentViewTitle } from "@/client/router/document-meta";
 import { useTranslation } from "@/client/i18n";
 import { SOURCES } from "@/client/nav/sources";
 import type { ModelSource } from "@/shared/types";
@@ -21,11 +21,9 @@ import DetailPageLayout from "@/client/components/layout/detail-page-layout.vue"
 const props = defineProps<{ source: ModelSource; title: string }>();
 
 const { t } = useTranslation();
-const setTitle = useDocumentTitle();
+useDocumentViewTitle(() => props.title);
 
 const config = computed(() => SOURCES[props.source]);
-
-watch(() => props.title, setTitle, { immediate: true });
 </script>
 
 <template>

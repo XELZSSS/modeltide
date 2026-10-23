@@ -1,4 +1,5 @@
-import { isoDate, sortByDateDesc, isRecord, str } from "@/server/formats/parser-primitives";
+import { isoDateOnly, sortByDateDesc } from "@/server/formats/dates";
+import { isRecord, str } from "@/server/formats/scalars";
 import { MAX_ID_CHARS, MAX_NAME_CHARS } from "@/shared/config";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 
@@ -18,8 +19,8 @@ function toClosedEntry(
   if (!cleanId || !cleanModel || !cleanProvider) return null;
   if (cleanId.length > MAX_ID_CHARS || cleanModel.length > MAX_ID_CHARS || cleanProvider.length > MAX_NAME_CHARS)
     return null;
-  const date = rawDate.slice(0, 10);
-  if (!isoDate(date)) return null;
+  const date = isoDateOnly(rawDate.slice(0, 10));
+  if (!date) return null;
   return {
     id: cleanId,
     model: cleanModel,

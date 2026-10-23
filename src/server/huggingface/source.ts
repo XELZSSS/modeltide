@@ -1,18 +1,19 @@
-import { isValidRowId } from "@/server/formats/parser-primitives";
+import { isValidRowId } from "@/server/formats/content-guards";
 import { MAX_MODEL_ID_CHARS, ONE_MINUTE, SLOW_TTL_MS } from "@/shared/config";
 import { upstreamConfig } from "@/server/upstream/upstream";
 import { cacheKeys } from "@/server/cache/keys";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import type { AppContext } from "@/server/api/context";
-import { UpstreamError, ValidationError, isTimeoutLike, rethrowIfClientAbort } from "@/server/api/errors";
+import { UpstreamError, isTimeoutLike, rethrowIfClientAbort } from "@/server/api/errors";
 import { dedupeBy, errMsg } from "@/shared/utils";
 import { encodeModelIdPath } from "@/shared/utils/models";
-import { LicenseDropTally, keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
+import { keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
+import { LicenseDropTally } from "./license-tally";
 import type { HFModel } from "@/server/formats/wire-types";
 
 import type { SourcePayload } from "@/shared/types";
 import type { OpenSourceModelsQuery } from "@/shared/query-schemas";
-import { cachedPayload, defineParamSource, requireArrayBody, requireRows } from "@/server/pipeline";
+import { defineParamSource, requireArrayBody, requireRows } from "@/server/pipeline";
 
 const HF_API = upstreamConfig.huggingface;
 const HF_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,96}(?:\/[A-Za-z0-9][A-Za-z0-9._-]{0,96})?$/;
@@ -27,10 +28,10 @@ const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", 
 // 50-subrequest and connection budget. A page of 1000 weighs ~0.5 MB, well inside MAX_JSON_BYTES.
 const HF_PAGE_LIMIT = 1000;
 
-// Raw-row ceilings (pages × HF_PAGE_LIMIT). The list is trendingScore-ordered, so these only set how deep the tail
-// goes: 2000 rows leave ~1200 after the license and download gates, while the home card aggregates a task
-// distribution and needs a wide sample rather than the full list.
-const HF_MAX_PAGES = 2;
+// Raw-row ceilings (pages × HF_PAGE_LIMIT). The list is trendingScore-ordered, so these only set how deep the tail goes.
+// One page still leaves ~600 rows after the license and download gates — enough for a 20-row page × 30 pages — and it
+// removes one 500 KB JSON parse per refresh, which is the budget the free plan's 10 ms CPU limit actually pays for.
+const HF_MAX_PAGES = 1;
 const HOME_HF_MAX_PAGES = 1;
 
 // A healthy list page answers in ~1.3 s, so the 12 s interactive default would let two attempts on the first page eat
@@ -159,7 +160,7 @@ function parseHFItems(items: HFModel[], ctx: AppContext): OpenSourceModelEntry[]
 // same top-N ranking, so it is not a degradation. Only an aborted fetch or an exhausted pagination budget leaves the
 // list genuinely incomplete, and only that is reported as partial.
 function hfListSource(maxPages: number, keyOf: (params: OpenSourceModelsQuery) => string) {
-  return defineParamSource<OpenSourceModelsQuery, HFRaw, OpenSourceModelEntry>(keyOf, {
+  return defineParamSource<OpenSourceModelsQuery, HFRaw, OpenSourceModelEntry[]>(keyOf, {
     ttl: SLOW_TTL_MS,
     label: "HuggingFace",
     fetch: (ctx, params) => fetchHFModels(ctx, params.sort, maxPages),
@@ -171,9 +172,6 @@ function hfListSource(maxPages: number, keyOf: (params: OpenSourceModelsQuery) =
 // The ranking list and the home dashboard sample the same upstream list at different depths, and cache it separately.
 const fullListSource = hfListSource(HF_MAX_PAGES, (params) => cacheKeys.openSourceModels(params.sort));
 const homeListSource = hfListSource(HOME_HF_MAX_PAGES, (params) => cacheKeys.homeOpenSource(params.sort));
-
-export const getModels = (ctx: AppContext, p: OpenSourceModelsQuery): Promise<SourcePayload<OpenSourceModelEntry[]>> =>
-  fullListSource(ctx, p);
 
 export const getHomeOpenSourceModels = (
   ctx: AppContext,
@@ -194,29 +192,27 @@ async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSource
 
 const NEGATIVE_STALE_CAP_MS = 5 * ONE_MINUTE;
 
-export const getModelById = (ctx: AppContext, id: string): Promise<SourcePayload<OpenSourceModelEntry | null>> => {
-  const trimmed = id.trim();
-  if (!isValidHFModelId(trimmed)) {
-    return Promise.reject(new ValidationError(`Invalid Hugging Face model id "${id}"`));
-  }
-  return cachedPayload<OpenSourceModelEntry | null>(
-    ctx,
-    cacheKeys.openSourceModel(trimmed),
-    SLOW_TTL_MS,
-    async (ctx) => {
-      const model = await fetchHFModelById(ctx, trimmed);
-      return model == null ? { rows: model, ttl: ONE_MINUTE } : { rows: model };
-    },
-    { staleCapMs: NEGATIVE_STALE_CAP_MS },
-  );
-};
+// An id that cannot exist on Hugging Face is a miss, not a bad request. The API would answer 400 for one, and a 4xx
+// never retries and the error boundary's retry re-asks the same question, so a junk URL used to pin the detail page on
+// the error boundary forever; HF itself answers 404. Cache the miss as briefly as the real 404 path.
+const modelByIdSource = defineParamSource<string, OpenSourceModelEntry | null, OpenSourceModelEntry | null>(
+  (id) => cacheKeys.openSourceModel(id),
+  {
+    ttl: SLOW_TTL_MS,
+    label: "HuggingFace model",
+    scope: { staleCapMs: NEGATIVE_STALE_CAP_MS },
+    fetch: (ctx, id) => (isValidHFModelId(id) ? fetchHFModelById(ctx, id) : Promise.resolve(null)),
+    parse: (raw) => raw,
+    partialWhen: ({ raw }) => (raw == null ? { partial: false, ttl: ONE_MINUTE } : { partial: false }),
+  },
+);
 
-export async function getModelsForQuery(
+export async function getOpenSourceModels(
   ctx: AppContext,
   p: OpenSourceModelsQuery,
 ): Promise<SourcePayload<OpenSourceModelEntry[]>> {
-  if (!p.id) return getModels(ctx, p);
-  const single = await getModelById(ctx, p.id);
+  if (!p.id) return fullListSource(ctx, p);
+  const single = await modelByIdSource(ctx, p.id.trim());
   return {
     data: single.data == null ? [] : [single.data],
     fetchedAt: single.fetchedAt,

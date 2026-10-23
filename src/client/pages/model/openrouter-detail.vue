@@ -50,7 +50,7 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
     <InfoGrid>
       <InfoCard :title="t('modelInfo')">
         <InfoRow :label="t('apiModelId')">
-          <code class="font-mono text-xs bg-bg-secondary px-1.5 py-0.5">{{ model.id }}</code>
+          <code class="font-mono text-xs bg-bg-secondary px-1.5 py-0.5 break-all">{{ model.id }}</code>
         </InfoRow>
         <InfoRow :label="t('category')">{{ categoryLabel(model.category, t) }}</InfoRow>
         <InfoRow v-if="model.expiresAt" :label="t('expiresAt')">{{ model.expiresAt }}</InfoRow>

@@ -154,7 +154,7 @@ main,
   min-width: 0;
 
   @media (width >= 640px) {
-    font-size: 2.75rem;
+    font-size: 2.5rem;
     line-height: 1.1;
   }
 }

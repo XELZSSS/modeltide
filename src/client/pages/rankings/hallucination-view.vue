@@ -16,16 +16,9 @@ function buildHallColumns(t: TFunction): DataTableColumn<HallucinationRankingEnt
     monoCol("hallucinationRate", t("hallucinationRate"), (item) => formatPercent(item.hallucinationRate, t), {
       emphasis: "strong",
     }),
-    monoCol("accuracy", t("accuracy"), (item) => formatPercent(item.accuracy, t), { hiddenMd: true }),
-    monoCol("attemptRate", t("attemptRate"), (item) => formatPercent(item.attemptRate, t), { hiddenMd: true }),
-    monoCol(
-      "omniscienceIndex",
-      t("omniscienceIndex"),
-      (item) => formatIndex(item.omniscienceIndex, t("notAvailable")),
-      {
-        hiddenMd: true,
-      },
-    ),
+    monoCol("accuracy", t("accuracy"), (item) => formatPercent(item.accuracy, t)),
+    monoCol("attemptRate", t("attemptRate"), (item) => formatPercent(item.attemptRate, t)),
+    monoCol("omniscienceIndex", t("omniscienceIndex"), (item) => formatIndex(item.omniscienceIndex, t("notAvailable"))),
   ];
 }
 

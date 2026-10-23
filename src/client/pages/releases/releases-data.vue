@@ -38,7 +38,7 @@ const dateLabels = computed(() => {
 const columns = computed<DataTableColumn<ReleaseRow>[]>(() => [
   col("model", translate("model"), (row) =>
     h("div", { class: "min-w-0" }, [
-      h("p", { class: "text-sm truncate font-semibold", title: row.name }, row.name),
+      h("p", { class: "text-sm font-semibold break-words md:truncate", title: row.name }, row.name),
       h("div", { class: "flex md:hidden mt-1.5 items-center gap-2" }, [
         h("span", { class: "text-xs text-text-secondary" }, row.provider),
         h("span", { class: "ui-meta" }, dateLabels.value.get(row.id)!),
@@ -74,7 +74,7 @@ function renderExpandedRow(row: ReleaseRow): VNodeChild {
         translate("aaModelPage"),
         h(ExternalLink, {
           size: 14,
-          class: "md:opacity-0 md:group-hover:opacity-100 ui-motion",
+          class: "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 ui-motion",
         }),
       ],
     ),

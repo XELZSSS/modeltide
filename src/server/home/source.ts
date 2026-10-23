@@ -1,7 +1,7 @@
 import type { AppContext } from "@/server/api/context";
 import { UpstreamError } from "@/server/api/errors";
 import { fanOut } from "@/server/fan-out";
-import { getIntelligenceIndexResult } from "@/server/aa";
+import { getIntelligenceIndex } from "@/server/aa";
 import { getTextToImageLeaderboard } from "@/server/aa/text-to-image";
 import { getHomeOpenSourceModels } from "@/server/huggingface/source";
 import { getOpenRouterRankings } from "@/server/openrouter/rankings";
@@ -15,10 +15,9 @@ import type {
   HomeOpenSourceEntry,
   HomeProviderSpeed,
   OpenSourceModelEntry,
-  SourcePayload,
 } from "@/shared/types";
 import { computeProviderStats } from "@/shared/utils/models";
-import { cachedPayload } from "@/server/pipeline";
+import { defineSource } from "@/server/pipeline";
 
 const HOME_OR_RANKING_ROWS = 5;
 const HOME_TEXT_TO_IMAGE_ROWS = 8;
@@ -71,7 +70,12 @@ function homeHallucinationRows(models: ArtificialAnalysisModel[]): HomeHallucina
   return rows.sort((a, b) => b.accuracy - a.accuracy).slice(0, HOME_HALLUCINATION_ROWS);
 }
 
-async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboardData; partial: boolean }> {
+interface HomeRaw {
+  data: HomeDashboardData;
+  partial: boolean;
+}
+
+async function fetchHomeDashboard(ctx: AppContext): Promise<HomeRaw> {
   const {
     values,
     failures,
@@ -83,7 +87,7 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboar
       { label: "openrouter", run: () => getOpenRouterRankings(ctx) },
       { label: "textToImage", run: () => getTextToImageLeaderboard(ctx) },
       { label: "opensource", run: () => getHomeOpenSourceModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS }) },
-      { label: "artificial", run: () => getIntelligenceIndexResult(ctx) },
+      { label: "artificial", run: () => getIntelligenceIndex(ctx) },
     ],
     { tag: "home" },
   );
@@ -91,7 +95,7 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboar
   if (!orRankings && !textToImage && !opensource && !artificial) {
     throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`, { retryable: true });
   }
-  const artificialModels = artificial?.models ?? [];
+  const artificialModels = artificial?.data ?? [];
   const data: HomeDashboardData = {
     orRankings: (orRankings?.data ?? []).slice(0, HOME_OR_RANKING_ROWS),
     textToImage: (textToImage?.data ?? []).slice(0, HOME_TEXT_TO_IMAGE_ROWS),
@@ -105,16 +109,18 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<{ data: HomeDashboar
     orRankings?.partial === true ||
     textToImage?.partial === true ||
     opensource?.partial === true ||
-    artificial?.enrichFailed === true;
+    artificial?.partial === true;
   if (partial && failures.length === 0) {
     ctx.log("warn", "[home] partial dashboard (a leg returned partial data)");
   }
   return { data, partial };
 }
 
-export async function getHomeDashboard(ctx: AppContext): Promise<SourcePayload<HomeDashboardData>> {
-  return cachedPayload(ctx, cacheKeys.homeDashboard, FIVE_MINUTES, async (ctx) => {
-    const { data, partial } = await fetchHomeDashboard(ctx);
-    return { rows: data, partial };
-  });
-}
+export const getHomeDashboard = defineSource<HomeRaw, HomeDashboardData>({
+  key: cacheKeys.homeDashboard,
+  ttl: FIVE_MINUTES,
+  label: "Home dashboard",
+  fetch: (ctx) => fetchHomeDashboard(ctx),
+  parse: (raw) => raw.data,
+  partialWhen: ({ raw }) => ({ partial: raw.partial }),
+});

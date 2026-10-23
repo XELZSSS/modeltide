@@ -59,7 +59,6 @@ export interface TextToImageModel {
   id: string;
   slug: string;
   name: string;
-  rank: number;
   elo: number | null;
   eloLower: number | null;
   eloUpper: number | null;

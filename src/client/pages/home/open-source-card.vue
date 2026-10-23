@@ -27,11 +27,14 @@ import { cn } from "@/client/utils/cn";
 import type { HomeBarStat } from "./use-home-stats";
 import RankedListRows from "./ranked-list-rows.vue";
 import { OTHER_TASK_KEY, UNTAGGED_TASK_KEY, aggregateTaskShare, taskLabel, type TaskSlice } from "./task-share";
+import { useDevice } from "@/client/device";
+import Dot from "@/client/components/ui/dot.vue";
 
 const props = defineProps<{ models: { task: string | null | undefined }[]; trending: HomeBarStat[] }>();
 
 const { t } = useTranslation();
 const theme = useChartTheme();
+const isMobile = useDevice();
 const aggregated = computed(() => aggregateTaskShare(props.models));
 const slices = computed(() => aggregated.value.slices);
 const total = computed(() => aggregated.value.total);
@@ -70,7 +73,7 @@ const options = computed<ChartOptions<"doughnut">>(() => ({
   ...chartBase,
   cutout: "62%",
   plugins: {
-    legend: { ...legendStyle(theme.value), position: "bottom" as const },
+    legend: { ...legendStyle(theme.value), position: "bottom" as const, display: !isMobile.value },
     tooltip: {
       ...defaultTooltipOptions(theme.value),
       callbacks: {
@@ -113,6 +116,15 @@ const caption = computed(() =>
             />
             <figcaption class="sr-only">{{ caption }}</figcaption>
           </ChartFrame>
+          <!-- A 7-slice Chart.js legend inside the same fixed frame left the doughnut about 80px across. On a phone the
+               list below carries the same colour, label and share in two readable columns. -->
+          <ul v-if="isMobile && slices.length > 0" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <li v-for="(slice, i) in slices" :key="slice.key" class="flex items-center gap-1.5 min-w-0">
+              <Dot size="sm" :color="sliceColors[i]" />
+              <span class="ui-caption truncate">{{ sliceLabel(slice) }}</span>
+              <span class="ui-meta ml-auto shrink-0 tabular-nums">{{ percentOf(slice.total) }}</span>
+            </li>
+          </ul>
         </div>
         <div class="flex flex-col min-w-0">
           <p class="ui-caption mb-2">{{ t("downloads") }}</p>

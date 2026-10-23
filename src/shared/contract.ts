@@ -3,7 +3,6 @@ import type {
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
   HomeDashboardData,
-  NewsCategory,
   NewsItem,
   OpenSourceModelEntry,
   OpenRouterRankEntry,
@@ -11,12 +10,10 @@ import type {
 } from "./types";
 export type { ApiDomain };
 
-export type NewsByCategory = Record<NewsCategory, SourcePayload<NewsItem[]>>;
-
 interface ApiContract {
   artificialIndex: ArtificialAnalysisModel[];
   homeDashboard: HomeDashboardData;
-  news: NewsByCategory;
+  news: NewsItem[];
   openSourceModels: OpenSourceModelEntry[];
   closedReleases: ClosedReleaseEntry[];
   openRouterRankings: OpenRouterRankEntry[];

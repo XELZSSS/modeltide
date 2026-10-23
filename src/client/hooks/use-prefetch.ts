@@ -6,7 +6,7 @@ import { prefetchQueries, type PrefetchTarget } from "@/client/router/prefetch";
 const HOVER_PREFETCH_DELAY_MS = 150;
 const TOUCH_PREFETCH_DELAY_MS = 300;
 
-export interface PrefetchIntent<Id> {
+interface PrefetchIntent<Id> {
   hover: (id: Id) => void;
   touch: (id: Id) => void;
   cancel: () => void;

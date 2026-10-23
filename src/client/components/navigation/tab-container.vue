@@ -19,9 +19,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{ tabChange: [tabId: string]; tabIntent: [tabId: string, active: boolean] }>();
 
-const groupClasses = computed(() =>
-  cn("w-fit max-w-full overflow-x-auto no-scrollbar sm:flex-wrap", props.fill && "w-full sm:w-full"),
-);
+// Wrap rather than scroll: an edge fade over a strip that already fits faded the last tab's own label, and a hidden
+// scroller with no affordance left tabs 4 and 5 invisible on a phone.
+const groupClasses = computed(() => cn("w-fit max-w-full flex-wrap", props.fill && "w-full sm:w-full"));
 const panelClasses = computed(() => cn("min-w-0 flex flex-col gap-4", props.class));
 
 function onKeydown(event: KeyboardEvent): void {

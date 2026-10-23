@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetModuleCachesForTests } from "@/server/cache/service";
-import { backfillFromMeta, mergeBySlug } from "./model-enrich";
+import { backfillFromMeta } from "./meta-backfill";
+import { mergeBySlug } from "./model-merge";
 import { compact } from "./model-compact";
 import { parseLeaderboardModels } from "./leaderboard";
 import { parseChangelogModels, type ChangelogModel } from "./changelog";

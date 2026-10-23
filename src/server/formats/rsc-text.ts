@@ -20,15 +20,34 @@ const TRIM_WHITESPACE = new Set([
 
 export const isTrimWhitespace = (c: number): boolean => TRIM_WHITESPACE.has(c);
 
+/** Advances past whitespace as JSON defines it, which is wider than `String.prototype.trim`. */
+export function skipTrimWhitespace(text: string, pos: number): number {
+  let at = pos;
+  while (at < text.length && isTrimWhitespace(text.charCodeAt(at))) at++;
+  return at;
+}
+
 export function markerNeedle(marker: string): string {
   return `"${marker}"`;
+}
+
+/** Collects up to `limit` non-overlapping-start offsets of `needle` in `text`, in ascending order. */
+export function findNeedlePositions(text: string, needle: string, limit: number): number[] {
+  const positions: number[] = [];
+  let from = 0;
+  while (positions.length < limit) {
+    const idx = text.indexOf(needle, from);
+    if (idx === -1) break;
+    positions.push(idx);
+    from = idx + 1;
+  }
+  return positions;
 }
 
 export function isMarkerBoundaryAt(line: string, needle: string): boolean {
   let idx = line.indexOf(needle);
   while (idx !== -1) {
-    let at = idx + needle.length;
-    while (at < line.length && isTrimWhitespace(line.charCodeAt(at))) at++;
+    const at = skipTrimWhitespace(line, idx + needle.length);
     if (at < line.length) {
       const c = line.charCodeAt(at);
       if (c === 0x3a || c === 0x5b || c === 0x22 || c === 0x2c || c === 0x7d || c === 0x5d) {

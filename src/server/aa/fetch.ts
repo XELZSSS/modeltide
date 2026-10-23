@@ -1,28 +1,24 @@
 import type { AppContext } from "@/server/api/context";
 import { upstreamConfig } from "@/server/upstream/upstream";
-import { rethrowIfClientAbort, UpstreamError } from "@/server/api/errors";
-import { isRecord } from "@/server/formats/parser-primitives";
+import { UpstreamError } from "@/server/api/errors";
+import { isRecord } from "@/server/formats/scalars";
 import { parseRscPayload } from "@/server/formats/rsc-parser";
-import { cachedRaw } from "@/server/pipeline";
+import { defineSource, type FixedSource } from "@/server/pipeline";
 import { SLOW_TTL_MS } from "@/shared/config";
-import { fieldAliases } from "./parse/model-compact";
+import { fieldAliases } from "./parse/benchmark-fields";
 
 export function fetchAaRsc(ctx: AppContext, path: string): Promise<string> {
   return ctx.http.getRsc(upstreamConfig.artificialAnalysis, path);
 }
 
 interface EnrichSpec<T> {
+  key: string;
   label: string;
   path: string;
   marker: string;
   extract: (tree: unknown) => T[] | null;
   fields?: readonly string[];
   map?: (arr: T[]) => T[];
-}
-
-interface EnrichResult<T> {
-  rows: T[];
-  failed: boolean;
 }
 
 function parseEnrich<T>(spec: EnrichSpec<T>, body: string): T[] {
@@ -49,29 +45,25 @@ function missingFields<T>(rows: readonly T[], fields: readonly string[]): readon
   return fields.filter((field) => !seen.has(field));
 }
 
-export async function getAndParseEnrich<T>(
-  ctx: AppContext,
-  cacheKey: string,
-  spec: EnrichSpec<T>,
-): Promise<EnrichResult<T>> {
-  try {
-    const { value, degraded } = await cachedRaw<T[]>(ctx, cacheKey, SLOW_TTL_MS, async (refreshCtx) => {
-      const rows = parseEnrich(spec, await fetchAaRsc(refreshCtx, spec.path));
+/** One cached enrichment page, exposed through the same source interface as every other data source. */
+export function defineEnrichSource<T>(spec: EnrichSpec<T>): FixedSource<T[]> {
+  return defineSource<string, T[]>({
+    key: spec.key,
+    ttl: SLOW_TTL_MS,
+    label: spec.label,
+    fetch: (ctx) => fetchAaRsc(ctx, spec.path),
+    parse: (body, ctx) => {
+      const rows = parseEnrich(spec, body);
       if (spec.fields) {
         const missing = missingFields(rows, spec.fields);
         if (missing.length > 0 && rows.length > 0) {
-          refreshCtx.log(
+          ctx.log(
             "warn",
             `[artificial] ${spec.label} enrich omitted ${missing.length} expected field(s): ${missing.join(", ")}`,
           );
         }
       }
       return rows;
-    });
-    return { rows: value, failed: degraded };
-  } catch (err) {
-    rethrowIfClientAbort(err);
-    ctx.log("warn", "[artificial] partial", { label: spec.label, failed: true });
-    return { rows: [], failed: true };
-  }
+    },
+  });
 }

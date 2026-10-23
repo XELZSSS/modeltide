@@ -8,6 +8,10 @@ export interface DataTableColumn<T> {
   cell: (row: T) => VNodeChild;
   align?: "left" | "right";
   width?: number | string;
+  /**
+   * Leave this column out of the mobile card. Only for a value that the primary cell already renders on a phone —
+   * every other column belongs in the card, because a hidden column is data the reader cannot reach at all.
+   */
   hiddenMd?: boolean;
   mobilePrimary?: boolean;
 }
@@ -78,7 +82,9 @@ export function monoCol<T>(
 }
 
 export const RightAlignedText: FunctionalComponent<{ class?: string }> = (props, { slots }) =>
-  h("p", { class: cn("overflow-hidden text-ellipsis whitespace-nowrap text-right", props.class) }, slots.default?.());
+  // Mobile cards stack the label above the value, so a column's alignment must not be baked into the cell: the desktop
+  // table supplies `justify-end text-right` from `align: "right"`, and here the value wraps instead of truncating.
+  h("p", { class: cn("min-w-0 break-words md:truncate", props.class) }, slots.default?.());
 
 export function modelNameCol<T>(
   header: string,

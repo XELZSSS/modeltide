@@ -52,7 +52,7 @@ watch(
         <button
           type="button"
           :aria-label="t('removeModel', { name: modelDisplayName(model) })"
-          class="shrink-0 p-1 text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          class="-m-1.5 flex size-9 shrink-0 items-center justify-center text-text-secondary hoverable:hover:text-text-primary hoverable:hover:bg-hover ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           @click="emit('remove', model)"
         >
           <X :size="14" />

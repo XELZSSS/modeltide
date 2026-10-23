@@ -13,7 +13,7 @@ const classes = computed(() =>
 
 <template>
   <div :class="classes">
-    <p class="ui-caption truncate shrink-0">{{ label }}</p>
-    <div class="ui-mono-value text-right truncate min-w-0 font-medium"><slot /></div>
+    <p class="ui-caption shrink-0">{{ label }}</p>
+    <div class="ui-mono-value min-w-0 text-right font-medium break-words md:truncate"><slot /></div>
   </div>
 </template>

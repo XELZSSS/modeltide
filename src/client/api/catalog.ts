@@ -1,5 +1,6 @@
 import {
   FIVE_MINUTES,
+  FIFTEEN_MINUTES,
   NEWS_TTL_MS,
   ONE_MINUTE,
   OPEN_SOURCE_MODELS_DEFAULTS,
@@ -12,6 +13,7 @@ import { openSourceModelsQueryString } from "@/shared/query-schemas";
 import { isPartialPayload } from "./payload-normalize";
 import { createApiQuery } from "./factory";
 import { LruCache } from "@/client/utils/lru";
+import type { NewsCategory } from "@/shared/types";
 
 export const qArtificialList = createApiQuery("artificialIndex", queryKeys.artificialIndex, {
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
@@ -24,7 +26,7 @@ export const qOpenRouterList = createApiQuery("openRouterRankings", queryKeys.op
 });
 
 export const qHomeDashboard = createApiQuery("homeDashboard", queryKeys.homeDashboard, {
-  ttl: FIVE_MINUTES,
+  ttl: FIFTEEN_MINUTES,
   gcTime: 15 * 60_000,
   partialRefetchMs: ONE_MINUTE,
   isPartialData: isPartialPayload,
@@ -51,11 +53,23 @@ function memoQuery<K extends string, T>(
   };
 }
 
-export const qNews = createApiQuery("news", queryKeys.news, {
-  ttl: NEWS_TTL_MS,
-  partialRefetchMs: PARTIAL_FAIL_TTL_MS,
-  isPartialData: isPartialPayload,
-});
+type NewsQuery = ReturnType<typeof createApiQuery<"news">>;
+
+/**
+ * One query per news category. The API serves a single category per request (firing all 14 feeds at once was the heaviest
+ * thing an invocation did), so each tab owns its cache entry, its partial flag and its refetch timing.
+ */
+export const qNewsByCategory: (category: NewsCategory) => NewsQuery = memoQuery<NewsCategory, NewsQuery>(
+  8,
+  (category) => category as NewsCategory,
+  (category): NewsQuery =>
+    createApiQuery("news", queryKeys.news(category), {
+      ttl: NEWS_TTL_MS,
+      partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+      isPartialData: isPartialPayload,
+      query: { category },
+    }),
+);
 
 export const qClosedReleasesList = createApiQuery("closedReleases", queryKeys.closedReleases, {
   ttl: STATIC_TTL_MS,
@@ -70,7 +84,7 @@ export const qOpenSourceModelById: (id: string) => OpenSourceModelQuery = memoQu
   (id) => id,
   (id: string): OpenSourceModelQuery =>
     createApiQuery("openSourceModels", queryKeys.openSourceModels(OPEN_SOURCE_SORT, id), {
-      ttl: ONE_MINUTE,
+      ttl: FIVE_MINUTES,
       partialRefetchMs: PARTIAL_FAIL_TTL_MS,
       isPartialData: isPartialPayload,
       query: openSourceModelsQueryString(OPEN_SOURCE_SORT, id),

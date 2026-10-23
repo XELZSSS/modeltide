@@ -33,7 +33,7 @@ export function cacheKey(domain: ApiDomain, ...parts: (string | number)[]): stri
 export const queryKeys = {
   artificialIndex: [...QUERY_KEY_PREFIX, API_DOMAINS.artificialIndex],
   openSourceModels: (sort: string, id = "") => [...QUERY_KEY_PREFIX, API_DOMAINS.openSourceModels, sort, id],
-  news: [...QUERY_KEY_PREFIX, API_DOMAINS.news],
+  news: (category: string) => [...QUERY_KEY_PREFIX, API_DOMAINS.news, category],
   openRouterRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.openRouterRankings],
   closedReleases: [...QUERY_KEY_PREFIX, API_DOMAINS.closedReleases],
   homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],

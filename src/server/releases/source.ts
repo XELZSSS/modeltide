@@ -5,7 +5,7 @@ import type { ClosedReleaseEntry } from "@/shared/types";
 import type { AppContext } from "@/server/api/context";
 import { UpstreamError } from "@/server/api/errors";
 import { getChangelogModels } from "@/server/aa/changelog";
-import { getIntelligenceIndexResult } from "@/server/aa";
+import { getIntelligenceIndex } from "@/server/aa";
 import { fanOut } from "@/server/fan-out";
 import { toClosedReleases, toClosedReleasesFromIndex } from "./parse";
 import { defineSource, requireRows } from "@/server/pipeline";
@@ -20,14 +20,14 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
   const { values } = await fanOut(
     ctx,
     [
-      { label: "index", run: () => getIntelligenceIndexResult(ctx) },
+      { label: "index", run: () => getIntelligenceIndex(ctx) },
       { label: "changelog", run: () => getChangelogModels(ctx) },
     ],
     { tag: "closed-releases" },
   );
   const [index, changelog] = values;
-  const models = index?.models ?? [];
-  const changelogModels = changelog?.models ?? [];
+  const models = index?.data ?? [];
+  const changelogModels = changelog?.data ?? [];
   if (models.length === 0 && changelogModels.length === 0) {
     throw new UpstreamError(`Releases: both index and changelog failed`, { retryable: true });
   }
@@ -42,7 +42,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
     finalEntries = toClosedReleasesFromIndex(models, upstreamConfig.artificialAnalysis);
     ctx.log("warn", `[closed-releases] changelog empty, index fallback rows=${finalEntries.length}`);
   }
-  const partial = index == null || index.enrichFailed || indexFallback || changelog?.degraded === true;
+  const partial = index == null || index.partial || indexFallback || changelog?.partial === true;
   if (partial) ctx.log("warn", "[closed-releases] serving partial (degraded enrichment)");
   return {
     entries: finalEntries,
@@ -51,7 +51,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
   };
 }
 
-export const getClosedReleases = defineSource<ClosedReleasesRaw, ClosedReleaseEntry>({
+export const getClosedReleases = defineSource<ClosedReleasesRaw, ClosedReleaseEntry[]>({
   key: cacheKeys.closedReleases,
   ttl: STATIC_TTL_MS,
   label: "Releases",

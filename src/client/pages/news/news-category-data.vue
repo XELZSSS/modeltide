@@ -13,7 +13,7 @@ import { formatDate, formatRelativeTime, safeHref } from "@/shared/utils";
 import type { NewsCategory, NewsItem } from "@/shared/types";
 import { ROW_PADDING } from "@/client/nav/layout";
 
-const ROW_CLASS = `group flex items-start justify-between gap-4 ${ROW_PADDING} ui-motion hoverable:hover:bg-hover focus-visible:outline-none focus-visible:bg-hover`;
+const ROW_CLASS = `group flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-4 ${ROW_PADDING} ui-motion hoverable:hover:bg-hover focus-visible:outline-none focus-visible:bg-hover`;
 
 const props = defineProps<{ categoryId: NewsCategory }>();
 
@@ -61,19 +61,19 @@ function rowAttrs(item: NewsItem, href: string | undefined): Record<string, stri
       <li v-for="row in rows" :key="row.id">
         <component :is="rowTag(row.href)" v-bind="rowAttrs(row.item, row.href)" :class="ROW_CLASS">
           <h2
-            class="ui-body font-medium min-w-0 break-words decoration-accent/50 underline-offset-4 group-hover:underline ui-motion"
+            class="ui-body font-medium min-w-0 break-words decoration-accent/50 underline-offset-4 [@media(hover:hover)]:group-hover:underline ui-motion"
           >
             {{ row.item.title }}
           </h2>
-          <div class="flex items-center gap-3 shrink-0 ui-caption mt-1">
-            <span class="hidden sm:inline truncate max-w-48" :title="row.item.source">{{ row.item.source }}</span>
+          <div class="flex items-center gap-3 ui-caption md:shrink-0">
+            <span class="truncate max-w-48" :title="row.item.source">{{ row.item.source }}</span>
             <span class="flex items-center gap-1.5 shrink-0" :title="formatDate(row.item.pubDate, lang)">
               <Clock :size="12" aria-hidden="true" />
               {{ formatRelativeTime(row.item.pubDate, t, lang) }}
             </span>
             <ExternalLink
               :size="14"
-              class="md:opacity-0 md:group-hover:opacity-100 ui-motion shrink-0"
+              class="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 ui-motion shrink-0"
               aria-hidden="true"
             />
           </div>

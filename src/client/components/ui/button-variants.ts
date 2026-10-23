@@ -11,9 +11,11 @@ export const buttonVariants = cva(
         ghost: "text-text-primary hoverable:hover:bg-hover",
       },
       size: {
-        sm: "h-8 px-3 text-xs",
-        md: "h-9 px-4 text-sm",
-        icon: "size-9",
+        // Touch first: the mobile sizes keep every control at or above 40px, and `md:h-8`/`md:h-9` restore the
+        // desktop density the tables and toolbars were designed around.
+        sm: "h-10 px-3 text-sm md:h-8 md:text-xs",
+        md: "h-10 px-4 text-sm md:h-9",
+        icon: "size-10 md:size-9",
       },
     },
     defaultVariants: { variant: "ghost", size: "sm" },

@@ -34,6 +34,6 @@ export function buildRankingColumns(t: TFunction): DataTableColumn<ArtificialAna
     rightCol("creator", t("creator"), (model) => h(RightAlignedText, null, () => orNA(model.model_creators?.name, t))),
     scoreColumn("intelligence", t("intelligenceIndex"), (m) => m.intelligence_index, t, { mobilePrimary: true }),
     scoreColumn("coding", t("coding"), (m) => m.coding_index, t),
-    scoreColumn("agentic", t("agentic"), (m) => m.agentic_index, t, { hiddenMd: true }),
+    scoreColumn("agentic", t("agentic"), (m) => m.agentic_index, t),
   ];
 }

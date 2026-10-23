@@ -47,7 +47,7 @@ const { rows, renderExpanded } = useRowList(props);
         "
         :style="staggerStyle(index)"
       >
-        <div class="flex items-center gap-2 min-w-0">
+        <div class="flex items-start gap-2 min-w-0">
           <ExpandToggle
             v-if="isExpandable"
             :row-id="item.id"
@@ -56,30 +56,37 @@ const { rows, renderExpanded } = useRowList(props);
             :size="16"
             @toggle-expand="emit('toggleExpand', $event)"
           />
-          <div class="min-w-0 flex-1">
-            <CellView :render="layout.primaryCol.cell" :row="item.row" />
-          </div>
-          <div v-if="layout.mainStatCol" class="shrink-0 text-right min-w-0 max-w-[40%]">
-            <span v-if="layout.mainStatCol.header" class="ui-meta mr-1.5 truncate" :title="layout.mainStatCol.header">{{
-              layout.mainStatCol.header
-            }}</span>
-            <div class="ui-mono-value font-semibold">
-              <CellView :render="layout.mainStatCol.cell" :row="item.row" />
+          <!-- One content column for the whole card: the metric grid below used to start at the card edge while the name
+               started after the expand chevron, so nothing above and below lined up. -->
+          <div class="flex min-w-0 flex-1 flex-col gap-3">
+            <div class="flex items-start gap-2 min-w-0">
+              <div class="min-w-0 flex-1">
+                <CellView :render="layout.primaryCol.cell" :row="item.row" />
+              </div>
+              <!-- Stacked, not inline: "Hallucination Rate" and "Avg Intelligence" do not fit beside the value in a
+                   40%-wide column, and truncating the header left the number unlabelled on touch, where `title` never
+                   fires. -->
+              <div v-if="layout.mainStatCol" class="flex shrink-0 flex-col items-end gap-0.5 max-w-[45%]">
+                <span v-if="layout.mainStatCol.header" class="ui-meta text-right leading-tight">
+                  {{ layout.mainStatCol.header }}
+                </span>
+                <div class="ui-mono-value font-semibold">
+                  <CellView :render="layout.mainStatCol.cell" :row="item.row" />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div
-          v-if="layout.secondaryCols.length > 0"
-          class="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 border-t border-border/60 pt-3"
-        >
-          <div
-            v-for="col in layout.secondaryCols"
-            :key="col.id"
-            :class="cn('flex items-baseline gap-1.5 min-w-0', col.align === 'right' && 'ml-auto')"
-          >
-            <span v-if="col.header" class="ui-meta shrink-0">{{ col.header }}</span>
-            <div class="ui-body min-w-0">
-              <CellView :render="col.cell" :row="item.row" />
+            <!-- Two fixed columns keep the labels aligned down the card list; the label sits above the value so neither
+                 has to be clipped when a license name or a provider does not fit. -->
+            <div
+              v-if="layout.secondaryCols.length > 0"
+              class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border/60 pt-3"
+            >
+              <div v-for="col in layout.secondaryCols" :key="col.id" class="flex flex-col gap-0.5 min-w-0">
+                <span v-if="col.header" class="ui-meta">{{ col.header }}</span>
+                <div class="ui-body min-w-0 break-words">
+                  <CellView :render="col.cell" :row="item.row" />
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -1,11 +1,13 @@
-import { isRecord, isValidTextToImageEntry, numCoerce, numCoerceNonNegative } from "@/server/formats/parser-primitives";
+import { isRecord, numCoerce, numCoerceNonNegative } from "@/server/formats/scalars";
+import { mapRows } from "@/server/formats/parse-rows";
 import { toStringOrNull } from "@/shared/utils";
 import type { TextToImageModel } from "@/shared/types";
 import type { RawEntry } from "@/server/formats/wire-types";
-import { findLongestData, findNextData, parseRscPayload } from "@/server/formats/rsc-parser";
+import { findLongestData, findNextData } from "@/server/formats/rsc-data";
+import { parseRscPayload } from "@/server/formats/rsc-parser";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
 
-export function parseTextToImageRows(body: unknown): ParseResult<Omit<TextToImageModel, "rank">[]> {
+export function parseTextToImageRows(body: unknown): ParseResult<TextToImageModel[]> {
   if (typeof body !== "string" || !body) return parseFail("Text-to-image returned an empty body");
   const scanned = parseRscPayload<Record<string, unknown>>(
     body,
@@ -13,32 +15,24 @@ export function parseTextToImageRows(body: unknown): ParseResult<Omit<TextToImag
     (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
   );
   if (!scanned.ok) return parseFail(`Text-to-image parse failed: ${scanned.error}`);
-  let dropped = 0;
-  const rows: Omit<TextToImageModel, "rank">[] = [];
-  for (const entry of scanned.data.map(mapEntry)) {
-    if (entry === null) {
-      dropped += 1;
-      continue;
-    }
-    rows.push(entry);
-  }
+  const { rows, dropped } = mapRows(scanned.data, mapEntry);
   return parseOk(rows, dropped > 0 ? [`Dropped ${dropped} text-to-image rows without a usable identity or elo`] : []);
 }
 
-export function mapEntry(raw: unknown): Omit<TextToImageModel, "rank"> | null {
+export function mapEntry(raw: unknown): TextToImageModel | null {
   if (!isRecord(raw)) return null;
   const entry = raw as RawEntry;
   const id = toStringOrNull(entry.id);
   const slug = toStringOrNull(entry.slug);
   const name = toStringOrNull(entry.name);
   const elo = numCoerce(entry.elo);
-  if (!isValidTextToImageEntry({ id, slug, name, elo })) return null;
+  if (id == null || slug == null || name == null || elo == null || !Number.isFinite(elo)) return null;
 
   return {
-    id: id as string,
-    slug: slug as string,
-    name: (name as string).trim(),
-    elo: elo as number,
+    id,
+    slug,
+    name: name.trim(),
+    elo,
     eloLower: numCoerce(entry.lower95ci),
     eloUpper: numCoerce(entry.upper95ci),
     pricePer1kImages: numCoerceNonNegative(entry.price),

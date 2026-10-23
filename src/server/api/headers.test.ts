@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
-import { applyApiHeaders, ifNoneMatchSatisfied, payloadEtag } from "./headers";
+import { applyApiHeaders, cacheHeadersForTtl, ifNoneMatchSatisfied, payloadEtag } from "./headers";
 
 const FETCHED_AT = "2026-01-01T00:00:00.000Z";
+
+describe("cacheHeadersForTtl", () => {
+  it("gives the browser half of the server TTL and the CDN the full window", () => {
+    expect(cacheHeadersForTtl(10 * 60_000)).toEqual({
+      browser: "public, max-age=300",
+      cdn: "public, max-age=600, stale-while-revalidate=300, stale-if-error=86400",
+    });
+  });
+
+  it("caps both windows at 30 minutes", () => {
+    const headers = cacheHeadersForTtl(60 * 60_000);
+    expect(headers.browser).toBe("public, max-age=900");
+    expect(headers.cdn.startsWith("public, max-age=1800,")).toBe(true);
+  });
+
+  it("keeps the browser window at least 30s and falls back to the default window for an unusable TTL", () => {
+    expect(cacheHeadersForTtl(30_000).browser).toBe("public, max-age=30");
+    expect(cacheHeadersForTtl(0)).toEqual(cacheHeadersForTtl(60_000));
+    expect(cacheHeadersForTtl(Number.NaN)).toEqual(cacheHeadersForTtl(60_000));
+  });
+});
 
 describe("payloadEtag", () => {
   it("identifies a payload by fetch time and row count", () => {

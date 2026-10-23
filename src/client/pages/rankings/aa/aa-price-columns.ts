@@ -26,7 +26,7 @@ export function buildPricingColumns(
   const getEff = (model: ArtificialAnalysisModel): EffectivePricing =>
     effectiveMap.get(modelId(model)) ?? resolveEffectivePricing(model.pricing);
   const pricingLegCol = (id: string, header: string, getLeg: PriceLegPick) =>
-    rightCol(id, header, (row: PricingRow) => formatDollar(getLeg(getEff(row.model)), t), { hiddenMd: true });
+    rightCol(id, header, (row: PricingRow) => formatDollar(getLeg(getEff(row.model)), t));
   return [
     col("model", t("model"), (row) => h(CompareModelCell, { model: row.model }), { width: "35%" }),
     rightCol("provider", t("provider"), (row) =>

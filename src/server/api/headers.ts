@@ -7,17 +7,37 @@ export const BROWSER_CACHE_HEADER = "public, max-age=60";
 export const BROWSER_NO_STORE_HEADER = "no-store, max-age=0";
 export const CDN_CACHE_HEADER = "public, max-age=300, stale-while-revalidate=300, stale-if-error=86400";
 export const CDN_NO_STORE_HEADER = "no-store";
-
 export const PARTIAL_CACHE_HEADERS = {
   browser: "public, max-age=30",
   cdn: "public, max-age=60, stale-while-revalidate=60, stale-if-error=86400",
 };
 
+
+/**
+ * Browsers cache an API response for at most half of the server's TTL, and the CDN layer keeps it for the full
+ * window: the origin refreshes at the same cadence, so an edge hit never hands out data older than one refresh
+ * cycle. Both are capped so a change to a long-TTL source (releases, open-source lists) still reaches every
+ * reader within half an hour instead of the full server TTL.
+ */
+const MAX_TTL_HEADER_S = 30 * 60;
+const FALLBACK_TTL_HEADER_S = 60;
+
+export function cacheHeadersForTtl(ttlMs: number): { browser: string; cdn: string } {
+  const source = Number.isFinite(ttlMs) && ttlMs > 0 ? Math.floor(ttlMs / 1000) : FALLBACK_TTL_HEADER_S;
+  const cdn = Math.min(source, MAX_TTL_HEADER_S);
+  const browser = Math.max(30, Math.floor(cdn / 2));
+  const swr = Math.min(cdn, 300);
+  return {
+    browser: `public, max-age=${browser}`,
+    cdn: `public, max-age=${cdn}, stale-while-revalidate=${swr}, stale-if-error=86400`,
+  };
+}
+
 const CONTRACT_VERSION_HEADER = "X-Contract-Version";
 
 const WEAK_ETAG_PREFIX_RE = /^W\//;
 
-export interface EtagVariant {
+interface EtagVariant {
   rows?: number;
   partial?: boolean;
 }

@@ -25,17 +25,13 @@ const columns = computed<DataTableColumn<ProviderStats>[]>(() => [
   monoCol("avgIntelligence", t("avgIntelligence"), (p) => formatScore(p.avgIntelligence, t), {
     mobilePrimary: true,
   }),
-  monoCol("avgPrice", t("avgPrice"), (p) => formatPricePerMillion(p.avgInputPrice, t), { hiddenMd: true }),
-  rightCol(
-    "avgSpeed",
-    t("avgSpeed"),
-    (p) =>
-      h(
-        "span",
-        { class: "text-sm text-text-primary" },
-        p.avgSpeed != null ? `${formatSpeed(p.avgSpeed, t)} ${t("tokensPerSecond")}` : t("notAvailable"),
-      ),
-    { hiddenMd: true },
+  monoCol("avgPrice", t("avgPrice"), (p) => formatPricePerMillion(p.avgInputPrice, t)),
+  rightCol("avgSpeed", t("avgSpeed"), (p) =>
+    h(
+      "span",
+      { class: "text-sm text-text-primary" },
+      p.avgSpeed != null ? `${formatSpeed(p.avgSpeed, t)} ${t("tokensPerSecond")}` : t("notAvailable"),
+    ),
   ),
 ]);
 

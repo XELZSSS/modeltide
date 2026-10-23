@@ -1,4 +1,6 @@
-import { isRecord, isUnsuitableContent, str } from "@/server/formats/parser-primitives";
+import { str } from "@/server/formats/scalars";
+import { isUnsuitableContent } from "@/server/formats/content-guards";
+import { mapRows } from "@/server/formats/parse-rows";
 import { MAX_SCAN_CHARS } from "@/server/formats/limits";
 import type { ChangelogModelEntry } from "@/server/formats/wire-types";
 import { scanReleaseIndex, type ReleaseInfo } from "./release-index";
@@ -28,28 +30,26 @@ function collectModels(
   for (const value of modelArrays) {
     if (!Array.isArray(value)) continue;
     const rows = value as unknown[];
-    const mapped: ChangelogModel[] = [];
-    for (const raw of rows) {
-      if (!isRecord(raw)) continue;
+    const { rows: mapped, dropped } = mapRows(rows, (raw) => {
       const entry = raw as ChangelogModelEntry;
       const slug = str(entry.slug).trim();
       const name = str(entry.name).trim();
       const releaseSlug = str(entry.releaseSlug).trim();
       const release = releases.get(releaseSlug);
-      if (!release) continue;
-      if (!isUsableField(slug) || !isUsableField(name) || !isUsableField(release.name)) continue;
-      mapped.push({
+      if (!release) return null;
+      if (!isUsableField(slug) || !isUsableField(name) || !isUsableField(release.name)) return null;
+      return {
         slug,
         name,
         releaseSlug,
         releaseName: release.name,
         releaseDate: release.releaseDate,
         creatorName: release.creatorName,
-      });
-    }
+      };
+    });
     if (mapped.length > best.length) {
       best = mapped;
-      skipped = rows.length - mapped.length;
+      skipped = dropped;
     }
   }
   return { models: best, skipped };

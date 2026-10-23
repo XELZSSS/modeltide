@@ -1,5 +1,5 @@
 import { balancedJsonSlice, type ScanSpend } from "./json-balance";
-import { isTrimWhitespace } from "./rsc-text";
+import { skipTrimWhitespace } from "./rsc-text";
 import { MAX_NEEDLE_CANDIDATES, MAX_NEEDLE_WORK_CHARS, MAX_SCAN_CHARS } from "./limits";
 
 interface NeedleScanOptions {
@@ -21,15 +21,10 @@ function unescapeEmbedded(window: string): string {
   return window.replace(EMBEDDED_ESCAPE_RE, (m, c: string) => (c === '"' ? '"' : c === "\\" ? "\\" : m));
 }
 
-function skipWs(text: string, pos: number): number {
-  while (pos < text.length && isTrimWhitespace(text.charCodeAt(pos))) pos++;
-  return pos;
-}
-
 function valuePosAfterColon(text: string, at: number): number | null {
-  let c = skipWs(text, at);
+  const c = skipTrimWhitespace(text, at);
   if (text[c] !== ":") return null;
-  return skipWs(text, c + 1);
+  return skipTrimWhitespace(text, c + 1);
 }
 
 function collectNeedleCandidates(text: string, locators: readonly string[]): NeedleCandidate[] {
@@ -47,7 +42,6 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
     }
   }
   candidates.sort((a, b) => a.start - b.start);
-  if (candidates.length > cap) candidates.length = cap;
   return candidates;
 }
 

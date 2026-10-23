@@ -4,15 +4,16 @@ import { upstreamConfig, upstreamEndpoints, upstreamUrl } from "@/server/upstrea
 import type { AppContext } from "@/server/api/context";
 import { UpstreamError } from "@/server/api/errors";
 import { parseDirectoryRows, type DirectoryCacheEntry } from "./parse-directory";
-import type { ModelMetaEntry } from "@/server/formats/wire-types";
-import { cachedRaw, toPartial } from "@/server/pipeline";
+import { defineSource } from "@/server/pipeline";
 
-const PRICING_TTL_MS = SLOW_TTL_MS;
 const PRICING_GAP_RATIO = 0.3;
 
-export type DirectoryCacheEntryWithPartial = DirectoryCacheEntry & { partial: boolean };
+interface DirectoryRaw {
+  entry: DirectoryCacheEntry;
+  partial: boolean;
+}
 
-async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntryWithPartial> {
+async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryRaw> {
   const res = (await ctx.http.getJson<unknown>(
     upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterDirectory),
   )) as { data?: unknown } | null;
@@ -25,22 +26,14 @@ async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntry
   if (partial) {
     ctx.log("warn", `[openrouter] directory pricing gaps`, { missing, totalRows });
   }
-  return { ...entry, partial };
+  return { entry, partial };
 }
 
-export async function getModelDirectory(ctx: AppContext): Promise<DirectoryCacheEntryWithPartial> {
-  const { value, degraded } = await cachedRaw<DirectoryCacheEntryWithPartial>(
-    ctx,
-    cacheKeys.openRouterPricing,
-    PRICING_TTL_MS,
-    fetchModelDirectory,
-  );
-  return toPartial(value, degraded);
-}
-
-export async function getModelDirectoryMeta(
-  ctx: AppContext,
-): Promise<{ meta: Record<string, ModelMetaEntry>; partial: boolean }> {
-  const { meta, partial } = await getModelDirectory(ctx);
-  return { meta, partial };
-}
+export const getModelDirectory = defineSource<DirectoryRaw, DirectoryCacheEntry>({
+  key: cacheKeys.openRouterPricing,
+  ttl: SLOW_TTL_MS,
+  label: "OpenRouter directory",
+  fetch: (ctx) => fetchModelDirectory(ctx),
+  parse: (raw) => raw.entry,
+  partialWhen: ({ raw }) => ({ partial: raw.partial }),
+});

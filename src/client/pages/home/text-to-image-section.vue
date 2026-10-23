@@ -40,7 +40,7 @@ const rows = computed(() =>
       <CardHeader :title="t('textToImage')" :subtitle="t('artificialSource')" />
       <EmptyState v-if="rows.length === 0" variant="plain" compact :message="t('notAvailable')" />
       <div v-else class="flex flex-1 flex-col gap-1 justify-between">
-        <div v-for="(row, i) in rows" :key="row.id" class="flex h-10 items-center gap-3 min-w-0">
+        <div v-for="(row, i) in rows" :key="row.id" class="flex min-h-10 items-center gap-3 py-1 min-w-0">
           <span class="text-xs font-medium text-text-tertiary w-6 text-center shrink-0 tabular-nums">
             {{ i + 1 }}
           </span>
@@ -49,7 +49,7 @@ const rows = computed(() =>
               {{ row.name }}
               <span v-if="row.creatorName" class="ui-caption">({{ row.creatorName }})</span>
             </p>
-            <p class="ui-caption truncate">
+            <p class="ui-caption">
               {{ t("elo") }}:
               <strong class="text-text-primary font-semibold">{{ row.rating }}</strong>
               <template v-if="row.price">

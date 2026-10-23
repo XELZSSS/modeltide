@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { LicenseDropTally, keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
+import { keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
+import { LicenseDropTally } from "./license-tally";
 import type { OpenSourceModelEntry } from "@/shared/types";
 
 function hfRow(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
