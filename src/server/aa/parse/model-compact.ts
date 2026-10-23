@@ -70,10 +70,12 @@ const LEADERBOARD_BENCHMARKS = [
   "omniscience",
 ] as const satisfies readonly BenchmarkKey[];
 
+// `gdpval` is deliberately missing: on the /models page that key carries the raw GDPval Elo (e.g. 1586.76) with a
+// `gdpvalInterval`, not the 0-1 ratio the leaderboard exports as `gdpvalNormalized`. Expecting it here projected a
+// field that either landed on the wrong scale or was dropped by `ratioScore`, and reported a permanent drift warning.
 const MODELS_BENCHMARKS = [
   "gpqa",
   "hle",
-  "gdpval",
   "scicode",
   "ifbench",
   "lcr",

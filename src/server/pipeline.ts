@@ -82,27 +82,27 @@ export function cachedPayload<T>(
     .then(({ value, degraded }) => (degraded ? { ...value, partial: true } : value));
 }
 
-interface SourceSpec<TRaw, TRow> {
-  key: string;
+interface SourceSpec<P, TRaw, TRow> {
   ttl: number;
   scope?: CacheScope;
   label: string;
-  fetch: (ctx: AppContext) => Promise<TRaw>;
+  fetch: (ctx: AppContext, params: P) => Promise<TRaw>;
   parse: (raw: TRaw, ctx: AppContext) => TRow[];
   partialWhen?: (stats: { raw: TRaw }) => { partial: boolean; ttl?: number; log?: Record<string, unknown> };
   cap?: number;
 }
 
-export function defineSource<TRaw, TRow>(
-  spec: SourceSpec<TRaw, TRow>,
-): (ctx: AppContext) => Promise<SourcePayload<TRow[]>> {
-  return (ctx: AppContext) =>
+function buildSource<P, TRaw, TRow>(
+  keyOf: (params: P) => string,
+  spec: SourceSpec<P, TRaw, TRow>,
+): (ctx: AppContext, params: P) => Promise<SourcePayload<TRow[]>> {
+  return (ctx: AppContext, params: P) =>
     cachedPayload<TRow[]>(
       ctx,
-      spec.key,
+      keyOf(params),
       spec.ttl,
       async (refreshCtx) => {
-        const raw = await spec.fetch(refreshCtx);
+        const raw = await spec.fetch(refreshCtx, params);
         let rows = spec.parse(raw, refreshCtx);
         let truncated = false;
         if (spec.cap != null && rows.length > spec.cap) {
@@ -117,4 +117,20 @@ export function defineSource<TRaw, TRow>(
       },
       spec.scope,
     );
+}
+
+/** A source with one fixed cache key. */
+export function defineSource<TRaw, TRow>(
+  spec: SourceSpec<void, TRaw, TRow> & { key: string },
+): (ctx: AppContext) => Promise<SourcePayload<TRow[]>> {
+  const run = buildSource<void, TRaw, TRow>(() => spec.key, spec);
+  return (ctx: AppContext) => run(ctx, undefined);
+}
+
+/** A source whose cache key (and upstream request) depends on the validated query, e.g. `?sort=` or a news category. */
+export function defineParamSource<P, TRaw, TRow>(
+  keyOf: (params: P) => string,
+  spec: SourceSpec<P, TRaw, TRow>,
+): (ctx: AppContext, params: P) => Promise<SourcePayload<TRow[]>> {
+  return buildSource(keyOf, spec);
 }

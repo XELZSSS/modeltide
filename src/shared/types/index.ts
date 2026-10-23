@@ -10,6 +10,14 @@ export type {
 export type { NewsCategory, NewsItem } from "./news";
 export type { BenchmarkKey } from "./benchmark";
 
-export type { ThemeMode, HomeOpenSourceEntry, HomeDashboardData, ModelSource } from "./app";
+export type {
+  ThemeMode,
+  HomeOpenSourceEntry,
+  HomeDashboardData,
+  HomeChartPoint,
+  HomeProviderSpeed,
+  HomeHallucinationPoint,
+  ModelSource,
+} from "./app";
 
 export type { SourcePayload } from "./payload";

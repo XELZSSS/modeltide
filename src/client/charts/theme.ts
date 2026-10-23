@@ -59,15 +59,30 @@ function chartFontFamily(): string {
 
 const CHART_FONT_SIZE = 12;
 
+/** Chart.js glides the tooltip over its own default duration; on a panel that follows the cursor that reads as lag. */
+const TOOLTIP_ANIMATION_MS = 150;
+
 export function applyChartDefaults(chart: typeof ChartJS): void {
   chart.defaults.font.family = chartFontFamily();
   chart.defaults.font.size = CHART_FONT_SIZE;
+  // Plugin defaults only exist once the Tooltip plugin has been registered, so register.ts calls this again after every
+  // `register()` instead of relying on the module-level call alone.
+  const plugins = (chart.defaults as unknown as { plugins?: Record<string, unknown> }).plugins;
+  const tooltip = plugins?.tooltip as
+    | { animations?: { numbers?: { duration?: number }; opacity?: { duration?: number } } }
+    | undefined;
+  if (!tooltip?.animations?.numbers || !tooltip.animations.opacity) return;
+  tooltip.animations.numbers.duration = TOOLTIP_ANIMATION_MS;
+  tooltip.animations.opacity.duration = TOOLTIP_ANIMATION_MS;
 }
 
 export const chartBase = {
   responsive: true,
   maintainAspectRatio: false,
-  animation: false,
+  // A zero-length data animation, not `false`: these charts show snapshots and must settle in the same frame, but the
+  // plugin resolves its own tooltip animation from `chart.options.animation`, so `false` here switched off every hover
+  // transition and the panel jumped into place.
+  animation: { duration: 0 },
 } as const;
 
 export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tick, font: { size: 10 } });

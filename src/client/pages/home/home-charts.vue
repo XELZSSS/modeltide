@@ -26,12 +26,12 @@ import {
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatIndex } from "@/shared/utils";
-import { modelDisplayName, shortModelId } from "@/shared/utils/models";
+import { shortModelId } from "@/shared/utils/models";
 import { FALLBACK_DASH } from "@/shared/config/ui";
 import { cn } from "@/client/utils/cn";
-import type { ArtificialAnalysisModel } from "@/shared/types";
+import type { HomeChartPoint } from "@/shared/types";
 
-const SERIES_KEYS = ["intelligence_index", "coding_index"] as const;
+const SERIES_KEYS = ["intelligence", "coding"] as const;
 const SERIES_LABEL_KEYS = ["intelligence", "coding"] as const;
 const TOP_N = 10;
 const AXIS_POINT_RADIUS = 4;
@@ -40,13 +40,13 @@ const AXIS_POINT_HOVER_RADIUS = 7;
 type IndexSeriesKey = (typeof SERIES_KEYS)[number];
 
 const AXIS_LABEL_MAX_CHARS = 12;
-type IndexRow = ArtificialAnalysisModel & Record<IndexSeriesKey, number>;
+type IndexRow = HomeChartPoint & Record<IndexSeriesKey, number>;
 
-function buildIndexRows(models: readonly ArtificialAnalysisModel[]): IndexRow[] {
+function buildIndexRows(models: readonly HomeChartPoint[]): IndexRow[] {
   const complete = models.filter((model): model is IndexRow =>
     SERIES_KEYS.every((key) => typeof model[key] === "number" && Number.isFinite(model[key])),
   );
-  complete.sort((a, b) => b.intelligence_index - a.intelligence_index);
+  complete.sort((a, b) => b.intelligence - a.intelligence);
   return complete.slice(0, TOP_N);
 }
 
@@ -56,12 +56,14 @@ function axisLabel(value: string): string {
   return value.length > AXIS_LABEL_MAX_CHARS ? `${value.slice(0, AXIS_LABEL_MAX_CHARS - 1)}…` : value;
 }
 
-const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
+const props = defineProps<{ models: HomeChartPoint[] }>();
 
 const { t } = useTranslation();
 const theme = useChartTheme();
 const rows = computed(() => buildIndexRows(props.models));
-const fullLabels = computed(() => rows.value.map((m) => m.short_name || shortModelId(m.name) || m.id || FALLBACK_DASH));
+const fullLabels = computed(() =>
+  rows.value.map((m) => m.shortName || shortModelId(m.name) || m.id || FALLBACK_DASH),
+);
 const labels = computed(() => fullLabels.value.map(axisLabel));
 
 const data = computed<ChartData<"line">>(() => ({
@@ -117,7 +119,7 @@ const caption = computed(() =>
   rows.value
     .map(
       (m) =>
-        `${modelDisplayName(m)}: ${SERIES_KEYS.map(
+        `${m.shortName || m.name}: ${SERIES_KEYS.map(
           (key, slot) => `${t(SERIES_LABEL_KEYS[slot]!)} ${formatIndex(m[key])}`,
         ).join(", ")}`,
     )

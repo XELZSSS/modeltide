@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Search, X } from "@lucide/vue";
 import { cn } from "@/client/utils/cn";
 import Input from "@/client/components/ui/input.vue";
@@ -39,6 +39,60 @@ const clearClasses = computed(() =>
   ),
 );
 
+const PANEL_MAX_PX = 448;
+const PANEL_MIN_PX = 176;
+const PANEL_GAP_PX = 6;
+const PANEL_EDGE_PX = 8;
+
+const panelStyle = ref<Record<string, string>>({});
+let fitFrame = 0;
+
+/**
+ * The panel is clipped by the scrolling `<main>`, and on small screens the fixed bottom bar covers the same area,
+ * so a long result list used to be cut off by the scrollport or painted over the bar. Capping the height to the room
+ * that is actually left keeps the whole list reachable. The panel also sits at `z-20`: above page content (the
+ * table's sticky column is `z-10`), below the nav bars (`z-30`) and the modal layer (`z-40`/`z-50`).
+ */
+function fitPanel(): void {
+  const input = inputRef.value;
+  if (!input) return;
+  const clipBottom = Math.min(
+    input.closest("main")?.getBoundingClientRect().bottom ?? window.innerHeight,
+    window.innerHeight,
+  );
+  const barHeight = document.querySelector<HTMLElement>("[data-bottom-nav]")?.offsetHeight ?? 0;
+  const room = clipBottom - barHeight - input.getBoundingClientRect().bottom - PANEL_GAP_PX - PANEL_EDGE_PX;
+  const height = Math.max(PANEL_MIN_PX, Math.min(PANEL_MAX_PX, Math.round(room)));
+  panelStyle.value = { maxHeight: `${height}px` };
+}
+
+function scheduleFit(): void {
+  if (!isOpen.value || !canSearch.value || fitFrame !== 0) return;
+  fitFrame = requestAnimationFrame(() => {
+    fitFrame = 0;
+    fitPanel();
+  });
+}
+
+watch(
+  [isOpen, canSearch],
+  ([open, searchable]) => {
+    if (open && searchable) scheduleFit();
+  },
+  { flush: "post" },
+);
+
+onMounted(() => {
+  window.addEventListener("resize", scheduleFit, { passive: true });
+  // `scroll` does not bubble, so capture it from whichever ancestor actually scrolls.
+  window.addEventListener("scroll", scheduleFit, { passive: true, capture: true });
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", scheduleFit);
+  window.removeEventListener("scroll", scheduleFit, { capture: true });
+  if (fitFrame !== 0) cancelAnimationFrame(fitFrame);
+});
 const inputInstance = ref<InstanceType<typeof Input> | null>(null);
 
 watch(
@@ -101,7 +155,8 @@ function setListEl(el: unknown): void {
     <Transition name="ui-pop">
       <div
         v-if="isOpen && canSearch"
-        class="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay z-40"
+        class="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay z-20"
+        :style="panelStyle"
       >
         <div class="p-1.5">
           <slot name="status" />

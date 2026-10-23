@@ -20,7 +20,6 @@
   --motion-rise: 6px;
   --motion-pop: 4px;
   --motion-sheet: 100%;
-  --motion-scale: 0.98;
 }
 
 @utility ease-motion-out {
@@ -83,9 +82,11 @@
   transition-timing-function: var(--ui-motion-easing, var(--motion-ease-out));
 }
 
+/* A pressed control only recolours its label: no background, no border, and no `scale` — so the box never shifts and the
+   text is never re-rasterized. `ui-motion` already transitions `color`, so the change eases in and back out. */
 @utility ui-press {
   &:active {
-    scale: var(--ui-motion-press-scale, var(--motion-scale));
+    color: var(--press-text, var(--accent));
   }
 }
 
@@ -106,6 +107,10 @@
     scale var(--ui-motion-duration, var(--motion-duration-base)) var(--ui-motion-easing, var(--motion-ease-emphasized));
 }
 
+/* Every enter animation fills `backwards`, never `both`. Holding the end frame costs nothing visually — the end state is
+   the element's own style — but a filled `transform` keeps the element a stacking context for the rest of its life (an
+   interpolated `transform: none` still resolves to the identity matrix), which used to trap the search panel behind the
+   table that follows the page header. */
 @keyframes ui-motion-rise {
   from {
     opacity: 0;
@@ -122,34 +127,34 @@
 @keyframes ui-motion-pop {
   from {
     opacity: 0;
-    transform: scale(var(--motion-scale));
+    transform: translate3d(0, var(--motion-pop), 0);
   }
 }
 
 @utility ui-anim-rise {
-  animation: ui-motion-rise var(--motion-duration-base) var(--motion-ease-out) both;
+  animation: ui-motion-rise var(--motion-duration-base) var(--motion-ease-out) backwards;
   animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
 }
 
 @utility ui-anim-fade {
-  animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) both;
+  animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) backwards;
   animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
 }
 
 @utility ui-anim-pop {
-  animation: ui-motion-pop var(--motion-duration-base) var(--motion-ease-out) both;
+  animation: ui-motion-pop var(--motion-duration-base) var(--motion-ease-out) backwards;
   animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
 }
 
 @utility ui-anim-rows {
-  animation: ui-motion-fade var(--motion-duration-base) var(--motion-ease-out) both;
+  animation: ui-motion-fade var(--motion-duration-base) var(--motion-ease-out) backwards;
   animation-delay: calc(
     min(var(--motion-stagger-index, 0), var(--motion-stagger-max-rows)) * var(--motion-stagger-step-rows)
   );
 }
 
 @utility ui-anim-swap {
-  animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) both;
+  animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) backwards;
 }
 
 @keyframes ui-motion-spin {
@@ -211,10 +216,13 @@
     transform var(--motion-duration-fast) var(--motion-ease-in);
 }
 
+/* No `scale()` in the panel recipes: a scaled layer is re-rasterized at the off-scale size for the duration of the
+   transition, so the text inside the panel renders soft and only snaps sharp once the transform settles. A short
+   slide gives the same "it arrived" cue without ever resampling the text. */
 .ui-pop-enter-from,
 .ui-pop-leave-to {
   opacity: 0;
-  transform: translate3d(0, calc(-1 * var(--motion-pop)), 0) scale(var(--motion-scale));
+  transform: translate3d(0, calc(-1 * var(--motion-pop)), 0);
 }
 
 .ui-sheet-enter-active {
@@ -240,7 +248,7 @@
   .ui-sheet-enter-from,
   .ui-sheet-leave-to {
     opacity: 0;
-    transform: scale(var(--motion-scale));
+    transform: translate3d(0, var(--motion-rise), 0);
   }
 }
 

@@ -21,6 +21,7 @@ const isMoreActive = computed(() => mobileMore.value.some(isActive));
 
 <template>
   <nav
+    data-bottom-nav
     class="md:hidden fixed left-0 right-0 bottom-0 z-30 flex h-16 items-stretch border-t border-border bg-bg-primary pb-[env(safe-area-inset-bottom,0px)]"
     :aria-label="t('navPrimaryMobile')"
   >

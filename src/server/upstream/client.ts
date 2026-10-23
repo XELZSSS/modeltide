@@ -252,11 +252,20 @@ export class HttpClient {
     return this.json<T>(url, fetchPolicy("interactive"));
   }
 
-  async getJsonPage<T>(url: string): Promise<JsonPage<T>> {
-    return this.readJson<T, JsonPage<T>>(url, fetchPolicy("interactive"), MAX_JSON_BYTES, (res, body) => ({
-      data: body,
-      nextUrl: nextLinkUrl(res.headers.get("link")),
-    }));
+  /**
+   * `opts` overrides the interactive policy per page: the first page of a listing is worth a retry, later pages
+   * already have usable rows in hand and should fail fast into a partial response instead of stalling the refresh.
+   */
+  async getJsonPage<T>(url: string, opts?: { timeoutMs?: number; retries?: number }): Promise<JsonPage<T>> {
+    return this.readJson<T, JsonPage<T>>(
+      url,
+      { ...fetchPolicy("interactive"), ...opts },
+      MAX_JSON_BYTES,
+      (res, body) => ({
+        data: body,
+        nextUrl: nextLinkUrl(res.headers.get("link")),
+      }),
+    );
   }
 
   async getRsc(base: string, path: string): Promise<string> {

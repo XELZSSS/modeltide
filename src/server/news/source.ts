@@ -15,10 +15,11 @@ import { rssFeeds } from "./feeds";
 import { dedupeBy } from "@/shared/utils";
 import { normalizeNewsLink } from "@/server/formats/url";
 
-import { cachedPayload, requireParsed, requireRows } from "@/server/pipeline";
+import { defineParamSource, requireParsed, requireRows } from "@/server/pipeline";
 
-// Two legs at a time keeps the feed fan-out inside the per-invocation connection budget.
-const NEWS_LEG_CONCURRENCY = 2;
+// Per-category leg cap. The 6-slot connection pool is the hard limit, so this only decides whether a category with
+// many feeds (industry has five) finishes in two rounds or three.
+const NEWS_LEG_CONCURRENCY = 4;
 
 function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsItem[]): NewsItem[] {
   let invalidDates = 0;
@@ -41,6 +42,7 @@ function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsIt
 }
 
 interface NewsRaw {
+  category: NewsCategory;
   items: NewsItem[];
   failCount: number;
   total: number;
@@ -73,25 +75,24 @@ async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<Ne
         .join("; ")}`,
     );
   }
-  return { items: allItems, failCount: failures.length, total: values.length };
+  return { category, items: allItems, failCount: failures.length, total: values.length };
 }
 
+const newsCategorySource = defineParamSource<NewsCategory, NewsRaw, NewsItem>((category) => cacheKeys.news(category), {
+  ttl: NEWS_TTL_MS,
+  label: "news",
+  fetch: (ctx, category) => fetchNewsRaw(ctx, category),
+  parse: (raw, ctx) =>
+    requireRows(pickNewsItems(ctx, raw.category, raw.items), `news "${raw.category}"`, "usable items", "all filtered?"),
+  // A category that lost feeds stays partial and keeps its shortened TTL, so the next refresh retries it sooner.
+  partialWhen: ({ raw }) => ({
+    partial: raw.failCount > 0,
+    ttl: ttlForRatio(raw.failCount, raw.total, NEWS_TTL_MS),
+  }),
+});
+
 export const getNewsCategory = (ctx: AppContext, category: NewsCategory): Promise<SourcePayload<NewsItem[]>> =>
-  cachedPayload<NewsItem[]>(ctx, cacheKeys.news(category), NEWS_TTL_MS, async (refreshCtx) => {
-    const raw = await fetchNewsRaw(refreshCtx, category);
-    const rows = requireRows(
-      pickNewsItems(refreshCtx, category, raw.items),
-      `news "${category}"`,
-      "usable items",
-      "all filtered?",
-    );
-    const partial = raw.failCount > 0;
-    return {
-      rows,
-      partial,
-      ttl: ttlForRatio(raw.failCount, raw.total, NEWS_TTL_MS),
-    };
-  });
+  newsCategorySource(ctx, category);
 
 /**
  * Newest fetch time across the cached categories. A failed slice carries `""` so it cannot win;

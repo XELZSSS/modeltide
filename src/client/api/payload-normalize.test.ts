@@ -53,19 +53,34 @@ describe("normalizeHomeDashboard", () => {
     partial,
   });
 
-  it("passes through three well-formed lists", () => {
+  it("passes through every well-formed list", () => {
     const normalized = normalizeHomeDashboard(
-      payloadOf({ orRankings: [{ rank: 1 }], textToImage: [{ slug: "x" }], opensource: [{ id: "m", downloads: 1 }] }),
+      payloadOf({
+        orRankings: [{ rank: 1 }],
+        textToImage: [{ slug: "x" }],
+        opensource: [{ id: "m", downloads: 1 }],
+        chart: [{ id: "c" }],
+        providers: [{ name: "p" }],
+        hallucinations: [{ model: "h" }],
+      }),
     );
     expect(normalized.malformed).toBe(false);
     expect(normalized.partial).toBe(false);
     expect(normalized.orRankings).toHaveLength(1);
     expect(normalized.textToImage).toHaveLength(1);
     expect(normalized.opensource).toHaveLength(1);
+    expect(normalized.chart).toHaveLength(1);
+    expect(normalized.providers).toHaveLength(1);
+    expect(normalized.hallucinations).toHaveLength(1);
   });
 
   it("carries the partial flag through", () => {
-    const normalized = normalizeHomeDashboard(payloadOf({ orRankings: [], textToImage: [], opensource: [] }, true));
+    const normalized = normalizeHomeDashboard(
+      payloadOf(
+        { orRankings: [], textToImage: [], opensource: [], chart: [], providers: [], hallucinations: [] },
+        true,
+      ),
+    );
     expect(normalized.partial).toBe(true);
     expect(normalized.malformed).toBe(false);
   });
@@ -76,6 +91,9 @@ describe("normalizeHomeDashboard", () => {
       orRankings: [],
       textToImage: [],
       opensource: [],
+      chart: [],
+      providers: [],
+      hallucinations: [],
       partial: false,
       malformed: true,
     });

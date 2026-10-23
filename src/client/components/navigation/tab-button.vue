@@ -3,8 +3,10 @@ import { computed } from "vue";
 import { cva } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
 
+// The active underline ends at the button's own bottom edge (`bottom-0`, not `-bottom-px`). The tab strip is an
+// `overflow-x` scroller, which clips at its padding box, so a line hanging 1px below the button was never painted.
 const tabButtonVariants = cva(
-  "font-medium ui-motion ui-press whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none relative pb-2.5 after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-accent after:origin-left ui-motion-indicator",
+  "font-medium ui-motion ui-press whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none relative pb-2.5 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-accent after:origin-left ui-motion-indicator",
   {
     variants: {
       active: {

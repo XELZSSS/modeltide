@@ -12,8 +12,13 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 
 let chart: Chart | null = null;
 
-function withoutAnimation(options: ChartOptions): ChartOptions {
-  return { ...options, animation: false };
+/**
+ * A chart here shows a snapshot, so a data update must land in the same frame. `animation: { duration: 0 }` does that while
+ * keeping the animation system alive: `animation: false` also silenced the tooltip, which resolves its own animation from
+ * `chart.options.animation`, so hover panels used to appear in one hard step.
+ */
+function withoutDataAnimation(options: ChartOptions): ChartOptions {
+  return { ...options, animation: { duration: 0 } };
 }
 
 function create(): void {
@@ -24,14 +29,14 @@ function create(): void {
   chart = new Chart(canvas, {
     type: props.type,
     data: props.data,
-    options: withoutAnimation(props.options ?? {}),
+    options: withoutDataAnimation(props.options ?? {}),
   });
 }
 
 function update(): void {
   if (!chart) return;
   chart.data = props.data;
-  if (props.options) chart.options = withoutAnimation(props.options);
+  if (props.options) chart.options = withoutDataAnimation(props.options);
   chart.update("none");
 }
 

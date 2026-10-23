@@ -5,7 +5,8 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-accent text-accent-contrast hoverable:hover:bg-accent/90 border border-transparent",
+        primary:
+          "bg-accent text-accent-contrast hoverable:hover:bg-accent/90 border border-transparent [--press-text:var(--accent-contrast)]",
         outline: "border border-border text-text-primary hoverable:hover:border-text-primary",
         ghost: "text-text-primary hoverable:hover:bg-hover",
       },

@@ -1,3 +1,6 @@
+// Cache and contract-version headers only. Do not add security headers (CSP, X-Frame-Options, HSTS, …): Cloudflare
+// Pages owns the edge policy and the repo-side set was removed on purpose. See AGENTS.md before touching this file.
+
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
 
 export const BROWSER_CACHE_HEADER = "public, max-age=60";

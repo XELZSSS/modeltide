@@ -37,7 +37,7 @@ export const ROUTES: RouteRecordRaw[] = [
     meta: {
       titleKey: "home",
       load: loadHomeView,
-      prefetch: [qArtificialList, qHomeDashboard, qClosedReleasesList],
+      prefetch: [qHomeDashboard],
       nav: { group: "primary", labelKey: "home", icon: Home },
     },
   },

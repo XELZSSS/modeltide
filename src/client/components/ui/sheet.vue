@@ -136,23 +136,17 @@ onUnmounted(unlock);
       <div v-if="open" class="fixed inset-0 z-40 bg-black/50" aria-hidden="true" @click="emit('close')" />
     </Transition>
     <Transition name="ui-sheet">
-      <div
-        v-if="open"
-        ref="panelRef"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="ariaLabel"
-        tabindex="-1"
-        :class="
-          cn(
-            'fixed z-50 w-full max-w-md ui-overlay focus:outline-none',
-            'left-1/2 -translate-x-1/2 bottom-0',
-            'sm:top-1/2 sm:bottom-auto sm:-translate-y-1/2',
-            props.class,
-          )
-        "
-      >
-        <slot />
+      <div v-if="open" class="fixed inset-0 z-50 flex items-end justify-center pointer-events-none sm:items-center">
+        <div
+          ref="panelRef"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="ariaLabel"
+          tabindex="-1"
+          :class="cn('pointer-events-auto w-full max-w-md ui-overlay focus:outline-none', props.class)"
+        >
+          <slot />
+        </div>
       </div>
     </Transition>
   </Teleport>

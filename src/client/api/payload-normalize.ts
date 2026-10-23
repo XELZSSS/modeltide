@@ -21,6 +21,9 @@ export interface NormalizedHomeDashboard {
   orRankings: HomeDashboardData["orRankings"];
   textToImage: HomeDashboardData["textToImage"];
   opensource: HomeOpenSourceEntry[];
+  chart: HomeDashboardData["chart"];
+  providers: HomeDashboardData["providers"];
+  hallucinations: HomeDashboardData["hallucinations"];
   partial: boolean;
   malformed: boolean;
 }
@@ -41,12 +44,25 @@ export function normalizeHomeDashboard(payload: unknown): NormalizedHomeDashboar
   const orRankings = raw ? listField<HomeDashboardData["orRankings"][number]>(raw.orRankings) : null;
   const textToImage = raw ? listField<HomeDashboardData["textToImage"][number]>(raw.textToImage) : null;
   const opensource = raw ? listField<HomeOpenSourceEntry>(raw.opensource) : null;
+  const chart = raw ? listField<HomeDashboardData["chart"][number]>(raw.chart) : null;
+  const providers = raw ? listField<HomeDashboardData["providers"][number]>(raw.providers) : null;
+  const hallucinations = raw ? listField<HomeDashboardData["hallucinations"][number]>(raw.hallucinations) : null;
   return {
     orRankings: orRankings ?? [],
     textToImage: textToImage ?? [],
     opensource: opensource ?? [],
+    chart: chart ?? [],
+    providers: providers ?? [],
+    hallucinations: hallucinations ?? [],
     partial: isPartialPayload(payload),
-    malformed: raw == null || orRankings == null || textToImage == null || opensource == null,
+    malformed:
+      raw == null ||
+      orRankings == null ||
+      textToImage == null ||
+      opensource == null ||
+      chart == null ||
+      providers == null ||
+      hallucinations == null,
   };
 }
 

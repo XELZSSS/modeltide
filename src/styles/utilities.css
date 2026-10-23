@@ -17,8 +17,8 @@
     font-size: 14px;
     line-height: var(--leading-text);
     letter-spacing: var(--tracking-text);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    /* No font-smoothing override: the platform default keeps subpixel (LCD) antialiasing on Windows, where forcing
+       `antialiased` turns every glyph into grayscale coverage — thinner and softer at the sizes this UI uses. */
     font-variant-numeric: tabular-nums;
     font-synthesis: none;
     background-color: var(--bg-primary);

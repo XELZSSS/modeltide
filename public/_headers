@@ -1,3 +1,7 @@
+# Cache directives only. Do not add security headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy,
+# HSTS, Permissions-Policy): Cloudflare Pages owns the edge policy and the repo-side copy was removed on purpose.
+# See AGENTS.md before touching this file.
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
