@@ -36,11 +36,9 @@ function noteContractVersion(res: Response): void {
   contractSkew.value = served !== null && served !== CACHE_VERSION;
 }
 
-const apiBase = import.meta.env.VITE_API_BASE?.replace(/\/+$/, "") ?? "";
-
+/** Same-origin only: the API ships no CORS headers, so every call goes back to this origin. */
 function buildApiUrl(path: string): string {
-  const url = apiBase && path.startsWith("/") ? apiBase + path : path;
-  const [base, query] = url.split("?", 2);
+  const [base, query] = path.split("?", 2);
   const params = new URLSearchParams(query);
   params.set(API_VERSION_PARAM, CACHE_VERSION);
   return `${base}?${params.toString()}`;

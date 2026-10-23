@@ -3,6 +3,7 @@ import { resetModuleCachesForTests } from "@/server/cache/service";
 import { categoryFrom, creatorFromSlug, mapModels } from "./parse-rankings";
 import type { PricingEntry } from "./parse-directory";
 import type { ModelRow } from "@/server/formats/wire-types";
+import type { MetaLookup, RankingScanStats } from "./aggregate";
 
 beforeEach(() => resetModuleCachesForTests());
 
@@ -207,5 +208,44 @@ describe("mapModels", () => {
       variant: "standard",
       pricing: variantPricing.get("a/b:standard"),
     });
+  });
+});
+
+describe("mapModels retirement accounting", () => {
+  const expiryRow = (id: string) => row({ model_permaslug: id, variant_permaslug: id });
+  const emptyStats = (): RankingScanStats => ({ scannedRows: 0, validRows: 0, expiredRows: 0 });
+  const metaWith = (entries: Record<string, { expiresAt: string }>) => entries as unknown as MetaLookup;
+
+  it("drops retired models and counts them apart from the valid rows", () => {
+    const stats = emptyStats();
+    const models = mapModels(
+      [expiryRow("old-model"), expiryRow("live-model")],
+      {},
+      stats,
+      metaWith({ "old-model": { expiresAt: "2020-01-01" } }),
+    );
+
+    expect(models.map((model) => model.id)).toEqual(["live-model"]);
+    expect(stats.validRows).toBe(2);
+    expect(stats.expiredRows).toBe(1);
+  });
+
+  it("leaves the retired counter at zero when nothing has expired", () => {
+    const stats = emptyStats();
+    const models = mapModels([expiryRow("live-model")], {}, stats, metaWith({}));
+
+    expect(models).toHaveLength(1);
+    expect(stats.expiredRows).toBe(0);
+  });
+
+  it("keeps ranking positions contiguous after a model is dropped", () => {
+    const models = mapModels(
+      [expiryRow("old-model"), expiryRow("live-model"), expiryRow("other-model")],
+      {},
+      emptyStats(),
+      metaWith({ "old-model": { expiresAt: "2020-01-01" } }),
+    );
+
+    expect(models.map((model) => model.rank)).toEqual([1, 2]);
   });
 });

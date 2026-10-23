@@ -52,10 +52,10 @@ describe("ifNoneMatchSatisfied", () => {
 });
 
 describe("applyApiHeaders", () => {
-  it("advertises the build id and exposes it to cross-origin readers", () => {
+  it("advertises the build id only: the API serves same-origin readers, so no CORS headers ride along", () => {
     const headers = new Headers();
     applyApiHeaders(headers);
     expect(headers.get("X-Contract-Version")).toBe(CACHE_VERSION);
-    expect(headers.get("Access-Control-Expose-Headers")).toContain("X-Contract-Version");
+    expect([...headers.keys()]).toEqual(["x-contract-version"]);
   });
 });

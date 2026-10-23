@@ -1,4 +1,3 @@
-import { ONE_DAY } from "@/shared/config/time";
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
 
 export const BROWSER_CACHE_HEADER = "public, max-age=60";
@@ -13,16 +12,7 @@ export const PARTIAL_CACHE_HEADERS = {
 
 const CONTRACT_VERSION_HEADER = "X-Contract-Version";
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "content-type",
-  "Access-Control-Expose-Headers": CONTRACT_VERSION_HEADER,
-  "Access-Control-Max-Age": String(ONE_DAY / 1000),
-};
-
 const WEAK_ETAG_PREFIX_RE = /^W\//;
-const CORS_ENTRIES = Object.entries(CORS_HEADERS);
 
 export interface EtagVariant {
   rows?: number;
@@ -44,7 +34,9 @@ export function ifNoneMatchSatisfied(ifNoneMatch: string | null, etag: string): 
   });
 }
 
+/**
+ * Advertises the build id the client compares against its own to detect a stale bundle.
+ */
 export function applyApiHeaders(h: Headers): void {
-  for (const [k, v] of CORS_ENTRIES) h.set(k, v);
   h.set(CONTRACT_VERSION_HEADER, CACHE_VERSION);
 }

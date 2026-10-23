@@ -1,5 +1,4 @@
 import type { Env } from "./api/context";
-import { applyApiHeaders } from "./api/headers";
 import { handleApiRoute, methodNotAllowedResponse, notFoundResponse, stripBodyForHead } from "./api/router";
 import { SOURCES } from "./registry";
 
@@ -17,17 +16,8 @@ function resolveRoute(pathname: string): RouteEntry | undefined {
   return ROUTES.get(pathname);
 }
 
-function optionsResponse(): Response {
-  const res = new Response(null, { status: 204 });
-  res.headers.set("Allow", "GET, HEAD, OPTIONS");
-  applyApiHeaders(res.headers);
-  return res;
-}
-
 function methodResponse(method: string): Response | null {
-  if (method === "OPTIONS") return optionsResponse();
-  if (method !== "GET" && method !== "HEAD") return methodNotAllowedResponse();
-  return null;
+  return method === "GET" || method === "HEAD" ? null : methodNotAllowedResponse();
 }
 
 function notFoundForMethod(method: string): Response {

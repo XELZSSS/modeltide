@@ -33,6 +33,6 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
-  // Match production: let the local API middleware answer OPTIONS itself, not vite's dev CORS preflight handler.
+  // The API answers same-origin GET/HEAD only and ships no CORS headers, so keep vite's dev CORS layer off too.
   server: { cors: false },
 });

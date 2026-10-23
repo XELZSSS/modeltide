@@ -68,7 +68,7 @@ function rateLimitedResponse(retryAfterMs: number | undefined): Response {
 
 export function methodNotAllowedResponse(): Response {
   const res = errorJson(405, "Method not allowed");
-  res.headers.set("Allow", "GET, HEAD, OPTIONS");
+  res.headers.set("Allow", "GET, HEAD");
   return res;
 }
 
