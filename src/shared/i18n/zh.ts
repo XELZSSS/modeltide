@@ -16,6 +16,7 @@ export const zh = {
   clear: "清空",
   compareLimit: "请至少选择 2 个模型进行对比。",
   compareLimitTwo: "最多只能选择 2 个模型进行对比。",
+  pickModels: "去排行榜挑选模型",
   outputSpeed: "输出速度",
   hallucinationRate: "幻觉率",
   accuracy: "准确率",

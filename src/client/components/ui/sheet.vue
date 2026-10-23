@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onUnmounted, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { cn } from "@/client/utils/cn";
 
 const FOCUSABLE_SELECTOR =
@@ -111,6 +111,12 @@ function unlock(): void {
   trigger = null;
 }
 
+// A sheet may be mounted already open (the app mounts its sheets on first use), and the watcher's
+// post-flush tick runs before a Teleport child is attached in that case, so lock explicitly on mount.
+onMounted(() => {
+  if (props.open) lock();
+});
+
 watch(
   () => props.open,
   async (open) => {
@@ -124,7 +130,7 @@ watch(
     if (token !== openToken || !props.open) return;
     lock();
   },
-  { immediate: true, flush: "post" },
+  { flush: "post" },
 );
 
 onUnmounted(unlock);

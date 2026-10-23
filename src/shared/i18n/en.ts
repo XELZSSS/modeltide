@@ -14,6 +14,7 @@ export const en = {
   clear: "Clear",
   compareLimit: "Select at least 2 models to compare.",
   compareLimitTwo: "You can compare at most 2 models.",
+  pickModels: "Pick models from the rankings",
   outputSpeed: "Output Speed",
   hallucinationRate: "Hallucination Rate",
   accuracy: "Accuracy",

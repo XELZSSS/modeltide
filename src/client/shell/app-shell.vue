@@ -1,23 +1,32 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useSettingsStore } from "@/client/stores";
 import { useTranslation } from "@/client/i18n";
 import DesktopNav from "./desktop-nav.vue";
 import MobileNav from "./mobile-nav.vue";
 import ErrorBoundary from "@/client/components/feedback/error-boundary.vue";
-import SettingsSheet from "./settings-sheet.vue";
-import MobileMoreSheet from "./mobile-more-sheet.vue";
 import ContractSkewNotice from "@/client/components/feedback/contract-skew-notice.vue";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";
 import { THEME_COLORS } from "@/shared/config";
 import { useScrollRestoreMain } from "@/client/hooks/use-scroll-restore";
+
+const SettingsSheet = defineAsyncComponent(() => import("./settings-sheet.vue"));
+const MobileMoreSheet = defineAsyncComponent(() => import("./mobile-more-sheet.vue"));
 
 const route = useRoute();
 const settings = useSettingsStore();
 const { t } = useTranslation();
 
 const openSheet = ref<"settings" | "more" | null>(null);
+// Mount each sheet on first open, then keep it mounted so its exit transition can play. Keeping the
+// closed sheets unmounted leaves their chunk and the shared focus-trap code out of the first load.
+const settingsMounted = ref(false);
+const moreMounted = ref(false);
+watch(openSheet, (sheet) => {
+  if (sheet === "settings") settingsMounted.value = true;
+  if (sheet === "more") moreMounted.value = true;
+});
 const mainRef = ref<HTMLElement | null>(null);
 const { recordScroll, restoreScroll } = useScrollRestoreMain(mainRef);
 
@@ -81,10 +90,10 @@ onBeforeUnmount(() => {
       <slot />
     </main>
     <MobileNav @more-open="openSheet = 'more'" @settings-open="openSheet = 'settings'" />
-    <ErrorBoundary key="settings">
+    <ErrorBoundary v-if="settingsMounted" key="settings">
       <SettingsSheet :open="openSheet === 'settings'" @close="closeSheet" />
     </ErrorBoundary>
-    <ErrorBoundary key="more">
+    <ErrorBoundary v-if="moreMounted" key="more">
       <MobileMoreSheet :open="openSheet === 'more'" @close="closeSheet" />
     </ErrorBoundary>
   </div>

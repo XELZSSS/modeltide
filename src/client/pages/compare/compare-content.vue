@@ -9,6 +9,8 @@ import { useSuspenseArtificialRankings } from "@/client/api/hooks";
 import { useCompareStore } from "@/client/stores";
 import { useCompareModels, usePruneCompareIds } from "@/client/hooks/use-compare-models";
 import { navigate } from "@/client/router";
+import SafeLink from "@/client/components/ui/safe-link.vue";
+import { buttonVariants } from "@/client/components/ui/button-variants";
 import CompareChipBar from "./compare-chip-bar.vue";
 
 const PRUNE_NOTICE_MS = 8000;
@@ -42,15 +44,20 @@ function clearAndBack(): void {
 
 <template>
   <PageContainer v-if="models.length < 2">
-    <div class="flex flex-col gap-3 items-center py-16 text-center ui-anim-rise">
-      <div class="w-full">
-        <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
-      </div>
-      <EmptyState :message="t('compareLimit')" compact />
-      <p v-if="pruned" class="ui-caption" role="status">
-        {{ t("compareStale") }}
-      </p>
+    <div class="flex flex-col gap-4">
       <BackButton label-key="back" :to="props.backTo" />
+      <div class="flex flex-col gap-3 items-center py-12 text-center ui-anim-rise">
+        <div class="w-full">
+          <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
+        </div>
+        <EmptyState :message="t('compareLimit')" compact />
+        <p v-if="pruned" class="ui-caption" role="status">
+          {{ t("compareStale") }}
+        </p>
+        <SafeLink :href="props.backTo" :class="buttonVariants({ variant: 'primary', size: 'sm' })">
+          {{ t("pickModels") }}
+        </SafeLink>
+      </div>
     </div>
   </PageContainer>
   <DetailPageLayout

@@ -61,9 +61,7 @@ const props = defineProps<{ models: HomeChartPoint[] }>();
 const { t } = useTranslation();
 const theme = useChartTheme();
 const rows = computed(() => buildIndexRows(props.models));
-const fullLabels = computed(() =>
-  rows.value.map((m) => m.shortName || shortModelId(m.name) || m.id || FALLBACK_DASH),
-);
+const fullLabels = computed(() => rows.value.map((m) => m.shortName || shortModelId(m.name) || m.id || FALLBACK_DASH));
 const labels = computed(() => fullLabels.value.map(axisLabel));
 
 const data = computed<ChartData<"line">>(() => ({
