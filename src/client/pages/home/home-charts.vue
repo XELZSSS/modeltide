@@ -39,7 +39,7 @@ const AXIS_POINT_HOVER_RADIUS = 7;
 
 type IndexSeriesKey = (typeof SERIES_KEYS)[number];
 
-const AXIS_LABEL_MAX_CHARS = 8;
+const AXIS_LABEL_MAX_CHARS = 12;
 type IndexRow = ArtificialAnalysisModel & Record<IndexSeriesKey, number>;
 
 function buildIndexRows(models: readonly ArtificialAnalysisModel[]): IndexRow[] {
@@ -93,7 +93,9 @@ const options = computed<ChartOptions<"line">>(() =>
     interaction: { mode: "index", intersect: false },
     x: {
       type: "category",
-      ticks: { ...axisTickStyle(theme.value), autoSkip: false, maxRotation: 0, minRotation: 0 },
+      // Ten long labels cannot fit a 160px-tall chart: let Chart.js drop ticks that would collide.
+      // The tooltip title still carries the full model name.
+      ticks: { ...axisTickStyle(theme.value), autoSkip: true, maxTicksLimit: 6, maxRotation: 0, minRotation: 0 },
     },
     y: {
       min: 0,

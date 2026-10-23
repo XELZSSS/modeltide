@@ -93,6 +93,20 @@ export const getNewsCategory = (ctx: AppContext, category: NewsCategory): Promis
     };
   });
 
+/**
+ * Newest fetch time across the cached categories. A failed slice carries `""` so it cannot win;
+ * deriving the timestamp from the data (instead of `Date.now()`) keeps the payload ETag stable
+ * between refreshes, which is what makes 304 revalidation work for this endpoint.
+ */
+function aggregateFetchedAt(byCategory: NewsByCategory): string {
+  let newest = Number.NEGATIVE_INFINITY;
+  for (const category of NEWS_CATEGORIES) {
+    const ts = Date.parse(byCategory[category].fetchedAt);
+    if (Number.isFinite(ts) && ts > newest) newest = ts;
+  }
+  return Number.isFinite(newest) ? new Date(newest).toISOString() : new Date().toISOString();
+}
+
 /** One request serves every tab: categories stay independently cached and keep their own partial flag. */
 export async function getNews(ctx: AppContext): Promise<SourcePayload<NewsByCategory>> {
   const entries = await Promise.all(
@@ -102,14 +116,14 @@ export async function getNews(ctx: AppContext): Promise<SourcePayload<NewsByCate
       } catch (err) {
         // A dead category degrades to an empty, partial slice instead of failing the whole tab bar.
         ctx.log("warn", `[news] category "${category}" unavailable: ${errMsg(err)}`);
-        return [category, { data: [], fetchedAt: new Date().toISOString(), partial: true }] as const;
+        return [category, { data: [], fetchedAt: "", partial: true }] as const;
       }
     }),
   );
   const byCategory = Object.fromEntries(entries) as NewsByCategory;
   return {
     data: byCategory,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: aggregateFetchedAt(byCategory),
     partial: NEWS_CATEGORIES.some((category) => byCategory[category].partial),
   };
 }

@@ -59,6 +59,24 @@ function describeFetchError(err: unknown): string {
   return joined || "unknown fetch failure";
 }
 
+/**
+ * Both a client hang-up and a watchdog deadline abort the same signal. Only the former is a client
+ * disconnect: the shared refresh context hands this client an `AbortSignal.timeout()`, and reporting
+ * that as a client abort would surface a non-retryable 499 for a merely slow upstream.
+ */
+function abortedByDeadline(signal: AbortSignal): boolean {
+  // Only a `TimeoutError` reason means the watchdog fired. A caller hang-up carries `AbortError`,
+  // and the shared error helper treats both as timeout-like, so match the name precisely here.
+  const reason = signal.reason as { name?: unknown } | undefined;
+  return reason?.name === "TimeoutError";
+}
+
+function abortFailure(url: string, signal: AbortSignal): Error {
+  return abortedByDeadline(signal)
+    ? new UpstreamError(`Upstream deadline exceeded for ${url}`, { timeout: true })
+    : new ClientAbortError(`Client aborted fetch for ${url}`);
+}
+
 type AttemptOutcome<T> =
   | { kind: "return"; value: T }
   | { kind: "throw"; error: unknown }
@@ -140,7 +158,7 @@ export class HttpClient {
           error: new UpstreamError(`Subrequest limit hit for ${url}`, { retryable: false }),
         };
       }
-      if (initSignal?.aborted) return { kind: "throw", error: new ClientAbortError(`Client aborted fetch for ${url}`) };
+      if (initSignal?.aborted) return { kind: "throw", error: abortFailure(url, initSignal) };
       const timedOut = deadline.aborted;
       return {
         kind: "fail",
@@ -157,7 +175,7 @@ export class HttpClient {
         return { kind: "return", value: await read(res, signal) };
       } catch (err) {
         if (initSignal?.aborted) {
-          return { kind: "throw", error: new ClientAbortError(`Client aborted body read for ${url}`) };
+          return { kind: "throw", error: abortFailure(url, initSignal) };
         }
         // A body read killed by this attempt's deadline is a timeout like the fetch stage; spend retries too.
         if (err instanceof UpstreamError && err.causedByTimeout && deadline.aborted) {
@@ -192,9 +210,7 @@ export class HttpClient {
         () => this.attemptFetch(url, headers, read, signal, deadline, initSignal, rest),
         // Slot-race loss is either the caller hanging up or this attempt's own deadline.
         (): AttemptOutcome<T> =>
-          initSignal?.aborted
-            ? { kind: "throw", error: new ClientAbortError(`Client aborted fetch for ${url}`) }
-            : { kind: "abort" },
+          initSignal?.aborted ? { kind: "throw", error: abortFailure(url, initSignal) } : { kind: "abort" },
       );
       if (outcome.kind === "return") return outcome.value;
       if (outcome.kind === "throw") throw outcome.error;
@@ -203,9 +219,7 @@ export class HttpClient {
       }
       if (attempt === retries) throw finalError(url, outcome);
       await sleepAbortable(computeBackoff(attempt), initSignal);
-      if (initSignal?.aborted) {
-        throw new ClientAbortError(`Client aborted fetch for ${url}`);
-      }
+      if (initSignal?.aborted) throw abortFailure(url, initSignal);
     }
     throw new UpstreamError(`HTTP failed for ${url}`);
   }
