@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** A coloured dot: the colour is a caller-supplied value (a provider's brand colour), the size is from the scale. */
 import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 
@@ -8,7 +9,7 @@ const props = withDefaults(defineProps<{ size?: keyof typeof DOT_SIZE_CLASS; col
   size: "md",
 });
 
-const classes = computed(() => cn("inline-block shrink-0", DOT_SIZE_CLASS[props.size], props.class));
+const classes = computed(() => cn("inline-block shrink-0 rounded-full", DOT_SIZE_CLASS[props.size], props.class));
 </script>
 
 <template>

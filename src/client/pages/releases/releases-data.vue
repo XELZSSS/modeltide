@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, h, watch, type VNodeChild } from "vue";
+import { computed, h, watch, withDirectives, type VNodeChild } from "vue";
+import { vTooltip } from "@/client/directives/tooltip";
 import { ExternalLink } from "@lucide/vue";
 import { col, rightCol, RightAlignedText, type DataTableColumn } from "@/client/components/table/table-columns.ts";
 import SearchableDataTable from "@/client/components/table/data-table.vue";
@@ -38,9 +39,11 @@ const dateLabels = computed(() => {
 const columns = computed<DataTableColumn<ReleaseRow>[]>(() => [
   col("model", translate("model"), (row) =>
     h("div", { class: "min-w-0" }, [
-      h("p", { class: "text-sm font-semibold break-words md:truncate", title: row.name }, row.name),
+      withDirectives(h("p", { class: "ui-body font-medium break-words md:truncate" }, row.name), [
+        [vTooltip, row.name],
+      ]),
       h("div", { class: "flex md:hidden mt-1.5 items-center gap-2" }, [
-        h("span", { class: "text-xs text-text-secondary" }, row.provider),
+        h("span", { class: "ui-caption" }, row.provider),
         h("span", { class: "ui-meta" }, dateLabels.value.get(row.id)!),
       ]),
     ]),
@@ -68,7 +71,7 @@ function renderExpandedRow(row: ReleaseRow): VNodeChild {
         target: "_blank",
         rel: "noopener noreferrer",
         class:
-          "group inline-flex items-center gap-1.5 text-sm text-accent w-fit underline-offset-4 ui-motion hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          "group inline-flex items-center gap-1.5 text-sm text-text-primary w-fit underline-offset-4 ui-motion hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       },
       [
         translate("aaModelPage"),

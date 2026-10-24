@@ -19,3 +19,7 @@ Thumbs.db
 
 # Generated Pages Functions bundle (built by build/bundle-functions.mjs)
 functions/api/\[\[route\]\].js
+
+# Generated version file (built by build/gen-cache-version.cjs from the sources it hashes, then by every entry point
+# that imports it: dev, type-check, test, build:app, format)
+src/shared/config/cache-version.gen.ts

@@ -18,10 +18,7 @@ function row(over: Partial<TestRow> = {}): TestRow {
     variant_permaslug: "openai/gpt-5",
     total_completion_tokens: 50,
     total_prompt_tokens: 100,
-    total_native_tokens_reasoning: 10,
-    total_native_tokens_cached: 0,
     count: 2,
-    total_tool_calls: 0,
     change: 1,
     ...over,
   };
@@ -62,8 +59,6 @@ describe("mapModels", () => {
           date: "2026-08-02",
           total_prompt_tokens: 10,
           change: null,
-          total_native_tokens_cached: 7,
-          total_tool_calls: 3,
         }),
         row({
           date: "2026-08-03",
@@ -71,7 +66,6 @@ describe("mapModels", () => {
           variant_permaslug: "openai/gpt-5:batch",
           total_prompt_tokens: 0,
           total_completion_tokens: 0,
-          total_native_tokens_reasoning: 0,
           count: 0,
           change: -0.9,
         }),
@@ -88,9 +82,6 @@ describe("mapModels", () => {
       completionTokens: 100,
       totalTokens: 210,
       requestCount: 4,
-      reasoningTokens: 20,
-      cachedTokens: 7,
-      toolCalls: 3,
       change: -90,
       pricing: pricing.get("openai/gpt-5"),
     });

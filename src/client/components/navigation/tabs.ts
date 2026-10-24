@@ -1,3 +1,7 @@
+/**
+ * Roving focus for a strip of tabs or radios: the strip is a single tab stop, and Arrow/Home/End move the selection
+ * inside it (which also moves focus, so the reader follows the selection visually and for a screen reader).
+ */
 export interface TabItem {
   id: string;
   label: string;

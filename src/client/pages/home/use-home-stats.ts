@@ -3,7 +3,7 @@ import type { TFunction } from "@/shared/i18n";
 import type { TextToImageModel } from "@/shared/types";
 import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
 import { shortModelId } from "@/shared/utils/models";
-import { formatShortNumber } from "@/shared/utils";
+import { formatPercent, formatShortNumber } from "@/shared/utils";
 
 export interface HomeBarStat {
   label: string;
@@ -17,10 +17,6 @@ export interface HomeProviderStat {
   avgSpeed: number;
 }
 
-const TOP_ROWS = 5;
-
-const topRows = <T>(items: T[], map: (item: T) => HomeBarStat): HomeBarStat[] => items.slice(0, TOP_ROWS).map(map);
-
 interface HomeStats {
   trendingStats: ComputedRef<HomeBarStat[]>;
   hallucinationStats: ComputedRef<HomeBarStat[]>;
@@ -29,14 +25,14 @@ interface HomeStats {
 }
 
 /**
- * The dashboard payload already carries the top-N slices the home cards need, so this hook only
- * formats them. Keeping the aggregation server-side is what lets `/` skip the full AA index.
+ * The dashboard payload already carries the top-N slices the home cards need and in the order they are drawn, so this
+ * hook only formats them. Keeping the aggregation and the slice server-side is what lets `/` skip the full AA index.
  */
 export function useHomeStats(dashboardData: MaybeRefOrGetter<NormalizedHomeDashboard>, t: TFunction): HomeStats {
   const t2iModels = computed(() => toValue(dashboardData).textToImage);
 
   const trendingStats = computed<HomeBarStat[]>(() =>
-    topRows(toValue(dashboardData).opensource, (model) => ({
+    toValue(dashboardData).opensource.map((model) => ({
       label: shortModelId(model.id),
       value: model.downloads,
       valueLabel: formatShortNumber(model.downloads, t("notAvailable")),
@@ -44,17 +40,17 @@ export function useHomeStats(dashboardData: MaybeRefOrGetter<NormalizedHomeDashb
   );
 
   const hallucinationStats = computed<HomeBarStat[]>(() =>
-    topRows(toValue(dashboardData).hallucinations, (entry) => ({
-      label: entry.model,
+    toValue(dashboardData).hallucinations.map((entry) => ({
+      label: entry.name,
       value: entry.accuracy,
-      valueLabel: `${entry.accuracy.toFixed(1)}%`,
+      valueLabel: formatPercent(entry.accuracy, t),
     })),
   );
 
   const providerStats = computed<HomeProviderStat[]>(() =>
     toValue(dashboardData).providers.map(({ name, color, avgSpeed }) => ({
-      // The server leaves the unknown-provider label blank so it can be translated here.
-      name: name || t("unknown"),
+      // `null` is the payload's way of saying "creator unknown"; the translated label can only come from here.
+      name: name ?? t("unknown"),
       color,
       avgSpeed,
     })),

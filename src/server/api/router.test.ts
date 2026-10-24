@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { handleApiRoute, type ApiRouteDef } from "./router";
 import { API_VERSION_PARAM } from "@/shared/config/api";
+import { cacheDurationsForTtl } from "./headers";
 import { ClientAbortError, UpstreamError } from "./errors";
 
 function route(overrides: Partial<ApiRouteDef> = {}): ApiRouteDef {
   return {
+    cache: cacheDurationsForTtl(30 * 60_000),
     handler: async () => ({ data: [], fetchedAt: "2026-01-01T00:00:00.000Z", partial: false }),
     ...overrides,
   };
@@ -108,5 +110,17 @@ describe("handleApiRoute validators", () => {
     const url = new URL("http://localhost/api/test");
     const res = await handleApiRoute(new Request(url, { headers: { "if-none-match": etag } }), {}, url, def);
     expect(res.status).toBe(304);
+  });
+
+  it("keeps a route's stale-if-error refusal when the payload degrades", async () => {
+    const res = await call(
+      "",
+      route({
+        cache: { browserMaxAgeS: 30, cdnMaxAgeS: 60, swrCapS: 60 },
+        handler: async () => ({ data: [], fetchedAt: "2026-01-01T00:00:00.000Z", partial: true }),
+      }),
+    );
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=30");
+    expect(res.headers.get("CDN-Cache-Control")).not.toContain("stale-if-error");
   });
 });

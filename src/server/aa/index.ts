@@ -13,6 +13,7 @@ import { upstreamEndpoints } from "@/server/upstream/upstream";
 import { UpstreamError } from "@/server/api/errors";
 import { defineSource, requireParsed, requireRows } from "@/server/pipeline";
 import { fanOut } from "@/server/fan-out";
+import { MAX_LEADERBOARD_ROWS } from "@/server/formats/limits";
 
 const leaderboardBodySource = defineSource<string, string>({
   key: cacheKeys.aaLeaderboardBody,
@@ -66,9 +67,9 @@ async function fetchIntelligenceIndex(
 
   const indexModels = requireParsed(parseLeaderboardModels(indexBody.data), ctx.log, "aa-leaderboard");
 
-  const enrichFailures =
-    [modelsEnrich, omniscienceEnrich].filter((leg) => leg == null || leg.partial).length +
-    (openRouterMeta === null ? 1 : 0);
+  // Only the two enrichment legs. The directory is a separate source whose failure is already carried by
+  // `directoryPartial`, so counting it here too inflated the number the suite log below reports.
+  const enrichFailures = [modelsEnrich, omniscienceEnrich].filter((leg) => leg == null || leg.partial).length;
   const { models, outOfRatio, backfilled } = assembleModels({
     indexModels,
     modelsEnrich: modelsEnrich?.data ?? [],
@@ -88,13 +89,22 @@ async function fetchIntelligenceIndex(
   return { models, partial: enrichFailures > 0 || indexBody.partial || directoryPartial };
 }
 
+/**
+ * How long the index payload may stay cached at the origin. `src/server/registry.ts` reads this same constant for the
+ * route's HTTP cache headers, so the edge window cannot drift from the origin window.
+ */
+export const ARTIFICIAL_INDEX_TTL_MS = ONE_HOUR;
 export const getIntelligenceIndex = defineSource<
   { models: ArtificialAnalysisModel[]; partial: boolean },
   ArtificialAnalysisModel[]
 >({
   key: cacheKeys.intelligenceIndex,
-  ttl: ONE_HOUR,
+  ttl: ARTIFICIAL_INDEX_TTL_MS,
   label: "Artificial Analysis parsing",
+  served: true,
+  // Same ceiling as the other leaderboards: an oversized index is truncated and reported partial instead of being
+  // parsed into a payload the client cannot page through anyway.
+  cap: MAX_LEADERBOARD_ROWS,
   fetch: (ctx) => fetchIntelligenceIndex(ctx),
   parse: (raw) => raw.models,
   partialWhen: ({ raw }) => ({ partial: raw.partial }),

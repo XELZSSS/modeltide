@@ -5,10 +5,9 @@ import CardContent from "@/client/components/layout/card-content.vue";
 import CardHeader from "@/client/components/layout/card-header.vue";
 import { useTranslation } from "@/client/i18n";
 import { formatDollar } from "@/shared/utils";
+import { staggerStyle } from "@/client/motion";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import type { TextToImageModel } from "@/shared/types";
-
-const TOP_T2I = 5;
 
 const props = defineProps<{ models: TextToImageModel[] }>();
 
@@ -24,7 +23,7 @@ function ratingText(entry: TextToImageModel): string {
 }
 
 const rows = computed(() =>
-  props.models.slice(0, TOP_T2I).map((entry) => ({
+  props.models.map((entry) => ({
     id: entry.id,
     name: entry.name,
     creatorName: entry.creatorName,
@@ -36,25 +35,31 @@ const rows = computed(() =>
 
 <template>
   <Card class="h-full">
-    <CardContent class="flex flex-col h-full">
+    <CardContent class="flex h-full flex-col">
       <CardHeader :title="t('textToImage')" :subtitle="t('artificialSource')" />
       <EmptyState v-if="rows.length === 0" variant="plain" compact :message="t('notAvailable')" />
-      <div v-else class="flex flex-1 flex-col gap-1 justify-between">
-        <div v-for="(row, i) in rows" :key="row.id" class="flex min-h-10 items-center gap-3 py-1 min-w-0">
-          <span class="text-xs font-medium text-text-tertiary w-6 text-center shrink-0 tabular-nums">
+      <!-- The same 40px row as the ranked lists: the height separates the rows, so no divider is drawn. -->
+      <div v-else class="flex flex-1 flex-col justify-between">
+        <div
+          v-for="(row, i) in rows"
+          :key="row.id"
+          class="flex min-h-10 min-w-0 ui-anim-rows items-center gap-3"
+          :style="staggerStyle(i)"
+        >
+          <span class="w-6 shrink-0 text-center ui-meta font-medium tabular-nums">
             {{ i + 1 }}
           </span>
           <div class="min-w-0 flex-1">
-            <p class="text-sm truncate" :title="row.creatorName ? `${row.name} (${row.creatorName})` : row.name">
+            <p class="truncate text-sm" v-tooltip="row.creatorName ? `${row.name} (${row.creatorName})` : row.name">
               {{ row.name }}
               <span v-if="row.creatorName" class="ui-caption">({{ row.creatorName }})</span>
             </p>
             <p class="ui-caption">
               {{ t("elo") }}:
-              <strong class="text-text-primary font-semibold">{{ row.rating }}</strong>
+              <strong class="font-medium text-text-primary">{{ row.rating }}</strong>
               <template v-if="row.price">
                 <span class="mx-1.5 text-text-tertiary">·</span>{{ t("price") }}:
-                <strong class="text-text-primary font-semibold">{{ row.price }}</strong>
+                <strong class="font-medium text-text-primary">{{ row.price }}</strong>
               </template>
             </p>
           </div>

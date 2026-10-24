@@ -12,6 +12,15 @@ function fail(message) {
   process.exit(1);
 }
 
+const MINIFY = true;
+
+/**
+ * Ceiling for the bundled worker. The budget is per-invocation CPU and cold-start size: the unminified build sat at
+ * ~294 KB and minification alone lands near 140 KB, so this leaves roughly 20 KB of room for genuine growth while
+ * still failing on a regression that pulls in something large instead of letting the bundle creep up unnoticed.
+ */
+const MAX_BUNDLE_BYTES = 160 * 1024;
+
 function main() {
   if (!fs.existsSync(ENTRY)) fail(`missing entry: ${ENTRY}`);
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -23,14 +32,21 @@ function main() {
     target: "es2022",
     alias: { "@": path.join(ROOT, "src") },
     outfile: OUT,
-    minify: false,
+    minify: MINIFY,
     logLevel: "warning",
   });
   if (result.errors.length > 0) fail("esbuild reported errors");
   const code = fs.readFileSync(OUT, "utf8");
-  if (/from\s+["']\.[./]/.test(code)) fail("output still contains relative imports; expected a self-contained bundle");
+  // `from"./x"` is what minified output looks like: the whitespace is optional, so the check cannot require it.
+  const RELATIVE_IMPORT = /from\s*["']\.{1,2}\//;
+  const RELATIVE_DYNAMIC_IMPORT = /import\s*\(\s*["']\.{1,2}\//;
+  if (RELATIVE_IMPORT.test(code) || RELATIVE_DYNAMIC_IMPORT.test(code)) {
+    fail("output still contains relative imports; expected a self-contained bundle");
+  }
   if (!code.includes("onRequest")) fail("output does not export onRequest");
-  console.log(`bundle:functions wrote ${path.relative(ROOT, OUT)} (${code.length} bytes)`);
+  const bytes = Buffer.byteLength(code);
+  if (bytes > MAX_BUNDLE_BYTES) fail(`bundle is ${bytes} bytes, above the ${MAX_BUNDLE_BYTES} byte budget`);
+  console.log(`bundle:functions wrote ${path.relative(ROOT, OUT)} (${bytes} bytes)`);
 }
 
 try {

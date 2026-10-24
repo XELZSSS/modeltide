@@ -9,6 +9,7 @@ import type { SearchResult } from "@/client/search/types";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { foldSearchStr } from "@/client/search/match";
 import { defineSource, collect, detailLink, rankSearchHits, type SourceConfig } from "@/client/search/search-rank";
+import { modelId } from "@/shared/utils/models";
 
 export const MIN_QUERY = 2;
 
@@ -52,8 +53,10 @@ export function useSearchAllRankings(
         name: m.name,
         source: "modelRankings",
         score: m.intelligence_index,
+        scoreLabel: "intelligenceIndex",
         provider: m.model_creators?.name || null,
-        link: detailLink("modelRankings", m.slug || m.id),
+        // Same identity order as every other link into a model page (`modelId`): id first, slug as the fallback.
+        link: detailLink("modelRankings", modelId(m)),
       })),
     ),
     or: computed<SourceConfig>(() =>
@@ -62,6 +65,7 @@ export function useSearchAllRankings(
         name: e.name,
         source: "openRouterRankings",
         score: null,
+        scoreLabel: null,
         provider: e.creator || null,
         link: detailLink("openRouterRankings", e.id),
       })),
@@ -72,6 +76,7 @@ export function useSearchAllRankings(
         name: e.id,
         source: "openSourceRankings",
         score: null,
+        scoreLabel: null,
         provider: e.author || null,
         link: detailLink("openSourceRankings", e.id),
       })),
@@ -82,8 +87,9 @@ export function useSearchAllRankings(
         name: e.model,
         source: "hallucinationRankings",
         score: e.omniscienceIndex,
+        scoreLabel: "omniscienceIndex",
         provider: null,
-        link: detailLink("hallucinationRankings", e.slug || e.id),
+        link: detailLink("hallucinationRankings", modelId(e)),
       })),
     ),
   };

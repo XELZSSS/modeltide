@@ -17,5 +17,11 @@ export {
   ttlFor,
 } from "./time";
 export { NEWS_CATEGORIES } from "@/shared/types/news";
-export { BENCHMARK_KEYS, type BenchmarkKey, ABSOLUTE_SCORE_BENCHMARKS } from "./benchmarks";
+export {
+  BENCHMARK_KEYS,
+  type BenchmarkKey,
+  ABSOLUTE_SCORE_BENCHMARKS,
+  benchmarkScaleOf,
+  type BenchmarkScale,
+} from "./benchmarks";
 export { THEME_COLORS } from "./ui";

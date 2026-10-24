@@ -43,7 +43,7 @@ export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record
       m.agentic_index = entry.agenticIndex;
       filled++;
     }
-    if (entry.codingIndex != null && m.coding_index !== entry.codingIndex) {
+    if (m.coding_index == null && entry.codingIndex != null) {
       m.coding_index = entry.codingIndex;
       filled++;
     }

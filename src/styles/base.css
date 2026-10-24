@@ -1,0 +1,96 @@
+/*
+ * Element normalisation, in Tailwind's `base` layer so any utility in `src/client` still wins without `!important`.
+ * Imported after `@import "tailwindcss"` so it refines preflight rather than replacing it.
+ *
+ * Kept small on purpose: these are the defaults that must hold for *every* element (document metrics, font
+ * inheritance, wrapping), not component styles that happen to be global.
+ */
+
+@layer base {
+  /* Document metrics */
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Typographic inheritance: font, size, leading, tracking and the numeric style every figure in the UI relies on. */
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: var(--leading-text);
+    letter-spacing: var(--tracking-text);
+    /* No font-smoothing override: the platform default keeps subpixel (LCD) antialiasing on Windows, where forcing
+       `antialiased` turns every glyph into grayscale coverage — thinner and softer at the sizes this UI uses. */
+    /* Proportional figures for prose; `th, td` and the `ui-mono-value` / `ui-metric` roles opt back in (see the table
+       rule below), so a figure in a column still lines up while a number inside a sentence keeps its own rhythm. */
+    font-variant-numeric: proportional-nums;
+    font-synthesis: none;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.4;
+  }
+
+  code,
+  pre {
+    font-family: var(--font-mono);
+    word-break: break-word;
+  }
+
+  ::selection {
+    background-color: var(--color-selected);
+  }
+
+  /* A control that looks clickable should say so on a desktop pointer; preflight leaves `cursor: default` on a
+     <button>, which reads as dead text in a toolbar of ghost buttons. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  /* Media defaults: nothing overflows its column, and an unsized image keeps its own aspect ratio. The `[class*="h-"]`
+     / `[class*="w-"]` escape hatches let an explicitly sized element keep both dimensions. */
+  img:not([class*="h-"]):not([class*="w-"]),
+  video:not([class*="h-"]):not([class*="w-"]) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  svg:not([class*="h-"]):not([class*="w-"]),
+  canvas:not([class*="h-"]):not([class*="w-"]),
+  iframe:not([class*="h-"]):not([class*="w-"]) {
+    max-width: 100%;
+  }
+
+  table {
+    max-width: 100%;
+  }
+
+  /* Wrapping: a long model slug or URL has to break inside its cell instead of widening the table. */
+  p,
+  li,
+  th,
+  td {
+    overflow-wrap: break-word;
+  }
+
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+}

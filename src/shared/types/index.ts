@@ -17,6 +17,7 @@ export type {
   HomeChartPoint,
   HomeProviderSpeed,
   HomeHallucinationPoint,
+  TaskSlice,
   ModelSource,
 } from "./app";
 

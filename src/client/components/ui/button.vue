@@ -3,10 +3,15 @@ import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 import { buttonVariants, type ButtonSize, type ButtonVariant } from "@/client/components/ui/button-variants";
 
+/**
+ * The app's only button. Shape, colour and sizing for every usage are declared once in button-variants.ts; this
+ * component just resolves the variant for the current props and passes the caller's extra classes through `cn`, so a
+ * one-off adjustment (`w-full`, `-mt-2`) never has to fight the base styles.
+ */
 const props = withDefaults(
   defineProps<{
-    variant?: ButtonVariant | null;
-    size?: ButtonSize | null;
+    variant?: ButtonVariant;
+    size?: ButtonSize;
     disabled?: boolean;
     class?: string;
   }>(),

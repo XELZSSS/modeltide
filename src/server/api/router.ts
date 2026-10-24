@@ -1,31 +1,27 @@
 import { buildContext, type AppContext, type Env } from "./context";
 import { ApiError, ClientAbortError, UpstreamError, errMsg, isTimeoutLike, ValidationError } from "./errors";
 import { logger } from "./logger";
+import { serializedBodyOf } from "@/server/serialized-body";
 import { validateQuery, type QuerySchema, type ValidatedQuery } from "./validation";
 import type { ApiDomain, DomainPayload } from "@/shared/contract";
 import { API_VERSION_PARAM } from "@/shared/config/api";
 import {
-  BROWSER_CACHE_HEADER,
+  type CacheDurations,
+  type CacheSpec,
   BROWSER_NO_STORE_HEADER,
-  CDN_CACHE_HEADER,
   CDN_NO_STORE_HEADER,
-  PARTIAL_CACHE_HEADERS,
   applyApiHeaders,
   ifNoneMatchSatisfied,
   payloadEtag,
+  renderCacheSpec,
+  renderPartialCacheSpec,
 } from "./headers";
 
 const UNKNOWN_PARAM_MAX_SHOWN = 5;
 
-function applyCacheHeaders(h: Headers, override?: { browser: string; cdn: string }): string {
-  const browser = override?.browser ?? BROWSER_CACHE_HEADER;
-  h.set("Cache-Control", browser);
-  h.set("CDN-Cache-Control", override?.cdn ?? CDN_CACHE_HEADER);
-  return browser;
-}
-
-function clampStatus(status: number): number {
-  return status >= 400 && status <= 599 ? status : 500;
+function applyCacheHeaders(h: Headers, spec: CacheSpec): void {
+  h.set("Cache-Control", spec.browser);
+  h.set("CDN-Cache-Control", spec.cdn);
 }
 
 function errorHeaders(): Headers {
@@ -96,13 +92,14 @@ function mapApiError(err: unknown, method: string, path: string, clientAborted: 
     return rateLimitedResponse(err.retryAfterMs);
   }
   if (err instanceof ApiError) {
-    const status = clampStatus(err.status);
-    if (status === 502) {
+    // Every ApiError subclass is constructed with a 4xx/5xx status (400 validation, 499 caller abort, 502 upstream,
+    // 504 timeout), so the status is used as-is.
+    if (err.status === 502) {
       const origin = err instanceof UpstreamError && err.statusCode != null ? ` (upstream ${err.statusCode})` : "";
       logger("warn", `[upstream] ${method} ${path} ${err.message}${origin}`);
       return errorJson(502, "Upstream data source temporarily unavailable");
     }
-    return errorJson(status, err.message);
+    return errorJson(err.status, err.message);
   }
   logger("error", `[unhandled] ${method} ${path} ${errMsg(err)}`);
   return errorJson(500, "Internal server error");
@@ -110,7 +107,14 @@ function mapApiError(err: unknown, method: string, path: string, clientAborted: 
 
 export interface ApiRouteDef<D extends ApiDomain = ApiDomain, S extends QuerySchema = QuerySchema> {
   query?: S;
-  cache?: { browser: string; cdn: string };
+  /** How long this route's payload may be kept. The router renders it into the browser and edge headers. */
+  cache: CacheDurations;
+  /**
+   * Per-payload override of `cache`. A source that answers an empty list for a miss (the Hugging Face by-id lookup)
+   * would otherwise hand the route's multi-hour TTL to a payload it only keeps for a minute, so it leaves out
+   * `staleIfErrorS` as well: "not found" must not be pinnable at the edge.
+   */
+  cacheFor?(payload: DomainPayload<D>): CacheDurations | undefined;
   handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<DomainPayload<D>>;
 }
 
@@ -125,7 +129,10 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
   try {
     const context = buildContext(env, { callerSignal: req.signal, onDetach: hooks?.onDetach });
     const rawParams = collectQueryParams(url);
-    const schemaKeys = new Set(Object.keys(def.query ?? {}));
+    // `def.query` is optional on the route definition; a route without a schema accepts no params, which is what the
+    // empty object says. Both uses read it once, so the default is applied here rather than at each site.
+    const schema = def.query ?? {};
+    const schemaKeys = new Set(Object.keys(schema));
     const unknownKeys = Object.keys(rawParams).filter((k) => !schemaKeys.has(k) && k !== API_VERSION_PARAM);
     if (unknownKeys.length > 0) {
       const shown = unknownKeys
@@ -134,23 +141,30 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
         .join(", ");
       throw new ValidationError(`Unknown query param(s): ${shown}`);
     }
-    const params = validateQuery(rawParams, (def.query ?? {}) as S);
+    const params = validateQuery(rawParams, schema as S);
     const payload = await def.handler(context, params);
     const headers = new Headers({ "content-type": "application/json" });
-    const browserCache = applyCacheHeaders(headers, payload.partial ? PARTIAL_CACHE_HEADERS : def.cache);
+    const durations = def.cacheFor?.(payload) ?? def.cache;
+    // A partial payload is held for less time, and `renderPartialCacheSpec` decides how much less. The route's
+    // stale-if-error decision comes along unchanged, so a miss that must not be pinned at the edge stays unpinnable
+    // after it degrades too.
+    applyCacheHeaders(headers, payload.partial ? renderPartialCacheSpec(durations) : renderCacheSpec(durations));
     applyApiHeaders(headers);
-    if (!browserCache.includes("no-store")) {
-      const etag = payloadEtag(payload.fetchedAt, {
-        rows: Array.isArray(payload.data) ? payload.data.length : undefined,
-        partial: payload.partial,
-      });
-      headers.set("ETag", etag);
-      if (ifNoneMatchSatisfied(req.headers.get("if-none-match"), etag)) {
-        headers.delete("content-type");
-        return new Response(null, { status: 304, headers });
-      }
+    // Every route's spec renders a `public` header, so a payload that got here is always cacheable and there is no
+    // `no-store` response whose validator would have to be skipped.
+    const etag = payloadEtag(payload.fetchedAt, {
+      rows: Array.isArray(payload.data) ? payload.data.length : undefined,
+      partial: payload.partial,
+    });
+    headers.set("ETag", etag);
+    if (ifNoneMatchSatisfied(req.headers.get("if-none-match"), etag)) {
+      headers.delete("content-type");
+      return new Response(null, { status: 304, headers });
     }
-    return req.method === "HEAD" ? new Response(null, { headers }) : Response.json(payload, { headers });
+    if (req.method === "HEAD") return new Response(null, { headers });
+    // The cache stored this payload together with its encoded body, so a hit serves the bytes it already holds. Only a
+    // payload that never went through the cache (a degraded copy, a route handler in tests) is encoded here.
+    return new Response(serializedBodyOf(payload) ?? JSON.stringify(payload), { headers });
   } catch (err) {
     return mapApiError(err, req.method, path, req.signal.aborted);
   }

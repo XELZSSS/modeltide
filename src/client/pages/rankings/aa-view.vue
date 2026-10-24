@@ -3,11 +3,12 @@ import { computed } from "vue";
 import { navigate } from "@/client/router";
 import { useTranslation } from "@/client/i18n";
 import { useClientTab } from "@/client/hooks/use-client-tab";
-import { AGENT_VIEW_PARAM } from "@/client/nav/nav-config";
+import { VIEW_PARAM } from "@/client/nav/nav-config";
+import { PATHS } from "@/client/router/paths";
 import { useCompareStore, useCostStore } from "@/client/stores";
 import { useCompareModels, usePruneCompareIds } from "@/client/hooks/use-compare-models";
 import { usePricingMaps } from "@/client/hooks/use-pricing-maps";
-import CompareChipBar from "@/client/pages/compare/compare-chip-bar.vue";
+import CompareChipBar from "@/client/components/navigation/compare-chip-bar.vue";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
 import TabButton from "@/client/components/navigation/tab-button.vue";
@@ -16,6 +17,7 @@ import SearchableDataTable from "@/client/components/table/data-table.vue";
 import ModelExpandedDetail from "./aa/aa-cells.vue";
 import { buildRankingColumns } from "./aa/aa-rank-columns";
 import { buildPricingColumns, type PricingRow } from "./aa/aa-price-columns";
+import { useRankExtras } from "@/client/hooks/use-rank-extras";
 import { modelId } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
@@ -24,13 +26,12 @@ Object.freeze(EMPTY_MODELS);
 
 const VIEW_MODES = ["rankings", "pricing"] as const;
 
-const props = defineProps<{ rankings: ArtificialAnalysisModel[] }>();
+const props = defineProps<{ rankings: ArtificialAnalysisModel[]; partial?: boolean }>();
 
 const { t } = useTranslation();
 const store = useCompareStore();
 const costStore = useCostStore();
-const [viewMode, setViewMode] = useClientTab(AGENT_VIEW_PARAM, VIEW_MODES, VIEW_MODES[0]);
-
+const [viewMode, setViewMode] = useClientTab(VIEW_PARAM, VIEW_MODES, VIEW_MODES[0]);
 const { tabIndexFor: viewTabIndex, onKeydown: onViewKeydown } = useRovingRadio({
   items: () => VIEW_MODES,
   activeId: () => viewMode.value,
@@ -43,25 +44,33 @@ const pricingModels = computed(() => (pricingMode.value ? props.rankings : EMPTY
 
 const pricing = usePricingMaps(pricingModels, () => costStore.values);
 const effectivePricingMap = pricing.effectivePricing;
-const monthlyCosts = pricing.monthlyCosts;
+const costEstimates = pricing.costEstimates;
 const comparedModels = useCompareModels(() => props.rankings);
 
-usePruneCompareIds(() => props.rankings);
+usePruneCompareIds(
+  () => props.rankings,
+  undefined,
+  () => props.partial === true,
+);
 
 const viewItems = computed(() => [
   { id: "rankings" as const, label: t("modelRankings") },
   { id: "pricing" as const, label: t("pricing") },
 ]);
 
-const rankingColumns = computed(() => buildRankingColumns(t));
-const pricingColumns = computed(() => buildPricingColumns(t, effectivePricingMap.value));
+// The tab's default order is the ranking, so a row's position in it is its rank; the name links to the AA detail page —
+// the same one the model search and the expanded row lead to.
+const rowExtras = useRankExtras(() => props.rankings, modelId, "aa");
+
+const rankingColumns = computed(() => buildRankingColumns(t, rowExtras.value));
+const pricingColumns = computed(() => buildPricingColumns(t, effectivePricingMap.value, rowExtras.value));
 
 const pricingRows = computed<PricingRow[]>(() =>
-  props.rankings.map((model) => ({ model, monthlyCost: monthlyCosts.value.get(modelId(model)) ?? null })),
+  props.rankings.map((model) => ({ model, estimate: costEstimates.value.get(modelId(model)) ?? null })),
 );
 
 function handleCompare(): void {
-  navigate(pricingMode.value ? "/price-compare" : "/compare");
+  navigate(pricingMode.value ? PATHS.priceCompare : PATHS.compare);
 }
 
 const modelRowName = (m: ArtificialAnalysisModel) => m.name || m.slug || modelId(m);
@@ -74,9 +83,9 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
 
 <template>
   <div class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-center gap-2 min-w-0">
+    <div class="flex min-w-0 flex-wrap items-center gap-2">
       <SegmentedGroup
-        class="overflow-x-auto no-scrollbar"
+        class="no-scrollbar overflow-x-auto"
         role="radiogroup"
         :aria-label="t('viewMode')"
         @keydown="onViewKeydown"
@@ -95,7 +104,7 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
       </SegmentedGroup>
     </div>
 
-    <p v-if="pricingMode" class="text-xs text-text-tertiary">{{ t("pricingDisclaimer") }} · {{ t("priceUnitNote") }}</p>
+    <p v-if="pricingMode" class="ui-meta">{{ t("pricingDisclaimer") }}</p>
     <CompareChipBar
       :models="comparedModels"
       :show-compare="true"

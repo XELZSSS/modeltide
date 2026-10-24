@@ -21,6 +21,7 @@ export interface NormalizedHomeDashboard {
   orRankings: HomeDashboardData["orRankings"];
   textToImage: HomeDashboardData["textToImage"];
   opensource: HomeOpenSourceEntry[];
+  openSourceTasks: HomeDashboardData["openSourceTasks"];
   chart: HomeDashboardData["chart"];
   providers: HomeDashboardData["providers"];
   hallucinations: HomeDashboardData["hallucinations"];
@@ -36,14 +37,16 @@ export function normalizeHomeDashboard(payload: unknown): NormalizedHomeDashboar
   const label = "homeDashboard";
   let raw: HomeDashboardData | null = null;
   try {
+    // `unwrapObject` throws unless the envelope is an object carrying `data`, so `raw` is either a usable payload or
+    // still `null`; a second shape check here would only restate what the decoder already established.
     raw = unwrapObject<HomeDashboardData>(payload, label);
-    if (raw == null || typeof raw !== "object") raw = null;
   } catch (err) {
     console.warn(`[api] dropping malformed ${label} payload:`, err);
   }
   const orRankings = raw ? listField<HomeDashboardData["orRankings"][number]>(raw.orRankings) : null;
   const textToImage = raw ? listField<HomeDashboardData["textToImage"][number]>(raw.textToImage) : null;
   const opensource = raw ? listField<HomeOpenSourceEntry>(raw.opensource) : null;
+  const openSourceTasks = raw ? listField<HomeDashboardData["openSourceTasks"][number]>(raw.openSourceTasks) : null;
   const chart = raw ? listField<HomeDashboardData["chart"][number]>(raw.chart) : null;
   const providers = raw ? listField<HomeDashboardData["providers"][number]>(raw.providers) : null;
   const hallucinations = raw ? listField<HomeDashboardData["hallucinations"][number]>(raw.hallucinations) : null;
@@ -51,6 +54,7 @@ export function normalizeHomeDashboard(payload: unknown): NormalizedHomeDashboar
     orRankings: orRankings ?? [],
     textToImage: textToImage ?? [],
     opensource: opensource ?? [],
+    openSourceTasks: openSourceTasks ?? [],
     chart: chart ?? [],
     providers: providers ?? [],
     hallucinations: hallucinations ?? [],
@@ -60,6 +64,7 @@ export function normalizeHomeDashboard(payload: unknown): NormalizedHomeDashboar
       orRankings == null ||
       textToImage == null ||
       opensource == null ||
+      openSourceTasks == null ||
       chart == null ||
       providers == null ||
       hallucinations == null,

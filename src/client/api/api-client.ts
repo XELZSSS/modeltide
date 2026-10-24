@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/query-core";
 import { ref } from "vue";
-import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
+import { CACHE_VERSION, CONTRACT_VERSION } from "@/shared/config/cache-version.gen.ts";
 import { API_VERSION_PARAM } from "@/shared/config/api";
 import type { SourcePayload } from "@/shared/types";
 
@@ -47,16 +47,24 @@ export function isAbortError(err: unknown): boolean {
 export const contractSkew = ref(false);
 
 /**
- * Every response from our own function carries the header, on success and on error paths alike, so an absent
- * header means the response came from something we cannot verify (service worker copy, middlebox). Treat that as
- * "no information" instead of pinning a previous mismatch, which used to leave the notice up indefinitely.
+ * Our own function sends this header on success and error alike, so an absent header means the response came from
+ * something unverifiable (service-worker copy, middlebox). That is treated as "no information" rather than pinning a
+ * previous mismatch, which left the notice up indefinitely.
+ *
+ * Compared against CONTRACT_VERSION, not the cache version: only the payload shape decides whether this bundle can
+ * still read the answer.
  */
 function noteContractVersion(res: Response): void {
   const served = res.headers.get(CONTRACT_VERSION_HEADER);
-  contractSkew.value = served !== null && served !== CACHE_VERSION;
+  contractSkew.value = served !== null && served !== CONTRACT_VERSION;
 }
 
-/** Same-origin only: the API ships no CORS headers, so every call goes back to this origin. */
+/**
+ * Same-origin only: the API ships no CORS headers, so every call goes back to this origin.
+ *
+ * `?v=` carries the cache version rather than the contract version: the values in a payload can change without the
+ * shape changing, and that still has to miss every browser and edge copy of the previous build.
+ */
 function buildApiUrl(path: string): string {
   const [base, query] = path.split("?", 2);
   const params = new URLSearchParams(query);
@@ -64,18 +72,16 @@ function buildApiUrl(path: string): string {
   return `${base}?${params.toString()}`;
 }
 
-function timeoutSignal(ms: number): AbortSignal {
-  if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(new DOMException("Timed out", "TimeoutError")), ms);
-  ctrl.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
-  return ctrl.signal;
-}
-
+/**
+ * The caller's abort signal joined with a timeout.
+ *
+ * `AbortSignal.timeout` is inside the `baseline-widely-available` set Vite builds for (Chrome 111 / Safari 16.4 floor,
+ * and it shipped in Safari 16), so it is used directly. `AbortSignal.any` is *not*: it shipped in Chrome 116 and Safari
+ * 17.4, both above that floor, so the merge is still hand-written for the browsers the build targets.
+ */
 function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
-  const timeout = timeoutSignal(ms);
+  const timeout = AbortSignal.timeout(ms);
   if (!signal) return timeout;
-  if (typeof AbortSignal.any === "function") return AbortSignal.any([signal, timeout]);
   if (signal.aborted) return signal;
   if (timeout.aborted) return timeout;
   const ctrl = new AbortController();

@@ -57,7 +57,11 @@ export function stripHtml(s: unknown): string {
   while (i < s.length) {
     if (s.startsWith("<!--", i)) {
       const end = s.indexOf("-->", i + 4);
-      if (end === -1) break;
+      if (end === -1) {
+        // Unterminated comment: keep the remainder as text, the way an unterminated tag below is kept.
+        parts.push(s.slice(i));
+        break;
+      }
       i = end + 3;
       continue;
     }
@@ -80,7 +84,10 @@ export function stripHtml(s: unknown): string {
     }
     if (s.startsWith("<!", i) || s.startsWith("<?", i)) {
       const end = findTagEnd(s, i);
-      if (end === -1) break;
+      if (end === -1) {
+        parts.push(s.slice(i));
+        break;
+      }
       i = end + 1;
       continue;
     }

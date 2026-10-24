@@ -3,10 +3,11 @@ import {
   CategoryScale,
   LinearScale,
   ArcElement,
+  BarController,
+  BarElement,
   DoughnutController,
   PointElement,
   LineElement,
-  LineController,
   Filler,
   RadialLinearScale,
   RadarController,
@@ -23,8 +24,9 @@ function registerChart(...elements: Parameters<(typeof ChartJS)["register"]>[num
   applyChartDefaults(ChartJS);
 }
 
-export function registerLine(): void {
-  registerChart(LineController, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
+/** The home ranking bars: horizontal bars need the controller, the element and both scale types. */
+export function registerBar(): void {
+  registerChart(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 }
 export function registerDoughnut(): void {
   registerChart(DoughnutController, ArcElement, Tooltip, Legend);

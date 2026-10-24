@@ -1,24 +1,15 @@
 import { defineStore } from "pinia";
 import { STORAGE_KEYS } from "@/shared/config";
 import { loadPersistedState, makeStorageSync } from "./make-persisted-store";
-import type { CostFieldId } from "@/shared/scenario";
+import { DEFAULT_COST_FIELDS, type CostFieldId } from "@/shared/scenario";
 
 const COST_STORE_VERSION = 1;
 
-const DEFAULT_VALUES: Record<CostFieldId, string> = {
-  dailyInput: "2",
-  dailyOutput: "1",
-  dailyReasoning: "2",
-  cacheHitRate: "50",
-  cacheWriteRate: "5",
-  daysPerMonth: "22",
-};
-
-const COST_FIELD_IDS = Object.keys(DEFAULT_VALUES) as CostFieldId[];
+const COST_FIELD_IDS = Object.keys(DEFAULT_COST_FIELDS) as CostFieldId[];
 
 function cleanValues(raw: unknown): Record<CostFieldId, string> {
   const persisted = (raw ?? {}) as Partial<Record<CostFieldId, unknown>>;
-  const values = { ...DEFAULT_VALUES };
+  const values = { ...DEFAULT_COST_FIELDS };
   for (const id of COST_FIELD_IDS) {
     const value = persisted[id];
     if (typeof value === "string") values[id] = value;

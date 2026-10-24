@@ -13,14 +13,14 @@ const { t } = useTranslation();
 const { hover, cancel } = usePrefetch();
 
 const ICON_BUTTON =
-  "p-1.5 text-text-secondary hoverable:hover:text-text-primary ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
+  "rounded-md p-2 text-text-secondary hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
 </script>
 
 <template>
   <nav
-    class="hidden md:flex h-12 shrink-0 items-center border-b border-border bg-bg-primary sticky top-0 z-30"
+    class="sticky top-0 z-30 hidden h-14 shrink-0 items-center border-b border-border bg-bg-primary/80 backdrop-blur-md md:flex"
     :aria-label="t('navPrimary')"
   >
     <div :class="INNER">
@@ -32,8 +32,10 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           :aria-label="item.label"
           :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
-            'relative px-3 py-1.5 text-sm font-medium ui-motion whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1',
-            isActive(item) ? 'text-text-primary' : 'text-text-secondary hoverable:hover:text-text-primary',
+            'inline-flex h-8 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap ui-motion focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+            isActive(item)
+              ? 'bg-surface-hover text-text-primary'
+              : 'text-text-secondary hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary',
           ]"
           @mouseenter="hover(item.path)"
           @mouseleave="cancel"
@@ -41,13 +43,6 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           @blur="cancel"
         >
           {{ item.label }}
-          <span
-            aria-hidden="true"
-            :class="[
-              'absolute inset-x-3 -bottom-px h-px bg-accent ui-motion-underline origin-left',
-              isActive(item) ? 'scale-x-100' : 'scale-x-0',
-            ]"
-          />
         </SafeLink>
       </div>
       <div class="ml-auto flex items-center gap-1">

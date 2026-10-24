@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * A link that stays a link. Same-origin clicks are handed to the router so an in-app jump does not reload the bundle;
+ * modified clicks (new tab, download, middle button) are left to the browser, which is what keeps cursor and
+ * middle-click behaviour intact despite the interception.
+ */
 import { navigate } from "@/client/router";
 import { isInternalHref } from "@/shared/utils/url";
 

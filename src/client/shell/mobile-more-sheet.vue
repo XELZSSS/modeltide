@@ -27,8 +27,8 @@ const prefetch = usePrefetch();
           :href="item.path"
           :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
-            'flex items-center justify-between gap-3 px-4 py-3 ui-motion focus-visible:outline-none focus-visible:bg-hover',
-            isActive(item) ? 'text-accent' : 'text-text-primary hoverable:hover:bg-hover',
+            'flex items-center justify-between gap-3 px-4 py-3 ui-motion focus-visible:bg-surface-hover focus-visible:outline-none',
+            isActive(item) ? 'text-text-primary' : 'text-text-secondary hoverable:hover:bg-surface-hover',
           ]"
           @click="emit('close')"
           @touchstart="prefetch.touch(item.path)"
@@ -37,13 +37,13 @@ const prefetch = usePrefetch();
           @focus="prefetch.hover(item.path)"
           @blur="prefetch.cancel"
         >
-          <span class="flex items-center gap-2 min-w-0">
-            <span :class="isActive(item) ? 'text-accent shrink-0' : 'text-text-secondary shrink-0'">
+          <span class="flex min-w-0 items-center gap-2">
+            <span :class="isActive(item) ? 'shrink-0 text-text-primary' : 'shrink-0 text-text-secondary'">
               <component :is="item.icon" :size="18" />
             </span>
             <span class="text-sm">{{ item.label }}</span>
           </span>
-          <ChevronRight :size="16" class="text-text-tertiary shrink-0" aria-hidden="true" />
+          <ChevronRight :size="16" class="shrink-0 text-text-tertiary" aria-hidden="true" />
         </SafeLink>
       </nav>
     </SheetBody>

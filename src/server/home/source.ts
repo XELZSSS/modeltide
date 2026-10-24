@@ -1,5 +1,4 @@
 import type { AppContext } from "@/server/api/context";
-import { UpstreamError } from "@/server/api/errors";
 import { fanOut } from "@/server/fan-out";
 import { getIntelligenceIndex } from "@/server/aa";
 import { getTextToImageLeaderboard } from "@/server/aa/text-to-image";
@@ -17,13 +16,16 @@ import type {
   OpenSourceModelEntry,
 } from "@/shared/types";
 import { computeProviderStats } from "@/shared/utils/models";
+import { aggregateTaskShare } from "@/shared/utils";
+import {
+  HOME_CHART_ROWS,
+  HOME_HALLUCINATION_ROWS,
+  HOME_OPEN_SOURCE_ROWS,
+  HOME_OR_RANKING_ROWS,
+  HOME_PROVIDER_ROWS,
+  HOME_TEXT_TO_IMAGE_ROWS,
+} from "@/shared/config/ui";
 import { defineSource } from "@/server/pipeline";
-
-const HOME_OR_RANKING_ROWS = 5;
-const HOME_TEXT_TO_IMAGE_ROWS = 8;
-const HOME_CHART_ROWS = 10;
-const HOME_PROVIDER_ROWS = 5;
-const HOME_HALLUCINATION_ROWS = 5;
 
 function homeOpenSourceRow({ id, downloads, task }: OpenSourceModelEntry): HomeOpenSourceEntry {
   return { id, downloads, task };
@@ -51,12 +53,13 @@ function homeChartRows(models: ArtificialAnalysisModel[]): HomeChartPoint[] {
 }
 
 function homeProviderRows(models: ArtificialAnalysisModel[]): HomeProviderSpeed[] {
-  // The unknown-provider label is filled in client-side, where translations live.
+  // `computeProviderStats` labels an unknown creator with "", which the payload does not: it sends `null` and lets the
+  // client fill in the translated label, the only layer that can.
   return computeProviderStats(models, "")
     .filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
     .sort((a, b) => b.avgSpeed - a.avgSpeed)
     .slice(0, HOME_PROVIDER_ROWS)
-    .map(({ name, color, avgSpeed }) => ({ name, color, avgSpeed }));
+    .map(({ name, color, avgSpeed }) => ({ name: name || null, color, avgSpeed }));
 }
 
 function homeHallucinationRows(models: ArtificialAnalysisModel[]): HomeHallucinationPoint[] {
@@ -65,7 +68,7 @@ function homeHallucinationRows(models: ArtificialAnalysisModel[]): HomeHallucina
     const total = model.omniscience_breakdown?.total;
     // Same rule as the hallucination ranking: an entry needs both an index and an accuracy.
     if (total?.omniscience == null || total.accuracy == null) continue;
-    rows.push({ model: model.name, accuracy: total.accuracy });
+    rows.push({ name: model.name, accuracy: total.accuracy });
   }
   return rows.sort((a, b) => b.accuracy - a.accuracy).slice(0, HOME_HALLUCINATION_ROWS);
 }
@@ -80,7 +83,6 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<HomeRaw> {
     values,
     failures,
     partial: legPartial,
-    reasons,
   } = await fanOut(
     ctx,
     [
@@ -89,17 +91,18 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<HomeRaw> {
       { label: "opensource", run: () => getHomeOpenSourceModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS }) },
       { label: "artificial", run: () => getIntelligenceIndex(ctx) },
     ],
-    { tag: "home" },
+    // Every leg returns a payload object on success, so "all legs rejected" is exactly "every value is missing": the
+    // shared policy in runLegs replaces the hand-written null check this used to do after the fan-out returned.
+    { tag: "home", allFailedMessage: "Home dashboard: all sources failed" },
   );
   const [orRankings, textToImage, opensource, artificial] = values;
-  if (!orRankings && !textToImage && !opensource && !artificial) {
-    throw new UpstreamError(`Home dashboard: all sources failed (${reasons})`, { retryable: true });
-  }
   const artificialModels = artificial?.data ?? [];
+  const openSourceModels = opensource?.data ?? [];
   const data: HomeDashboardData = {
     orRankings: (orRankings?.data ?? []).slice(0, HOME_OR_RANKING_ROWS),
     textToImage: (textToImage?.data ?? []).slice(0, HOME_TEXT_TO_IMAGE_ROWS),
-    opensource: (opensource?.data ?? []).map(homeOpenSourceRow),
+    opensource: openSourceModels.slice(0, HOME_OPEN_SOURCE_ROWS).map(homeOpenSourceRow),
+    openSourceTasks: aggregateTaskShare(openSourceModels).slices,
     chart: homeChartRows(artificialModels),
     providers: homeProviderRows(artificialModels),
     hallucinations: homeHallucinationRows(artificialModels),
@@ -115,11 +118,16 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<HomeRaw> {
   }
   return { data, partial };
 }
-
+/**
+ * How long a dashboard payload may stay cached at the origin. `src/server/registry.ts` reads this same constant for the
+ * route's HTTP cache headers, so the edge window cannot drift from the origin window.
+ */
+export const HOME_DASHBOARD_TTL_MS = FIVE_MINUTES;
 export const getHomeDashboard = defineSource<HomeRaw, HomeDashboardData>({
   key: cacheKeys.homeDashboard,
-  ttl: FIVE_MINUTES,
+  ttl: HOME_DASHBOARD_TTL_MS,
   label: "Home dashboard",
+  served: true,
   fetch: (ctx) => fetchHomeDashboard(ctx),
   parse: (raw) => raw.data,
   partialWhen: ({ raw }) => ({ partial: raw.partial }),

@@ -3,7 +3,7 @@ import { mapRows } from "@/server/formats/parse-rows";
 import { toStringOrNull } from "@/shared/utils";
 import type { TextToImageModel } from "@/shared/types";
 import type { RawEntry } from "@/server/formats/wire-types";
-import { findLongestData, findNextData } from "@/server/formats/rsc-data";
+import { findLongestData } from "@/server/formats/rsc-data";
 import { parseRscPayload } from "@/server/formats/rsc-parser";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
 
@@ -12,7 +12,9 @@ export function parseTextToImageRows(body: unknown): ParseResult<TextToImageMode
   const scanned = parseRscPayload<Record<string, unknown>>(
     body,
     "textToImage",
-    (tree) => findLongestData(tree, "textToImage") ?? findNextData(tree, "textToImage"),
+    // `findNextData` walks the same tree with the same predicate, so the `??` it sat behind could only ever run on a
+    // failure path where it also returned null — one extra full traversal of the page on every failed parse.
+    (tree) => findLongestData(tree, "textToImage"),
   );
   if (!scanned.ok) return parseFail(`Text-to-image parse failed: ${scanned.error}`);
   const { rows, dropped } = mapRows(scanned.data, mapEntry);

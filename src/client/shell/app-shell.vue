@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useSettingsStore } from "@/client/stores";
 import { useTranslation } from "@/client/i18n";
 import DesktopNav from "./desktop-nav.vue";
 import MobileNav from "./mobile-nav.vue";
 import ErrorBoundary from "@/client/components/feedback/error-boundary.vue";
-import FetchIndicator from "./fetch-indicator.vue";
 import { loadMobileMoreSheet, loadSettingsSheet } from "./sheet-loaders";
 import ContractSkewNotice from "@/client/components/feedback/contract-skew-notice.vue";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";
@@ -36,15 +35,29 @@ function closeSheet(): void {
   openSheet.value = null;
 }
 
+const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+const systemDark = ref(systemThemeQuery.matches);
+const onSystemTheme = (event: MediaQueryListEvent): void => {
+  systemDark.value = event.matches;
+};
+systemThemeQuery.addEventListener("change", onSystemTheme);
+onBeforeUnmount(() => systemThemeQuery.removeEventListener("change", onSystemTheme));
+
+/**
+ * The setting is a preference, not a resolved colour: "system" follows the OS, which can change while the app is open, so
+ * the shell watches the resolved value rather than the stored mode.
+ */
+const isDark = computed(() => (settings.themeMode === "system" ? systemDark.value : settings.themeMode === "dark"));
+
 function applyTheme(): void {
-  const dark = settings.themeMode === "dark";
+  const dark = isDark.value;
   document.documentElement.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
   const metas = document.querySelectorAll("meta[name='theme-color']");
   for (const meta of metas) meta.setAttribute("content", dark ? THEME_COLORS.dark : THEME_COLORS.light);
 }
 
-watch(() => settings.themeMode, applyTheme, { immediate: true, flush: "post" });
+watch(isDark, applyTheme, { immediate: true, flush: "post" });
 
 watch(
   () => route.fullPath,
@@ -71,25 +84,28 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-h-screen h-[100dvh] flex flex-col bg-bg-primary overflow-x-hidden pt-[env(safe-area-inset-top,0px)]">
+  <!-- One fixed height, in `dvh`: `min-h-screen` alongside it resolved to `100vh`, which on a phone is the *large*
+       viewport — taller than the visible area — so the shell outgrew the screen and pushed the bottom bar below the
+       fold, reintroducing the page scroll the in-flow nav exists to avoid. -->
+  <div class="flex h-[100dvh] flex-col overflow-x-hidden bg-bg-primary pt-[env(safe-area-inset-top,0px)]">
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-bg-primary focus:border focus:border-border focus:text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:border focus:border-border focus:bg-bg-primary focus:px-4 focus:py-2 focus:text-sm focus:ring-2 focus:ring-ring focus:outline-none"
     >
       {{ t("skipToContent") }}
     </a>
     <DesktopNav @settings-open="openSheet = 'settings'" />
-    <!-- `scrollbar-gutter: stable` reserves the thin scrollbar's 10px whether or not the page scrolls. Now that the
-         scrollport is `auto`, switching between ranking tabs of different heights used to add and remove that strip,
-         which shifted the centred content sideways on every switch. -->
+    <!-- `scrollbar-gutter: stable` reserves the thin bar's 10px on touch widths, where that bar is still painted: the
+         scrollport is `auto`, so switching between ranking tabs of different heights used to add and remove the strip
+         and shift the centred content sideways. Desktop hides the bar (see utilities.css), so nothing is reserved
+         there. -->
     <main
       ref="mainRef"
       id="main-content"
       tabindex="-1"
       :aria-label="t('mainContent')"
-      class="flex-1 min-h-0 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0 focus:outline-none"
+      class="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto overscroll-contain focus:outline-none md:[scrollbar-gutter:auto]"
     >
-      <FetchIndicator />
       <div :class="[PAGE_WIDTH, PAGE_GUTTER]">
         <ContractSkewNotice />
       </div>

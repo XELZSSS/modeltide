@@ -3,8 +3,12 @@ import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
 import TabButton from "@/client/components/navigation/tab-button.vue";
-import { nextRovingId, type TabItem } from "@/client/components/navigation/tabs";
+import { useRovingRadio, type TabItem } from "@/client/components/navigation/tabs";
 
+/**
+ * The tab strip plus its panel. Arrow/Home/End handling comes from the shared roving-radio helper rather than a local
+ * `keydown`: the strip is one tab stop that the arrow keys move inside, and the panel is labelled by the active tab.
+ */
 const props = withDefaults(
   defineProps<{
     tabs: TabItem[];
@@ -22,14 +26,17 @@ const emit = defineEmits<{ tabChange: [tabId: string]; tabIntent: [tabId: string
 // Wrap rather than scroll: an edge fade over a strip that already fits faded the last tab's own label, and a hidden
 // scroller with no affordance left tabs 4 and 5 invisible on a phone.
 const groupClasses = computed(() => cn("w-fit max-w-full flex-wrap", props.fill && "w-full sm:w-full"));
-const panelClasses = computed(() => cn("min-w-0 flex flex-col gap-4", props.class));
+// `ui-anim-swap` is the vocabulary's "content that replaces other content in place" step: a fast cross-fade with no
+// stagger and no travel. The panel is keyed per tab, so each switch mounts this fade — without it the old panel vanished
+// and the new one appeared in the same frame.
+const panelClasses = computed(() => cn("flex min-w-0 ui-anim-swap flex-col gap-4", props.class));
 
-function onKeydown(event: KeyboardEvent): void {
-  const nextId = nextRovingId(event, props.tabs, props.activeTab);
-  if (nextId == null) return;
-  emit("tabChange", nextId);
-  document.getElementById(`tab-${nextId}`)?.focus();
-}
+const { onKeydown } = useRovingRadio({
+  items: () => props.tabs.map((tab) => tab.id),
+  activeId: () => props.activeTab,
+  elementId: (tabId) => `tab-${tabId}`,
+  select: (tabId) => emit("tabChange", tabId),
+});
 </script>
 
 <template>

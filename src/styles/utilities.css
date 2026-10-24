@@ -1,138 +1,50 @@
-@layer base {
-  html,
-  body,
-  #root {
-    min-height: 100%;
-  }
+/*
+ * The design system's utility layer: each class names a role, not a set of Tailwind primitives, and is the single
+ * definition of a repeated decision (a card surface, a heading level, a caption). Components compose these instead
+ * of re-deriving the same utility strings, so the type scale and the surfaces cannot drift file by file.
+ *
+ * shadcn/ui "new-york" look: hairline borders, one small radius step for controls and one larger for surfaces, a
+ * tight type scale where the page title carries `tracking-tight` and everything below it is 14px or smaller.
+ *
+ * Elevation is spent once: a surface gets its edge from the hairline border alone, and only a layer that actually
+ * floats above the page (`ui-overlay`) gets a shadow. A card carrying both drew two greys along the same edge on a
+ * white page, which read as a fuzzy double line rather than depth.
+ *
+ * Conventions:
+ *   - `ui-*` classes are utilities, so Tailwind primitives can still override one property (`ui-caption` +
+ *     `text-warning`) without a specificity fight.
+ *   - Colours come from a token in src/styles/theme.css; sizes/leading from the token or an on-scale rem value.
+ *   - Blocks marked "shared base" exist only to be `@apply`-ed by their neighbours and are not used in markup;
+ *     Tailwind emits a utility only when something references it, so they add no bytes.
+ */
 
-  html {
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
-    -webkit-tap-highlight-color: transparent;
-  }
+/* ---------- Surfaces ---------- */
 
-  body {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    line-height: var(--leading-text);
-    letter-spacing: var(--tracking-text);
-    /* No font-smoothing override: the platform default keeps subpixel (LCD) antialiasing on Windows, where forcing
-       `antialiased` turns every glyph into grayscale coverage — thinner and softer at the sizes this UI uses. */
-    font-variant-numeric: tabular-nums;
-    font-synthesis: none;
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-  }
-
-  ::selection {
-    background-color: var(--color-selected);
-  }
-
-  img:not([class*="h-"]):not([class*="w-"]),
-  video:not([class*="h-"]):not([class*="w-"]) {
-    max-width: 100%;
-    height: auto;
-  }
-
-  svg:not([class*="h-"]):not([class*="w-"]),
-  canvas:not([class*="h-"]):not([class*="w-"]),
-  iframe:not([class*="h-"]):not([class*="w-"]) {
-    max-width: 100%;
-  }
-
-  code,
-  pre {
-    font-family: var(--font-mono);
-    word-break: break-word;
-  }
-
-  table {
-    max-width: 100%;
-  }
-
-  p,
-  li,
-  th,
-  td {
-    overflow-wrap: break-word;
-  }
-
-  th,
-  td {
-    font-variant-numeric: tabular-nums;
-  }
-
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    line-height: 1.4;
-  }
-}
-
-html,
-main,
-.overflow-y-auto:not(.no-scrollbar),
-.overflow-x-auto:not(.no-scrollbar) {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-secondary) 20%, transparent) transparent;
-
-  &::-webkit-scrollbar-track,
-  &::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background-color: color-mix(in srgb, var(--text-secondary) 20%, transparent);
-    border-radius: 0;
-    border: 2px solid transparent;
-    background-clip: content-box;
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background-color: color-mix(in srgb, var(--text-secondary) 40%, transparent);
-  }
-
-  @media (width < 768px) {
-    &::-webkit-scrollbar {
-      width: 4px;
-      height: 4px;
-    }
-  }
-}
-
-@utility no-scrollbar {
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
+/* Shared base for both surface roles below: the hairline and the flex/grid shrinking behaviour. */
+@utility ui-surface {
+  border: 1px solid var(--border);
+  min-width: 0;
 }
 
 @utility ui-card {
-  border: 1px solid var(--border);
+  @apply ui-surface rounded-xl;
   background-color: var(--bg-card);
-  min-width: 0;
 }
 
+/* Floating surfaces (sheets, popovers, the search panel): same hairline, one step more elevation. */
 @utility ui-overlay {
-  border: 1px solid var(--border);
+  @apply ui-surface rounded-xl shadow-lg;
   background-color: var(--bg-overlay);
-  min-width: 0;
 }
 
+/* ---------- Headings ---------- */
+
+/* The full-page figure/number line: page titles and metric displays share the display tracking and the tight leading. */
 @utility ui-display {
   font-family: var(--font-sans);
   font-size: 2.25rem;
   line-height: 1.05;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: var(--tracking-display);
   font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
@@ -143,27 +55,28 @@ main,
   }
 }
 
+/* 26px/30px bold with tight tracking — the page header size the reference dashboard uses. */
 @utility ui-page-title {
   font-family: var(--font-sans);
-  font-size: 1.75rem;
-  line-height: 1.15;
-  font-weight: 600;
+  font-size: 1.625rem;
+  line-height: var(--leading-title);
+  font-weight: 700;
   letter-spacing: var(--tracking-display);
   color: var(--text-primary);
   overflow-wrap: break-word;
   min-width: 0;
 
   @media (width >= 640px) {
-    font-size: 2.5rem;
-    line-height: 1.1;
+    font-size: 1.875rem;
   }
 }
 
+/* The same hierarchy inside a detail page, where the title sits under a back button instead of owning the viewport. */
 @utility ui-page-title-compact {
   font-family: var(--font-sans);
   font-size: 1.25rem;
   line-height: 1.3;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: var(--tracking-title);
   color: var(--text-primary);
   overflow-wrap: break-word;
@@ -194,6 +107,9 @@ main,
   color: var(--text-primary);
 }
 
+/* ---------- Body text ---------- */
+
+/* 14px/`--leading-text`, the reading size. The two roles differ only in emphasis, which is why they share the metrics. */
 @utility ui-body {
   font-size: 0.875rem;
   line-height: var(--leading-text);
@@ -206,6 +122,7 @@ main,
   color: var(--text-secondary);
 }
 
+/* 12px/16px, the supporting size: captions carry meaning, meta is the tertiary annotation. */
 @utility ui-caption {
   font-size: 0.75rem;
   line-height: 1rem;
@@ -218,13 +135,17 @@ main,
   color: var(--text-tertiary);
 }
 
+/* ---------- Figures ---------- */
+
+/* The headline figure: sans with tabular figures, which is how the reference dashboard sets a hero number. Monospace
+   stays on `ui-mono-value`, where digit alignment between rows is the point. */
 @utility ui-metric {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
   font-size: 1.5rem;
   line-height: 1.15;
   font-weight: 600;
   letter-spacing: var(--tracking-title);
-  font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   overflow-wrap: anywhere;
   min-width: 0;
@@ -238,17 +159,13 @@ main,
   color: var(--text-primary);
 }
 
+/* Column headers: sentence case at 12px, quiet colour, never wrapped so a sticky header keeps its height. The wide
+   uppercase tracking of the previous scale is gone — the reference design system sets table headers as normal text. */
 @utility ui-table-header {
   font-size: 0.75rem;
   line-height: 1rem;
   font-weight: 500;
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  letter-spacing: var(--tracking-text);
+  color: var(--text-secondary);
   white-space: nowrap;
-}
-
-html:lang(zh) {
-  --tracking-text: 0em;
-  --leading-text: 1.7;
 }

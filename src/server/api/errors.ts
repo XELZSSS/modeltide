@@ -8,14 +8,6 @@ export function isTimeoutLike(err: unknown): boolean {
   return name === "TimeoutError" || name === "AbortError";
 }
 
-export function isTimeoutReason(reason: unknown): boolean {
-  return (reason as { name?: unknown } | null | undefined)?.name === "TimeoutError";
-}
-
-export function isCallerAbort(signal: AbortSignal | undefined): boolean {
-  return signal?.aborted === true && !isTimeoutReason(signal.reason);
-}
-
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {

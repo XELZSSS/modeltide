@@ -1,6 +1,6 @@
 import type { BenchmarkKey } from "@/shared/config";
 
-export const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
+const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
   apex_agents: "apexAgents",
   automation_bench: "automationBenchPartialScore",
   briefcase_elo: "briefcaseElo",

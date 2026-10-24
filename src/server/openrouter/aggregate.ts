@@ -2,20 +2,13 @@ import { isRecord, numCoerce } from "@/server/formats/scalars";
 import { parseTs } from "@/server/formats/dates";
 import { isValidRowId } from "@/server/formats/content-guards";
 import { isModelRow } from "@/server/formats/wire-guards";
-import { MAX_DIRECTORY_ROWS } from "@/server/formats/limits";
+import { MAX_RANKING_ROWS } from "@/server/formats/limits";
 import { lookupHit, normalizeKeyCached, type Lookup } from "./lookup";
 
 import type { ModelMetaEntry, ModelRow } from "@/server/formats/wire-types";
 import type { PricingEntry } from "./parse-directory";
 
-const SUM_KEYS = [
-  "total_prompt_tokens",
-  "total_completion_tokens",
-  "total_native_tokens_reasoning",
-  "total_native_tokens_cached",
-  "count",
-  "total_tool_calls",
-] as const;
+const SUM_KEYS = ["total_prompt_tokens", "total_completion_tokens", "count"] as const;
 
 function usageTotal(row: ModelRow): number {
   const p = numCoerce(row.total_prompt_tokens);
@@ -38,7 +31,13 @@ interface Group {
   metric: number | null;
 }
 
-function changePercent(value: unknown): number | null {
+/**
+ * Converts the upstream `change` figure to percent. The payload has been observed in both forms: a ratio (`-0.9`, i.e.
+ * -90%) and an already-percent number (`1`, i.e. 1%). Magnitude tells them apart — every ratio the feed emits is below 1
+ * in absolute value — and that is the single heuristic this pipeline relies on. `parse-rankings.test.ts` pins both
+ * cases, so a change in upstream meaning fails the suite instead of quietly scaling every trend by 100.
+ */
+function changeToPercent(value: unknown): number | null {
   const n = numCoerce(value);
   if (n == null) return null;
   return Math.abs(n) < 1 ? n * 100 : n;
@@ -81,7 +80,7 @@ export function resolveExpiry(meta: MetaLookup | undefined, id: string, variantK
 function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> {
   const grouped = new Map<string, Group>();
   if (!Array.isArray(rows)) return grouped;
-  const count = Math.min(rows.length, MAX_DIRECTORY_ROWS);
+  const count = Math.min(rows.length, MAX_RANKING_ROWS);
   let valid = 0;
   for (let i = 0; i < count; i++) {
     const raw: unknown = rows[i];
@@ -151,4 +150,4 @@ function compareRanked(a: RankedGroup, b: RankedGroup): number {
   return aid === bid ? 0 : aid < bid ? -1 : 1;
 }
 
-export { groupRows, compareRanked, usageTotal, resolvePricing, changePercent };
+export { groupRows, compareRanked, usageTotal, resolvePricing, changeToPercent };

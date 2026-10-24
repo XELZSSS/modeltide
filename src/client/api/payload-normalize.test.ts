@@ -59,9 +59,10 @@ describe("normalizeHomeDashboard", () => {
         orRankings: [{ rank: 1 }],
         textToImage: [{ slug: "x" }],
         opensource: [{ id: "m", downloads: 1 }],
+        openSourceTasks: [{ key: "text-generation", total: 1 }],
         chart: [{ id: "c" }],
         providers: [{ name: "p" }],
-        hallucinations: [{ model: "h" }],
+        hallucinations: [{ name: "h" }],
       }),
     );
     expect(normalized.malformed).toBe(false);
@@ -69,6 +70,7 @@ describe("normalizeHomeDashboard", () => {
     expect(normalized.orRankings).toHaveLength(1);
     expect(normalized.textToImage).toHaveLength(1);
     expect(normalized.opensource).toHaveLength(1);
+    expect(normalized.openSourceTasks).toHaveLength(1);
     expect(normalized.chart).toHaveLength(1);
     expect(normalized.providers).toHaveLength(1);
     expect(normalized.hallucinations).toHaveLength(1);
@@ -77,7 +79,15 @@ describe("normalizeHomeDashboard", () => {
   it("carries the partial flag through", () => {
     const normalized = normalizeHomeDashboard(
       payloadOf(
-        { orRankings: [], textToImage: [], opensource: [], chart: [], providers: [], hallucinations: [] },
+        {
+          orRankings: [],
+          textToImage: [],
+          opensource: [],
+          openSourceTasks: [],
+          chart: [],
+          providers: [],
+          hallucinations: [],
+        },
         true,
       ),
     );
@@ -91,6 +101,7 @@ describe("normalizeHomeDashboard", () => {
       orRankings: [],
       textToImage: [],
       opensource: [],
+      openSourceTasks: [],
       chart: [],
       providers: [],
       hallucinations: [],

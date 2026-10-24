@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * Previous/next paging with the page counter announced politely. It renders nothing for a single page, so a short list
+ * does not grow a control that cannot do anything.
+ */
 import { computed } from "vue";
 import { ChevronLeft, ChevronRight } from "@lucide/vue";
 import { cn } from "@/client/utils/cn";
@@ -23,7 +27,7 @@ const classes = computed(() => cn("flex items-center justify-center gap-3 pt-2",
     >
       <ChevronLeft :size="16" />
     </Button>
-    <span class="ui-caption tabular-nums min-w-16 text-center" aria-live="polite">{{ page }} / {{ totalPages }}</span>
+    <span class="min-w-16 text-center ui-caption tabular-nums" aria-live="polite">{{ page }} / {{ totalPages }}</span>
     <Button
       variant="outline"
       size="icon"

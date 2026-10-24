@@ -1,11 +1,15 @@
 <script setup lang="ts">
+/**
+ * One label/value line: the label is a caption and never shrinks, the value is monospaced, right-aligned and truncates
+ * on desktop, so a long model id cannot push the label out of the row.
+ */
 import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 
 const props = defineProps<{ label: string; class?: string }>();
 const classes = computed(() =>
   cn(
-    "flex flex-row items-baseline justify-between min-w-0 py-1.5 gap-3 border-b border-border/60 last:border-0",
+    "flex min-w-0 flex-row items-baseline justify-between gap-3 border-b border-border/60 py-1.5 last:border-0",
     props.class,
   ),
 );
@@ -13,7 +17,7 @@ const classes = computed(() =>
 
 <template>
   <div :class="classes">
-    <p class="ui-caption shrink-0">{{ label }}</p>
-    <div class="ui-mono-value min-w-0 text-right font-medium break-words md:truncate"><slot /></div>
+    <p class="shrink-0 ui-caption">{{ label }}</p>
+    <div class="min-w-0 text-right ui-mono-value font-medium break-words md:truncate" v-tooltip><slot /></div>
   </div>
 </template>

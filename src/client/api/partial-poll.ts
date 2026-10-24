@@ -12,25 +12,31 @@ function trackBase(pollKey: string, base: number): void {
   if (!oldest.done) partialPollCounts.delete(oldest.value);
 }
 
+/**
+ * The slice of TanStack's `Query` this reads. Narrower than the real type so the module carries no query-core import,
+ * but every field is required: the caller hands over a live `Query`, whose key and counters always exist.
+ */
 interface PollQuery {
-  queryKey?: readonly unknown[];
-  state?: { data?: unknown; dataUpdateCount?: number; errorUpdateCount?: number };
+  queryKey: readonly unknown[];
+  state: { data: unknown; dataUpdateCount: number; errorUpdateCount: number };
 }
 
+/**
+ * How long to wait before the next refetch while a payload is still `partial`, or `false` once it is complete or the
+ * polling budget for that query is spent.
+ */
 export function partialPollInterval(
-  query: unknown,
+  query: PollQuery,
   isPartialData: (data: unknown) => boolean,
   partialRefetchMs: number,
 ): number | false {
-  if (query == null || typeof query !== "object") return false;
-  const pollQuery = query as PollQuery;
-  const pollKey = JSON.stringify(pollQuery.queryKey ?? null);
-  const state = pollQuery.state;
-  if (!isPartialData(state?.data)) {
+  const pollKey = JSON.stringify(query.queryKey);
+  const { state } = query;
+  if (!isPartialData(state.data)) {
     partialPollCounts.delete(pollKey);
     return false;
   }
-  const settled = (state?.dataUpdateCount ?? 0) + (state?.errorUpdateCount ?? 0);
+  const settled = state.dataUpdateCount + state.errorUpdateCount;
   const prev = partialPollCounts.get(pollKey);
   const base = prev == null || settled < prev ? settled : prev;
   trackBase(pollKey, base);

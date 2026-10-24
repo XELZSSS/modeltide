@@ -17,24 +17,24 @@ export function matchFolded(folded: string[], needle: string): { matched: boolea
   return { matched: best > 0, score: best };
 }
 
-interface CachedFields {
-  accessor: unknown;
-  prepared: PreparedFields;
-}
-
-const preparedFieldsCache = new WeakMap<object, CachedFields>();
+const preparedFieldsCache = new WeakMap<object, WeakMap<object, PreparedFields>>();
 
 export function preparedFieldsFor<T extends object>(
   item: T,
   getFields: (item: T) => (string | null | undefined)[],
 ): PreparedFields {
-  // Keyed by row because folding is the expensive half, but the accessor is part of the entry: two tables can filter
-  // the same row objects through different field sets, and serving the first set's fields to the second made one of
-  // them search the wrong columns.
-  const cached = preparedFieldsCache.get(item);
-  if (cached != null && cached.accessor === getFields) return cached.prepared;
+  // Keyed by row because folding is the expensive half, then by accessor because two tables can filter the same row
+  // objects through different field sets: a single entry per row made them evict each other, so both tables refolded
+  // the same rows on every keystroke. The inner WeakMap lets an accessor that goes out of scope release its entries.
+  let byAccessor = preparedFieldsCache.get(item);
+  if (byAccessor === undefined) {
+    byAccessor = new WeakMap();
+    preparedFieldsCache.set(item, byAccessor);
+  }
+  const cached = byAccessor.get(getFields);
+  if (cached !== undefined) return cached;
   const prepared = prepareFields(getFields(item));
-  preparedFieldsCache.set(item, { accessor: getFields, prepared });
+  byAccessor.set(getFields, prepared);
   return prepared;
 }
 

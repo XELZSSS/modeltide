@@ -19,20 +19,18 @@ const stub = () => {
 describe("fanOut", () => {
   it("keeps the surviving legs and reports the payload as partial", async () => {
     const { ctx } = stub();
-    const { values, failures, partial, reasons } = await fanOut(ctx, [ok("a", 1), failing("b", new Error("boom"))], {
+    const { values, failures, partial } = await fanOut(ctx, [ok("a", 1), failing("b", new Error("boom"))], {
       tag: "demo",
     });
     expect(values).toEqual([1, undefined]);
     expect(failures.map((failure) => failure.label)).toEqual(["b"]);
     expect(partial).toBe(true);
-    expect(reasons).toBe("b: boom");
   });
 
   it("is not partial when every leg succeeded", async () => {
     const { ctx } = stub();
-    const { partial, reasons } = await fanOut(ctx, [ok("a", 1), ok("b", 2)], { tag: "demo" });
+    const { partial } = await fanOut(ctx, [ok("a", 1), ok("b", 2)], { tag: "demo" });
     expect(partial).toBe(false);
-    expect(reasons).toBe("");
   });
 
   it("logs every failed leg once under the source tag", async () => {
@@ -48,12 +46,5 @@ describe("fanOut", () => {
     const { ctx } = stub();
     const abort = new ClientAbortError("gone");
     await expect(fanOut(ctx, [ok("a", 1), failing("b", abort)], { tag: "demo" })).rejects.toBe(abort);
-  });
-
-  it("wraps a total failure in a retryable error when a message is supplied", async () => {
-    const { ctx } = stub();
-    await expect(
-      fanOut(ctx, [failing("a", new Error("x"))], { tag: "demo", allFailedMessage: "all legs failed" }),
-    ).rejects.toMatchObject({ name: "UpstreamError", message: "all legs failed", retryable: true });
   });
 });

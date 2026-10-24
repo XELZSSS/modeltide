@@ -1,7 +1,9 @@
+import { SITE_URLS } from "@/shared/config/sites";
+
 export const upstreamConfig = {
-  artificialAnalysis: "https://artificialanalysis.ai",
-  huggingface: "https://huggingface.co/api/models",
-  openrouter: "https://openrouter.ai",
+  artificialAnalysis: SITE_URLS.artificialAnalysis,
+  huggingface: `${SITE_URLS.huggingface}/api/models`,
+  openrouter: SITE_URLS.openRouter,
 } as const satisfies Record<string, string>;
 
 export const upstreamEndpoints = {
@@ -14,9 +16,9 @@ export const upstreamEndpoints = {
   openRouterDirectory: "/api/v1/models",
 } as const;
 
-export { MAX_FEED_BYTES, MAX_JSON_BYTES } from "@/server/formats/limits";
+export { MAX_FEED_BYTES, MAX_JSON_BYTES, MAX_RSC_BYTES } from "@/server/formats/limits";
 
-export const USER_AGENT = "ModelTide/1.0 (+https://github.com/XELZSSS/modeltide)";
+export const USER_AGENT = `ModelTide/1.0 (+${SITE_URLS.repository})`;
 
 export function upstreamUrl(base: string, endpoint: string): string {
   return new URL(endpoint, base).href;

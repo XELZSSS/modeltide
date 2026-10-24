@@ -28,6 +28,8 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
   const [index, changelog] = values;
   const models = index?.data ?? [];
   const changelogModels = changelog?.data ?? [];
+  // Broader than runLegs' `allFailedMessage`: this fires when neither source produced a usable row, which also covers
+  // a leg that fulfilled with an empty array. The fan-out therefore stays without that option.
   if (models.length === 0 && changelogModels.length === 0) {
     throw new UpstreamError(`Releases: both index and changelog failed`, { retryable: true });
   }
@@ -51,10 +53,17 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
   };
 }
 
+/**
+ * How long a release payload may stay cached at the origin. `src/server/registry.ts` reads this same constant for the
+ * route's HTTP cache headers, so the edge window cannot drift from the origin window.
+ */
+export const CLOSED_RELEASES_TTL_MS = STATIC_TTL_MS;
+
 export const getClosedReleases = defineSource<ClosedReleasesRaw, ClosedReleaseEntry[]>({
   key: cacheKeys.closedReleases,
-  ttl: STATIC_TTL_MS,
+  ttl: CLOSED_RELEASES_TTL_MS,
   label: "Releases",
+  served: true,
   fetch: (ctx) => fetchClosedReleases(ctx),
   parse: (raw) => {
     requireRows(raw.entries, "Releases", "rows", `changelog=${raw.counts.changelog}, index=${raw.counts.index}`);

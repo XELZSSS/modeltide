@@ -17,7 +17,6 @@ import {
   FLEX_CHART_HEIGHT,
   chartBase,
   defaultTooltipOptions,
-  legendStyle,
   useChartTheme,
 } from "@/client/charts/theme";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
@@ -26,18 +25,18 @@ import { formatPercent, formatShortNumber } from "@/shared/utils";
 import { cn } from "@/client/utils/cn";
 import type { HomeBarStat } from "./use-home-stats";
 import RankedListRows from "./ranked-list-rows.vue";
-import { OTHER_TASK_KEY, UNTAGGED_TASK_KEY, aggregateTaskShare, taskLabel, type TaskSlice } from "./task-share";
+import { OTHER_TASK_KEY, UNTAGGED_TASK_KEY, taskLabel, type TaskSlice } from "@/shared/i18n/task-labels";
 import { useDevice } from "@/client/device";
 import Dot from "@/client/components/ui/dot.vue";
 
-const props = defineProps<{ models: { task: string | null | undefined }[]; trending: HomeBarStat[] }>();
+const props = defineProps<{ tasks: TaskSlice[]; trending: HomeBarStat[] }>();
 
 const { t } = useTranslation();
 const theme = useChartTheme();
 const isMobile = useDevice();
-const aggregated = computed(() => aggregateTaskShare(props.models));
-const slices = computed(() => aggregated.value.slices);
-const total = computed(() => aggregated.value.total);
+// The histogram is aggregated on the server over the full HF page; this card only draws the slices it receives.
+const slices = computed(() => props.tasks);
+const total = computed(() => slices.value.reduce((sum, slice) => sum + slice.total, 0));
 
 const sliceColors = computed<string[]>(() => {
   const { donut, palette } = theme.value;
@@ -62,7 +61,9 @@ const data = computed<ChartData<"doughnut">>(() => ({
       backgroundColor: sliceColors.value,
       borderColor: theme.value.tooltipBg,
       borderWidth: 2,
-      borderRadius: 0,
+      // Soften the slice ends to the same 3px the bar chart uses; a square end next to the rounded dots elsewhere
+      // was the last hard corner in the charts.
+      borderRadius: 3,
       spacing: 1,
       hoverOffset: 0,
     },
@@ -73,12 +74,14 @@ const options = computed<ChartOptions<"doughnut">>(() => ({
   ...chartBase,
   cutout: "62%",
   plugins: {
-    legend: { ...legendStyle(theme.value), position: "bottom" as const, display: !isMobile.value },
+    // Seven entries squeezed into the fixed frame shrank the doughnut, so the chart never draws its own legend; the
+    // tooltip names each slice and, on a phone, the list below carries colour, label and share.
+    legend: { display: false },
     tooltip: {
       ...defaultTooltipOptions(theme.value),
       callbacks: {
         label: (ctx) => {
-          const v = typeof ctx.parsed === "number" ? ctx.parsed : 0;
+          const v = ctx.parsed;
           return `${ctx.label}: ${formatShortNumber(v, t("notAvailable"))} (${percentOf(v)})`;
         },
       },
@@ -95,11 +98,11 @@ const caption = computed(() =>
 
 <template>
   <Card class="h-full">
-    <CardContent class="flex flex-col h-full">
+    <CardContent class="flex h-full flex-col">
       <CardHeader :title="t('openSourceTrendingStats')" :subtitle="t('huggingFaceSource')" />
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 flex-1 min-w-0">
-        <div class="flex flex-col min-w-0">
-          <p class="ui-caption mb-2">{{ t("opensourceTaskShare") }}</p>
+      <div class="grid min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+        <div class="flex min-w-0 flex-col">
+          <p class="mb-2 ui-caption font-medium">{{ t("opensourceTaskShare") }}</p>
           <EmptyState
             v-if="slices.length === 0"
             variant="plain"
@@ -116,18 +119,17 @@ const caption = computed(() =>
             />
             <figcaption class="sr-only">{{ caption }}</figcaption>
           </ChartFrame>
-          <!-- A 7-slice Chart.js legend inside the same fixed frame left the doughnut about 80px across. On a phone the
-               list below carries the same colour, label and share in two readable columns. -->
+          <!-- The mobile stand-in for the suppressed chart legend: same colour, label and share in two readable columns. -->
           <ul v-if="isMobile && slices.length > 0" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
-            <li v-for="(slice, i) in slices" :key="slice.key" class="flex items-center gap-1.5 min-w-0">
+            <li v-for="(slice, i) in slices" :key="slice.key" class="flex min-w-0 items-center gap-1.5">
               <Dot size="sm" :color="sliceColors[i]" />
-              <span class="ui-caption truncate">{{ sliceLabel(slice) }}</span>
-              <span class="ui-meta ml-auto shrink-0 tabular-nums">{{ percentOf(slice.total) }}</span>
+              <span class="truncate ui-caption" v-tooltip="sliceLabel(slice)">{{ sliceLabel(slice) }}</span>
+              <span class="ml-auto shrink-0 ui-meta tabular-nums">{{ percentOf(slice.total) }}</span>
             </li>
           </ul>
         </div>
-        <div class="flex flex-col min-w-0">
-          <p class="ui-caption mb-2">{{ t("downloads") }}</p>
+        <div class="flex min-w-0 flex-col">
+          <p class="mb-2 ui-caption font-medium">{{ t("downloads") }}</p>
           <EmptyState v-if="trending.length === 0" variant="plain" compact :message="t('notAvailable')" />
           <RankedListRows v-else :rows="trending" />
         </div>

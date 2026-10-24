@@ -18,7 +18,9 @@ export function useClientTab<T extends string>(
     const next = new URLSearchParams(searchParams.value);
     if (next.get(paramKey) === tabId) return;
     next.set(paramKey, tabId);
-    navigate(`${pathname.value}?${next.toString()}`, true);
+    // A push, not a replace: the tabs and sub-views are places a reader moves between, so Back has to return to the one
+    // they left. Replacing kept every switch out of history, and Back left the page instead of the tab.
+    navigate(`${pathname.value}?${next.toString()}`);
   }
   return [activeTab, setTab];
 }

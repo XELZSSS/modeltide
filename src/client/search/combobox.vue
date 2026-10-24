@@ -30,12 +30,12 @@ const {
   onClear,
 } = props.controller;
 
-const classes = computed(() => cn("relative w-full sm:w-72 min-w-0 max-w-full", props.class));
+const classes = computed(() => cn("relative w-full max-w-full min-w-0 sm:w-72", props.class));
 
 const clearClasses = computed(() =>
   cn(
-    "shrink-0 p-1 hoverable:hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-    !inputValue.value && "invisible pointer-events-none",
+    "shrink-0 rounded-md p-1 text-text-secondary ui-motion focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary",
+    !inputValue.value && "pointer-events-none invisible",
   ),
 );
 
@@ -48,10 +48,10 @@ const panelStyle = ref<Record<string, string>>({});
 let fitFrame = 0;
 
 /**
- * The panel is clipped by the scrolling `<main>`, and on small screens the fixed bottom bar covers the same area,
- * so a long result list used to be cut off by the scrollport or painted over the bar. Capping the height to the room
- * that is actually left keeps the whole list reachable. The panel also sits at `z-20`: above page content (the
- * table's sticky column is `z-10`), below the nav bars (`z-30`) and the modal layer (`z-40`/`z-50`).
+ * The panel is clipped by the scrolling `<main>`, and on small screens the fixed bottom bar covers the same area, so a
+ * long result list would be cut off or painted over. Capping the height to the room actually left keeps the whole list
+ * reachable. The panel sits at `z-20`: above page content (the table's sticky column is `z-10`), below the nav bars
+ * (`z-30`) and the modal layer (`z-40`/`z-50`).
  */
 function fitPanel(): void {
   const input = inputRef.value;
@@ -60,8 +60,9 @@ function fitPanel(): void {
     input.closest("main")?.getBoundingClientRect().bottom ?? window.innerHeight,
     window.innerHeight,
   );
-  const barHeight = document.querySelector<HTMLElement>("[data-bottom-nav]")?.offsetHeight ?? 0;
-  const room = clipBottom - barHeight - input.getBoundingClientRect().bottom - PANEL_GAP_PX - PANEL_EDGE_PX;
+  // `clipBottom` is the scrollport's bottom edge, and the bottom bar is a row of that layout rather than an overlay, so
+  // the space below the input is already net of the bar; subtracting it again cost the panel 64px of height.
+  const room = clipBottom - input.getBoundingClientRect().bottom - PANEL_GAP_PX - PANEL_EDGE_PX;
   const height = Math.max(PANEL_MIN_PX, Math.min(PANEL_MAX_PX, Math.round(room)));
   panelStyle.value = { maxHeight: `${height}px` };
 }
@@ -116,9 +117,9 @@ function setListEl(el: unknown): void {
   <div :ref="setContainerEl" :class="classes">
     <label :for="inputId" class="sr-only">{{ t("searchPlaceholder") }}</label>
     <div
-      class="flex h-9 items-center gap-2 min-w-0 max-w-full ui-card px-3 ui-motion focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-ring/30"
+      class="flex h-9 max-w-full ui-card min-w-0 items-center gap-2 px-3 ui-motion focus-within:border-ring focus-within:ring-2 focus-within:ring-ring"
     >
-      <Search :size="16" class="text-text-secondary shrink-0" aria-hidden="true" />
+      <Search :size="16" class="shrink-0 text-text-secondary" aria-hidden="true" />
       <Input
         ref="inputInstance"
         :id="inputId"
@@ -132,7 +133,7 @@ function setListEl(el: unknown): void {
         :aria-describedby="statusId"
         autocomplete="off"
         :placeholder="t('searchPlaceholder')"
-        class="flex-1 border-0 bg-transparent px-0 h-full focus:border-transparent focus:ring-0"
+        class="h-full flex-1 rounded-none border-0 bg-transparent px-0 focus:border-transparent focus-visible:bg-transparent focus-visible:ring-0 hoverable:hover:bg-transparent"
         @update:model-value="onChange"
         @focus="onFocus"
         @blur="onBlur"
@@ -155,7 +156,7 @@ function setListEl(el: unknown): void {
     <Transition name="ui-pop">
       <div
         v-if="isOpen && canSearch"
-        class="absolute top-full left-0 right-0 sm:left-auto sm:right-0 sm:w-72 sm:max-w-[calc(100vw-2rem)] mt-1.5 max-h-[28rem] overflow-y-auto overscroll-contain no-scrollbar ui-overlay z-20"
+        class="absolute top-full right-0 left-0 z-20 mt-1.5 no-scrollbar max-h-[28rem] ui-overlay overflow-y-auto overscroll-contain sm:right-0 sm:left-auto sm:w-72 sm:max-w-[calc(100vw-2rem)]"
         :style="panelStyle"
       >
         <div class="p-1.5">

@@ -8,27 +8,40 @@ import {
   rightCol,
   RightAlignedText,
   type DataTableColumn,
+  type NameCellExtras,
 } from "@/client/components/table/table-columns.ts";
 import CompareModelCell from "./compare-model-cell.vue";
-import { computeBlendPrice } from "@/shared/utils";
+import type { CostEstimate } from "@/shared/utils/cost";
 import { modelId } from "@/shared/utils/models";
 import { resolveEffectivePricing, PRICE_LEGS, type EffectivePricing, type PriceLegPick } from "@/shared/utils/pricing";
 
 export interface PricingRow {
   model: ArtificialAnalysisModel;
-  monthlyCost: number | null;
+  /** The same object the monthly and blended columns read, so the two figures cannot diverge. */
+  estimate: CostEstimate | null;
 }
 
 export function buildPricingColumns(
   t: TFunction,
   effectiveMap: Map<string, EffectivePricing>,
+  extras?: NameCellExtras<ArtificialAnalysisModel>,
 ): DataTableColumn<PricingRow>[] {
   const getEff = (model: ArtificialAnalysisModel): EffectivePricing =>
     effectiveMap.get(modelId(model)) ?? resolveEffectivePricing(model.pricing);
   const pricingLegCol = (id: string, header: string, getLeg: PriceLegPick) =>
     rightCol(id, header, (row: PricingRow) => formatDollar(getLeg(getEff(row.model)), t));
   return [
-    col("model", t("model"), (row) => h(CompareModelCell, { model: row.model }), { width: "35%" }),
+    col(
+      "model",
+      t("model"),
+      (row) =>
+        h(CompareModelCell, {
+          model: row.model,
+          rank: extras?.rankOf?.(row.model) ?? null,
+          href: extras?.hrefOf?.(row.model),
+        }),
+      { width: "35%" },
+    ),
     rightCol("provider", t("provider"), (row) =>
       h(RightAlignedText, null, () => orNA(row.model.model_creators?.name, t)),
     ),
@@ -37,8 +50,10 @@ export function buildPricingColumns(
     pricingLegCol("cacheHitPrice", t("cacheHitPrice"), PRICE_LEGS.cacheHitPrice),
     pricingLegCol("cacheWritePrice", t("cacheWritePrice"), PRICE_LEGS.cacheWritePrice),
     rightCol("blendedPrice", t("blendedPrice"), (row: PricingRow) =>
-      formatDollar(computeBlendPrice(getEff(row.model)), t),
+      formatDollar(row.estimate?.blendedPrice ?? null, t),
     ),
-    mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.monthlyCost, t), { hiddenMd: true }),
+    mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.estimate?.monthlyCost ?? null, t), {
+      hiddenMd: true,
+    }),
   ];
 }

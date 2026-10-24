@@ -1,9 +1,15 @@
 <script setup lang="ts">
+/**
+ * Catches render and async errors from everything below it, reports them once, and offers a retry that remounts the
+ * subtree through the `Suspense` key. Retrying is blocked while the browser reports itself offline, because the retry
+ * could only fail again and the notice already says why.
+ */
 import { onErrorCaptured, onMounted, onUnmounted, ref } from "vue";
 import { TriangleAlert } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import Button from "@/client/components/ui/button.vue";
+import { reportClientError } from "@/client/monitoring";
 import PageContainer from "@/client/components/layout/page-container.vue";
 
 const props = defineProps<{ reset?: () => void }>();
@@ -29,7 +35,7 @@ onUnmounted(() => {
 });
 
 onErrorCaptured((err: unknown) => {
-  console.error("[ErrorBoundary]", err);
+  reportClientError("ErrorBoundary", err);
   error.value = err instanceof Error ? err : new Error(String(err));
   return false;
 });

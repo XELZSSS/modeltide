@@ -1,4 +1,46 @@
+/*
+ * Design tokens — the palette, plus the Tailwind namespace mapping that exposes it.
+ *
+ * shadcn/ui's "new-york" zinc theme: a monochrome primary, a muted surface for controls, hairline borders and one
+ * accent ramp reserved for data. Every value is a hex literal so it can be shared verbatim with
+ * src/shared/config/ui.ts.
+ *
+ *   1. `@theme inline` publishes Tailwind names for the properties declared in 2 and 3. `inline` keeps the
+ *      *reference* rather than the resolved value, which is what lets `.dark` re-point the same property instead
+ *      of every utility needing a dark twin.
+ *   2. `:root` — the light palette.
+ *   3. `.dark` — the dark palette, same names in the same order, so a diff between the two blocks lists every
+ *      themed value and nothing else.
+ *   4. `html:lang(zh)` — the two typographic tokens the Chinese typography needs.
+ *
+ * Colours only ever enter the UI through this file. build/consistency-guard.ts pins `--bg-primary`, the
+ * `--chart-*` / `--donut-*` scales and both font stacks to src/shared/config/{ui,typography}.ts, so changing a
+ * value here without changing that constant fails the build.
+ *
+ * Two naming generations coexist on purpose: the app's own roles (`bg-bg-card`, `text-text-secondary`, `accent`,
+ * `hover`, `selected`) and the shadcn names (`bg-card`, `bg-muted`, `text-muted-foreground`, `bg-surface-hover`)
+ * new components read, so a copied recipe keeps its meaning. `primary` and `accent` are the same value; shadcn's
+ * `accent` (a subtle hover surface) is called `surface-hover` here to keep the two apart.
+ */
+
 @theme inline {
+  /* shadcn-compatible semantics */
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+  --color-card: var(--bg-card);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--bg-overlay);
+  --color-popover-foreground: var(--text-primary);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-contrast);
+  --color-secondary: var(--bg-secondary);
+  --color-secondary-foreground: var(--text-primary);
+  --color-muted: var(--bg-secondary);
+  --color-muted-foreground: var(--text-secondary);
+  --color-surface-hover: var(--hover);
+  --color-input: var(--border);
+
+  /* Surfaces and text */
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
   --color-bg-card: var(--bg-card);
@@ -6,12 +48,16 @@
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
   --color-border: var(--border);
+
+  /* Interaction */
   --color-hover: var(--hover);
   --color-selected: var(--selected);
   --color-accent: var(--accent);
   --color-accent-light: var(--accent-light);
   --color-accent-contrast: var(--accent-contrast);
   --color-ring: var(--ring);
+
+  /* Status */
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-success-light: var(--success-light);
@@ -20,100 +66,165 @@
   --color-info: var(--info);
   --color-info-light: var(--info-light);
 
-  --tracking-text: 0.01em;
-  --tracking-label: 0.025em;
-  --tracking-caps: 0.14em;
-  --tracking-title: -0.01em;
-  --tracking-display: -0.02em;
-  --leading-text: 1.6;
+  /* Radii: one base value, the four steps the components use */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
+  /* Type scale: tracking and leading are tokens too, so the `tracking-*` utilities never carry a literal. Only the steps
+     something actually uses are declared — the wide "caps" step and the label step died with the uppercase table headers. */
+  --tracking-text: 0.01em;
+  --tracking-title: -0.02em;
+  --tracking-display: -0.025em;
+  --leading-text: 1.6;
+  /* Page titles get their own leading: 1.15 keeps a 30px Latin title tight, while CJK needs the room (see the
+     `html:lang(zh)` block at the bottom, which raises this and flattens the negative tracking). */
+  --leading-title: 1.15;
+
+  /* Stacks are pinned by the consistency guard: the same strings appear in src/shared/config/typography.ts. */
   --font-sans:
-    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Symbol", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    "IBM Plex Sans", "Plex Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", "Segoe UI Symbol", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
     sans-serif;
   --font-mono:
-    "IBM Plex Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Segoe UI Symbol",
-    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", monospace;
+    "IBM Plex Mono", ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Segoe UI Symbol", monospace;
 }
 
 :root {
   color-scheme: light;
-  --bg-primary: #fafbfc;
-  --bg-secondary: #f1f4f7;
+
+  /*
+   * One radius scale, three steps, nothing off-scale:
+   *   `rounded-xl`  14px — surfaces: `ui-card`, `ui-overlay`, and the filled input (a field, not a button)
+   *   `rounded-lg`  10px — strips and inline notices: the segmented-control track, `notice.vue`, the mobile icon pill
+   *   `rounded-md`   8px — controls: buttons, badges, tab triggers, icon buttons, the skip link
+   * A bordered or filled block *inside* a rounded surface is not rounded itself: it is a section of that surface (a
+   * table's expanded row, a sheet's list), and the surface's `overflow` clips it to its own corners.
+   */
+  --radius: 0.625rem;
+
+  /* Surfaces */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f4f5;
   --bg-card: #ffffff;
   --bg-overlay: #ffffff;
-  --text-primary: #1e2430;
-  --text-secondary: #5b6675;
-  --text-tertiary: #8b96a5;
-  --border: rgba(30, 36, 48, 0.14);
-  --accent: #36577d;
-  --accent-light: color-mix(in srgb, var(--accent) 10%, transparent);
-  --accent-contrast: #ffffff;
-  --hover: color-mix(in srgb, var(--accent) 7%, transparent);
-  --selected: color-mix(in srgb, var(--accent) 12%, transparent);
-  --ring: var(--accent);
-  --destructive: #c03a30;
-  --success: #2f7a4d;
-  --success-light: color-mix(in srgb, var(--success) 10%, transparent);
-  --warning: #9a6b0a;
-  --warning-light: color-mix(in srgb, var(--warning) 10%, transparent);
-  --info: #2f6d8a;
-  --info-light: color-mix(in srgb, var(--info) 10%, transparent);
-  --chart-1: #36577d;
-  --chart-2: #1e2430;
-  --chart-3: #5b6675;
-  --chart-4: #9aa5b4;
-  --chart-5: #2f7a4d;
-  --chart-6: #2f6d8a;
-  --chart-7: #9a6b0a;
-  --chart-8: #c03a30;
-  --chart-9: #6d85a2;
-  --chart-10: #c3ccd6;
-  --donut-1: #36577d;
-  --donut-2: #1e2430;
-  --donut-3: #2f6d8a;
-  --donut-4: #2f7a4d;
-  --donut-5: #9a6b0a;
-  --donut-6: #9aa5b4;
+
+  /* Text */
+  --text-primary: #09090b;
+  --text-secondary: #71717b;
+  --text-tertiary: #9f9fa9;
+
+  /* Lines and interaction: the accent *is* the primary colour, so a filled button is monochrome and the brand colour
+     only ever shows up in data. */
+  --border: #e4e4e7;
+  --accent: #18181b;
+  --accent-light: color-mix(in srgb, var(--accent) 8%, transparent);
+  --accent-contrast: #fafafa;
+  --hover: color-mix(in srgb, var(--accent) 6%, transparent);
+  --selected: color-mix(in srgb, var(--accent) 9%, transparent);
+  /*
+   * The focus ring is drawn opaque, never through an alpha multiplier: a focus indicator has to clear 3:1 against the
+   * surface it sits on, and the previous #9f9fa9 at 15–50% measured 1.4–1.9:1. At full strength this value is 7.7:1 on
+   * the card and 7.3:1 on muted, so a 2–3px ring is unmistakable without turning into a black outline.
+   */
+  --ring: #52525b;
+
+  /*
+   * Status colours are text colours first: `text-success` / `text-warning` / `text-info` / `text-destructive` label 12px
+   * metadata, so each value clears 4.5:1 on the card *and* on its own 8% tint (10% pushed amber under the floor). The
+   * dark block keeps the lighter 400 step for the same reason — 6:1 and up on the dark card.
+   */
+  /* Status */
+  --destructive: #c81e1e;
+  --success: #047857;
+  --success-light: color-mix(in srgb, var(--success) 8%, transparent);
+  --warning: #ab4e08;
+  --warning-light: color-mix(in srgb, var(--warning) 8%, transparent);
+  --info: #0369a1;
+  --info-light: color-mix(in srgb, var(--info) 8%, transparent);
+
+  /* Data viz: the categorical scale canvas charts read (see src/client/charts/theme.ts), then the shorter donut ramp. */
+  --chart-1: #f54900;
+  --chart-2: #009689;
+  --chart-3: #104e64;
+  --chart-4: #b45309;
+  --chart-5: #0e7490;
+  --chart-6: #ad46ff;
+  --chart-7: #ff2056;
+  --chart-8: #059669;
+  --chart-9: #1447e6;
+  --chart-10: #71717b;
+
+  --donut-1: #f54900;
+  --donut-2: #009689;
+  --donut-3: #104e64;
+  --donut-4: #b45309;
+  --donut-5: #ad46ff;
+  --donut-6: #71717b;
 }
 
 .dark {
   color-scheme: dark;
-  --bg-primary: #1a1a1a;
-  --bg-secondary: #2d2d2d;
-  --bg-card: #232323;
-  --bg-overlay: #2d2d2d;
-  --text-primary: #e8edf3;
-  --text-secondary: #9aa5b4;
-  --text-tertiary: #6e7887;
-  --border: rgba(232, 237, 243, 0.16);
-  --accent: #8faed1;
-  --accent-light: color-mix(in srgb, var(--accent) 12%, transparent);
-  --accent-contrast: #1a1a1a;
-  --hover: color-mix(in srgb, var(--accent) 9%, transparent);
+
+  --bg-primary: #09090b;
+  --bg-secondary: #27272a;
+  --bg-card: #18181b;
+  --bg-overlay: #18181b;
+
+  --text-primary: #fafafa;
+  --text-secondary: #9f9fa9;
+  --text-tertiary: #71717b;
+
+  --border: color-mix(in srgb, #fafafa 10%, transparent);
+  --accent: #e4e4e7;
+  --accent-light: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-contrast: #18181b;
+  --hover: color-mix(in srgb, var(--accent) 10%, transparent);
   --selected: color-mix(in srgb, var(--accent) 14%, transparent);
-  --ring: var(--accent);
-  --destructive: #dd6f66;
-  --success: #6fae7e;
+  --ring: #a1a1aa;
+
+  --destructive: #ff6467;
+  --success: #34d399;
   --success-light: color-mix(in srgb, var(--success) 14%, transparent);
-  --warning: #d3a24a;
+  --warning: #fbbf24;
   --warning-light: color-mix(in srgb, var(--warning) 14%, transparent);
-  --info: #6aa5c2;
+  --info: #38bdf8;
   --info-light: color-mix(in srgb, var(--info) 14%, transparent);
-  --chart-1: #8faed1;
-  --chart-2: #e8edf3;
-  --chart-3: #9aa5b4;
-  --chart-4: #6e7887;
-  --chart-5: #6fae7e;
-  --chart-6: #6aa5c2;
-  --chart-7: #d3a24a;
-  --chart-8: #dd6f66;
-  --chart-9: #8f9cbd;
-  --chart-10: #4a5462;
-  --donut-1: #8faed1;
-  --donut-2: #e8edf3;
-  --donut-3: #6aa5c2;
-  --donut-4: #6fae7e;
-  --donut-5: #d3a24a;
-  --donut-6: #6e7887;
+
+  --chart-1: #38bdf8;
+  --chart-2: #00bc7d;
+  --chart-3: #fe9a00;
+  --chart-4: #ad46ff;
+  --chart-5: #ff2056;
+  --chart-6: #fc6c2f;
+  --chart-7: #26bdae;
+  --chart-8: #5caaca;
+  --chart-9: #e7ad00;
+  --chart-10: #acacba;
+
+  --donut-1: #38bdf8;
+  --donut-2: #00bc7d;
+  --donut-3: #fe9a00;
+  --donut-4: #fc6c2f;
+  --donut-5: #ad46ff;
+  --donut-6: #acacba;
+}
+
+/*
+ * Chinese sets wider glyphs with no ascender/descender separation to compensate for, so the tracking that helps Latin
+ * text at 14px only makes CJK feel loose, and the leading has to grow instead. The negative *display* tracking has the
+ * opposite problem: CJK glyphs already sit almost edge to edge, so -0.025em closes the gaps until strokes touch. Both
+ * therefore flatten here — the body tracking goes to zero, the title/display tracking to a hair of negative rather than
+ * the Latin value.
+ */
+html:lang(zh) {
+  --tracking-text: 0em;
+  --tracking-title: 0em;
+  --tracking-display: -0.01em;
+  --leading-text: 1.7;
+  /* A CJK title at 1.15 sets its glyph boxes nearly edge to edge once it wraps; 1.32 restores the gap the Latin value
+     was tuned to remove. */
+  --leading-title: 1.32;
 }

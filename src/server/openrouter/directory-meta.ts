@@ -1,7 +1,7 @@
 import { numCoerce, obj } from "@/server/formats/scalars";
 import { isoDateOnly } from "@/server/formats/dates";
 import { normalizeModelKey, toStringOrNull } from "@/shared/utils";
-import type { ModelMetaEntry, PricingRow } from "@/server/formats/wire-types";
+import type { ModelMetaEntry } from "@/server/formats/wire-types";
 
 function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
   return {
@@ -19,7 +19,7 @@ function isoExpiry(raw: unknown): string | null {
 }
 
 /** Reads the AA benchmark block and expiry date off one directory row and files it under every model key. */
-export function recordMeta(meta: Record<string, ModelMetaEntry>, raw: PricingRow): void {
+export function recordMeta(meta: Record<string, ModelMetaEntry>, raw: Record<string, unknown>): void {
   const benchmarks = obj(raw.benchmarks);
   const aaBenchmarks = obj(benchmarks?.artificial_analysis);
   const intelligenceIndex = numCoerce(aaBenchmarks?.intelligence_index);
@@ -34,12 +34,16 @@ export function recordMeta(meta: Record<string, ModelMetaEntry>, raw: PricingRow
   if (codingIndex != null) metaEntry.codingIndex = codingIndex;
   if (expiresAt != null) metaEntry.expiresAt = expiresAt;
 
+  // Both forms, exactly as `recordPricing` files its keys. The normalized key alone collapses every variant of every
+  // model onto the bare suffix (`normalizeModelKey("openai/gpt-4o:free")` is `"free"`), so one row's expiry date and
+  // index values would be filed under every `:free` row in the directory and `resolveExpiry` would retire them all.
   const keys = new Set<string>();
   for (const value of [raw.name, raw.id, raw.canonical_slug]) {
-    if (typeof value === "string") {
-      const key = normalizeModelKey(value);
-      if (key) keys.add(key);
-    }
+    if (typeof value !== "string") continue;
+    const lower = value.toLowerCase();
+    if (lower) keys.add(lower);
+    const normalized = normalizeModelKey(value);
+    if (normalized) keys.add(normalized);
   }
   for (const key of keys) {
     const cur = meta[key];

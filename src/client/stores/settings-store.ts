@@ -12,35 +12,31 @@ interface PersistedSettings {
 }
 
 function isThemeMode(value: unknown): value is ThemeMode {
-  return value === "dark" || value === "light";
+  return value === "system" || value === "dark" || value === "light";
 }
 
 function isLang(value: unknown): value is Lang {
   return value === "zh" || value === "en";
 }
 
-function initialThemeMode(): ThemeMode {
-  try {
-    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-  } catch {}
-  return "light";
-}
+/**
+ * Nothing persisted means "follow the OS" — the same preference `index.html` resolves for its first paint. It is a mode
+ * and not a snapshot: `app-shell` re-resolves it every time the OS preference changes.
+ */
+const DEFAULT_THEME_MODE: ThemeMode = "system";
 
+/**
+ * The browser's own language, read only when nothing is persisted. Anything that is not an English tag gets the
+ * Chinese copy, which is what `index.html` does too.
+ */
 function initialLang(): Lang {
-  try {
-    const navLang = typeof navigator !== "undefined" ? (navigator.language ?? "") : "";
-    return navLang.toLowerCase().startsWith("en") ? "en" : "zh";
-  } catch {
-    return "zh";
-  }
+  return navigator.language.toLowerCase().startsWith("en") ? "en" : "zh";
 }
 
 function readSettings(): { themeMode: ThemeMode; lang: Lang } {
   const stored = loadPersistedState<PersistedSettings>("local", STORAGE_KEYS.settings, VERSION);
   return {
-    themeMode: isThemeMode(stored.themeMode) ? stored.themeMode : initialThemeMode(),
+    themeMode: isThemeMode(stored.themeMode) ? stored.themeMode : DEFAULT_THEME_MODE,
     lang: isLang(stored.lang) ? stored.lang : initialLang(),
   };
 }

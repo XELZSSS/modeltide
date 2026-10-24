@@ -17,6 +17,7 @@ function sourceOf(entries: readonly OpenSourceModelEntry[]) {
       name: model.id,
       source: "openSourceRankings",
       score: null,
+      scoreLabel: null,
       provider: model.author,
       link: detailLink("openSourceRankings", model.id),
     }),
@@ -25,7 +26,7 @@ function sourceOf(entries: readonly OpenSourceModelEntry[]) {
 
 function hit(name: string, source: SearchResult["source"], match: number, score: number | null = null) {
   return {
-    result: { id: name.toLowerCase(), name, source, score, provider: null, link: `/model/${name}` },
+    result: { id: name.toLowerCase(), name, source, score, scoreLabel: null, provider: null, link: `/model/${name}` },
     match,
   };
 }

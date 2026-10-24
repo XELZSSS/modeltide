@@ -53,6 +53,8 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
     task: toStringOrNull(model.pipeline_tag),
     createdAt: isoDate(model.createdAt),
     lastModified: isoDate(model.lastModified),
+    // Tags belong to the detail payload only. A ranking row is one of up to 1000 and tags are the largest field on it,
+    // so `mapListModel` leaves them out; the expanded row renders the facts the row actually carries.
     tags: includeTags ? tags.slice(0, 100) : [],
   };
   return entry;

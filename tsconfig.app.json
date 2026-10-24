@@ -1,4 +1,8 @@
 {
+  // `.vue` files are only understood by vue-tsc (TypeScript itself has no SFC support), which is why `npm run type-check`
+  // runs `vue-tsc -p tsconfig.app.json` for this project. Running bare `tsc` against it reports TS2307 for every `.vue`
+  // import — that is expected, not a broken config, and it is also why the `*.vue` module shim was removed: it hid the
+  // real component types from the checker.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -6,6 +10,7 @@
   },
   "include": [
     "src/client/**/*.ts",
+    "src/client/**/*.vue",
     "src/shared/**/*.ts",
     "src/test/**/*.ts",
     "build/**/*.ts",

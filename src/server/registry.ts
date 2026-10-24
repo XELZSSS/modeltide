@@ -1,26 +1,15 @@
 import type { ApiRouteDef } from "./api/router";
-import { cacheHeadersForTtl } from "./api/headers";
+import { type CacheDurations, cacheDurationsForTtl, SHORTEST_CACHE_DURATIONS } from "./api/headers";
 import { qEnum, qStr, type QuerySchema } from "./api/validation";
 import type { ApiDomain } from "@/shared/contract";
-import {
-  apiPaths,
-  FIVE_MINUTES,
-  MAX_MODEL_ID_CHARS,
-  NEWS_CATEGORIES,
-  NEWS_TTL_MS,
-  OPEN_SOURCE_MODELS_DEFAULTS,
-  ONE_HOUR,
-  SLOW_TTL_MS,
-  STATIC_TTL_MS,
-} from "@/shared/config";
+import { apiPaths, MAX_MODEL_ID_CHARS, NEWS_CATEGORIES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
 import { OPEN_SOURCE_SORTS } from "@/shared/query-schemas";
-import { getIntelligenceIndex } from "./aa";
-
-import { getClosedReleases } from "./releases/source";
-import { getHomeDashboard } from "./home/source";
-import { getNews } from "./news/source";
-import { getOpenSourceModels } from "./huggingface/source";
-import { getOpenRouterRankings } from "./openrouter/rankings";
+import { ARTIFICIAL_INDEX_TTL_MS, getIntelligenceIndex } from "./aa";
+import { CLOSED_RELEASES_TTL_MS, getClosedReleases } from "./releases/source";
+import { getHomeDashboard, HOME_DASHBOARD_TTL_MS } from "./home/source";
+import { getNews, NEWS_CATEGORY_TTL_MS } from "./news/source";
+import { getOpenSourceModels, OPEN_SOURCE_MODELS_TTL_MS } from "./huggingface/source";
+import { getOpenRouterRankings, OPENROUTER_RANKINGS_TTL_MS } from "./openrouter/rankings";
 
 interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends ApiRouteDef<D, Q> {
   readonly domain: D;
@@ -34,18 +23,22 @@ function defineRoute<D extends ApiDomain, Q extends QuerySchema = QuerySchema>(
   return { domain, path: apiPaths[domain], ...def };
 }
 
+// The Hugging Face by-id lookup answers a miss with 200 + an empty list and keeps that answer at the source for one minute
+// (see `partialWhen` in src/server/huggingface/source.ts), so the route hands such a payload the API's shortest windows —
+// and takes them without `staleIfErrorS`, which would otherwise let the edge serve "not found" for a day.
+const EMPTY_LIST_DURATIONS: CacheDurations = SHORTEST_CACHE_DURATIONS;
 const ENTRIES = {
   artificialIndex: defineRoute("artificialIndex", {
-    cache: cacheHeadersForTtl(ONE_HOUR),
+    cache: cacheDurationsForTtl(ARTIFICIAL_INDEX_TTL_MS),
     handler: getIntelligenceIndex,
   }),
   homeDashboard: defineRoute("homeDashboard", {
-    cache: cacheHeadersForTtl(FIVE_MINUTES),
+    cache: cacheDurationsForTtl(HOME_DASHBOARD_TTL_MS),
     handler: getHomeDashboard,
   }),
   news: defineRoute("news", {
     query: { category: qEnum(NEWS_CATEGORIES) },
-    cache: cacheHeadersForTtl(NEWS_TTL_MS),
+    cache: cacheDurationsForTtl(NEWS_CATEGORY_TTL_MS),
     handler: getNews,
   }),
 
@@ -54,15 +47,18 @@ const ENTRIES = {
       sort: qEnum(OPEN_SOURCE_SORTS, OPEN_SOURCE_MODELS_DEFAULTS.sort),
       id: qStr({ maxLength: MAX_MODEL_ID_CHARS, optional: true }),
     },
-    cache: cacheHeadersForTtl(SLOW_TTL_MS),
+    cache: cacheDurationsForTtl(OPEN_SOURCE_MODELS_TTL_MS),
+    // `getOpenSourceModels` answers 200 + an empty list for an id that does not exist; that miss is only kept for a
+    // minute, so it must not inherit the list TTL.
+    cacheFor: (payload) => (payload.data.length === 0 ? EMPTY_LIST_DURATIONS : undefined),
     handler: getOpenSourceModels,
   }),
   closedReleases: defineRoute("closedReleases", {
-    cache: cacheHeadersForTtl(STATIC_TTL_MS),
+    cache: cacheDurationsForTtl(CLOSED_RELEASES_TTL_MS),
     handler: getClosedReleases,
   }),
   openRouterRankings: defineRoute("openRouterRankings", {
-    cache: cacheHeadersForTtl(ONE_HOUR),
+    cache: cacheDurationsForTtl(OPENROUTER_RANKINGS_TTL_MS),
     handler: getOpenRouterRankings,
   }),
 } satisfies Record<ApiDomain, unknown>;

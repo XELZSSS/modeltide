@@ -12,6 +12,7 @@ import { DEFAULT_RANKING_TAB } from "@/client/nav/nav-config";
 import { loadableView, preloadChunk } from "./lazy-view";
 import { RANKING_TAB_LOADS, RANKING_TAB_QUERIES } from "@/client/pages/rankings/tab-loaders";
 import type { Prefetchable } from "./route-meta";
+import { PATHS } from "./paths";
 
 const loadHomeView = () => import("@/client/pages/home/home-view.vue");
 const loadRankingsHubView = () => {
@@ -34,11 +35,9 @@ const NewsView = loadableView(loadNewsView);
 
 const newsPrefetch: readonly Prefetchable[] = [qNewsByCategory(NEWS_CATEGORIES[0]!)];
 
-export { RANKING_TAB_QUERIES };
-
 export const ROUTES: RouteRecordRaw[] = [
   {
-    path: "/",
+    path: PATHS.home,
     name: "home",
     component: HomeView,
     meta: {
@@ -49,7 +48,7 @@ export const ROUTES: RouteRecordRaw[] = [
     },
   },
   {
-    path: "/models",
+    path: PATHS.rankings,
     name: "models",
     component: RankingsHubView,
     meta: {
@@ -60,24 +59,24 @@ export const ROUTES: RouteRecordRaw[] = [
         group: "primary",
         labelKey: "rankings",
         icon: Award,
-        activePrefixes: ["/model/", "/compare", "/price-compare"],
+        activePrefixes: [PATHS.modelDetailPrefix, PATHS.compare, PATHS.priceCompare],
       },
     },
   },
   {
-    path: "/compare",
+    path: PATHS.compare,
     name: "compare",
     component: CompareView,
     meta: { titleKey: "modelComparison", load: loadCompareView, prefetch: [qArtificialList] },
   },
   {
-    path: "/price-compare",
+    path: PATHS.priceCompare,
     name: "price",
     component: PriceCompareView,
     meta: { titleKey: "priceComparison", load: loadPriceCompareView, prefetch: [qArtificialList] },
   },
   {
-    path: "/releases",
+    path: PATHS.releases,
     name: "releases",
     component: ReleasesView,
     meta: {
@@ -88,7 +87,7 @@ export const ROUTES: RouteRecordRaw[] = [
     },
   },
   {
-    path: "/news",
+    path: PATHS.news,
     name: "news",
     component: NewsView,
     meta: {
@@ -99,7 +98,7 @@ export const ROUTES: RouteRecordRaw[] = [
     },
   },
   {
-    path: "/model/:id(.*)",
+    path: PATHS.modelDetail,
     name: "model",
     component: ModelDetailView,
     meta: { titleKey: "modelDetail", load: loadModelView, prefetch: [qArtificialList, qOpenRouterList] },

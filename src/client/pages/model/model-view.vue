@@ -42,6 +42,6 @@ useSoftNotFound(computed(() => !source.value || !decodedId.value));
     <AaDetailView v-else-if="source === 'aa'" :key="decodedId" :decoded-id="decodedId" />
     <OrDetailView v-else-if="source === 'or'" :key="decodedId" :decoded-id="decodedId" />
     <OpenSourceDetail v-else-if="source === 'os'" :key="decodedId" :decoded-id="decodedId" />
-    <HallucinationDetail v-else :key="decodedId" :decoded-id="decodedId" />
+    <HallucinationDetail v-else-if="source === 'hall'" :key="decodedId" :decoded-id="decodedId" />
   </SuspenseQuery>
 </template>

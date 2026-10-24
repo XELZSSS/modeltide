@@ -8,6 +8,6 @@ const state = await useSuspenseArtificialRankingsState();
 
 <template>
   <TabStateShell :state="state" domain="artificialIndex">
-    <ArtificialAnalysisView :rankings="state.items" />
+    <ArtificialAnalysisView :rankings="state.items" :partial="state.partial" />
   </TabStateShell>
 </template>

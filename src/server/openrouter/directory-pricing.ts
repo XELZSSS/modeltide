@@ -29,12 +29,15 @@ function buildPricingEntry(
 
 export function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
   const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
-  const cacheWriteRaw = pricing.input_cache_write ?? pricing.input_cache_write_1h;
+  // `-1` is the upstream's "not applicable" sentinel and `numCoerceNonNegative` is what drops it, so the fallback has
+  // to run after coercion: `??` alone kept `"-1"` and masked the hourly cache-write price behind a null.
+  const cacheWrite =
+    numCoerceNonNegative(pricing.input_cache_write) ?? numCoerceNonNegative(pricing.input_cache_write_1h);
   return buildPricingEntry(
     numCoerceNonNegative(pricing.prompt),
     numCoerceNonNegative(pricing.completion),
     numCoerceNonNegative(pricing.input_cache_read),
-    numCoerceNonNegative(cacheWriteRaw),
+    cacheWrite,
   );
 }
 

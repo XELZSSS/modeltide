@@ -11,9 +11,6 @@ export interface OpenRouterRankEntry {
   totalTokens: number;
   promptTokens: number;
   completionTokens: number;
-  reasoningTokens: number;
-  cachedTokens: number;
-  toolCalls: number;
   requestCount: number;
   change: number | null;
   pricing: ModelPricing | null;
@@ -34,10 +31,17 @@ export interface OpenSourceModelEntry {
 }
 
 export interface ClosedReleaseEntry {
+  /**
+   * The Artificial Analysis slug this release is identified by. Its *space* depends on which source produced the entry:
+   * the changelog path carries AA's **release** slug (`releaseSlug`), while the index fallback has no release slug and
+   * uses the **model** slug instead. Only one path ever runs for a given payload, and the two must not be assumed
+   * interchangeable — an id from one list will not look up in the other.
+   */
   id: string;
   model: string;
   provider: string;
   releaseDate: string;
+  /** The model page this release belongs to, or `null` when the source offered no usable model slug. */
   link: string | null;
 }
 

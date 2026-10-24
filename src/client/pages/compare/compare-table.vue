@@ -40,9 +40,10 @@ import { modelDisplayName } from "@/shared/utils/models";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { computeWinners, modelKeyOf, rowKey, type CompareRow } from "@/client/utils/compare-logic";
 import { RenderView } from "@/client/components/table/cell-view";
-import { ROW_PADDING_ULTRA_COMPACT } from "@/client/nav/layout";
+import { ROW_PADDING } from "@/client/nav/layout";
 
-const CELL = ROW_PADDING_ULTRA_COMPACT;
+// The metric matrix uses the same 40px row as the data tables, so a metric row and a ranking row read at one density.
+const CELL = ROW_PADDING;
 
 const props = defineProps<{
   title?: string;
@@ -75,12 +76,15 @@ function getWinner(
     <Card v-for="(model, index) in models" :key="modelKeyOf(model, index)">
       <CardContent compact class="flex flex-col gap-3">
         <p
-          class="flex items-center gap-2 text-sm font-medium truncate"
+          class="flex items-center gap-2 text-sm font-medium"
           :style="{ color: seriesColor(theme, index) }"
-          :title="modelDisplayName(model)"
+          v-tooltip="modelDisplayName(model)"
         >
           <Dot size="sm" :color="seriesColor(theme, index)" />
-          {{ modelDisplayName(model) }}
+          <!-- `truncate` has to sit on the text itself: on this flex row it applied to a box whose only child is an
+               anonymous flex item, where `text-overflow` never resolves, so a long name was cut mid-glyph with no
+               ellipsis. -->
+          <span class="min-w-0 truncate">{{ modelDisplayName(model) }}</span>
         </p>
         <div class="flex flex-col gap-2">
           <div v-for="row in rows" :key="rowKey(row)" class="flex items-center justify-between gap-3">
@@ -94,30 +98,20 @@ function getWinner(
   <Card v-else>
     <CardContent class="!p-0">
       <div v-if="title" class="px-4 pt-4"><CardHeader :title="title" class="mb-3" /></div>
-      <div class="min-w-0 w-full overflow-x-auto">
+      <div class="w-full min-w-0 overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-border">
-              <th
-                scope="col"
-                :class="
-                  cn(
-                    CELL,
-                    'text-xs font-medium text-text-tertiary',
-                    'text-left',
-                    'font-semibold text-text-secondary sticky left-0 z-10 bg-bg-card',
-                  )
-                "
-              >
+              <th scope="col" :class="cn(CELL, 'sticky left-0 z-10 bg-bg-card text-left ui-table-header')">
                 {{ t("metric") }}
               </th>
               <th
                 v-for="(model, index) in models"
                 :key="modelKeyOf(model, index)"
                 scope="col"
-                :class="cn(CELL, 'text-xs font-medium text-text-tertiary', 'text-right', 'font-semibold')"
+                :class="cn(CELL, 'text-right ui-table-header')"
                 :style="{ color: seriesColor(theme, index) }"
-                :title="modelDisplayName(model)"
+                v-tooltip="modelDisplayName(model)"
               >
                 {{ modelDisplayName(model) }}
               </th>
@@ -127,14 +121,7 @@ function getWinner(
             <tr v-for="row in rows" :key="rowKey(row)" class="border-b border-border last:border-b-0">
               <th
                 scope="row"
-                :class="
-                  cn(
-                    CELL,
-                    'text-xs font-medium text-text-tertiary',
-                    'text-left',
-                    'text-text-secondary sticky left-0 bg-bg-card z-10',
-                  )
-                "
+                :class="cn(CELL, 'sticky left-0 z-10 bg-bg-card text-left text-xs font-medium text-text-secondary')"
               >
                 {{ row.label }}
               </th>

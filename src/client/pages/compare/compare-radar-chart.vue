@@ -6,7 +6,8 @@ registerRadar();
 
 <script setup lang="ts">
 import { computed } from "vue";
-import type { ChartData, ChartOptions } from "chart.js";
+import { defaults } from "chart.js";
+import type { Chart, ChartData, ChartOptions } from "chart.js";
 import { useTranslation } from "@/client/i18n";
 import { useDevice } from "@/client/device";
 import { hexToRgba } from "@/shared/utils/color";
@@ -15,7 +16,6 @@ import {
   RADAR_CHART_HEIGHT,
   axisTickStyle,
   chartBase,
-  defaultTooltipOptions,
   legendStyle,
   seriesColor,
   useChartTheme,
@@ -49,16 +49,42 @@ const data = computed<ChartData<"radar">>(() => ({
       borderColor: color,
       backgroundColor: hexToRgba(color, 0.06),
       borderWidth: 2,
+      // Every vertex is a solid dot in the series colour, at rest and on hover. Inheriting the 6% `backgroundColor` wash
+      // left a near-transparent centre that antialiasing rendered as a hollow ring on some vertices and a dot on others.
+      pointStyle: "circle",
       pointRadius: 2,
+      pointBackgroundColor: color,
+      pointBorderColor: color,
       pointHoverRadius: 4,
+      pointHoverBackgroundColor: color,
+      pointHoverBorderColor: color,
     };
   }),
 }));
 
+const legend = computed(() => {
+  const style = legendStyle(theme.value);
+  return {
+    ...style,
+    labels: {
+      ...style.labels,
+      // The radar's dataset `backgroundColor` is the 6% area wash, so Chart.js's default marker fill still read as a
+      // ring here. The series' own line colour is what the legend names, so that is what fills the dot.
+      generateLabels: (chart: Chart) =>
+        defaults.plugins.legend.labels.generateLabels(chart).map((item) => ({
+          ...item,
+          fillStyle: item.strokeStyle,
+        })),
+    },
+  };
+});
+
 const options = computed<ChartOptions<"radar">>(() => ({
   ...chartBase,
   interaction: { mode: "index", intersect: false },
-  layout: { padding: isMobile.value ? 0 : 8 },
+  // 0 left the outermost label flush against the canvas: the polygon is as large as it can be, but a 12-character axis
+  // name ("Intelligence") is wider than that slack. 4px of layout padding costs 8px of radius and fits it.
+  layout: { padding: isMobile.value ? 4 : 8 },
   scales: {
     r: {
       min: 0,
@@ -70,12 +96,14 @@ const options = computed<ChartOptions<"radar">>(() => ({
       },
       grid: { color: theme.value.grid },
       angleLines: { color: theme.value.grid },
-      pointLabels: { color: theme.value.tickSecondary, font: { size: isMobile.value ? 10 : 11 }, padding: 2 },
+      // Chart.js draws point labels outside the polygon but does not reserve space for them, so a long axis name was
+      // clipped by the canvas edge — `padding` is both the gap to the vertex and the only lever that keeps it inside.
+      pointLabels: { color: theme.value.tickSecondary, font: { size: isMobile.value ? 10 : 11 }, padding: 4 },
     },
   },
   plugins: {
-    legend: legendStyle(theme.value),
-    tooltip: defaultTooltipOptions(theme.value),
+    legend: legend.value,
+    tooltip: { enabled: false },
   },
 }));
 
@@ -94,7 +122,7 @@ const caption = computed(() =>
 
 <template>
   <Card class="w-full">
-    <CardContent class="h-full flex items-center justify-center p-3 sm:p-6">
+    <CardContent class="flex h-full items-center justify-center p-3 sm:p-6">
       <ChartFrame :height="RADAR_CHART_HEIGHT">
         <ChartCanvas type="radar" :data="data" :options="options" role="img" :aria-label="t('modelComparison')" />
         <figcaption class="sr-only">{{ caption }}</figcaption>

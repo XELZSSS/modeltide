@@ -34,13 +34,15 @@ export function resetCacheStats(): void {
   Object.assign(cacheStats, ZERO_STATS);
 }
 
-export function noteCacheStat(key: keyof CacheStats, by = 1): void {
-  cacheStats[key] += by;
+// `by` is always one: every caller records a single event, so a delta parameter was a knob no caller ever turned.
+export function noteCacheStat(key: keyof CacheStats): void {
+  cacheStats[key] += 1;
 }
 
 /**
- * Emits one aggregate line per window and clears the counters, so the next window starts from zero. A window with no
- * cache activity logs nothing.
+ * Emits one aggregate line each time the 30-minute gate opens, then clears the counters. While the gate is closed the
+ * counters keep accumulating and nothing is logged, so a line covers at least one interval and the silent stretch in
+ * between is carried into the next one rather than dropped.
  */
 export function flushCacheStats(log: Logger): void {
   if (!statsLogGate.open()) return;

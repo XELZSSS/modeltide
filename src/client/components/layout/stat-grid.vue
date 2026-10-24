@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** A row of stat cards: fixed at two or four columns, two on a phone either way. */
 import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 

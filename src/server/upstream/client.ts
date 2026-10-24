@@ -1,4 +1,4 @@
-import { MAX_JSON_BYTES, USER_AGENT, upstreamUrl } from "./upstream";
+import { MAX_JSON_BYTES, MAX_RSC_BYTES, USER_AGENT, upstreamUrl } from "./upstream";
 import { FEED_FETCH_OPTS, UPSTREAM_FETCH_OPTS } from "./timeouts";
 import { ClientAbortError, UpstreamError, errMsg } from "@/server/api/errors";
 import { acquireSlot, createSlotPool, releaseSlot, type SlotPool } from "./pools";
@@ -13,30 +13,26 @@ const FETCH_POLICIES = {
   slowFeed: FEED_FETCH_OPTS,
 } as const;
 
-function fetchPolicy(name: FetchPolicyName): { timeoutMs: number; retries: number } {
+function fetchPolicy(name: FetchPolicyName): FetchPolicy {
   return { ...FETCH_POLICIES[name] };
 }
 
-type FetchOptions = Omit<RequestInit, "headers"> & {
-  timeoutMs?: number;
-  retries?: number;
-  headers?: Record<string, string>;
-};
+/** The two numbers a policy is made of. `doFetch` needs both; the public entry points default them. */
+interface FetchPolicy {
+  timeoutMs: number;
+  retries: number;
+}
+
+type FetchOptions = Omit<RequestInit, "headers"> &
+  FetchPolicy & {
+    headers?: Record<string, string>;
+  };
+
+/** What a caller may pass: the same shape, but either policy number can be left to the default or overridden. */
+type FetchOptionsInput = Omit<FetchOptions, keyof FetchPolicy> & Partial<FetchPolicy>;
 
 function buildHeaders(userAgent: string, accept: string, extra?: Record<string, string>): Record<string, string> {
   return { "user-agent": userAgent, accept, ...extra };
-}
-
-interface JsonPage<T> {
-  data: T;
-  nextUrl: string | null;
-}
-const NEXT_LINK_RE = /<([^>]+)>\s*;\s*rel="next"/;
-
-function nextLinkUrl(linkHeader: string | null): string | null {
-  if (!linkHeader) return null;
-  const match = NEXT_LINK_RE.exec(linkHeader);
-  return match?.[1] ? match[1] : null;
 }
 
 function isSubrequestLimit(err: unknown): boolean {
@@ -197,9 +193,6 @@ export class HttpClient {
     read: (res: Response, signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
     const { timeoutMs, retries, headers: initHeaders, signal: initSignalOpt, ...rest } = init;
-    if (timeoutMs == null || retries == null) {
-      throw new UpstreamError(`FetchPolicy required for ${url}: pass timeoutMs + retries from fetchPolicy()`);
-    }
     const initSignal = initSignalOpt ?? this.defaultSignal;
     const headers = buildHeaders(USER_AGENT, accept, initHeaders);
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -226,7 +219,7 @@ export class HttpClient {
 
   private readJson<T, R>(
     url: string,
-    init: FetchOptions | undefined,
+    init: FetchOptionsInput | undefined,
     maxBytes: number,
     wrap: (res: Response, body: T) => R,
   ): Promise<R> {
@@ -235,11 +228,11 @@ export class HttpClient {
     );
   }
 
-  async json<T>(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<T> {
+  async json<T>(url: string, init?: FetchOptionsInput, maxBytes: number = MAX_JSON_BYTES): Promise<T> {
     return this.readJson<T, T>(url, init, maxBytes, (_res, body) => body);
   }
 
-  async text(url: string, init?: FetchOptions, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
+  async text(url: string, init?: FetchOptionsInput, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
     return this.doFetch(
       url,
       { ...UPSTREAM_FETCH_OPTS, ...init },
@@ -252,25 +245,9 @@ export class HttpClient {
     return this.json<T>(url, fetchPolicy("interactive"));
   }
 
-  /**
-   * `opts` overrides the interactive policy per page: the first page of a listing is worth a retry, later pages
-   * already have usable rows in hand and should fail fast into a partial response instead of stalling the refresh.
-   */
-  async getJsonPage<T>(url: string, opts?: { timeoutMs?: number; retries?: number }): Promise<JsonPage<T>> {
-    return this.readJson<T, JsonPage<T>>(
-      url,
-      { ...fetchPolicy("interactive"), ...opts },
-      MAX_JSON_BYTES,
-      (res, body) => ({
-        data: body,
-        nextUrl: nextLinkUrl(res.headers.get("link")),
-      }),
-    );
-  }
-
   async getRsc(base: string, path: string): Promise<string> {
     const policy = fetchPolicy("interactive");
-    return this.text(upstreamUrl(base, path), { headers: { RSC: "1" }, ...policy }, MAX_JSON_BYTES);
+    return this.text(upstreamUrl(base, path), { headers: { RSC: "1" }, ...policy }, MAX_RSC_BYTES);
   }
 
   async getFeed(url: string, accept: string, maxBytes: number): Promise<string> {

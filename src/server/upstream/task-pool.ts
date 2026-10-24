@@ -1,10 +1,3 @@
-class TaskNotRunError extends Error {
-  constructor() {
-    super("Pool deadline passed before the task started");
-    this.name = "TaskNotRunError";
-  }
-}
-
 export async function runCapped<T>(
   tasks: readonly (() => Promise<T>)[],
   concurrency: number,
@@ -13,16 +6,12 @@ export async function runCapped<T>(
   const total = tasks.length;
   let cursor = 0;
   const runner = async (): Promise<void> => {
+    // `i` only ever advances to a value below `total`, which is `tasks.length`, so `tasks[i]` always exists.
     while (cursor < total) {
       const i = cursor;
       cursor += 1;
-      const task = tasks[i];
-      if (!task) {
-        results[i] = { status: "rejected", reason: new TaskNotRunError() };
-        continue;
-      }
       try {
-        results[i] = { status: "fulfilled", value: await task() };
+        results[i] = { status: "fulfilled", value: await tasks[i]!() };
       } catch (reason) {
         results[i] = { status: "rejected", reason };
       }

@@ -45,10 +45,10 @@ function isBestCost(model: ArtificialAnalysisModel): boolean {
 
 <template>
   <Card>
-    <CardContent class="!p-0">
-      <div class="px-4 pt-4"><CardHeader :title="t('estimatedMonthlyCost')" class="mb-3" /></div>
-      <div class="px-4 pb-4 flex flex-col gap-3">
-        <div class="flex flex-col sm:flex-row flex-wrap gap-2">
+    <CardContent compact>
+      <CardHeader :title="t('estimatedMonthlyCost')" />
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-col flex-wrap gap-2 sm:flex-row">
           <CostEstimatorInputs :state="costState" :avg-cost="avgMonthlyCost" />
         </div>
         <div class="flex flex-col gap-1.5">
@@ -58,20 +58,20 @@ function isBestCost(model: ArtificialAnalysisModel): boolean {
             class="flex items-center justify-between gap-2"
           >
             <span
-              class="text-sm truncate"
+              class="truncate text-sm"
               :style="{ color: seriesColor(theme, index) }"
-              :title="modelDisplayName(model)"
+              v-tooltip="modelDisplayName(model)"
             >
               {{ modelDisplayName(model) }}
             </span>
             <span
               v-if="costOf(model) != null"
-              :class="cn('font-mono text-sm', isBestCost(model) && 'font-semibold text-success')"
+              :class="cn('ui-mono-value', isBestCost(model) && 'font-semibold text-success')"
             >
               {{ formatDollar(costOf(model), t) }}
               <WinnerMark v-if="isBestCost(model)" />
             </span>
-            <span v-else class="text-sm text-text-tertiary">{{ t("notAvailable") }}</span>
+            <span v-else class="ui-mono-value text-text-tertiary">{{ t("notAvailable") }}</span>
           </div>
         </div>
       </div>

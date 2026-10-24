@@ -9,7 +9,7 @@
 <p>
   <a href="https://vuejs.org"><img src="https://img.shields.io/badge/Vue-3-41B883?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue" /></a>
   <a href="https://vite.dev"><img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" /></a>
-  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-7-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/Tailwind-4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" /></a>
   <a href="https://pages.cloudflare.com"><img src="https://img.shields.io/badge/Cloudflare-Pages-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Pages" /></a>
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT" />
@@ -52,18 +52,20 @@ npm run dev    # http://localhost:5173
 
 ## 命令
 
-| 命令              | 说明                                            |
-| ----------------- | ----------------------------------------------- |
-| `npm run dev`     | 开发服务器                                      |
-| `npm run build`   | 全量门禁：类型、lint、测试、生产构建            |
-| `npm run preview` | 本地预览已构建的 `dist`（先跑 `npm run build`） |
-| `npm run test`    | 仅跑测试（`test:watch` 可监听）                 |
-| `npm run lint`    | 静态检查                                        |
-| `npm run format`  | 代码格式化                                      |
+| 命令              | 说明                         |
+| ----------------- | ---------------------------- |
+| `npm run dev`     | 开发服务器                   |
+| `npm run build`   | 类型、lint、格式、测试、构建 |
+| `npm run preview` | 预览已构建的 `dist`          |
+| `npm run test`    | 测试（`test:watch` 可监听）  |
+| `npm run lint`    | 静态检查                     |
+| `npm run format`  | 代码格式化                   |
 
 ## 部署
 
-连接仓库到 Cloudflare Pages：Framework 选 `Vue`，构建命令 `npm run build`，输出目录 `dist`，`functions/` 自动部署，可选绑定名为 `CACHE` 的 KV 实现持久化缓存
+连接到 Cloudflare Pages：Framework 选 `Vue`，构建命令 `npm run build`，输出目录 `dist`；可选绑定名为 `CACHE` 的 KV 命名空间（区分大小写）以实现持久化缓存
+
+构建命令保持 `npm run build`：`functions/api/[[route]].js` 由它生成，改成裸 `vite build` 会让所有 `/api/*` 请求 404
 
 ## 许可证
 

@@ -1,21 +1,23 @@
-import type { TFunction } from "@/shared/i18n";
+import type { TFunction, TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq } from "@/shared/utils";
 import { modelId } from "@/shared/utils/models";
 import { resolveEffectivePricing, PRICE_LEG_IDS, PRICE_LEGS, type PriceLegPick } from "@/shared/utils/pricing";
 import { ceilToStep } from "@/client/charts/theme";
 export interface CompareRow<T> {
-  id?: string;
+  // Every row both builders produce carries `id`, `label`, `getNumeric` and `bestIs`, so those are required: the optional
+  // variants and the `?? row.label` fallback they fed are dead. `worstIs` is the one that differs — only the price rows
+  // set it — so it stays optional. `getValue` is never written or read anywhere and is gone.
+  id: string;
   label: string;
-  getValue?: (m: T) => string;
-  getNumeric?: (m: T) => number | null | undefined;
-  bestIs?: "max" | "min";
+  getNumeric: (m: T) => number | null | undefined;
+  bestIs: "max" | "min";
   worstIs?: "max" | "min";
 }
 
 export type Winner = "win" | "loss";
 
-export const rowKey = <T>(row: CompareRow<T>): string => row.id ?? row.label;
+export const rowKey = <T>(row: CompareRow<T>): string => row.id;
 
 export const modelKeyOf = (m: ArtificialAnalysisModel, index: number) => modelId(m) || `idx-${index}`;
 
@@ -37,9 +39,8 @@ function collectNumeric<T>(
   models: T[],
   getKey: (m: T, index: number) => string,
 ): { key: string; val: number }[] | null {
-  if (!row.getNumeric || !row.bestIs) return null;
   const values = models
-    .map((model, index) => ({ key: getKey(model, index), val: row.getNumeric!(model) }))
+    .map((model, index) => ({ key: getKey(model, index), val: row.getNumeric(model) }))
     .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val));
   return values.length >= 2 ? values : null;
 }
@@ -59,7 +60,7 @@ function decideRowWinners<T>(
   getKey: (m: T, index: number) => string,
 ): Map<string, Winner> | null {
   const values = collectNumeric(row, models, getKey);
-  if (!values || !row.bestIs) return null;
+  if (!values) return null;
   const best = pickExtreme(values, row.bestIs);
   if (values.every((v) => approxEq(v.val, best))) return null;
   const perModel = new Map<string, Winner>();
@@ -81,30 +82,35 @@ interface RadarRow {
   values: Record<string, number | null>;
 }
 
-function radarMetricGetters(
-  t: TFunction,
-): readonly { metric: string; getValue: (m: ArtificialAnalysisModel) => number | null }[] {
-  return [
-    { metric: t("intelligence"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.intelligence_index) },
-    { metric: t("coding"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.coding_index) },
-    { metric: t("agentic"), getValue: (m: ArtificialAnalysisModel) => nonNegative(m.agentic_index) },
-    { metric: t("gpqa"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.gpqa ?? null },
-    { metric: t("hle"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.hle ?? null },
-    { metric: t("scicode"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.scicode ?? null },
-    { metric: t("ifbench"), getValue: (m: ArtificialAnalysisModel) => m.benchmarks?.ifbench ?? null },
-  ];
-}
+/**
+ * The metrics the radar plots *and* the table below it lists. One table, because the two are read together: a metric
+ * added to one of two hand-written lists is a metric the other one silently lacks. Only 0..100 values belong here — the
+ * indexes (`nonNegative` is for their nullable arrival) and the benchmarks `benchmarkScaleOf` calls percent; an
+ * absolute-scale key would put a 1500 next to an 83 on a single axis.
+ */
+const COMPARE_METRICS: readonly {
+  id: TranslationKey;
+  get: (m: ArtificialAnalysisModel) => number | null;
+}[] = [
+  { id: "intelligence", get: (m) => nonNegative(m.intelligence_index) },
+  { id: "coding", get: (m) => nonNegative(m.coding_index) },
+  { id: "agentic", get: (m) => nonNegative(m.agentic_index) },
+  { id: "gpqa", get: (m) => m.benchmarks?.gpqa ?? null },
+  { id: "hle", get: (m) => m.benchmarks?.hle ?? null },
+  { id: "scicode", get: (m) => m.benchmarks?.scicode ?? null },
+  { id: "ifbench", get: (m) => m.benchmarks?.ifbench ?? null },
+];
 
 function buildRadarRows(t: TFunction, models: ArtificialAnalysisModel[], keys: readonly string[]): RadarRow[] {
-  return radarMetricGetters(t).map(({ metric, getValue }) => {
+  return COMPARE_METRICS.map(({ id, get }) => {
     const values: Record<string, number | null> = {};
     for (let i = 0; i < models.length; i++) {
       const key = keys[i]!;
       if (!key || key in values) continue;
-      const val = getValue(models[i]!);
+      const val = get(models[i]!);
       values[key] = val != null ? Number(val.toFixed(2)) : null;
     }
-    return { metric, values };
+    return { metric: t(id), values };
   });
 }
 
@@ -116,8 +122,9 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]):
   );
 }
 
-export function radarMaxFor(rows: RadarRow[], fallback = 100): number {
-  let peak = fallback;
+// The single caller (the radar) always wants the 0..100 axis floor, so `fallback` was an untaken knob; it is inlined.
+export function radarMaxFor(rows: RadarRow[]): number {
+  let peak = 100;
   for (const row of rows) {
     for (const value of Object.values(row.values)) {
       if (typeof value !== "number" || !Number.isFinite(value)) continue;
@@ -136,4 +143,12 @@ export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel
     bestIs: "min",
     worstIs: "max",
   }));
+}
+
+/**
+ * The model-comparison metric rows: the entries the radar plots, listed so a reader can read the numbers the chart can
+ * only draw. `bestIs: "max"` is what marks a row's winner.
+ */
+export function buildMetricRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
+  return COMPARE_METRICS.map(({ id, get }) => ({ id, label: t(id), getNumeric: get, bestIs: "max" }));
 }

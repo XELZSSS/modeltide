@@ -3,7 +3,6 @@ export interface HFModel {
   author?: string;
   downloads?: number;
   likes?: number;
-  trendingScore?: number;
   pipeline_tag?: string | null;
   createdAt?: string | null;
   lastModified?: string | null;
@@ -13,14 +12,19 @@ export interface HFModel {
 export interface ModelRow {
   date: string;
   model_permaslug: string;
-  variant: string;
-  variant_permaslug: string;
+  /**
+   * Variant fields are not part of the identity `isModelRow` establishes (it checks `model_permaslug` only), and the
+   * endpoint can omit them, so they stay optional instead of making the guard claim more than it verifies.
+   */
+  variant?: string;
+  variant_permaslug?: string;
   total_completion_tokens: number;
   total_prompt_tokens: number;
-  total_native_tokens_reasoning: number;
-  total_native_tokens_cached: number;
   count: number;
-  total_tool_calls: number;
+  /**
+   * Period-over-period change, in *either* the upstream ratio form or an already-percent number; `changeToPercent` in
+   * aggregate.ts normalises it and documents how the two are told apart. Never read this field directly.
+   */
   change: number | null;
   rankingMetricValue?: number;
 }
@@ -45,8 +49,6 @@ export interface PricingRow {
     input_cache_read?: string | number | null;
     input_cache_write?: string | number | null;
     input_cache_write_1h?: string | number | null;
-    web_search?: string | number | null;
-    image_output?: string | number | null;
   } | null;
   expiration_date?: string | null;
 }

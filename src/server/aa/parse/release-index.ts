@@ -1,7 +1,7 @@
 import { isRecord, str } from "@/server/formats/scalars";
-import { extractNeedleJsonArrays } from "@/server/formats/rsc-needle";
-import { MAX_SCAN_CHARS } from "@/server/formats/limits";
-import { fnv1aHash } from "@/server/util/hash";
+import { extractNeedleJsonArrays } from "@/server/formats/rsc-scan";
+import { MAX_RSC_BYTES } from "@/server/formats/limits";
+import { L1_TTL_CAP_MS } from "@/server/cache/config";
 
 const CANDIDATE_PREFIX_CHARS = 256;
 
@@ -11,7 +11,8 @@ const AA_RELEASES_KEY = '"releases"';
 const AA_SCAN_OPTS = {
   prefixChars: CANDIDATE_PREFIX_CHARS,
   smallSuffixChars: 256 * 1024 + CANDIDATE_PREFIX_CHARS,
-  maxSuffixChars: MAX_SCAN_CHARS + CANDIDATE_PREFIX_CHARS,
+  // Only has to cover a body the transport already caps at MAX_RSC_BYTES: a wider window cannot see more.
+  maxSuffixChars: MAX_RSC_BYTES + CANDIDATE_PREFIX_CHARS,
   unescape: true,
 };
 
@@ -53,18 +54,32 @@ interface ReleaseIndexScan {
   modelArrays: unknown[];
 }
 
-let cachedFingerprint = "";
+/**
+ * How long an idle scan stays memoized. The leaderboard and changelog parsers both receive the same cached body string,
+ * and L1 hands that one instance back for as long as it holds the entry — never longer than `L1_TTL_CAP_MS`. Retention is
+ * capped on purpose: the identity comparison is what keeps the body alive, so a memo with no expiry would pin a
+ * superseded multi-MB payload in the isolate for as long as the isolate lives.
+ */
+const SCAN_MEMO_IDLE_MS = L1_TTL_CAP_MS;
+
+let cachedHtml: string | null = null;
 let cachedScan: ReleaseIndexScan | null = null;
+let cachedScanAt = 0;
 
 export function scanReleaseIndex(html: string): ReleaseIndexScan {
-  const fingerprint = `${html.length}:${fnv1aHash(html)}`;
-  if (cachedScan && cachedFingerprint === fingerprint) return cachedScan;
+  // Identity, not a content hash: the leaderboard and changelog parsers both receive the same cached body string, so
+  // this hits, while `fnv1aHash(html)` walked the whole multi-MB body on every call and a 32-bit collision could have
+  // answered with another body's releases.
+  const now = Date.now();
+  if (cachedScan !== null && cachedHtml === html && now - cachedScanAt < SCAN_MEMO_IDLE_MS) return cachedScan;
   const scan: ReleaseIndexScan = {
     releases: collectReleases(html),
     modelArrays: extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS),
   };
-  cachedFingerprint = fingerprint;
+  // One slot, overwritten: the memo never holds more than the body it was last asked about.
+  cachedHtml = html;
   cachedScan = scan;
+  cachedScanAt = now;
   return scan;
 }
 

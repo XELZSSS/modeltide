@@ -14,7 +14,7 @@ const { t } = useTranslation();
 
 <template>
   <Card class="h-full">
-    <CardContent class="flex flex-col h-full">
+    <CardContent class="flex h-full flex-col">
       <CardHeader :title="t('hallucinationStats')" :subtitle="t('hallucinationSource')" />
       <EmptyState v-if="rows.length === 0" variant="plain" compact :message="t('notAvailable')" />
       <RankedListRows v-else :rows="rows" />

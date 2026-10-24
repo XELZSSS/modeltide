@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ONE_DAY, ONE_MINUTE } from "@/shared/config/time";
 import {
   CACHE_ENTRY_KV_TTL_S,
-  L1_MAX_TTL_MS,
+  L1_FALLBACK_TTL_MS,
   L1_RESIDENT_BYTES_FACTOR,
   L1_TTL_CAP_MS,
   MEMORY_CACHE_MAX_BYTES,
@@ -18,22 +18,29 @@ const MAX_STALE_EXTRA_MS = 60 * 60_000;
 
 const silentLog = (): void => {};
 
+interface SeedEntry {
+  value: string;
+  metadata?: unknown;
+}
+
 interface PutCall {
   key: string;
   value: string;
   expirationTtl?: number;
+  metadata?: unknown;
 }
 
-function fakeKv(seed: Record<string, string> = {}) {
-  const data = new Map<string, string>(Object.entries(seed));
+function fakeKv(seed: Record<string, SeedEntry> = {}) {
+  const data = new Map<string, SeedEntry>(Object.entries(seed));
   const puts: PutCall[] = [];
   const kv = new KvStore({
-    async get(key: string): Promise<string | null> {
-      return data.get(key) ?? null;
+    async getWithMetadata(key: string): Promise<{ value: string | null; metadata: unknown }> {
+      const entry = data.get(key);
+      return entry ? { value: entry.value, metadata: entry.metadata ?? null } : { value: null, metadata: null };
     },
-    async put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void> {
-      puts.push({ key, value, expirationTtl: options?.expirationTtl });
-      data.set(key, value);
+    async put(key: string, value: string, options?: { expirationTtl?: number; metadata?: unknown }): Promise<void> {
+      puts.push({ key, value, expirationTtl: options?.expirationTtl, metadata: options?.metadata });
+      data.set(key, { value, metadata: options?.metadata });
     },
     async delete(key: string): Promise<void> {
       data.delete(key);
@@ -44,10 +51,6 @@ function fakeKv(seed: Record<string, string> = {}) {
 
 function store(version = VERSION, onDetach?: (work: Promise<unknown>) => void): TierStore {
   return new TierStore(version, sharedL1, onDetach, silentLog);
-}
-
-function storedEnvelope(raw: string): { d: unknown; e: number; t?: number } {
-  return JSON.parse(raw) as { d: unknown; e: number; t?: number };
 }
 
 beforeEach(() => {
@@ -62,7 +65,7 @@ describe("TierStore.vk", () => {
 });
 
 describe("TierStore.storeCurrent", () => {
-  it("writes a {d,e,t} envelope under the versioned key and mirrors it into L1", async () => {
+  it("writes the payload body with expiry metadata under the versioned key and mirrors it into L1", async () => {
     const { kv, puts } = fakeKv();
     const tier = store();
     const before = Date.now();
@@ -70,14 +73,16 @@ describe("TierStore.storeCurrent", () => {
 
     expect(puts).toHaveLength(1);
     expect(puts[0]!.key).toBe("v-test:k1");
-    const env = storedEnvelope(puts[0]!.value);
-    expect(env.d).toEqual({ n: 1 });
-    expect(env.t).toBeGreaterThanOrEqual(ONE_MINUTE);
-    expect(env.t).toBeLessThanOrEqual(Math.round(ONE_MINUTE * 1.1));
-    expect(Math.abs(env.e - before - (env.t ?? 0))).toBeLessThanOrEqual(5);
+    expect(JSON.parse(puts[0]!.value)).toEqual({ n: 1 });
+    const meta = puts[0]!.metadata as { e: number; t: number };
+    expect(meta.t).toBeGreaterThanOrEqual(ONE_MINUTE);
+    expect(meta.t).toBeLessThanOrEqual(Math.round(ONE_MINUTE * 1.1));
+    expect(Math.abs(meta.e - before - meta.t)).toBeLessThanOrEqual(5);
 
     const l1 = sharedL1.get<{ n: number }>("v-test:k1");
     expect(l1?.d).toEqual({ n: 1 });
+    // The L1 entry owns the exact bytes the router serves, so a hit never re-encodes the payload.
+    expect(l1?.s).toBe(puts[0]!.value);
     expect(l1!.e - before).toBeLessThanOrEqual(L1_TTL_CAP_MS);
   });
 
@@ -86,7 +91,7 @@ describe("TierStore.storeCurrent", () => {
     const tier = store();
     await tier.storeCurrent(kv, tier.vk("k1"), { n: 1 }, 5 * ONE_MINUTE);
 
-    const ttl = storedEnvelope(puts[0]!.value).t!;
+    const ttl = (puts[0]!.metadata as { t: number }).t;
     const expected = Math.min(Math.max(Math.ceil((ttl + maxStaleMs(ttl)) / 1000), 60), CACHE_ENTRY_KV_TTL_S);
     expect(puts[0]!.expirationTtl).toBe(expected);
     expect(puts[0]!.expirationTtl).toBeGreaterThanOrEqual(60);
@@ -125,40 +130,54 @@ describe("TierStore.storeCurrent", () => {
     await tier.storeCurrent(kv, tier.vk("k-detached"), { n: 3 }, ONE_MINUTE);
     expect(detached).toHaveLength(1);
     await Promise.all(detached);
-    expect(storedEnvelope(data.get("v-test:k-detached")!).d).toEqual({ n: 3 });
+    expect(JSON.parse(data.get("v-test:k-detached")!.value)).toEqual({ n: 3 });
+  });
+
+  it("keeps no response copy for an internal source while still writing the KV value", async () => {
+    const { kv, puts } = fakeKv();
+    const tier = store();
+
+    await expect(tier.storeCurrent(kv, tier.vk("k-internal"), { n: 4 }, ONE_MINUTE, false)).resolves.toBeUndefined();
+
+    expect(JSON.parse(puts[0]!.value)).toEqual({ n: 4 });
+    const l1 = sharedL1.get<{ n: number }>("v-test:k-internal");
+    expect(l1?.d).toEqual({ n: 4 });
+    expect(l1?.s).toBeUndefined();
   });
 });
 
 describe("TierStore.getVersioned", () => {
-  it("returns undefined for a KV entry that is not valid JSON instead of throwing", async () => {
-    const { kv } = fakeKv({ "v-test:bad-json": "{not json" });
+  it("returns undefined for a KV value that is not valid JSON instead of throwing", async () => {
+    const { kv } = fakeKv({
+      "v-test:bad-json": { value: "{not json", metadata: { e: Date.now() + ONE_MINUTE, t: ONE_MINUTE } },
+    });
     await expect(store().getVersioned(kv, "bad-json")).resolves.toBeUndefined();
   });
 
-  it("returns undefined for JSON that is not a {d,e} envelope", async () => {
+  it("returns undefined when the expiry metadata is missing or corrupt", async () => {
     const { kv } = fakeKv({
-      "v-test:array": JSON.stringify([1, 2, 3]),
-      "v-test:missing-e": JSON.stringify({ d: 1 }),
-      "v-test:null": "null",
-      "v-test:bad-e": JSON.stringify({ d: 1, e: "soon" }),
+      "v-test:no-meta": { value: JSON.stringify({ n: 1 }) },
+      "v-test:bad-e": { value: JSON.stringify({ n: 1 }), metadata: { e: "soon", t: ONE_MINUTE } },
+      "v-test:null-meta": { value: JSON.stringify({ n: 1 }), metadata: null },
     });
     const tier = store();
-    for (const k of ["array", "missing-e", "null", "bad-e"]) {
+    for (const k of ["no-meta", "bad-e", "null-meta"]) {
       await expect(tier.getVersioned(kv, k)).resolves.toBeUndefined();
     }
   });
 
-  it("decodes a valid envelope and reports the serialized payload size", async () => {
-    const raw = JSON.stringify({ d: { n: 7 }, e: 1234, t: ONE_MINUTE });
-    const { kv } = fakeKv({ "v-test:good": raw });
+  it("decodes a valid entry, returning the parsed value and the exact response body", async () => {
+    const body = JSON.stringify({ n: 7 });
+    const { kv } = fakeKv({ "v-test:good": { value: body, metadata: { e: 1234, t: ONE_MINUTE } } });
     const hit = await store().getVersioned<{ n: number }>(kv, "good");
     expect(hit?.env).toEqual({ d: { n: 7 }, e: 1234, t: ONE_MINUTE });
-    expect(hit?.bytes).toBe(raw.length);
+    expect(hit?.body).toBe(body);
+    expect(hit?.bytes).toBe(body.length);
   });
 
   it("swallows a KV read failure and reports a miss", async () => {
     const failing = new KvStore({
-      async get(): Promise<string | null> {
+      async getWithMetadata(): Promise<{ value: string | null; metadata: unknown }> {
         throw new Error("kv unavailable");
       },
       async put(): Promise<void> {},
@@ -191,7 +210,7 @@ describe("l1TtlFor", () => {
     expect(l1TtlFor(2 * L1_TTL_CAP_MS)).toBe(L1_TTL_CAP_MS);
     expect(l1TtlFor(ONE_DAY)).toBe(L1_TTL_CAP_MS);
     for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(l1TtlFor(bad)).toBe(L1_MAX_TTL_MS);
+      expect(l1TtlFor(bad)).toBe(L1_FALLBACK_TTL_MS);
     }
   });
 });
@@ -200,10 +219,10 @@ describe("sharedL1.set", () => {
   it("refuses a single entry whose resident size exceeds MEMORY_CACHE_MAX_BYTES", () => {
     const residentBudget = MEMORY_CACHE_MAX_BYTES / L1_RESIDENT_BYTES_FACTOR;
 
-    expect(sharedL1.set("v-test:too-big", { n: 1 }, ONE_MINUTE, residentBudget + 1)).toBe(false);
+    expect(sharedL1.set("v-test:too-big", { n: 1 }, ONE_MINUTE, residentBudget + 1, ONE_MINUTE, "{}")).toBe(false);
     expect(sharedL1.get("v-test:too-big")).toBeUndefined();
 
-    expect(sharedL1.set("v-test:at-limit", { n: 1 }, ONE_MINUTE, residentBudget)).toBe(true);
+    expect(sharedL1.set("v-test:at-limit", { n: 1 }, ONE_MINUTE, residentBudget, ONE_MINUTE, "{}")).toBe(true);
     expect(sharedL1.get<{ n: number }>("v-test:at-limit")?.d).toEqual({ n: 1 });
   });
 });

@@ -17,3 +17,13 @@
 /sw.js
   Cache-Control: no-cache, must-revalidate
   Service-Worker-Allowed: /
+
+# The SPA shell. `/` and `/index.html` are the two request paths that reach the entry document directly; a deep link is
+# answered by the `_redirects` fallback, which serves that same asset. No `/*` catch-all on purpose: it would attach to
+# the `/api/*` responses too, and each route's API cache policy is rendered in `src/server/api/headers.ts` — including the
+# shortened partial windows and the `stale-if-error` variants a static file cannot express.
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache

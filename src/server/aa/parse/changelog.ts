@@ -56,10 +56,12 @@ function collectModels(
 }
 
 export function parseChangelogModels(html: unknown): ParseResult<ChangelogModel[]> {
-  if (typeof html !== "string" || !html) return parseFail("Changelog page is not a string");
-  if (html.length > MAX_SCAN_CHARS) return parseFail(`Changelog page too large (${html.length} chars)`);
+  // The input is the cached AA leaderboard body (see `getChangelogModels`), not a separate changelog page: the
+  // changelog is derived from the same RSC payload the index is built from.
+  if (typeof html !== "string" || !html) return parseFail("AA leaderboard body is not a string");
+  if (html.length > MAX_SCAN_CHARS) return parseFail(`AA leaderboard body too large (${html.length} chars)`);
   const { releases, modelArrays } = scanReleaseIndex(html);
   const { models, skipped } = collectModels(modelArrays, releases);
-  if (models.length === 0) return parseFail("Changelog page yielded no model rows");
+  if (models.length === 0) return parseFail("AA leaderboard body yielded no changelog rows");
   return parseOk(models, skipped > 0 ? [`Skipped ${skipped} changelog rows without a usable release`] : []);
 }

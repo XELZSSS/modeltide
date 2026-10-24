@@ -1,5 +1,5 @@
 import { CACHE_ENTRY_KV_TTL_S } from "./config";
-import { decodeEnvelope, encodeEnvelope, jitteredTtl, type DecodedEnvelope } from "./envelope";
+import { decodeStored, jitteredTtl, kvMetadata, type DecodedEnvelope } from "./envelope";
 import { sharedReads } from "./inflight";
 import { l1TtlFor, type MemoryL1 } from "./l1";
 import { maxStaleMs } from "./stale";
@@ -15,7 +15,7 @@ function warnKvReadFailure(log: Logger, err: unknown): void {
   log("warn", `[cache] KV read failed, degrading to refresh/stale path: ${errMsg(err)}`);
 }
 
-/** The two-tier store: writes the L1 mirror and the versioned KV envelope for one cache generation. */
+/** The two-tier store: writes the L1 mirror and the versioned KV entry for one cache generation. */
 export class TierStore {
   private log: Logger;
 
@@ -34,47 +34,69 @@ export class TierStore {
 
   async getVersioned<T>(kv: KvStore, k: string): Promise<DecodedEnvelope<T> | undefined> {
     const vk = this.vk(k);
-    return sharedReads.run(vk, () => this.readVersioned<T>(kv, vk));
+    return sharedReads.runShared(vk, () => this.readVersioned<T>(kv, vk));
   }
 
   private async readVersioned<T>(kv: KvStore, vk: string): Promise<DecodedEnvelope<T> | undefined> {
-    let raw: string | null;
+    let read: { value: string | null; metadata: unknown };
     noteCacheStat("kvReads");
     try {
-      raw = await kv.get(vk);
+      read = await kv.getWithMetadata(vk);
     } catch (err) {
       noteCacheStat("kvReadFailures");
       warnKvReadFailure(this.log, err);
       return undefined;
     }
-    if (!raw) return undefined;
-    return decodeEnvelope<T>(raw, vk, this.log);
+    if (!read.value) return undefined;
+    return decodeStored<T>(read.value, read.metadata, vk, this.log);
   }
 
-  async storeCurrent<T>(kv: KvStore | undefined, vk: string, data: T, ttl: number): Promise<void> {
+  /**
+   * Stores one entry in both tiers. The body is encoded once here — the same string becomes the KV value, and for a
+   * source a route returns, the L1 response copy the router serves. An internal source keeps no response copy: its
+   * payload is only read as an object by another source, so its body exists solely to be the KV value.
+   */
+  async storeCurrent<T>(
+    kv: KvStore | undefined,
+    vk: string,
+    data: T,
+    ttl: number,
+    serveBody = true,
+  ): Promise<string | undefined> {
     const effective = jitteredTtl(vk, ttl);
-    let serialized: string | undefined;
+    let body: string | undefined;
     try {
-      serialized = encodeEnvelope(data, effective);
+      body = JSON.stringify(data);
     } catch (err) {
       this.log("warn", `[cache] serialize failed for ${vk}: ${errMsg(err)}`);
     }
-    if (serialized === undefined) return;
-    // The L1 lifetime must not depend on whether KV is bound: without KV an entry kept its full TTL (up to
-    // 6 h) in the same isolate instead of being re-read. Cap it, and keep the jittered TTL as the stale budget.
-    const cached = this.l1.set(vk, data, l1TtlFor(effective), utf8ByteLength(serialized), effective);
+    if (body === undefined) return undefined;
+    const expiresAt = Date.now() + effective;
+    // The L1 lifetime must not depend on whether KV is bound: without KV an entry kept its full TTL (up to 6 h) in the
+    // same isolate instead of being re-read. Cap it, and keep the jittered TTL as the stale budget.
+    const retained = serveBody ? body : undefined;
+    const cached = this.l1.set(vk, data, l1TtlFor(effective), utf8ByteLength(body), effective, retained);
     if (!cached) this.log("warn", `[cache] L1 skipped oversized entry for ${vk}`);
-    if (!kv) return;
-    const put = this.setSerialized(kv, vk, serialized, effective).catch((err: unknown) => {
+    if (!kv) return retained;
+    const put = this.putEntry(kv, vk, body, expiresAt, effective).catch((err: unknown) => {
       this.log("warn", `[cache] KV write failed for ${vk}: ${errMsg(err)}`);
     });
-    if (this.onDetach) this.onDetach(put);
-    else await put;
+    if (this.onDetach) {
+      // The write is already in flight, so a throwing hook must not turn a stored refresh into a failure: the caller
+      // would fall back to the stale copy this run just replaced, and `RefreshRunner` would record a 45 s cooldown.
+      // `service.ts` and `util/abort.ts` guard their detach hooks the same way.
+      try {
+        this.onDetach(put);
+      } catch (err) {
+        this.log("warn", `[cache] onDetach callback failed: ${errMsg(err)}`);
+      }
+    } else await put;
+    return retained;
   }
 
-  private async setSerialized(kv: KvStore, k: string, serialized: string, ttl: number): Promise<void> {
+  private async putEntry(kv: KvStore, k: string, body: string, expiresAt: number, ttl: number): Promise<void> {
     const expirationTtl = Math.min(Math.max(Math.ceil((ttl + maxStaleMs(ttl)) / 1000), 60), CACHE_ENTRY_KV_TTL_S);
     noteCacheStat("kvWrites");
-    await kv.put(k, serialized, { expirationTtl });
+    await kv.put(k, body, { expirationTtl, metadata: kvMetadata(expiresAt, ttl) });
   }
 }

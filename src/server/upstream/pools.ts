@@ -25,23 +25,25 @@ function wakeWaiters(pool: SlotPool): void {
   }
 }
 
-export async function acquireSlot(signal: AbortSignal | undefined, pool: SlotPool): Promise<void> {
-  if (signal?.aborted) return Promise.reject(signal.reason);
+/**
+ * `signal` is required because every caller has one (the composed attempt signal) and losing the slot race without
+ * being able to drop out of the queue would leave a waiter behind that nobody wakes.
+ */
+export async function acquireSlot(signal: AbortSignal, pool: SlotPool): Promise<void> {
+  if (signal.aborted) return Promise.reject(signal.reason);
   if (pool.active < pool.max) {
     pool.active += 1;
-    return Promise.resolve();
+    return;
   }
   return new Promise<void>((resolve, reject) => {
     const waiter: SlotWaiter = { resolve, detach: () => {} };
-    if (signal) {
-      const onAbort = (): void => {
-        const i = pool.waiters.indexOf(waiter);
-        if (i !== -1) pool.waiters.splice(i, 1);
-        reject(signal.reason);
-      };
-      waiter.detach = () => signal.removeEventListener("abort", onAbort);
-      signal.addEventListener("abort", onAbort, { once: true });
-    }
+    const onAbort = (): void => {
+      const i = pool.waiters.indexOf(waiter);
+      if (i !== -1) pool.waiters.splice(i, 1);
+      reject(signal.reason);
+    };
+    waiter.detach = () => signal.removeEventListener("abort", onAbort);
+    signal.addEventListener("abort", onAbort, { once: true });
     pool.waiters.push(waiter);
   });
 }

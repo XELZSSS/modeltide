@@ -6,9 +6,9 @@ export function isFiniteNumber(v: unknown): v is number {
 }
 
 /**
- * Scales a figure that upstream sends as a 0-1 ratio onto a 0-100 scale. The unit is declared by the caller and
- * never sniffed from the value: anything outside 0-1 is not a ratio, so it is dropped (`null`) rather than rescaled
- * by a guess. A field that silently changed units then shows up as missing data, not as a plausible 100x error.
+ * Scales a 0-1 ratio onto a 0-100 scale. The unit is declared by the caller, never sniffed from the value: anything
+ * outside 0-1 is dropped (`null`) rather than rescaled by a guess, so a field that silently changed units shows up as
+ * missing data instead of a plausible 100x error.
  *
  * Fields that legitimately leave 0-1 (the signed omniscience index, Briefcase Elo, the Cyber index) are declared in
  * `ABSOLUTE_SCORE_BENCHMARKS` and must not come through here.
@@ -57,24 +57,30 @@ function formatScaled(abs: number, sign: string, value: number, scales: ScaleEnt
   return null;
 }
 
-function formatCompact(n: number | null | undefined, decimals = 2, fallback = FALLBACK_DASH): string {
+/**
+ * Compact scaled text for a count, always on `SHORT_SCALES`: the token table used to arrive through a `decimals === 1`
+ * branch no caller ever reached — `formatTokens` picks the token scales itself — so the parameter is gone instead of
+ * staying as a choice that cannot be made.
+ */
+function formatCompact(n: number | null | undefined, fallback = FALLBACK_DASH): string {
   if (!isFiniteNumber(n)) return fallback;
   const { abs, sign } = compactParts(n);
-  const scales = decimals === 1 ? TOKEN_SCALES : SHORT_SCALES;
-  const scaled = formatScaled(abs, sign, abs, scales, decimals);
+  const scaled = formatScaled(abs, sign, abs, SHORT_SCALES, 2);
   if (scaled) return scaled;
   if (Number.isInteger(abs)) return `${sign}${abs}`;
-  return `${sign}${parseFloat(abs.toFixed(decimals))}`;
+  return `${sign}${parseFloat(abs.toFixed(2))}`;
 }
 
 export function formatShortNumber(n: number | null | undefined, fallback = FALLBACK_DASH): string {
-  return formatCompact(n, 2, fallback);
+  return formatCompact(n, fallback);
 }
 
 export function formatTokens(n: number | null | undefined, t?: TFunction): string {
   if (!isFiniteNumber(n)) return t ? t("notAvailable") : FALLBACK_NA;
-  const { abs } = compactParts(n);
-  const scaled = formatScaled(abs, "", n, TOKEN_SCALES, 1);
+  // The sign travels on its own and the scaled figure is built from `abs`, so nothing has to be recovered from the
+  // division — a negative token count reads as negative for the same reason a positive one does.
+  const { abs, sign } = compactParts(n);
+  const scaled = formatScaled(abs, sign, abs, TOKEN_SCALES, 1);
   if (scaled) {
     const num = scaled.slice(0, -1);
     return `${num.endsWith(".0") ? num.slice(0, -2) : num}${scaled.charAt(scaled.length - 1)}`;

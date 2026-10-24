@@ -11,18 +11,41 @@ export type CostFieldId =
 
 export type CostFieldValues = Record<CostFieldId, string>;
 
-const numOr = (v: string, fallback: number): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+/**
+ * The estimator's starting values — and what a cleared field falls back to. They live here rather than in the store so the
+ * parser that prices a scenario and the store that pre-fills the form cannot disagree about what an empty field means.
+ */
+export const DEFAULT_COST_FIELDS: CostFieldValues = {
+  dailyInput: "2",
+  dailyOutput: "1",
+  dailyReasoning: "2",
+  cacheHitRate: "50",
+  cacheWriteRate: "5",
+  daysPerMonth: "22",
 };
+
+const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
+
+/**
+ * One field's number. A blank field is not zero: the reader is mid-edit, or cleared the field to get the default back, and
+ * pricing a blank "2M tokens/day" as 0 silently claims the model is free. Text that is no number at all — which is what a
+ * hand-edited localStorage entry can hold — falls back the same way.
+ */
+function fieldNumber(raw: string, id: CostFieldId): number {
+  const fallback = Number(DEFAULT_COST_FIELDS[id]);
+  const text = raw.trim();
+  if (!text) return fallback;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : fallback;
+}
 
 export function parseCostFields(values: CostFieldValues): CostScenario {
   return {
-    dailyInputM: Math.max(0, numOr(values.dailyInput, 0)),
-    dailyOutputM: Math.max(0, numOr(values.dailyOutput, 0)),
-    dailyReasoningM: Math.max(0, numOr(values.dailyReasoning, 0)),
-    cacheHitRate: Math.max(0, Math.min(100, numOr(values.cacheHitRate, 0))) / 100,
-    cacheWriteRate: Math.max(0, Math.min(100, numOr(values.cacheWriteRate, 0))) / 100,
-    daysPerMonth: Math.max(1, numOr(values.daysPerMonth, 0)),
+    dailyInputM: Math.max(0, fieldNumber(values.dailyInput, "dailyInput")),
+    dailyOutputM: Math.max(0, fieldNumber(values.dailyOutput, "dailyOutput")),
+    dailyReasoningM: Math.max(0, fieldNumber(values.dailyReasoning, "dailyReasoning")),
+    cacheHitRate: clamp(fieldNumber(values.cacheHitRate, "cacheHitRate"), 0, 100) / 100,
+    cacheWriteRate: clamp(fieldNumber(values.cacheWriteRate, "cacheWriteRate"), 0, 100) / 100,
+    daysPerMonth: Math.max(1, fieldNumber(values.daysPerMonth, "daysPerMonth")),
   };
 }

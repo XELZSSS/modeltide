@@ -1,7 +1,7 @@
 import type { Query } from "@tanstack/query-core";
 import { useQuery, type QueryClient, type UseQueryReturnType } from "@tanstack/vue-query";
 import type { MaybeRefOrGetter } from "vue";
-import { STATIC_TTL_MS, THIRTY_MINUTES, apiPaths } from "@/shared/config";
+import { ONE_DAY, THIRTY_MINUTES, apiPaths } from "@/shared/config";
 import type { ApiDomain, PayloadOf } from "@/shared/contract";
 import type { SourcePayload } from "@/shared/types";
 import { fetcher } from "./api-client";
@@ -16,32 +16,40 @@ type PollFn<D extends ApiDomain> = (
 const QUERY_DEFAULTS = {
   ttlMs: THIRTY_MINUTES,
   gcTimeMs: THIRTY_MINUTES,
-  maxGcTimeMs: STATIC_TTL_MS,
+  // A payload stays resident this many times its freshness. With `gcTime === staleTime` the entry was dropped the
+  // moment it went stale, so a return to the page suspended on an empty plate instead of rendering the copy it had.
+  gcTimeMultiplier: 3,
+  maxGcTimeMs: ONE_DAY,
 } as const;
 
 interface ApiQueryOptions<T> {
   ttl?: number;
   gcTime?: number;
-  partialRefetchMs?: number;
-  isPartialData?: (data: SourcePayload<T> | undefined) => boolean;
+  // Every caller in `catalog.ts` registers the partial-poll pair together, so both are required: the "this query never
+  // polls" arm they used to feed is unreachable.
+  partialRefetchMs: number;
+  isPartialData: (data: SourcePayload<T> | undefined) => boolean;
   query?: Record<string, string>;
 }
 
+// `opts` is required: all six `createApiQuery` calls in `catalog.ts` pass it, so the `?? {}` arm had no caller.
 export function createApiQuery<D extends ApiDomain>(
   domain: D,
   key: readonly (string | number)[],
-  opts?: ApiQueryOptions<PayloadOf<D>>,
+  opts: ApiQueryOptions<PayloadOf<D>>,
 ) {
-  const { ttl, gcTime, partialRefetchMs, isPartialData, query } = opts ?? {};
+  const { ttl, gcTime, partialRefetchMs, isPartialData, query } = opts;
   const path = query ? `${apiPaths[domain]}?${new URLSearchParams(query)}` : apiPaths[domain];
   const queryFn = fetcher<PayloadOf<D>>(path);
   const ttlMs = ttl ?? QUERY_DEFAULTS.ttlMs;
-  const refetchInterval: number | false | PollFn<D> =
-    isPartialData != null && partialRefetchMs != null
-      ? (query) => partialPollInterval(query, isPartialData as (data: unknown) => boolean, partialRefetchMs)
-      : false;
+  const residentMs = Math.min(
+    Math.max(ttlMs * QUERY_DEFAULTS.gcTimeMultiplier, QUERY_DEFAULTS.gcTimeMs),
+    QUERY_DEFAULTS.maxGcTimeMs,
+  );
+  const refetchInterval: PollFn<D> = (q) =>
+    partialPollInterval(q, isPartialData as (data: unknown) => boolean, partialRefetchMs);
   const timing = {
-    gcTime: gcTime ?? Math.min(Math.max(ttlMs, QUERY_DEFAULTS.gcTimeMs), QUERY_DEFAULTS.maxGcTimeMs),
+    gcTime: gcTime ?? residentMs,
     refetchInterval,
     staleTime: ttlMs,
   };

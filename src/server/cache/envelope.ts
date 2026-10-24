@@ -1,38 +1,67 @@
 import { errMsg } from "@/server/api/errors";
 import type { Logger } from "@/server/api/logger";
 import { fnv1aHashUint32, utf8ByteLength } from "@/server/util/hash";
+import { isFiniteNumber } from "@/shared/utils/number";
 
-export interface StaleEnvelope<T> {
+/** What the stale logic needs from one stored entry, whichever tier it came from. */
+export interface StoredEnvelope<T> {
   d: T;
+  /** When the entry stops being fresh (epoch ms). */
   e: number;
+  /** The TTL the entry was stored with, jitter included; the stale budgets are derived from it. */
   t?: number;
 }
 
 export interface DecodedEnvelope<T> {
-  env: StaleEnvelope<T>;
+  env: StoredEnvelope<T>;
+  /** The exact bytes the response body is served from. */
+  body: string;
   bytes: number;
 }
 
-function isEnvelope<T>(v: unknown): v is StaleEnvelope<T> {
-  if (typeof v !== "object" || v === null || !("d" in v) || !("e" in v)) return false;
-  const e = (v as StaleEnvelope<T>).e;
-  return typeof e === "number" && Number.isFinite(e);
+export interface KvEntryMetadata {
+  e: number;
+  t: number;
 }
 
-export function encodeEnvelope<T>(data: T, ttl: number): string {
-  return JSON.stringify({ d: data, e: Date.now() + ttl, t: ttl });
+/**
+ * KV keeps the expiry in metadata rather than inside the value, which is what lets the value be the response body
+ * itself. Metadata is written by `kvMetadata`; anything else (a legacy key, a truncated write) is a miss, not a guess.
+ */
+export function parseKvMetadata(metadata: unknown): KvEntryMetadata | undefined {
+  if (typeof metadata !== "object" || metadata === null) return undefined;
+  const { e, t } = metadata as { e?: unknown; t?: unknown };
+  if (!isFiniteNumber(e) || !isFiniteNumber(t)) return undefined;
+  return { e, t };
 }
 
-export function decodeEnvelope<T>(raw: string, k: string, log: Logger): DecodedEnvelope<T> | undefined {
-  let env: StaleEnvelope<T>;
+export function kvMetadata(expiresAt: number, ttl: number): KvEntryMetadata {
+  return { e: expiresAt, t: ttl };
+}
+
+/**
+ * Decodes one KV value: the body is parsed for composition (a parent source reads it as a payload) and kept verbatim
+ * for the response, so a hit never re-serializes the object it just parsed.
+ */
+export function decodeStored<T>(
+  body: string,
+  metadata: unknown,
+  k: string,
+  log: Logger,
+): DecodedEnvelope<T> | undefined {
+  let parsed: unknown;
   try {
-    env = JSON.parse(raw) as StaleEnvelope<T>;
+    parsed = JSON.parse(body);
   } catch (err) {
     log("warn", `[cache] KV entry decode failed for ${k}: ${errMsg(err)}`);
     return undefined;
   }
-  if (!isEnvelope<T>(env)) return undefined;
-  return { env, bytes: utf8ByteLength(raw) };
+  const meta = parseKvMetadata(metadata);
+  if (meta === undefined) {
+    log("warn", `[cache] KV entry has no usable expiry metadata for ${k}`);
+    return undefined;
+  }
+  return { env: { d: parsed as T, e: meta.e, t: meta.t }, body, bytes: utf8ByteLength(body) };
 }
 
 /** Spreads a TTL by ±10% so a whole cache generation does not expire in one burst. */

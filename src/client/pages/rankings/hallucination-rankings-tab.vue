@@ -17,6 +17,6 @@ const unavailable = computed(() => isHallucinationDataUnavailable(state.value.it
 <template>
   <TabStateShell :state="state" domain="artificialIndex">
     <EmptyState v-if="unavailable" variant="error" :message="t('rankingsUnavailable')" />
-    <HallucinationRankingsView v-else :rankings="rankings" />
+    <HallucinationRankingsView v-else :rankings="rankings" :models="state.items" />
   </TabStateShell>
 </template>

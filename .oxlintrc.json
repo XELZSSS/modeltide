@@ -47,7 +47,7 @@
                 "group": [
                   "@/server/upstream/upstream",
                   "@/server/upstream/timeouts",
-                  "@/server/upstream/fetch-policies",
+                  "@/server/upstream/client",
                   "@/server/cache/config",
                   "@/server/cache/keys"
                 ],

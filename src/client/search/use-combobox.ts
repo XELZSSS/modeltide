@@ -61,11 +61,10 @@ export function useCombobox({
     [activeIndex, isOpen],
     () => {
       if (!isOpen.value || activeIndex.value < 0) return;
-      try {
-        listRef.value
-          ?.querySelector(`#${escapeSelectorId(`${listboxId}-option-${activeIndex.value}`)}`)
-          ?.scrollIntoView({ block: "nearest" });
-      } catch {}
+      // `scrollIntoView` is absent in older engines; there is nothing to fall back to and the list stays usable.
+      listRef.value
+        ?.querySelector(`#${escapeSelectorId(`${listboxId}-option-${activeIndex.value}`)}`)
+        ?.scrollIntoView({ block: "nearest" });
     },
     { flush: "post" },
   );
@@ -146,9 +145,10 @@ export function useCombobox({
 
 export type ComboboxController = ReturnType<typeof useCombobox>;
 
+/**
+ * `CSS.escape` is in the browser baseline Vite targets and the ids this component mints are its plain-identifier case;
+ * the manual replacement it used to fall back to could only run on an engine the build never targets.
+ */
 function escapeSelectorId(id: string): string {
-  try {
-    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(id);
-  } catch {}
-  return id.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
+  return CSS.escape(id);
 }

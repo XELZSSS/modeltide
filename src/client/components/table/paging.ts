@@ -1,3 +1,8 @@
+/**
+ * Page state for a data table: de-duplicated rows, the current page clamped to the page count, and the slice the table
+ * renders. The page size is a getter so the same table can use a smaller page on a phone, and the page resets when the
+ * search term or the page size changes.
+ */
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
 import { dedupeBy } from "@/shared/utils";
 
@@ -12,6 +17,8 @@ export function usePagedData<T>(
 ) {
   const dedupedData = computed(() => dedupeBy(toValue(data), getRowId));
   const page = ref(1);
+  // A page size outside the two constants above is still a number the caller owns, so the same tolerance the rest of
+  // this function shows for out-of-range state (`safeTotal`, `currentPage`) applies here instead of a divide by zero.
   const safePageSize = computed(() => {
     const size = toValue(pageSize);
     return Number.isFinite(size) && size > 0 ? Math.floor(size) : DEFAULT_PAGE_SIZE;

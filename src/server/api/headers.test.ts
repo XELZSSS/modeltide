@@ -1,27 +1,49 @@
 import { describe, expect, it } from "vitest";
-import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
-import { applyApiHeaders, cacheHeadersForTtl, ifNoneMatchSatisfied, payloadEtag } from "./headers";
+import { CACHE_VERSION, CONTRACT_VERSION } from "@/shared/config/cache-version.gen.ts";
+import {
+  applyApiHeaders,
+  cacheDurationsForTtl,
+  ifNoneMatchSatisfied,
+  payloadEtag,
+  renderCacheSpec,
+  renderPartialCacheSpec,
+} from "./headers";
 
 const FETCHED_AT = "2026-01-01T00:00:00.000Z";
 
-describe("cacheHeadersForTtl", () => {
+describe("cacheDurationsForTtl", () => {
   it("gives the browser half of the server TTL and the CDN the full window", () => {
-    expect(cacheHeadersForTtl(10 * 60_000)).toEqual({
+    expect(renderCacheSpec(cacheDurationsForTtl(10 * 60_000))).toEqual({
       browser: "public, max-age=300",
       cdn: "public, max-age=600, stale-while-revalidate=300, stale-if-error=86400",
     });
   });
 
   it("caps both windows at 30 minutes", () => {
-    const headers = cacheHeadersForTtl(60 * 60_000);
-    expect(headers.browser).toBe("public, max-age=900");
-    expect(headers.cdn.startsWith("public, max-age=1800,")).toBe(true);
+    const spec = renderCacheSpec(cacheDurationsForTtl(60 * 60_000));
+    expect(spec.browser).toBe("public, max-age=900");
+    expect(spec.cdn.startsWith("public, max-age=1800,")).toBe(true);
   });
 
   it("keeps the browser window at least 30s and falls back to the default window for an unusable TTL", () => {
-    expect(cacheHeadersForTtl(30_000).browser).toBe("public, max-age=30");
-    expect(cacheHeadersForTtl(0)).toEqual(cacheHeadersForTtl(60_000));
-    expect(cacheHeadersForTtl(Number.NaN)).toEqual(cacheHeadersForTtl(60_000));
+    expect(renderCacheSpec(cacheDurationsForTtl(30_000)).browser).toBe("public, max-age=30");
+    expect(cacheDurationsForTtl(0)).toEqual(cacheDurationsForTtl(60_000));
+    expect(cacheDurationsForTtl(Number.NaN)).toEqual(cacheDurationsForTtl(60_000));
+  });
+});
+
+describe("renderPartialCacheSpec", () => {
+  it("tightens both freshness windows while keeping the stale-if-error window", () => {
+    expect(renderPartialCacheSpec(cacheDurationsForTtl(60 * 60_000))).toEqual({
+      browser: "public, max-age=30",
+      cdn: "public, max-age=60, stale-while-revalidate=60, stale-if-error=86400",
+    });
+  });
+
+  it("never grants stale-if-error to a policy that withheld it, as the Hugging Face by-id miss does", () => {
+    const miss = { browserMaxAgeS: 30, cdnMaxAgeS: 60, swrCapS: 60 };
+    expect(renderCacheSpec(miss).cdn).not.toContain("stale-if-error");
+    expect(renderPartialCacheSpec(miss).cdn).not.toContain("stale-if-error");
   });
 });
 
@@ -73,10 +95,16 @@ describe("ifNoneMatchSatisfied", () => {
 });
 
 describe("applyApiHeaders", () => {
-  it("advertises the build id only: the API serves same-origin readers, so no CORS headers ride along", () => {
+  it("advertises the payload contract version only: the API serves same-origin readers, so no CORS headers ride along", () => {
     const headers = new Headers();
     applyApiHeaders(headers);
-    expect(headers.get("X-Contract-Version")).toBe(CACHE_VERSION);
+    expect(headers.get("X-Contract-Version")).toBe(CONTRACT_VERSION);
     expect([...headers.keys()]).toEqual(["x-contract-version"]);
+  });
+
+  it("never advertises the cache version, which moves for reasons a client cannot act on", () => {
+    const headers = new Headers();
+    applyApiHeaders(headers);
+    expect(headers.get("X-Contract-Version")).not.toBe(CACHE_VERSION);
   });
 });

@@ -1,10 +1,10 @@
 import type { TranslationKey } from "@/shared/i18n";
-import { SEARCH_SOURCE_TO_MODEL_SOURCE, SOURCES } from "./sources";
+import { SOURCES } from "./sources";
+import { SITE_URLS } from "@/shared/config/sites";
 
-export { SEARCH_SOURCE_TO_MODEL_SOURCE };
-
-export const TAB_PARAM = "tab";
-export const AGENT_VIEW_PARAM = "view";
+// Both names describe the URL shape `src/client/router/paths.ts` owns, and are re-exported here because the tab hooks
+// that read them live next to the tab configuration rather than next to the router.
+export { TAB_PARAM, VIEW_PARAM } from "@/client/router/paths";
 
 export const RANKING_TABS = [
   "modelRankings",
@@ -28,7 +28,7 @@ export const RANKING_TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   providerCompare: SOURCES.aa.labelKey,
 };
 
-export const REPO_URL = "https://github.com/XELZSSS/modeltide";
+export const REPO_URL = SITE_URLS.repository;
 
 export function isRankingTabId(tabs: readonly string[], value: string): value is RankingTabId {
   return tabs.includes(value);

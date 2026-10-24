@@ -1,3 +1,7 @@
+/**
+ * Turns the paged rows into what the two table bodies render: a stable id, the name an expander announces, and whether
+ * this row is the expanded one. Ids fall back to the row index so a payload without ids still keys correctly.
+ */
 import { computed, type ComputedRef, type VNodeChild } from "vue";
 import type { RowListProps } from "./table-columns";
 

@@ -11,6 +11,19 @@ export { BENCHMARK_KEYS, type BenchmarkKey };
  */
 export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>(["briefcase_elo", "cyber_index", "omniscience"]);
 
+/**
+ * How a benchmark value is scaled inside `ArtificialAnalysisModel.benchmarks`.
+ *
+ * One record carries two scales — `percent` values are 0-100 (converted from the upstream ratio) and `absolute` ones
+ * keep their own range (Elo around 1500, a signed omniscience index) — so anything that formats, plots or compares a
+ * benchmark has to branch on the scale instead of assuming one. `benchmarkScaleOf` is the only place that decides.
+ */
+export type BenchmarkScale = "percent" | "absolute";
+
+export function benchmarkScaleOf(key: string): BenchmarkScale {
+  return ABSOLUTE_SCORE_BENCHMARKS.has(key as BenchmarkKey) ? "absolute" : "percent";
+}
+
 export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
   gpqa: "benchmarkGpqa",
   hle: "benchmarkHle",

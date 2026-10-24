@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import LoadingDots from "@/client/components/ui/loading-dots.vue";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
@@ -57,20 +56,16 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
     :status="pending ? undefined : t('searchResultsCount', { count: results.length })"
   >
     <template #status>
-      <div
-        v-if="pending && results.length === 0"
-        class="flex items-center justify-center gap-2 p-4 text-sm text-text-secondary"
-      >
-        <LoadingDots size="sm" :label="t('searching')" />
-        <span aria-hidden="true">{{ t("searching") }}</span>
+      <div v-if="pending && results.length === 0" class="p-4 text-center ui-body-secondary" role="status">
+        {{ t("searching") }}
       </div>
-      <div v-else-if="isError && results.length === 0" class="p-4 text-sm text-text-secondary" role="alert">
+      <div v-else-if="isError && results.length === 0" class="p-4 ui-body-secondary" role="alert">
         {{ t("searchFailed") }}
       </div>
-      <div v-else-if="results.length === 0" class="p-4 text-sm text-text-secondary" role="status">
+      <div v-else-if="results.length === 0" class="p-4 ui-body-secondary" role="status">
         {{ t("noResults") }}
       </div>
-      <div v-else-if="partial" class="px-3 pt-2 text-xs text-text-tertiary" role="status">
+      <div v-else-if="partial" class="px-3 pt-2 ui-meta" role="status">
         {{ t("partialDataNotice") }}
       </div>
     </template>
@@ -82,8 +77,8 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
       :aria-selected="activeIndex === index"
       :class="
         cn(
-          'w-full text-left p-2.5 cursor-pointer ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
-          activeIndex === index ? 'bg-hover' : 'hoverable:hover:bg-hover',
+          'w-full cursor-pointer rounded-md p-2.5 text-left ui-motion focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          activeIndex === index ? 'bg-surface-hover' : 'hoverable:hover:bg-surface-hover',
         )
       "
       @mouseenter="onHover(index)"
@@ -91,17 +86,18 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
       @click="onSelectIndex(index)"
     >
       <span class="flex items-center justify-between gap-2">
-        <span class="text-sm font-medium text-text-primary truncate" :title="result.name">{{ result.name }}</span>
+        <span class="truncate ui-body font-medium" v-tooltip="result.name">{{ result.name }}</span>
         <span
           v-if="typeof result.score === 'number' && Number.isFinite(result.score)"
-          class="text-xs text-text-secondary ml-2 shrink-0 font-mono"
+          class="ml-2 shrink-0 font-mono ui-caption tabular-nums"
+          v-tooltip="result.scoreLabel ? t(result.scoreLabel) : undefined"
         >
           {{ result.score.toFixed(1) }}
         </span>
       </span>
-      <span class="flex items-center gap-2 mt-1">
-        <span class="text-xs text-text-secondary">{{ t(result.source) }}</span>
-        <span v-if="result.provider" class="text-xs text-text-tertiary">{{ result.provider }}</span>
+      <span class="mt-1 flex items-center gap-2">
+        <span class="ui-caption">{{ t(result.source) }}</span>
+        <span v-if="result.provider" class="ui-meta">{{ result.provider }}</span>
       </span>
     </div>
   </Combobox>

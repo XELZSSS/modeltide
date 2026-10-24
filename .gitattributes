@@ -1,5 +1,5 @@
 # Normalise text files to LF in the repository and in the working tree.
-# oxfmt emits LF, so a CRLF checkout makes every file look misformatted.
+# oxfmt emits LF (`endOfLine` defaults to lf there), so a CRLF checkout makes every file look misformatted.
 #
 # One-time follow-up to rewrite the existing blobs (EOL-only change):
 #   git add --renormalize .

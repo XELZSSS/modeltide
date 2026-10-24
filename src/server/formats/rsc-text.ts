@@ -18,10 +18,10 @@ const TRIM_WHITESPACE = new Set([
   ...Array.from({ length: 11 }, (_, i) => 0x2000 + i),
 ]);
 
-export const isTrimWhitespace = (c: number): boolean => TRIM_WHITESPACE.has(c);
+const isTrimWhitespace = (c: number): boolean => TRIM_WHITESPACE.has(c);
 
 /** Advances past whitespace as JSON defines it, which is wider than `String.prototype.trim`. */
-export function skipTrimWhitespace(text: string, pos: number): number {
+function skipTrimWhitespace(text: string, pos: number): number {
   let at = pos;
   while (at < text.length && isTrimWhitespace(text.charCodeAt(at))) at++;
   return at;
@@ -44,19 +44,23 @@ export function findNeedlePositions(text: string, needle: string, limit: number)
   return positions;
 }
 
-export function isMarkerBoundaryAt(line: string, needle: string): boolean {
-  let idx = line.indexOf(needle);
-  while (idx !== -1) {
-    const at = skipTrimWhitespace(line, idx + needle.length);
-    if (at < line.length) {
-      const c = line.charCodeAt(at);
-      if (c === 0x3a || c === 0x5b || c === 0x22 || c === 0x2c || c === 0x7d || c === 0x5d) {
-        return true;
-      }
-    }
-    idx = line.indexOf(needle, idx + 1);
+/** The value position of a `"marker": value` pair whose quoted key starts at `at`, or null. */
+export function markerValueAt(text: string, at: number, needle: string): number | null {
+  if (!text.startsWith(needle, at)) return null;
+  const colon = skipTrimWhitespace(text, at + needle.length);
+  if (text[colon] !== ":") return null;
+  return skipTrimWhitespace(text, colon + 1);
+}
+
+/** The value position of the first `"needle": value` pair in `text`, or null when the key never carries a value. */
+export function findMarkerValue(text: string, needle: string, from = 0): number | null {
+  let at = text.indexOf(needle, from);
+  while (at !== -1) {
+    const valueAt = markerValueAt(text, at, needle);
+    if (valueAt !== null) return valueAt;
+    at = text.indexOf(needle, at + 1);
   }
-  return false;
+  return null;
 }
 
 export function* iterateLines(body: string): Generator<string> {

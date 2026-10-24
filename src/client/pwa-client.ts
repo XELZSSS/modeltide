@@ -1,3 +1,5 @@
+import { reportClientError } from "@/client/monitoring";
+
 const SW_URL = "/sw.js";
 
 const SKIP_WAITING = { type: "SKIP_WAITING" };
@@ -43,7 +45,7 @@ function register(): void {
     .register(SW_URL)
     .then(adoptUpdates)
     .catch((err) => {
-      console.warn("[pwa] service worker registration failed:", err);
+      reportClientError("pwa.register", err);
     });
 }
 

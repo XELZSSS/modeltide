@@ -42,27 +42,18 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
     <StatGrid :columns="4">
       <StatCard :label="t('creator')">{{ orNA(model.creator, t) }}</StatCard>
       <StatCard v-for="[labelKey, value] in tokenStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
-      <StatCard v-if="model.reasoningTokens != null" :label="t('reasoningTokens')">
-        {{ formatShortNumber(model.reasoningTokens, t("notAvailable")) }}
-      </StatCard>
-      <StatCard v-else :label="t('category')">{{ categoryLabel(model.category, t) }}</StatCard>
+      <StatCard :label="t('category')">{{ categoryLabel(model.category, t) }}</StatCard>
     </StatGrid>
     <InfoGrid>
       <InfoCard :title="t('modelInfo')">
         <InfoRow :label="t('apiModelId')">
-          <code class="font-mono text-xs bg-bg-secondary px-1.5 py-0.5 break-all">{{ model.id }}</code>
+          <code class="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs break-all">{{ model.id }}</code>
         </InfoRow>
         <InfoRow :label="t('category')">{{ categoryLabel(model.category, t) }}</InfoRow>
         <InfoRow v-if="model.expiresAt" :label="t('expiresAt')">{{ model.expiresAt }}</InfoRow>
         <InfoRow :label="t('trend')">{{ formatTrend(model.change, t) }}</InfoRow>
         <InfoRow :label="t('totalTokens')">
           {{ formatShortNumber(model.totalTokens, t("notAvailable")) }}
-        </InfoRow>
-        <InfoRow v-if="model.cachedTokens != null" :label="t('cachedTokens')">
-          {{ formatShortNumber(model.cachedTokens, t("notAvailable")) }}
-        </InfoRow>
-        <InfoRow v-if="model.toolCalls != null" :label="t('toolCalls')">
-          {{ formatShortNumber(model.toolCalls, t("notAvailable")) }}
         </InfoRow>
       </InfoCard>
       <InfoCard :title="t('pricing')">

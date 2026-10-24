@@ -9,7 +9,7 @@ import { modelId } from "@/shared/utils/models";
 import { useCompareStore } from "@/client/stores";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
-const props = defineProps<{ model: ArtificialAnalysisModel }>();
+const props = defineProps<{ model: ArtificialAnalysisModel; rank?: number | null; href?: string }>();
 
 const { t } = useTranslation();
 const store = useCompareStore();
@@ -24,14 +24,14 @@ function onToggle(event: MouseEvent): void {
 </script>
 
 <template>
-  <RankingNameCell :name="model.name || model.slug">
+  <RankingNameCell :name="model.name || model.slug" :rank="rank ?? null" :href="href">
     <template #suffix>
       <Button
         variant="ghost"
         size="icon"
         :aria-label="isCompared ? t('removeFromCompare') : t('addToCompare')"
         :aria-pressed="isCompared"
-        :class="cn('shrink-0', isCompared ? 'text-accent' : 'text-text-secondary')"
+        :class="cn('shrink-0', isCompared ? 'bg-surface-hover text-text-primary' : 'text-text-secondary')"
         @click="onToggle"
       >
         <Check v-if="isCompared" class="size-4" />

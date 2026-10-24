@@ -3,20 +3,15 @@ import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 
-// The single loading indicator of the app: three dots on one shared timeline (see `ui-dots` in motion.css). It is a
-// dumb visual — *what* is loading is decided by the caller, which in this app is always the live fetch count.
-const props = withDefaults(defineProps<{ label?: string; size?: "sm" | "md"; class?: string }>(), {
-  size: "md",
-});
+// The app's only loading indicator: three dots on one shared timeline (see `ui-dots` in motion.css). Its single caller is
+// the Suspense placeholder, so it never has to say *what* is loading — it is only ever shown where content will land.
+const props = defineProps<{ label?: string; class?: string }>();
 
 const { t } = useTranslation();
 
-const DOT_SIZE = {
-  sm: "[--motion-dot-size:0.25rem]",
-  md: "[--motion-dot-size:0.375rem]",
-} as const;
-
-const dotsClass = computed(() => cn("ui-dots", DOT_SIZE[props.size], props.class));
+// The dots' geometry is a token (`--motion-dot-size` in motion.css) and this is the app's only loader, so there is no
+// size to switch: the caller supplies colour and box padding and nothing else.
+const dotsClass = computed(() => cn("ui-dots", props.class));
 const label = computed(() => props.label ?? t("loading"));
 </script>
 

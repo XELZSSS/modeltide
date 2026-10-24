@@ -34,6 +34,7 @@ function missingFields<T>(rows: readonly T[], fields: readonly string[]): readon
   for (const row of rows) {
     if (!isRecord(row)) continue;
     for (const field of fields) {
+      if (seen.has(field)) continue;
       for (const alias of fieldAliases(field)) {
         if (alias in row) {
           seen.add(field);
@@ -41,6 +42,8 @@ function missingFields<T>(rows: readonly T[], fields: readonly string[]): readon
         }
       }
     }
+    // Every expected field was seen at least once: no later row can change the answer.
+    if (seen.size === fields.length) return [];
   }
   return fields.filter((field) => !seen.has(field));
 }

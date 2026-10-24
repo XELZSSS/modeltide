@@ -2,13 +2,24 @@
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "printWidth": 120,
   "sortPackageJson": false,
+  // Generated files a formatter must not touch: `functions/` is esbuild output, and
+  // `src/shared/config/cache-version.gen.ts` is compared byte-for-byte by `npm run gen:cache-version:check`.
   "ignorePatterns": [
     "dist/**",
     "node_modules/**",
     ".wrangler/**",
-    "functions/api/**",
+    "functions/**",
     "package-lock.json",
     "coverage/**",
-    "*.tsbuildinfo"
-  ]
+    "*.tsbuildinfo",
+    "src/shared/config/cache-version.gen.ts",
+    "public/sw.js"
+  ],
+  // Same algorithm as prettier-plugin-tailwindcss, in the native formatter. `stylesheet` points at the single style
+  // entry so the `@theme` tokens, the `@utility ui-*` utilities and the `@custom-variant hoverable` variant are all
+  // known to the sorter; `functions` extends that to the `cn()` / `cva()` call sites the components compose with.
+  "sortTailwindcss": {
+    "stylesheet": "./src/styles/globals.css",
+    "functions": ["cn", "cva"]
+  }
 }

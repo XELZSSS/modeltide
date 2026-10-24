@@ -16,8 +16,7 @@ import {
   type RankingTabId,
 } from "@/client/nav/nav-config";
 import { TAB_PARAM, isRankingTabId as isRankingTabValue } from "@/client/nav/nav-config";
-import { RANKING_TAB_QUERIES } from "@/client/router/routes";
-import { RANKING_TAB_LOADS } from "./tab-loaders";
+import { RANKING_TAB_LOADS, RANKING_TAB_QUERIES } from "./tab-loaders";
 
 const TAB_COMPONENTS = Object.fromEntries(
   RANKING_TABS.map((id): [RankingTabId, Component] => [id, loadableView(RANKING_TAB_LOADS[id])]),
@@ -31,10 +30,6 @@ const activeContent = computed(() => TAB_COMPONENTS[activeTabId.value]);
 const title = computed(() => t(activeTabId.value));
 const description = computed(() => t(RANKING_TAB_SOURCE_LABEL[activeTabId.value]));
 
-function isRankingTabId(value: string): value is RankingTabId {
-  return isRankingTabValue(RANKING_TABS, value);
-}
-
 const tabIntent = usePrefetchIntent<RankingTabId>((id) => ({
   queries: RANKING_TAB_QUERIES[id],
   load: RANKING_TAB_LOADS[id],
@@ -45,7 +40,7 @@ function onTabIntent(tabId: string, active: boolean): void {
     tabIntent.cancel();
     return;
   }
-  if (isRankingTabId(tabId)) tabIntent.hover(tabId);
+  if (isRankingTabValue(RANKING_TABS, tabId)) tabIntent.hover(tabId);
 }
 
 function preloadTabs(): void {
@@ -69,6 +64,7 @@ else preloadTabs();
     @tab-change="handleTabChange"
   >
     <template #actions><SearchInput /></template>
+    <p class="ui-meta">{{ t("dataDisclaimer") }}</p>
     <SuspenseQuery>
       <component :is="activeContent" />
     </SuspenseQuery>

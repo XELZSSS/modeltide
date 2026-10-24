@@ -1,6 +1,7 @@
 import type { SearchResultSource } from "@/client/search/types";
 import type { TranslationKey } from "@/shared/i18n";
 import type { ModelSource } from "@/shared/types/app";
+import { PATHS, TAB_PARAM, VIEW_PARAM } from "@/client/router/paths";
 
 type RankTabId = "modelRankings" | "openRouterRankings" | "openSourceRankings" | "hallucinationRankings";
 
@@ -10,10 +11,11 @@ interface SourceDecl {
   backLabelKey: TranslationKey;
 }
 
-const RANKINGS_PATH = "/models";
-
-function rankingTabHref(tab: RankTabId): string {
-  return `${RANKINGS_PATH}?tab=${tab}`;
+/** A rankings-tab link. `view` opens one of that tab's sub-views; the AA tab keeps its rankings/pricing mode there. */
+export function rankingTabHref(tab: RankTabId, view?: string): string {
+  const params = new URLSearchParams({ [TAB_PARAM]: tab });
+  if (view !== undefined) params.set(VIEW_PARAM, view);
+  return `${PATHS.rankings}?${params.toString()}`;
 }
 
 export const SOURCES: Record<ModelSource, SourceDecl> = {

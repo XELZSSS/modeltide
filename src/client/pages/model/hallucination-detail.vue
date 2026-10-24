@@ -2,94 +2,67 @@
 import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
-import type { ArtificialAnalysisModel, HallucinationRankingEntry } from "@/shared/types";
 import { formatIndex, formatPercent } from "@/shared/utils";
-import { normalizeModelKey } from "@/shared/utils";
-import { useSuspenseArtificialRankings, useSuspenseHallucinationRankings } from "@/client/api/hooks";
+import { useSuspenseArtificialRankingsState } from "@/client/api/hooks";
+import PartialNotice from "@/client/components/feedback/partial-notice.vue";
+import EmptyState from "@/client/components/feedback/empty-state.vue";
 import StatGrid from "@/client/components/layout/stat-grid.vue";
 import InfoCard from "@/client/components/layout/info-card.vue";
 import InfoRow from "@/client/components/layout/info-row.vue";
 import StatCard from "@/client/components/layout/stat-card.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
 import { DETAIL_BLOCK_GAP } from "@/client/nav/layout";
-import NotFound from "@/client/components/feedback/not-found.vue";
+import ModelMiss from "@/client/components/feedback/model-miss.vue";
 import { useSoftNotFound } from "@/client/router/document-meta";
 import ModelDetailContent from "./aa-detail.vue";
 import DetailShell, { findModel } from "./detail-views.vue";
-
-function indexAaModels(models: ArtificialAnalysisModel[]): Map<string, ArtificialAnalysisModel[]> {
-  const index = new Map<string, ArtificialAnalysisModel[]>();
-  for (const model of models) {
-    for (const value of [model.name, model.short_name, model.slug]) {
-      if (!value) continue;
-      const key = normalizeModelKey(value);
-      const bucket = index.get(key);
-      if (bucket) bucket.push(model);
-      else index.set(key, [model]);
-    }
-  }
-  return index;
-}
-
-function findAaModelForHall(
-  aaIndex: Map<string, ArtificialAnalysisModel[]>,
-  entry: HallucinationRankingEntry,
-): ArtificialAnalysisModel | undefined {
-  const candidates = new Set<ArtificialAnalysisModel>();
-  for (const value of [entry.model, entry.slug]) {
-    if (!value) continue;
-    for (const model of aaIndex.get(normalizeModelKey(value)) ?? []) candidates.add(model);
-  }
-  return candidates.size === 1 ? candidates.values().next().value : undefined;
-}
 
 const props = defineProps<{ decodedId: string }>();
 
 const { t } = useTranslation();
 
-const [aaData, hallucinationRankings] = await Promise.all([
-  useSuspenseArtificialRankings(),
-  useSuspenseHallucinationRankings(),
-]);
+// The AA index is the only payload this page reads, so it answers two different questions: whether the model exists,
+// and whether the omniscience evaluation has scored it yet. Looking the model up in the *derived* ranking list instead
+// answered both with one lookup, which reported every model the evaluation has not reached as "not found".
+const aaState = await useSuspenseArtificialRankingsState();
+const model = computed(() => findModel(aaState.value.items, props.decodedId, "id", "slug"));
 
-const entry = computed(() => findModel(hallucinationRankings.value, props.decodedId, "id", "slug"));
+useSoftNotFound(computed(() => !model.value && !aaState.value.partial));
 
-useSoftNotFound(computed(() => !entry.value));
-const directAa = computed(() => findModel(aaData.value, props.decodedId, "id", "slug"));
-const fallbackAa = computed(() =>
-  !directAa.value && entry.value ? findAaModelForHall(indexAaModels(aaData.value), entry.value) : undefined,
-);
-const aaModel = computed(() => directAa.value ?? fallbackAa.value);
-
-const hallStats = computed<[TranslationKey, string][]>(() =>
-  entry.value
-    ? [
-        ["omniscienceIndex", formatIndex(entry.value.omniscienceIndex, t("notAvailable"))],
-        ["accuracy", formatPercent(entry.value.accuracy, t)],
-        ["hallucinationRate", formatPercent(entry.value.hallucinationRate, t)],
-        ["attemptRate", formatPercent(entry.value.attemptRate, t)],
-      ]
-    : [],
-);
+const hallStats = computed<[TranslationKey, string][]>(() => {
+  const total = model.value?.omniscience_breakdown?.total;
+  const score = total?.omniscience;
+  // `omniscience` is the field the evaluation always writes and the one this page plots; the other three are optional
+  // and `formatPercent` renders those as N/A. No score means the evaluation has not reached this model yet.
+  if (!total || score == null) return [];
+  return [
+    ["omniscienceIndex", formatIndex(score, t("notAvailable"))],
+    ["accuracy", formatPercent(total.accuracy, t)],
+    ["hallucinationRate", formatPercent(total.hallucination_rate, t)],
+    ["attemptRate", formatPercent(total.attempt_rate, t)],
+  ];
+});
 </script>
 
 <template>
-  <NotFound v-if="!entry" heading-key="modelNotFoundTitle" body-key="modelNotFound" :code="null" />
-  <DetailShell v-else source="hall" :title="entry.model">
+  <ModelMiss v-if="!model" :partial="aaState.partial" />
+  <DetailShell v-else source="hall" :title="model.name">
     <div :class="DETAIL_BLOCK_GAP">
-      <StatGrid :columns="4">
+      <PartialNotice v-if="aaState.partial" />
+      <EmptyState v-if="hallStats.length === 0" variant="error" :message="t('rankingsUnavailable')" />
+      <StatGrid v-else :columns="4">
         <StatCard v-for="[labelKey, value] in hallStats" :key="labelKey" :label="t(labelKey)">{{ value }}</StatCard>
       </StatGrid>
       <InfoCard :title="t('modelInfo')">
-        <InfoRow :label="t('modelNameOrId')">{{ entry.model }}</InfoRow>
-        <InfoRow :label="t('slug')">{{ entry.slug }}</InfoRow>
-        <InfoRow v-if="aaModel?.model_creators?.name" :label="t('creator')">
-          {{ aaModel.model_creators.name }}
+        <InfoRow :label="t('modelNameOrId')">{{ model.name }}</InfoRow>
+        <InfoRow :label="t('slug')">{{ model.slug }}</InfoRow>
+        <InfoRow v-if="model.model_creators?.name" :label="t('creator')">
+          {{ model.model_creators.name }}
         </InfoRow>
-        <InfoRow v-if="aaModel?.release_date" :label="t('releaseDate')">{{ aaModel.release_date }}</InfoRow>
+        <InfoRow v-if="model.release_date" :label="t('releaseDate')">{{ model.release_date }}</InfoRow>
       </InfoCard>
-      <PageSection v-if="aaModel" :title="t('modelDetail')">
-        <ModelDetailContent :model="aaModel" />
+      <PageSection :title="t('modelDetail')">
+        <ModelDetailContent :model="model" />
       </PageSection>
     </div>
   </DetailShell>

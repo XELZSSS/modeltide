@@ -19,6 +19,17 @@ interface NewsFeed {
   id: string;
   url: string;
 }
+/**
+ * Feeds fetched in one leg round per category; the 6-slot connection pool per invocation is the hard ceiling, leaving
+ * one slot spare.
+ *
+ * The round count is a timeout budget, not only latency: one round costs at most FEED_TIMEOUT_MS × (retries + 1) +
+ * backoff = 18 s, inside INFLIGHT_HANG_GUARD_MS (28 s). A second round would reach 36 s, so the guard would drop the
+ * refresh after the upstream work was already paid for. Raising this number needs the budget in
+ * src/server/upstream/timeouts.ts re-checked; `assertNewsRoundBudget` in build/consistency-guard.ts fails the build
+ * if a category lists more feeds than fit one round.
+ */
+export const NEWS_LEG_CONCURRENCY = 5;
 
 export const rssFeeds: Record<NewsCategory, readonly NewsFeed[]> = {
   industry: [

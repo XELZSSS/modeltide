@@ -4,7 +4,7 @@ import { stripHtml } from "./html-to-text";
 import { parseFeed as parseFeedResult } from "./rss-feed-parser";
 import { findNextData, findLongestData } from "./rsc-data";
 import { parseRscPayload, parseRscPayloads } from "./rsc-parser";
-import { isMarkerBoundaryAt } from "./rsc-text";
+import { findMarkerValue } from "./rsc-text";
 import { getOpenLicenseId, licenseTagId } from "./licenses";
 import { sortByDateDesc, isoDate } from "./dates";
 import { numCoerce } from "./scalars";
@@ -66,8 +66,8 @@ describe("findNextData / findLongestData", () => {
   });
 });
 
-describe("isMarkerBoundaryAt", () => {
-  const boundary = (line: string, marker: string): boolean => isMarkerBoundaryAt(line, `"${marker}"`);
+describe("findMarkerValue", () => {
+  const valueAt = (line: string, marker: string): number | null => findMarkerValue(line, `"${marker}"`);
   const WHITESPACE = [
     " ",
     "\t",
@@ -83,11 +83,19 @@ describe("isMarkerBoundaryAt", () => {
     "\ufeff",
   ];
 
-  it("treats every character trimStart skips as whitespace", () => {
+  it("treats every character trimStart skips as whitespace around the colon", () => {
     for (const ws of WHITESPACE) {
-      expect(boundary(`{"m"${ws}:[]}`, "m")).toBe(true);
+      expect(valueAt(`{"m"${ws}:[]}`, "m")).not.toBeNull();
+      expect(valueAt(`{"m":${ws}[]}`, "m")).not.toBeNull();
     }
-    expect(boundary('{"m"\u00b7:[]}', "m")).toBe(false);
+    expect(valueAt('{"m"\u00b7:[]}', "m")).toBeNull();
+    expect(valueAt('{"x":["m"]}', "m")).toBeNull();
+  });
+
+  it("returns the value position of the first pair whose key carries a value", () => {
+    const line = '{"z":1,"m" : [42]}';
+    expect(line[valueAt(line, "m")!]).toBe("[");
+    expect(valueAt('{"other":["m"]}', "missing")).toBeNull();
   });
 });
 
@@ -153,6 +161,31 @@ describe("parseRscPayloads", () => {
       ),
     );
     expect(out).toEqual([{ v: 1 }]);
+  });
+
+  it("resolves the marker on a real AA line: one long JSON line with sibling keys carrying the same text", () => {
+    // The shape a live AA leaderboard body takes (verified against a real 643 KB payload): the whole page arrives as one
+    // ~380 KB JSON stream line, `initialModels` sits deep inside a `["$","div",null,{…}]` node, and the marker text also
+    // appears in earlier sibling keys that hold no array. The parser has to pick the array, not the first occurrence.
+    const rows = [
+      { slug: "m0", url: "https://example.com/a" },
+      { slug: "m1", url: "https://example.com/b" },
+    ];
+    const node = [
+      "$",
+      "div",
+      null,
+      { className: "container", nav: { initialModels: { children: [] } }, initialModels: rows },
+    ];
+    const body = `e:${JSON.stringify(node)}\n`;
+
+    expect(
+      unwrap(
+        parseRscPayload<{ slug: string }>(body, "initialModels", (tree) =>
+          findNextData<{ slug: string }>(tree, "initialModels"),
+        ),
+      ),
+    ).toEqual(rows);
   });
 });
 

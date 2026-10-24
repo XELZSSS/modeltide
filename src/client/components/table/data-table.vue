@@ -9,9 +9,16 @@ import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
 import type { DataTableColumn, RowAccessors } from "./table-columns.ts";
 import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "./paging";
 import { rowKeyOf } from "./use-row-list";
-import TableBody, { TableHeader } from "./desktop.vue";
+import TableBody from "./desktop.vue";
+import { TableHeader } from "./table-header.ts";
 import MobileTableBody from "./mobile.vue";
 
+/**
+ * The searchable, paged table. It owns what the two bodies must not each own: filtering by the route's search term,
+ * page state (a different page size per device), which row is expanded, and the empty state that replaces both bodies
+ * when nothing matches. Both bodies receive the same bindings, so a contract change reaches the desktop table and the
+ * phone card list at once.
+ */
 const props = defineProps<
   RowAccessors<T> & {
     data: T[];
@@ -42,12 +49,6 @@ const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(
   () => term.value,
 );
 
-const datasetSignature = computed(() => dedupedData.value.map((row) => props.getRowId(row)).join("\u0000"));
-const staggerRows = ref(true);
-watch(datasetSignature, () => {
-  staggerRows.value = true;
-});
-
 const expandedRowGone = computed(
   () =>
     expandedId.value != null &&
@@ -62,6 +63,17 @@ watch(
   { immediate: true },
 );
 
+/** The prop set shared by both bodies; see `RowListProps` in table-columns.ts. */
+const bodyBindings = computed(() => ({
+  pagedData: pagedData.value,
+  columns: props.columns,
+  getRowId: props.getRowId,
+  getRowName: props.getRowName,
+  isExpandable: isExpandable.value,
+  expandedRowId: expandedId.value,
+  renderExpandedRow: renderExpanded.value,
+}));
+
 function setExpandedId(rowId: string | null): void {
   expandedId.value = rowId;
 }
@@ -70,43 +82,21 @@ function setExpandedId(rowId: string | null): void {
 // into the table body meant Enter on the pager did nothing afterwards and a keyboard user had to Tab through the
 // whole new page to reach it again.
 function handlePageChange(next: number): void {
-  if (next !== page.value) staggerRows.value = false;
   goToPage(next);
   expandedId.value = null;
 }
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 min-w-0">
+  <div class="flex min-w-0 flex-col gap-4">
     <EmptyState v-if="dedupedData.length === 0" :message="emptyMessage" />
     <template v-else>
-      <div class="flex flex-col gap-4 min-w-0">
-        <MobileTableBody
-          v-if="isMobile"
-          :paged-data="pagedData"
-          :columns="columns"
-          :get-row-id="getRowId"
-          :get-row-name="getRowName"
-          :is-expandable="isExpandable"
-          :expanded-row-id="expandedId"
-          :render-expanded-row="renderExpanded"
-          :stagger="staggerRows"
-          @toggle-expand="setExpandedId"
-        />
+      <div class="flex min-w-0 flex-col gap-4">
+        <MobileTableBody v-if="isMobile" v-bind="bodyBindings" @toggle-expand="setExpandedId" />
         <div v-else class="ui-card overflow-x-auto">
-          <table class="w-full text-sm table-fixed">
+          <table class="w-full table-fixed text-sm">
             <TableHeader :columns="columns" :is-expandable="isExpandable" />
-            <TableBody
-              :paged-data="pagedData"
-              :columns="columns"
-              :get-row-id="getRowId"
-              :get-row-name="getRowName"
-              :is-expandable="isExpandable"
-              :expanded-row-id="expandedId"
-              :render-expanded-row="renderExpanded"
-              :stagger="staggerRows"
-              @toggle-expand="setExpandedId"
-            />
+            <TableBody v-bind="bodyBindings" @toggle-expand="setExpandedId" />
           </table>
         </div>
       </div>

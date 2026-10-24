@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * The detail-page skeleton: back button, then the heading, then the view's own blocks at the detail rhythm. Pages
+ * supply the return target and the labels; the spacing between every detail page comes from here.
+ */
 import type { TranslationKey } from "@/shared/i18n";
 import BackButton from "@/client/shell/back-button.vue";
 import PageContainer from "@/client/components/layout/page-container.vue";
@@ -16,7 +20,7 @@ defineProps<{
 
 <template>
   <PageContainer>
-    <div class="flex flex-col gap-5 min-w-0">
+    <div class="flex min-w-0 flex-col gap-5">
       <BackButton :label-key="backLabelKey" :to="backTo" />
       <div :class="DETAIL_BLOCK_GAP">
         <PageHeader :compact="compact" :title="title" :description="description" />

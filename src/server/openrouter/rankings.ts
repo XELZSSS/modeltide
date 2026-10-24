@@ -21,10 +21,17 @@ interface OpenRouterRaw {
   directory: SourcePayload<DirectoryCacheEntry> | undefined;
 }
 
+/**
+ * How long a rankings payload may stay cached at the origin. `src/server/registry.ts` reads this same constant for the
+ * route's HTTP cache headers, so the edge window cannot drift from the origin window.
+ */
+export const OPENROUTER_RANKINGS_TTL_MS = ONE_HOUR;
+
 const openRouterSource = defineSource<OpenRouterRaw, OpenRouterRankEntry[]>({
   key: cacheKeys.openRouterRankings,
-  ttl: ONE_HOUR,
+  ttl: OPENROUTER_RANKINGS_TTL_MS,
   label: "OpenRouter rankings",
+  served: true,
   fetch: async (ctx) => {
     const { values, failures } = await runLegs([
       {

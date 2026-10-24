@@ -9,11 +9,16 @@ function priceDisplayPrecision(v: number): number {
 }
 
 function usdString(v: number): string {
-  const sign = v < 0 ? "-" : "";
   const abs = Math.abs(v);
-  const out = abs.toFixed(priceDisplayPrecision(abs));
-  if (abs > 0 && Number(out) === 0) return v < 0 ? ">-$0.0001" : "<$0.0001";
-  return `${sign}$${out}`;
+  const precision = priceDisplayPrecision(abs);
+  const out = abs.toFixed(precision);
+  // Below the smallest printable amount, rounding would invent a value the price does not have: report the bound
+  // (">-$0.0001" / "<$0.0001") instead of a made-up one.
+  if (abs > 0 && abs < 10 ** -precision) {
+    const bound = (10 ** -precision).toFixed(precision);
+    return v < 0 ? `>-$${bound}` : `<$${bound}`;
+  }
+  return `${v < 0 ? "-" : ""}$${out}`;
 }
 
 export function formatDollar(v: number | null | undefined, t?: TFunction): string {

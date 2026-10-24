@@ -29,10 +29,10 @@ export function useListKeyboard(
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      index.value = (index.value + 1) % count.value;
+      index.value = (activeIndex.value + 1) % count.value;
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      index.value = index.value <= 0 ? count.value - 1 : index.value - 1;
+      index.value = activeIndex.value <= 0 ? count.value - 1 : activeIndex.value - 1;
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (activeIndex.value >= 0) onSelect(activeIndex.value);

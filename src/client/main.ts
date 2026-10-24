@@ -5,7 +5,11 @@ import App from "./app.vue";
 import { router } from "./router";
 import { queryClient } from "./api/query-client";
 import { initBootstrap } from "./bootstrap";
+import { installClientErrorReporting, reportClientError } from "./monitoring";
+import { vTooltip } from "./directives/tooltip";
 import "@/styles/globals.css";
+
+installClientErrorReporting();
 
 const app = createApp(App);
 
@@ -13,17 +17,23 @@ app.use(createPinia());
 app.use(VueQueryPlugin, { queryClient });
 app.use(router);
 
+app.directive("tooltip", vTooltip);
+
 app.config.errorHandler = (err, _instance, info) => {
-  console.error("[app]", err, info);
+  reportClientError("app.errorHandler", err, { info });
 };
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");
 
-void router
-  .isReady()
-  .catch(() => {})
-  .then(() => {
-    app.mount(root);
-    initBootstrap();
-  });
+/**
+ * `isReady()` rejects when the *first* navigation fails, and mounting anyway is deliberate: the router has already
+ * reported that failure through `onError`, the shell still has to render, and the reader can then navigate to a route
+ * that resolves. Awaiting it unguarded would leave the app unmounted with a blank page.
+ */
+router.onError((err) => reportClientError("router", err));
+
+await router.isReady().catch((err: unknown) => reportClientError("router.isReady", err));
+
+app.mount(root);
+initBootstrap();

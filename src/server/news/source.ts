@@ -9,15 +9,11 @@ import type { AppContext } from "@/server/api/context";
 import { errMsg } from "@/server/api/errors";
 import { FEED_ACCEPT, parseFeed } from "@/server/formats/rss-feed-parser";
 
-import { rssFeeds } from "./feeds";
+import { NEWS_LEG_CONCURRENCY, rssFeeds } from "./feeds";
 import { dedupeBy } from "@/shared/utils";
 import { normalizeNewsLink } from "@/server/formats/url";
 
 import { defineParamSource, requireParsed, requireRows } from "@/server/pipeline";
-
-// Per-category leg limit: five, so the biggest category (industry) finishes in one round instead of two. The 6-slot
-// connection pool per invocation is the hard ceiling, which leaves one slot spare.
-const NEWS_LEG_CONCURRENCY = 5;
 
 function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsItem[]): NewsItem[] {
   let invalidDates = 0;
@@ -76,11 +72,18 @@ async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<Ne
   return { category, items: allItems, failCount: failures.length, total: values.length };
 }
 
+/**
+ * How long a news category may stay cached at the origin in the healthy case. `src/server/registry.ts` reads this same
+ * constant for the route's HTTP cache headers, so the edge window cannot drift from the origin window.
+ */
+export const NEWS_CATEGORY_TTL_MS = NEWS_TTL_MS;
+
 const newsCategorySource = defineParamSource<{ category: NewsCategory }, NewsRaw, NewsItem[]>(
   ({ category }) => cacheKeys.news(category),
   {
-    ttl: NEWS_TTL_MS,
+    ttl: NEWS_CATEGORY_TTL_MS,
     label: "news",
+    served: true,
     fetch: (ctx, { category }) => fetchNewsRaw(ctx, category),
     parse: (raw, ctx) =>
       requireRows(
@@ -93,7 +96,7 @@ const newsCategorySource = defineParamSource<{ category: NewsCategory }, NewsRaw
     // serving it for the full news TTL.
     partialWhen: ({ raw }) => ({
       partial: raw.failCount > 0,
-      ttl: ttlFor(raw.failCount > 0, NEWS_TTL_MS),
+      ttl: ttlFor(raw.failCount > 0, NEWS_CATEGORY_TTL_MS),
     }),
   },
 );

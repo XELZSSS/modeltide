@@ -56,8 +56,11 @@ export function parseLeaderboardModels(html: unknown): ParseResult<Record<string
   const { releases, modelArrays } = scanReleaseIndex(html);
   const links = collectModelReleaseLinksFromArrays(modelArrays);
   const prop = parseRscPayload<unknown[]>(html, "initialModels", (tree) => findNextData(tree, "initialModels"));
-  const rows = prop.ok && Array.isArray(prop.data) ? prop.data : [];
-  if (rows.length === 0 || !rows.some((raw) => isRecord(raw) && "intelligenceIndex" in raw)) {
+  // `parseRscPayload` only answers `ok` with a non-empty array, so what used to be read as "an empty list" is a parse
+  // failure and belongs in the error, not in a payload that then reported "no usable model rows" for either cause.
+  if (!prop.ok) return parseFail(prop.error);
+  const rows = prop.data;
+  if (!rows.some((raw) => isRecord(raw) && "intelligenceIndex" in raw)) {
     return parseFail("AA leaderboard page yielded no usable model rows");
   }
   const seenWire = new Set<string>();

@@ -10,7 +10,6 @@ export function useCompareModels(
   const rankingMap = computed(() => {
     const map = new Map<string, ArtificialAnalysisModel>();
     for (const model of toValue(rankings)) {
-      if (model == null) continue;
       const id = modelId(model);
       if (id) map.set(id, model);
     }
@@ -26,13 +25,16 @@ export function useCompareModels(
 export function usePruneCompareIds(
   models: MaybeRefOrGetter<ArtificialAnalysisModel[]>,
   onPruned?: (removed: string[]) => void,
+  isPartial?: MaybeRefOrGetter<boolean>,
 ): void {
   const store = useCompareStore();
   const validIds = computed(() => new Set(toValue(models).map(modelId).filter(Boolean)));
   watch(
-    validIds,
-    (ids) => {
-      if (ids.size === 0) return;
+    [validIds, () => toValue(isPartial) === true],
+    ([ids, partial]) => {
+      // A partial catalogue is missing whatever legs the upstream failed to deliver, so an absent id is not evidence the
+      // model is gone — pruning on it would silently drop the reader's selection.
+      if (ids.size === 0 || partial) return;
       const removed = store.pruneCompare(ids);
       if (removed.length > 0) onPruned?.(removed);
     },

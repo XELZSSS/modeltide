@@ -23,7 +23,14 @@ export const RETRY_AFTER_MAX_MS = 5 * 60_000;
 
 export const SHARED_REFRESH_TIMEOUT_MS = WORST_CASE_UPSTREAM_CALL_MS;
 
-// The guard must still fire inside the platform's post-response window, so it sits just past the refresh budget.
-// The guard must still fire inside the platform's post-response window: ctx.waitUntil() is capped at 30 s, so the guard
-// sits just past the refresh budget with two seconds to spare instead of landing exactly on the cap.
-export const INFLIGHT_HANG_GUARD_MS = SHARED_REFRESH_TIMEOUT_MS + 2_000;
+/**
+ * Cloudflare's post-response window: work handed to `ctx.waitUntil()` is cut off at 30 s, so a guard that lands on or past
+ * this never runs and the refresh it was meant to release stays wedged for the isolate's lifetime.
+ * `build/consistency-guard.ts` re-checks the relationship below whenever a fetch budget changes.
+ */
+export const PLATFORM_WAIT_UNTIL_CAP_MS = 30_000;
+
+/** How far inside that cap the guard fires, so timer granularity on the platform side cannot push it outside. */
+export const INFLIGHT_HANG_GUARD_MARGIN_MS = 2_000;
+
+export const INFLIGHT_HANG_GUARD_MS = SHARED_REFRESH_TIMEOUT_MS + INFLIGHT_HANG_GUARD_MARGIN_MS;

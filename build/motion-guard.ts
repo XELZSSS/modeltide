@@ -2,10 +2,17 @@ import fs from "fs";
 import path from "path";
 import type { Plugin } from "vite";
 import { rootDir } from "../vite.shared.ts";
-
 const MOTION_CSS = path.join(rootDir, "src/styles/motion.css");
 const CLIENT_DIR = path.join(rootDir, "src/client");
+const MOTION_TIMING = path.join(CLIENT_DIR, "motion", "index.ts");
 const SOURCE_EXTENSIONS = new Set([".vue", ".ts"]);
+
+/**
+ * `export const MOTION_FAST_MS = <number>;`, read as text rather than imported: pulling a client module into the config
+ * graph makes Vite's native config loader resolve that module's own imports, which are extensionless by the client-side
+ * convention. The declaration is what has to agree with motion.css, so this reads the source of truth directly.
+ */
+const MOTION_FAST_DECLARATION = /export const MOTION_FAST_MS = (\d+);/;
 
 const EXEMPT_DIRS = new Set([path.join(CLIENT_DIR, "motion")]);
 
@@ -42,13 +49,31 @@ interface MotionVocabulary {
   recipes: Set<string>;
 }
 
-function readVocabulary(): MotionVocabulary {
-  const css = fs.readFileSync(MOTION_CSS, "utf8");
+function readVocabulary(css: string): MotionVocabulary {
   const utilities = new Set<string>();
   for (const match of css.matchAll(/@utility\s+([a-z0-9-]+)/g)) utilities.add(match[1]!);
   const recipes = new Set<string>();
   for (const match of css.matchAll(/\.(ui-[a-z0-9-]+)-enter-active/g)) recipes.add(match[1]!);
   return { utilities, recipes };
+}
+
+/**
+ * The one JS-side hold (the Suspense dots' delay) counts on `MOTION_FAST_MS`. That is one number in the comments and
+ * another in the code otherwise, so pin the declaration against the CSS it was derived from.
+ */
+function assertFastDuration(css: string, timing: string): void {
+  const declared = /--motion-duration-fast:\s*(\d+)ms/.exec(css)?.[1];
+  const constant = MOTION_FAST_DECLARATION.exec(timing)?.[1];
+  if (constant === undefined) {
+    throw new Error(
+      "src/client/motion/index.ts: no `export const MOTION_FAST_MS = <number>;` declaration to pin motion.css against",
+    );
+  }
+  if (declared !== constant) {
+    throw new Error(
+      `src/styles/motion.css: --motion-duration-fast is ${declared ?? "unset"}, but MOTION_FAST_MS in src/client/motion/index.ts is ${constant}`,
+    );
+  }
 }
 
 function relative(file: string): string {
@@ -106,13 +131,16 @@ export function motionGuard(): Plugin {
   let ran = false;
   return {
     name: "modeltide:motion-guard",
-    // Runs on `vite dev` and `vite build`: the motion vocabulary is invisible to type-check and lint, so violations
-    // used to accumulate locally until someone built for production.
+    // Runs on `vite dev` and `vite build`: the motion vocabulary is invisible to type-check and lint, so otherwise
+    // violations accumulate locally until someone builds for production.
     buildStart() {
       if (ran) return;
       if (this.environment?.name != null && this.environment.name !== "client") return;
       ran = true;
-      const vocabulary = readVocabulary();
+      const motionCss = fs.readFileSync(MOTION_CSS, "utf8");
+      const motionTiming = fs.readFileSync(MOTION_TIMING, "utf8");
+      const vocabulary = readVocabulary(motionCss);
+      assertFastDuration(motionCss, motionTiming);
       const files: string[] = [];
       collectSourceFiles(CLIENT_DIR, files);
       const problems = files.flatMap((file) => checkFile(file, vocabulary));

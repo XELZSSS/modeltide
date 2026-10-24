@@ -10,15 +10,11 @@ import EmptyState from "@/client/components/feedback/empty-state.vue";
 import RankedListRows from "./ranked-list-rows.vue";
 import type { HomeProviderStat } from "./use-home-stats";
 
-const TOP_PROVIDERS = 5;
-
 const props = defineProps<{ providerStats: HomeProviderStat[] }>();
 
 const { t } = useTranslation();
-const topProviders = computed(() => props.providerStats.slice(0, TOP_PROVIDERS));
-
 const rankedProviders = computed(() =>
-  topProviders.value.map((p) => ({
+  props.providerStats.map((p) => ({
     label: p.name,
     valueLabel: `${formatSpeed(p.avgSpeed, t)} ${t("tokensPerSecond")}`,
     color: p.color,
@@ -28,9 +24,9 @@ const rankedProviders = computed(() =>
 
 <template>
   <Card class="h-full">
-    <CardContent class="flex flex-col h-full">
+    <CardContent class="flex h-full flex-col">
       <CardHeader :title="t('providerSpeed')" :subtitle="t('artificialSource')" />
-      <EmptyState v-if="topProviders.length === 0" variant="plain" compact :message="t('notAvailable')" />
+      <EmptyState v-if="providerStats.length === 0" variant="plain" compact :message="t('notAvailable')" />
       <RankedListRows v-else :rows="rankedProviders">
         <template #label="{ row }">
           <LabeledDot :color="row.color" class="flex-1" :title="row.label">{{ row.label }}</LabeledDot>

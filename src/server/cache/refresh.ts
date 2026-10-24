@@ -1,16 +1,22 @@
 import { INFLIGHT_HANG_GUARD_MS } from "@/server/upstream/timeouts";
 import { UpstreamError } from "@/server/api/errors";
 import { noteCacheStat } from "./stats";
-import { FAILURE_COOLDOWN_MS, refreshFailureCooldown, shouldCoolDown } from "./failure-cooldown";
-import type { InflightRegistry } from "./inflight";
+import { refreshFailureCooldown, shouldCoolDown } from "./failure-cooldown";
+import type { SingleFlight } from "./inflight";
 import type { KvStore } from "./kv";
 import type { TierStore } from "./tier-store";
+
+export interface RefreshResult<T> {
+  value: T;
+  /** Serialized body, present when this run stored the entry; a displaced run has none. */
+  body: string | undefined;
+}
 
 /** Runs one refresh per versioned key, with a hang guard, failure cooldown and deduped concurrent callers. */
 export class RefreshRunner {
   constructor(
     private tier: TierStore,
-    private inflight: InflightRegistry,
+    private inflight: SingleFlight,
   ) {}
 
   async run<T>(
@@ -18,34 +24,31 @@ export class RefreshRunner {
     ttl: number,
     fn: () => Promise<{ data: T; ttl?: number }>,
     kv: KvStore | undefined,
-  ): Promise<T> {
-    const existing = this.inflight.get<T>(vk);
+    serveBody: boolean,
+  ): Promise<RefreshResult<T>> {
+    const existing = this.inflight.get<RefreshResult<T>>(vk);
     if (existing) return existing;
-    const cooldown = refreshFailureCooldown.shouldSkip(vk, FAILURE_COOLDOWN_MS);
-    if (cooldown.skip) {
-      const { entry } = cooldown;
-      throw new UpstreamError(`Upstream refresh skipped (failure cooldown) for ${vk}`, {
-        ...(entry.timeout ? { timeout: true } : {}),
-        ...(entry.statusCode != null ? { status: entry.statusCode } : {}),
-        ...(entry.retryAfterMs != null ? { retryAfterMs: entry.retryAfterMs } : {}),
-      });
-    }
+    refreshFailureCooldown.throwIfCooling(vk);
 
-    let p!: Promise<T>;
-    const work = (async (): Promise<T> => {
+    let p!: Promise<RefreshResult<T>>;
+    const work = (async (): Promise<RefreshResult<T>> => {
       noteCacheStat("refreshes");
       const { data, ttl: t } = await fn();
+      // The source answered with a payload, so a failure recorded by an earlier detached attempt is no longer this key's
+      // state: keeping it would report the *next* stale read as degraded even though the data was refreshed.
+      refreshFailureCooldown.noteRefreshSuccess(vk);
+      // The hang guard may have released this refresh and let a new owner register: then the new owner stores and
+      // this displaced run only answers its own waiters. With the slot empty or still ours, persist as usual.
       const owner = this.inflight.get(vk);
-      if (owner !== undefined && owner !== p) return data;
-      await this.tier.storeCurrent(kv, vk, data, t ?? ttl);
-      return data;
+      if (owner !== undefined && owner !== p) return { value: data, body: undefined };
+      return { value: data, body: await this.tier.storeCurrent(kv, vk, data, t ?? ttl, serveBody) };
     })();
 
     let hangGuardReject: (err: unknown) => void = () => {};
     const hangGuard = new Promise<never>((_, reject) => {
       hangGuardReject = reject;
     });
-    p = this.inflight.run(vk, Promise.race([work, hangGuard]));
+    p = this.inflight.insert(vk, Promise.race([work, hangGuard]));
     p.then(undefined, () => {});
 
     const hangTimer = setTimeout(() => {

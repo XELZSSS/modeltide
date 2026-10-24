@@ -1,7 +1,7 @@
 <script lang="ts">
-import { registerLine } from "@/client/charts/register";
+import { registerBar } from "@/client/charts/register";
 
-registerLine();
+registerBar();
 </script>
 
 <script setup lang="ts">
@@ -16,10 +16,10 @@ import {
   AXIS_MAX,
   AXIS_STEP,
   CHART_EMPTY_CLASS,
-  FLEX_CHART_HEIGHT,
+  RANKING_CHART_HEIGHT,
   axisTickStyle,
   cartesianChartOptions,
-  lineSeriesStyle,
+  ceilToStep,
   seriesColor,
   useChartTheme,
 } from "@/client/charts/theme";
@@ -34,24 +34,25 @@ import type { HomeChartPoint } from "@/shared/types";
 
 const SERIES_KEYS = ["intelligence", "coding"] as const;
 const SERIES_LABEL_KEYS = ["intelligence", "coding"] as const;
-const TOP_N = 10;
-const AXIS_POINT_RADIUS = 4;
-const AXIS_POINT_HOVER_RADIUS = 7;
+/** The bar is ~26px thick on a desktop card, so 3px rounds the ends without turning it into a capsule. */
+const BAR_RADIUS = 3;
+/**
+ * Label caps, in characters. `HOME_CHART_ROWS` in src/shared/config/ui.ts fixes the category count at seven — ~81px per
+ * slot on a desktop card is the largest set that still leaves a ~26px bar — and the server hands over exactly that many
+ * rows. Desktop labels are trimmed to one line; phone labels tilt 45° below the axis, which costs no slot width and
+ * carries more of the name. The tooltip title is always untrimmed.
+ */
+const AXIS_LABEL_MAX_CHARS = 15;
+const MOBILE_AXIS_LABEL_MAX_CHARS = 16;
 
 type IndexSeriesKey = (typeof SERIES_KEYS)[number];
-
-const AXIS_LABEL_MAX_CHARS = 12;
-const MOBILE_AXIS_LABEL_MAX_CHARS = 9;
-const AXIS_TICK_LIMIT = 6;
-const MOBILE_AXIS_TICK_LIMIT = 5;
 type IndexRow = HomeChartPoint & Record<IndexSeriesKey, number>;
 
+/** The payload arrives sliced to `HOME_CHART_ROWS` and ordered by intelligence: this drops only the rows a bar cannot draw. */
 function buildIndexRows(models: readonly HomeChartPoint[]): IndexRow[] {
-  const complete = models.filter((model): model is IndexRow =>
+  return models.filter((model): model is IndexRow =>
     SERIES_KEYS.every((key) => typeof model[key] === "number" && Number.isFinite(model[key])),
   );
-  complete.sort((a, b) => b.intelligence - a.intelligence);
-  return complete.slice(0, TOP_N);
 }
 
 const tickLabel = (value: string | number): string => formatIndex(Number(value));
@@ -67,60 +68,63 @@ const theme = useChartTheme();
 const isMobile = useDevice();
 const rows = computed(() => buildIndexRows(props.models));
 const fullLabels = computed(() => rows.value.map((m) => m.shortName || shortModelId(m.name) || m.id || FALLBACK_DASH));
-const labels = computed(() => {
-  const maxChars = isMobile.value ? MOBILE_AXIS_LABEL_MAX_CHARS : AXIS_LABEL_MAX_CHARS;
-  return fullLabels.value.map((label) => axisLabel(label, maxChars));
-});
+const labels = computed(() =>
+  fullLabels.value.map((label) =>
+    axisLabel(label, isMobile.value ? MOBILE_AXIS_LABEL_MAX_CHARS : AXIS_LABEL_MAX_CHARS),
+  ),
+);
 
-const data = computed<ChartData<"line">>(() => ({
+/**
+ * The index is a 0..100 scale, so 100 is the floor of the value axis — but it must not also be the ceiling: a model
+ * above 100 was drawn past the plot and clipped without a trace. `ceilToStep` grows the axis to the next gridline.
+ */
+const valueMax = computed(() =>
+  ceilToStep(rows.value.reduce((peak, row) => Math.max(peak, row.intelligence, row.coding), AXIS_MAX)),
+);
+
+const data = computed<ChartData<"bar">>(() => ({
   labels: labels.value,
-  datasets: SERIES_KEYS.map((key, slot) => {
-    const color = seriesColor(theme.value, slot);
-    return {
-      label: t(SERIES_LABEL_KEYS[slot]!),
-      data: rows.value.map((m) => m[key]),
-      borderColor: color,
-      backgroundColor: color,
-      fill: false,
-      ...lineSeriesStyle,
-      cubicInterpolationMode: "default",
-      tension: 0,
-      pointRadius: AXIS_POINT_RADIUS,
-      pointHoverRadius: AXIS_POINT_HOVER_RADIUS,
-      pointStyle: "circle",
-      pointBackgroundColor: theme.value.tooltipBg,
-      pointBorderColor: color,
-      pointBorderWidth: 2.5,
-    };
-  }),
+  datasets: SERIES_KEYS.map((key, slot) => ({
+    label: t(SERIES_LABEL_KEYS[slot]!),
+    data: rows.value.map((m) => m[key]),
+    backgroundColor: seriesColor(theme.value, slot),
+    borderRadius: BAR_RADIUS,
+    borderSkipped: false,
+    // Ten categories of two bars: the category band is 70% of the slot and each bar 90% of its half, which is what makes
+    // the bars thick enough to read in a card this wide.
+    categoryPercentage: 0.7,
+    barPercentage: 0.9,
+  })),
 }));
 
-const options = computed<ChartOptions<"line">>(() =>
-  cartesianChartOptions<"line", "category">(theme.value, {
+const options = computed<ChartOptions<"bar">>(() =>
+  cartesianChartOptions<"bar", "category">(theme.value, {
     interaction: { mode: "index", intersect: false },
     x: {
       type: "category",
-      // A phone leaves the plot about 290px: fewer, shorter labels fit instead of colliding. The tooltip title still
-      // carries the full model name.
       ticks: {
         ...axisTickStyle(theme.value),
-        autoSkip: true,
-        maxTicksLimit: isMobile.value ? MOBILE_AXIS_TICK_LIMIT : AXIS_TICK_LIMIT,
-        maxRotation: 0,
-        minRotation: 0,
+        // 10px because the slot is ~60px on a desktop card: an 11-character name fits, a second tick font size does not.
+        font: { size: 10 },
+        autoSkip: false,
+        maxRotation: isMobile.value ? 45 : 0,
+        minRotation: isMobile.value ? 45 : 0,
       },
+      // Category gridlines only add ten vertical rules behind ten bars.
+      grid: { display: false },
     },
     y: {
       min: 0,
-      max: AXIS_MAX,
+      max: valueMax.value,
       ticks: { ...axisTickStyle(theme.value), stepSize: AXIS_STEP, callback: tickLabel },
     },
     tooltip: {
       callbacks: {
         title: (items) => fullLabels.value[items[0]?.dataIndex ?? -1] ?? "",
         label: (ctx) => {
-          const y = ctx.parsed.y;
-          return `${ctx.dataset.label}: ${y == null ? FALLBACK_DASH : formatIndex(Number(y))}`;
+          // The bar's `parsed.y` is `number | null` in chart.js's own types, so the fallback branch is reachable here.
+          const value = ctx.parsed.y;
+          return `${ctx.dataset.label}: ${value == null ? FALLBACK_DASH : formatIndex(value)}`;
         },
       },
     },
@@ -141,16 +145,16 @@ const caption = computed(() =>
 
 <template>
   <Card class="h-full">
-    <CardContent class="flex flex-col h-full">
+    <CardContent class="flex h-full flex-col">
       <CardHeader :title="t('intelligenceIndex')" :subtitle="t('artificialSource')" />
       <EmptyState
         v-if="rows.length === 0"
         variant="plain"
         :message="t('noRankingsData')"
-        :class="cn(CHART_EMPTY_CLASS, FLEX_CHART_HEIGHT)"
+        :class="cn(CHART_EMPTY_CLASS, RANKING_CHART_HEIGHT)"
       />
-      <ChartFrame v-else :height="FLEX_CHART_HEIGHT">
-        <ChartCanvas type="line" :data="data" :options="options" :aria-label="t('intelligenceIndex')" role="img" />
+      <ChartFrame v-else :height="RANKING_CHART_HEIGHT">
+        <ChartCanvas type="bar" :data="data" :options="options" :aria-label="t('intelligenceIndex')" role="img" />
         <figcaption class="sr-only">{{ caption }}</figcaption>
       </ChartFrame>
     </CardContent>

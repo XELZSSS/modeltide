@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * A Chart.js instance bound to a `canvas`: created on mount, updated in place on data change, destroyed with the
+ * component. Diffing in place instead of recreating per render is what keeps a hover from being thrown away on every
+ * data tick.
+ */
 import { onUnmounted, ref, watch } from "vue";
 import { Chart, type ChartData, type ChartOptions, type ChartType } from "chart.js";
 

@@ -19,6 +19,6 @@ interface ApiContract {
   openRouterRankings: OpenRouterRankEntry[];
 }
 
-export type PayloadOf<D extends ApiDomain> = ApiContract[D] & unknown;
+export type PayloadOf<D extends ApiDomain> = ApiContract[D];
 
 export type DomainPayload<D extends ApiDomain> = SourcePayload<PayloadOf<D>>;

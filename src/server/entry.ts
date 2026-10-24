@@ -38,6 +38,9 @@ export async function onRequest(context: PagesFunctionContext): Promise<Response
   if (!route) return notFoundForMethod(request.method);
   const early = methodResponse(request.method);
   if (early) return early;
-  const onDetach = context.waitUntil ? (work: Promise<unknown>) => context.waitUntil?.(work) : undefined;
-  return handleApiRoute(request, env, url, route, onDetach ? { onDetach } : undefined);
+  const waitUntil = context.waitUntil;
+  // `waitUntil` keeps a detached cache refresh alive after the response is sent. Where the host does not provide it,
+  // the same work still runs — nothing just waits for it.
+  const hooks = waitUntil === undefined ? undefined : { onDetach: (work: Promise<unknown>) => waitUntil(work) };
+  return handleApiRoute(request, env, url, route, hooks);
 }

@@ -1,35 +1,34 @@
 {
   "name": "modeltide",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node build/gen-cache-version.cjs && vite",
     "gen:cache-version": "node build/gen-cache-version.cjs",
-    "gen:cache-version:check": "node build/gen-cache-version.cjs --check",
-    "build": "npm run type-check && npm run lint && npm run test && npm run build:app",
+    "postinstall": "node build/gen-cache-version.cjs",
+    "build": "npm run type-check && npm run lint && npm run format:check && npm run test && npm run build:app",
     "build:app": "node build/gen-cache-version.cjs && node build/bundle-functions.mjs && vite build",
     "preview": "vite preview",
-    "type-check": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",
+    "type-check": "node build/gen-cache-version.cjs && vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",
     "lint": "oxlint --vue-plugin --deny-warnings",
     "lint:fix": "oxlint --vue-plugin --fix",
-    "format": "oxfmt --write .",
+    "format": "oxfmt --write . && node build/gen-cache-version.cjs",
     "format:check": "oxfmt --check .",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node build/gen-cache-version.cjs && vitest run",
+    "test:watch": "node build/gen-cache-version.cjs && vitest",
     "clean": "node build/clean.mjs",
     "audit": "npm audit --registry=https://registry.npmjs.org"
   },
   "engines": {
     "node": ">=24.11.0"
   },
-  "packageManager": "npm@11.19.0",
+  "packageManager": "npm@11.19.1",
   "dependencies": {
     "@lucide/vue": "^1.48.0",
     "@tanstack/vue-query": "^5.104.0",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
     "fast-xml-parser": "^5.11.1",
     "pinia": "^4.0.3",
     "tailwind-merge": "^3.6.0",
@@ -42,15 +41,16 @@
     "@types/node": "24.19.2",
     "@vitejs/plugin-vue": "^6.0.9",
     "esbuild": "^0.28.2",
-    "oxfmt": "^0.73.0",
+    "oxfmt": "0.74.0",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vite": "^8.2.2",
-    "vitest": "~5.0.1"
+    "vitest": "~5.0.1",
+    "vue-tsc": "^3.3.13"
   },
   "allowScripts": {
-    "vue-demi@0.14.10": true,
-    "esbuild@0.28.2": true
+    "vue-demi": true,
+    "esbuild": true
   }
 }

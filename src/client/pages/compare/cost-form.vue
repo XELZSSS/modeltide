@@ -34,13 +34,13 @@ function onFieldChange(field: CostFieldDef, value: string): void {
 
 <template>
   <template v-for="field in fields" :key="field.id">
-    <div class="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+    <div class="flex max-w-full min-w-0 flex-wrap items-center gap-2">
       <Input
         :id="`cost-${field.id}`"
         type="text"
         inputmode="decimal"
         autocomplete="off"
-        class="w-24 sm:w-28 shrink-0"
+        class="w-24 shrink-0 sm:w-28"
         :model-value="field.value"
         :placeholder="field.label"
         :aria-label="field.unit ? `${field.label} (${field.unit})` : field.label"
@@ -48,16 +48,20 @@ function onFieldChange(field: CostFieldDef, value: string): void {
         :aria-describedby="!isCostFieldInput(field.value) ? `cost-${field.id}-error` : undefined"
         @update:model-value="onFieldChange(field, $event)"
       />
-      <label :for="`cost-${field.id}`" class="ui-caption min-w-0 cursor-text">
+      <label :for="`cost-${field.id}`" class="min-w-0 cursor-text ui-caption">
         {{ field.unit ? `${field.label} (${field.unit})` : field.label }}
       </label>
-      <p v-if="!isCostFieldInput(field.value)" :id="`cost-${field.id}-error`" class="w-full text-xs text-destructive">
+      <p
+        v-if="!isCostFieldInput(field.value)"
+        :id="`cost-${field.id}-error`"
+        class="w-full ui-caption text-destructive"
+      >
         {{ t("invalidCostValue") }}
       </p>
     </div>
   </template>
   <div v-if="avgCost !== undefined" class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-    <span class="text-sm text-text-secondary">{{ t("estimatedMonthlyCost") }}:</span>
+    <span class="ui-body-secondary">{{ t("estimatedMonthlyCost") }}:</span>
     <span class="ui-mono-value text-lg font-semibold">
       {{ avgCost == null ? t("notAvailable") : formatDollar(avgCost, t) }}
     </span>

@@ -3,24 +3,34 @@ import { computed } from "vue";
 import { cva } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
 
-// The active underline ends at the button's own bottom edge (`bottom-0`, not `-bottom-px`). The tab strip is an
-// `overflow-x` scroller, which clips at its padding box, so a line hanging 1px below the button was never painted.
+/**
+ * One tab in a tab strip, acting as a `tab` in a tablist or a `radio` in a segmented control — hence the selected state
+ * binding to `aria-selected` or `aria-checked` rather than always the same attribute.
+ *
+ * The look is the reference segmented control: the strip is the muted container (see `segmented-group.vue`) and the
+ * active trigger is the raised `bg-background` pill with a hairline lift. Selection is a surface change, not an
+ * underline.
+ *
+ * Defaults live in the prop defaults below; the variants carry no `defaultVariants`, because `active` and `size` are
+ * always supplied by them and a second set could only drift.
+ */
 const tabButtonVariants = cva(
-  "font-medium ui-motion ui-press whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none relative pb-2.5 after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-accent after:origin-left ui-motion-indicator",
+  "relative inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap ui-motion focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       active: {
-        true: "text-text-primary after:scale-x-100",
-        false: "text-text-secondary after:scale-x-0 hoverable:hover:text-text-primary",
+        // The pill has no border, so this lift is its only edge: without it the white fill on the muted track is a
+        // ~1.1:1 step and the selected tab reads as unselected.
+        true: "bg-background text-text-primary shadow-xs",
+        false: "text-text-secondary hoverable:hover:bg-background/60 hoverable:hover:text-text-primary",
       },
-      // `pt`/`px` rather than `py`: the base `pb-2.5` is the gap the active underline sits in, so growing the button
-      // for fingers has to come from the top and sides or the rule drifts away from the label.
+      // Touch first again: `h-10` under the `md:` breakpoint keeps a 40px target, then the desktop height matches the
+      // 32px pill the reference segmented control uses.
       size: {
-        sm: "px-2 pt-3 text-xs tracking-label md:px-1 md:pt-1.5",
-        md: "px-2 pt-3.5 text-sm tracking-label md:px-1 md:pt-2",
+        sm: "h-10 px-3 text-xs md:h-7 md:px-2.5",
+        md: "h-10 px-3.5 text-sm md:h-8 md:px-3",
       },
     },
-    defaultVariants: { active: false, size: "md" },
   },
 );
 

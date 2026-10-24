@@ -1,0 +1,62 @@
+/*
+ * One global rule themes every scrollport — the page's `main`, any `overflow-*-auto` block — and one utility opts a
+ * scrollport out of the theme.
+ *
+ * Widths follow the input device: touch (< 768px) gets a 4px bar, the only affordance that a horizontal strip is
+ * scrollable; pointer (>= 768px) gets none, because the wheel/trackpad is the affordance and the strip only cost
+ * layout.
+ */
+
+html,
+main,
+.overflow-y-auto:not(.no-scrollbar),
+.overflow-x-auto:not(.no-scrollbar) {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 20%, transparent) transparent;
+
+  &::-webkit-scrollbar-track,
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--text-secondary) 20%, transparent);
+    border: 2px solid transparent;
+    border-radius: 0;
+    background-clip: content-box;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--text-secondary) 40%, transparent);
+  }
+
+  @media (width < 768px) {
+    &::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+  }
+
+  @media (width >= 768px) {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+}
+
+/* Hides the bar on any scrollport, at any width: used where the caller draws its own affordance (the search panel, a
+   ranking strip that already shows an overflow edge). */
+@utility no-scrollbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

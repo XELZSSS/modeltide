@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * The page skeleton for a view that is split into tabs: the page column, the heading with its actions slot, and the tab
+ * strip around the body. Tab state stays with the caller, which is what lets a hub restore the tab from the URL.
+ */
 import PageContainer from "@/client/components/layout/page-container.vue";
 import PageHeader from "@/client/components/layout/page-header.vue";
 import TabContainer from "@/client/components/navigation/tab-container.vue";

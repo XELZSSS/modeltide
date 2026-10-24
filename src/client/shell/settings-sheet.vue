@@ -20,6 +20,7 @@ const languageOptions = computed(() => [
 ]);
 
 const themeOptions = computed(() => [
+  { value: "system", label: t("themeSystem") },
   { value: "light", label: t("themeLight") },
   { value: "dark", label: t("themeDark") },
 ]);
@@ -32,8 +33,8 @@ const themeOptions = computed(() => [
 
       <div class="divide-y divide-border">
         <div class="flex items-center justify-between gap-3 px-4 py-3">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-text-secondary shrink-0"><Languages :size="16" /></span>
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="shrink-0 text-text-secondary"><Languages :size="16" /></span>
             <p class="text-sm">{{ t("language") }}</p>
           </div>
           <SettingsSegmented
@@ -45,8 +46,8 @@ const themeOptions = computed(() => [
           />
         </div>
         <div class="flex items-center justify-between gap-3 px-4 py-3">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-text-secondary shrink-0"><SunMoon :size="16" /></span>
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="shrink-0 text-text-secondary"><SunMoon :size="16" /></span>
             <p class="text-sm">{{ t("themeToggle") }}</p>
           </div>
           <SettingsSegmented
@@ -54,7 +55,9 @@ const themeOptions = computed(() => [
             id-prefix="theme"
             :value="settings.themeMode"
             :options="themeOptions"
-            @change="(value) => (value === 'light' || value === 'dark') && settings.setThemeMode(value)"
+            @change="
+              (value) => (value === 'system' || value === 'light' || value === 'dark') && settings.setThemeMode(value)
+            "
           />
         </div>
       </div>

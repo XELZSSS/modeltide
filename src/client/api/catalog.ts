@@ -1,6 +1,5 @@
 import {
   FIVE_MINUTES,
-  FIFTEEN_MINUTES,
   NEWS_TTL_MS,
   ONE_MINUTE,
   OPEN_SOURCE_MODELS_DEFAULTS,
@@ -25,9 +24,12 @@ export const qOpenRouterList = createApiQuery("openRouterRankings", queryKeys.op
   isPartialData: isPartialPayload,
 });
 
+// The dashboard's client TTL must match its origin TTL (`FIVE_MINUTES`): a longer one let the tab keep serving a copy
+// the server had already replaced. Every other domain here holds for at most the server TTL — see
+// `cacheDurationsForTtl`. How long a payload stays resident after it goes stale is `createApiQuery`'s default, not a
+// per-domain decision.
 export const qHomeDashboard = createApiQuery("homeDashboard", queryKeys.homeDashboard, {
-  ttl: FIFTEEN_MINUTES,
-  gcTime: 15 * 60_000,
+  ttl: FIVE_MINUTES,
   partialRefetchMs: ONE_MINUTE,
   isPartialData: isPartialPayload,
 });

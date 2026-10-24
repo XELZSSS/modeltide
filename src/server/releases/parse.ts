@@ -1,19 +1,21 @@
 import { isoDateOnly, sortByDateDesc } from "@/server/formats/dates";
-import { isRecord, str } from "@/server/formats/scalars";
 import { MAX_ID_CHARS, MAX_NAME_CHARS } from "@/shared/config";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 
 import type { ChangelogModel } from "@/server/aa/parse/changelog";
 import { dedupeBy } from "@/shared/utils";
+import { aaModelPageUrl } from "@/shared/utils/models";
 
 function toClosedEntry(
   id: string,
+  modelSlug: string,
   model: string,
   provider: string,
   rawDate: string,
   modelsBaseUrl: string,
 ): ClosedReleaseEntry | null {
   const cleanId = id.trim();
+  const cleanSlug = modelSlug.trim();
   const cleanModel = model.trim();
   const cleanProvider = provider.trim();
   if (!cleanId || !cleanModel || !cleanProvider) return null;
@@ -26,28 +28,33 @@ function toClosedEntry(
     model: cleanModel,
     provider: cleanProvider,
     releaseDate: date,
-    link: `${modelsBaseUrl}/models/${encodeURIComponent(cleanId)}`,
+    // AA serves a model page at its **model** slug, and a release slug only equals that for some releases: where it does
+    // not (`ling-3-1-flash-rc5` announces the model page `ling-3-1-flash-1019`) the link answered 404. The row keeps its
+    // release id as identity and points at the model page; a release whose model slug the source does not give us stays
+    // in the list without a link rather than with a dead one.
+    link: cleanSlug ? aaModelPageUrl(modelsBaseUrl, cleanSlug) : null,
   };
 }
 
 function toClosedRelease(e: ChangelogModel, modelsBaseUrl: string): ClosedReleaseEntry | null {
-  return toClosedEntry(e.releaseSlug, e.releaseName, e.creatorName, e.releaseDate, modelsBaseUrl);
+  return toClosedEntry(e.releaseSlug, e.slug, e.releaseName, e.creatorName, e.releaseDate, modelsBaseUrl);
 }
 
-function toClosedReleaseFromIndex(m: unknown, modelsBaseUrl: string): ClosedReleaseEntry | null {
-  if (!isRecord(m)) return null;
-  const rec = m as Partial<ArtificialAnalysisModel>;
-  const slug = typeof rec.slug === "string" && rec.slug.trim() !== "" ? rec.slug : str(rec.id);
-  const name = str(rec.name);
-  const creator = typeof rec.model_creators?.name === "string" ? rec.model_creators.name : "";
-  const date = str(rec.release_date);
-  if (!slug || !name) return null;
-  return toClosedEntry(slug, name, creator, date, modelsBaseUrl);
+/**
+ * The changelog-empty fallback: the caller passes the already-compacted index rows, so the shape is established and
+ * only the release fields are picked out of each one.
+ */
+function toClosedReleaseFromIndex(m: ArtificialAnalysisModel, modelsBaseUrl: string): ClosedReleaseEntry | null {
+  const slug = m.slug.trim() !== "" ? m.slug : m.id;
+  if (!slug || !m.name) return null;
+  return toClosedEntry(slug, slug, m.name, m.model_creators?.name ?? "", m.release_date ?? "", modelsBaseUrl);
 }
 
-export function toClosedReleasesFromIndex(models: unknown, modelsBaseUrl: string): ClosedReleaseEntry[] {
-  if (!Array.isArray(models)) return [];
-  const entries = (models as ArtificialAnalysisModel[])
+export function toClosedReleasesFromIndex(
+  models: readonly ArtificialAnalysisModel[],
+  modelsBaseUrl: string,
+): ClosedReleaseEntry[] {
+  const entries = models
     .map((m) => toClosedReleaseFromIndex(m, modelsBaseUrl))
     .filter((e): e is ClosedReleaseEntry => e !== null);
   const deduped = dedupeBy(entries, (e) => e.id);
@@ -55,12 +62,13 @@ export function toClosedReleasesFromIndex(models: unknown, modelsBaseUrl: string
   return deduped;
 }
 
-export function toClosedReleases(changelog: readonly ChangelogModel[], modelsBaseUrl: string): ClosedReleaseEntry[] {
-  const records = [...changelog];
-  sortByDateDesc(records, (e) => e.releaseDate);
+export function toClosedReleases(changelog: ChangelogModel[], modelsBaseUrl: string): ClosedReleaseEntry[] {
+  // Sorted in place: this function owns the output order, and the array is the changelog parse's own with no other
+  // reader.
+  sortByDateDesc(changelog, (e) => e.releaseDate);
   const entries: ClosedReleaseEntry[] = [];
   const seen = new Set<string>();
-  for (const record of records) {
+  for (const record of changelog) {
     const entry = toClosedRelease(record, modelsBaseUrl);
     if (!entry || seen.has(entry.id)) continue;
     seen.add(entry.id);

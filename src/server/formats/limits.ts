@@ -5,6 +5,8 @@ export const SOURCE_LIMITS = {
 
 export const PER_MILLION = 1_000_000;
 export const MAX_DIRECTORY_ROWS = 20_000;
+/** Row ceiling for a usage-rankings payload: one row per (model, variant) before the aggregation groups them. */
+export const MAX_RANKING_ROWS = 20_000;
 export const MAX_LEADERBOARD_ROWS = 5_000;
 
 export function perMillionOrNull(rate: number | null): number | null {

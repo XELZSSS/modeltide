@@ -5,10 +5,13 @@ import type { ParseResult } from "./formats/parse-result";
 import { UpstreamError, zeroUpstream } from "./api/errors";
 import type { Logger } from "./api/logger";
 import type { CacheScope } from "./cache/types";
+import { attachSerializedBody } from "./serialized-body";
 
-export function requireParsed<T>(result: ParseResult<T>, log?: Logger, label = "parser"): T {
+// All four callers pass both a logger and a label, so `log` was never the no-logger path and `label` never the
+// `"parser"` default: requiring them drops the dead optional-chain branch and the untaken default.
+export function requireParsed<T>(result: ParseResult<T>, log: Logger, label: string): T {
   if (!result.ok) throw new UpstreamError(result.error);
-  if (result.warnings.length > 0) log?.("warn", `[${label}] ${result.warnings.join("; ")}`);
+  if (result.warnings.length > 0) log("warn", `[${label}] ${result.warnings.join("; ")}`);
   return result.data;
 }
 
@@ -33,6 +36,11 @@ interface SourceSpec<P, TRaw, TData> {
   ttl: number;
   scope?: CacheScope;
   label: string;
+  /**
+   * True when a route returns this payload to a client. Internal sources compose their value into another source and
+   * never answer a request, so the cache skips the response copy they would never serve.
+   */
+  served?: boolean;
   fetch: (ctx: AppContext, params: P) => Promise<TRaw>;
   parse: (raw: TRaw, ctx: AppContext) => TData;
   /** Truncates an array payload to this many rows and flags the result partial. */
@@ -73,9 +81,16 @@ function buildSource<P, TRaw, TData>(
             ttl: verdict?.ttl ?? ttlFor(partial, spec.ttl),
           };
         },
-        spec.scope,
+        { ...spec.scope, serveBody: spec.served === true },
       )
-      .then(({ value, degraded }) => (degraded ? { ...value, partial: true } : value));
+      .then(({ value, degraded, body }) => {
+        // A stale fallback rewrites the stored copy into a partial response, so the body stored beside it still says
+        // `partial: false`. Serving those bytes would ship a payload whose flag, ETag and cache headers disagree with
+        // its own body, and the client would never show the partial notice or start polling. Only an unchanged payload
+        // may be served from the copy the cache encoded.
+        if (degraded) return { ...value, partial: true };
+        return body === undefined ? value : attachSerializedBody(value, body);
+      });
   };
 }
 

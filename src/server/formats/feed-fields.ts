@@ -1,5 +1,4 @@
 import type { NewsItem } from "@/shared/types";
-import { fnv1aHash } from "@/server/util/hash";
 import { isRecord, truncateSafe } from "./scalars";
 import { isSuitableNewsItem, MAX_NEWS_TITLE_CHARS } from "./content-guards";
 import { sourceNameFromUrl as channelHost } from "./url";
@@ -10,8 +9,6 @@ import { stripHtml } from "./html-to-text";
 const UNSAFE_LINK_CHARS_RE = /["<>\u0000-\u001f\u007f]/;
 const SPACE_RE = / /g;
 const MAX_LINK_CHARS = 2048;
-const MAX_ID_CHARS = 2048;
-const MAX_DATE_CHARS = 64;
 
 export function textOf(v: unknown): string | null {
   if (Array.isArray(v)) v = v[0];
@@ -25,7 +22,7 @@ export function textOf(v: unknown): string | null {
   return null;
 }
 
-export function cleanTitle(raw: string): string {
+function cleanTitle(raw: string): string {
   const stripped = raw.includes("<") ? stripHtml(raw) : raw;
   const decoded = decodeEntities(stripped);
   const clean = decoded.includes("<") ? stripHtml(decoded) : decoded;
@@ -56,16 +53,21 @@ function itemLink(item: Record<string, unknown>): string | null {
   return null;
 }
 
-function itemId(item: Record<string, unknown>, link: string | null, title: string): string {
-  const guid = textOf(item.guid ?? item.id)?.trim();
-  if (!guid) return link ?? `title:${title}`;
-  return guid.length > MAX_ID_CHARS ? fnv1aHash(guid) : guid;
-}
-
-export function feedDate(item: Record<string, unknown>): string {
+/**
+ * The item's publication time as ISO 8601, or "" when none of the feed's date elements can be parsed.
+ *
+ * Feeds send this in three shapes — RFC 822 (`Sun, 01 Aug 2026 10:00:00 GMT`), ISO (`2026-08-01T10:00:00Z`) or an Atom
+ * `updated` element — and the first one present used to be copied into the payload verbatim, so `NewsItem.pubDate` was
+ * the only date field in the API that was not ISO. Parsing here also lets a malformed `pubDate` fall through to
+ * `published`/`updated` instead of dropping the item; when no element parses the item is reported by returning "" and
+ * the caller drops it, rather than shipping a date nothing downstream can read.
+ */
+function feedDate(item: Record<string, unknown>): string {
   for (const key of ["pubDate", "published", "updated"] as const) {
     const value = textOf(item[key])?.trim();
-    if (value) return value.slice(0, MAX_DATE_CHARS);
+    if (!value) continue;
+    const ts = Date.parse(value);
+    if (Number.isFinite(ts)) return new Date(ts).toISOString();
   }
   return "";
 }
@@ -79,7 +81,6 @@ export function toNewsItem(item: Record<string, unknown>, source: string): NewsI
   const title = cleanTitle(rawTitle);
   if (!isSuitableNewsItem(title, link)) return null;
   return {
-    id: itemId(item, link, title),
     title,
     link,
     pubDate: feedDate(item),

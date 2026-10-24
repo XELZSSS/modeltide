@@ -2,7 +2,9 @@ import { ONE_MINUTE } from "@/shared/config/time";
 import { localeOf } from "@/shared/config/ui";
 import type { Lang, TFunction } from "@/shared/i18n";
 
-export function formatRelativeTime(isoString: string, t: TFunction, lang: Lang = "en", nowMs = Date.now()): string {
+// The single caller passes an explicit `lang` and never a clock, so both defaults were dead; the now is read inline.
+export function formatRelativeTime(isoString: string, t: TFunction, lang: Lang): string {
+  const nowMs = Date.now();
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return isoString;
   const diffMs = nowMs - date.getTime();

@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { acquireSlot, createSlotPool, releaseSlot, type SlotPool } from "./pools";
 import { UPSTREAM_MAX_CONNECTIONS } from "./timeouts";
 
+/** Every production caller passes a composed attempt signal; the pool only needs one it can listen on. */
+const live = (): AbortSignal => new AbortController().signal;
+
 async function fillPool(pool: SlotPool): Promise<void> {
-  for (let i = 0; i < pool.max; i++) await acquireSlot(undefined, pool);
+  for (let i = 0; i < pool.max; i++) await acquireSlot(live(), pool);
 }
 
 describe("createSlotPool", () => {
@@ -22,7 +25,7 @@ describe("acquireSlot / releaseSlot", () => {
     expect(pool.active).toBe(UPSTREAM_MAX_CONNECTIONS);
 
     let settled = false;
-    const pending = acquireSlot(undefined, pool).then(() => {
+    const pending = acquireSlot(live(), pool).then(() => {
       settled = true;
     });
     await Promise.resolve();
@@ -42,9 +45,9 @@ describe("acquireSlot / releaseSlot", () => {
     await fillPool(pool);
 
     const order: string[] = [];
-    const a = acquireSlot(undefined, pool).then(() => order.push("a"));
-    const b = acquireSlot(undefined, pool).then(() => order.push("b"));
-    const c = acquireSlot(undefined, pool).then(() => order.push("c"));
+    const a = acquireSlot(live(), pool).then(() => order.push("a"));
+    const b = acquireSlot(live(), pool).then(() => order.push("b"));
+    const c = acquireSlot(live(), pool).then(() => order.push("c"));
     await Promise.resolve();
     expect(pool.waiters).toHaveLength(3);
 

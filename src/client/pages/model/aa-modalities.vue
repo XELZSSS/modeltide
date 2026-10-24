@@ -6,13 +6,14 @@ import { MODALITY_KEYS, type ModalityKey } from "@/shared/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import Badge from "@/client/components/ui/badge.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
-import { cn } from "@/client/utils/cn";
 
+// The chip surface stays muted for every modality — four tinted fills were the loudest thing in the section — and only
+// the label carries the colour, so the row reads as one quiet group of metadata.
 const MODALITY_STYLES: Record<ModalityKey, { className: string; labelKey: TranslationKey }> = {
-  text: { className: "border-accent/30 bg-accent-light text-accent", labelKey: "modalityText" },
-  image: { className: "border-info/30 bg-info-light text-info", labelKey: "modalityImage" },
-  speech: { className: "border-success/30 bg-success-light text-success", labelKey: "modalitySpeech" },
-  video: { className: "border-warning/30 bg-warning-light text-warning", labelKey: "modalityVideo" },
+  text: { className: "text-text-primary", labelKey: "modalityText" },
+  image: { className: "text-info", labelKey: "modalityImage" },
+  speech: { className: "text-success", labelKey: "modalitySpeech" },
+  video: { className: "text-warning", labelKey: "modalityVideo" },
 };
 
 const props = defineProps<{ model: ArtificialAnalysisModel }>();
@@ -40,27 +41,19 @@ const hasAnyModality = computed(() =>
 
 <template>
   <PageSection v-if="hasAnyModality" :title="t('modalities')">
-    <div class="flex flex-col gap-4 md:flex-row md:gap-12">
-      <div>
-        <div class="ui-caption font-medium mb-2.5">{{ t("inputModality") }}</div>
-        <div class="flex gap-2 flex-wrap">
-          <Badge
-            v-for="key in inputModalities"
-            :key="key"
-            :class="cn('px-2.5 py-1 normal-case tracking-normal', MODALITY_STYLES[key].className)"
-          >
+    <div class="flex flex-col gap-4 sm:flex-row sm:gap-6">
+      <div class="min-w-0">
+        <div class="mb-2 ui-caption font-medium">{{ t("inputModality") }}</div>
+        <div class="flex flex-wrap gap-2">
+          <Badge v-for="key in inputModalities" :key="key" :class="MODALITY_STYLES[key].className">
             {{ t(MODALITY_STYLES[key].labelKey) }}
           </Badge>
         </div>
       </div>
-      <div>
-        <div class="ui-caption font-medium mb-2.5">{{ t("outputModality") }}</div>
-        <div class="flex gap-2 flex-wrap">
-          <Badge
-            v-for="key in outputModalities"
-            :key="key"
-            :class="cn('px-2.5 py-1 normal-case tracking-normal', MODALITY_STYLES[key].className)"
-          >
+      <div class="min-w-0">
+        <div class="mb-2 ui-caption font-medium">{{ t("outputModality") }}</div>
+        <div class="flex flex-wrap gap-2">
+          <Badge v-for="key in outputModalities" :key="key" :class="MODALITY_STYLES[key].className">
             {{ t(MODALITY_STYLES[key].labelKey) }}
           </Badge>
         </div>

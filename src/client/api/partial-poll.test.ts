@@ -64,9 +64,4 @@ describe("partialPollInterval", () => {
     expect(poll(key, COMPLETE, 5)).toBe(false);
     expect(poll(key, PARTIAL, 9)).toBe(REFETCH_MS);
   });
-
-  it("ignores a malformed query object instead of throwing", () => {
-    const malformed = [null, undefined, 42, "query", {}];
-    for (const query of malformed) expect(partialPollInterval(query, isPartial, REFETCH_MS)).toBe(false);
-  });
 });

@@ -49,9 +49,13 @@ export function localApi(): Plugin {
           const response = await mod.onRequest({
             request,
             env: {},
-            waitUntil: (work) => {
-              work.catch(() => {});
-            },
+            // Mirrors the Pages host: detached cache refreshes outlive the response. A failure inside one is reported here
+            // as well — a detached promise that rejects after the handler returned used to be dropped on the floor, which
+            // hid it from everyone but the refresh runner's own log line.
+            waitUntil: (work) =>
+              void work.catch((err: unknown) => {
+                console.warn(`[dev-api] detached work failed: ${err instanceof Error ? err.message : String(err)}`);
+              }),
           });
           await writeWebResponse(response, res);
         } catch (err) {

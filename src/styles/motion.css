@@ -1,8 +1,21 @@
 /*
- * Motion tokens. Every animation in the app resolves to one of these — no component carries its own duration or curve
- * (see build/motion-guard.ts) — so the whole system is softened here and nowhere else: durations run a touch longer than
- * a "snappy" default, the curves spend more time decelerating instead of yanking out of the start and stopping hard, and
- * the travel distances stay small so an entrance reads as a settle rather than a jump.
+ * The motion system: the only place a duration, curve or travel distance is written down.
+ *
+ * Components refer to a token, an element-level override, or a `<Transition>` recipe defined here;
+ * build/motion-guard.ts fails the build when one hands in its own milliseconds, a raw `cubic-bezier()`,
+ * `transition-all` or `will-change`.
+ *
+ * Sections: tokens → touch adaptation → element-level overrides → transition pieces → entrances →
+ * loading dots → `<Transition>` recipes (plain classes, because Vue generates those names at runtime) →
+ * reduced motion.
+ */
+
+/* ---------- 1. Tokens ---------- */
+
+/*
+ * Durations run a touch longer than a "snappy" default, the curves spend more time decelerating instead of yanking out
+ * of the start and stopping hard, and the travel distances stay small so an entrance reads as a settle rather than a
+ * jump.
  */
 :root {
   --motion-duration-instant: 90ms;
@@ -31,17 +44,28 @@
   --motion-sheet: 100%;
 }
 
-/* Touch adaptation for the shared stagger tokens. Under a coarse pointer one item sits under a finger and the rest of
-   the list is usually off-screen, so a long desktop tail buys nothing and only delays the content the reader came for. */
+/* ---------- 2. Touch adaptation ---------- */
+
+/* Under a coarse pointer one item sits under a finger and the rest of the list is usually off-screen, so a long desktop
+   stagger tail buys nothing and only delays the content the reader came for. */
 @media (pointer: coarse) {
   :root {
     --motion-stagger-step: 12ms;
     --motion-stagger-max: 4;
+
     --motion-stagger-step-rows: 18ms;
     --motion-stagger-max-rows: 5;
   }
 }
 
+/* ---------- 3. Element-level overrides ---------- */
+
+/*
+ * An element that needs a different curve or duration sets one of these; `ui-motion` and the indicator/underline pieces
+ * read `--ui-motion-*` through a `var()` fallback, so the override reaches every transition the element starts. Nothing
+ * applies them today — they are the supported way to deviate without writing a literal, which is what the guard
+ * requires.
+ */
 @utility ease-motion-out {
   --ui-motion-easing: var(--motion-ease-out);
   transition-timing-function: var(--motion-ease-out);
@@ -82,6 +106,9 @@
   transition-duration: var(--motion-duration-slow);
 }
 
+/* ---------- 4. Transition pieces ---------- */
+
+/* The default transition: paint properties plus transforms, nothing that triggers layout. */
 @utility ui-motion {
   transition-property: var(
     --ui-motion-properties,
@@ -112,27 +139,14 @@
   }
 }
 
-@utility ui-motion-indicator {
-  &::after {
-    transition:
-      transform var(--ui-motion-duration, var(--motion-duration-base))
-        var(--ui-motion-easing, var(--motion-ease-emphasized)),
-      scale var(--ui-motion-duration, var(--motion-duration-base))
-        var(--ui-motion-easing, var(--motion-ease-emphasized));
-  }
-}
+/* ---------- 5. Entrances ---------- */
 
-@utility ui-motion-underline {
-  transition:
-    transform var(--ui-motion-duration, var(--motion-duration-base))
-      var(--ui-motion-easing, var(--motion-ease-emphasized)),
-    scale var(--ui-motion-duration, var(--motion-duration-base)) var(--ui-motion-easing, var(--motion-ease-emphasized));
-}
-
-/* Every enter animation fills `backwards`, never `both`. Holding the end frame costs nothing visually — the end state is
-   the element's own style — but a filled `transform` keeps the element a stacking context for the rest of its life (an
-   interpolated `transform: none` still resolves to the identity matrix), which used to trap the search panel behind the
-   table that follows the page header. */
+/*
+ * Every enter animation fills `backwards`, never `both`. Holding the end frame costs nothing visually — the end state is
+ * the element's own style — but a filled `transform` keeps the element a stacking context for the rest of its life (an
+ * interpolated `transform: none` still resolves to the identity matrix), which used to trap the search panel behind the
+ * table that follows the page header.
+ */
 @keyframes ui-motion-rise {
   from {
     opacity: 0;
@@ -153,21 +167,27 @@
   }
 }
 
-@utility ui-anim-rise {
-  animation: ui-motion-rise var(--motion-duration-base) var(--motion-ease-out) backwards;
+/* Shared base: the stagger offset every list entrance carries, so a list arrives as a sequence and not a flash. */
+@utility ui-anim-stagger {
   animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
+}
+
+@utility ui-anim-rise {
+  @apply ui-anim-stagger;
+  animation: ui-motion-rise var(--motion-duration-base) var(--motion-ease-out) backwards;
 }
 
 @utility ui-anim-fade {
+  @apply ui-anim-stagger;
   animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) backwards;
-  animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
 }
 
 @utility ui-anim-pop {
+  @apply ui-anim-stagger;
   animation: ui-motion-pop var(--motion-duration-base) var(--motion-ease-out) backwards;
-  animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
 }
 
+/* Table rows use their own, slower step: a rows list is longer than a card grid, and the same feel needs more spacing. */
 @utility ui-anim-rows {
   animation: ui-motion-fade var(--motion-duration-base) var(--motion-ease-out) backwards;
   animation-delay: calc(
@@ -175,9 +195,12 @@
   );
 }
 
+/* Content that replaces other content in place: no stagger, no travel, just a cross-fade. */
 @utility ui-anim-swap {
   animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) backwards;
 }
+
+/* ---------- 6. Loading dots ---------- */
 
 @keyframes ui-motion-dot {
   0%,
@@ -192,8 +215,8 @@
   }
 }
 
-/* The loading indicator: three dots on a shared timeline, each offset by a sixth of it. Child-based so the caller only
-   supplies colour and box padding; sizing comes from `--motion-dot-size`. */
+/* Three dots on a shared timeline, each offset by a sixth of it. Child-based so the caller only supplies colour and box
+   padding; sizing comes from `--motion-dot-size`. */
 @utility ui-dots {
   display: inline-flex;
   align-items: flex-end;
@@ -216,6 +239,13 @@
   }
 }
 
+/* ---------- 7. `<Transition>` recipes ---------- */
+/*
+ * These stay plain classes: Vue builds the names (`ui-fade-enter-active`, …) at runtime, so Tailwind never sees them in
+ * markup and would not emit an `@utility`. Recipes whose declaration blocks are identical share one rule.
+ */
+
+/* Fade: content that replaces other content in place, and the scrim behind a sheet. */
 .ui-fade-enter-active {
   transition: opacity var(--motion-duration-fast) var(--motion-ease-out);
 }
@@ -229,32 +259,11 @@
   opacity: 0;
 }
 
-/* The fetch indicator: it fades in like everything else, but it leaves the frame it was cancelled in. A request that
-   settles puts its content on screen at that moment, and a slow fade-out would leave the dots sitting over data that has
-   already arrived — which reads as the loader and the fetch running side by side rather than one after the other. */
-.ui-loader-enter-active {
-  transition: opacity var(--motion-duration-fast) var(--motion-ease-out);
-}
-
-.ui-loader-leave-active {
-  transition: opacity var(--motion-duration-instant) var(--motion-ease-in);
-}
-
-.ui-loader-enter-from,
-.ui-loader-leave-to {
-  opacity: 0;
-}
-
+/* Rise: content entering or leaving a page section, moving the short token distance. */
 .ui-rise-enter-active {
   transition:
     opacity var(--motion-duration-base) var(--motion-ease-out),
     transform var(--motion-duration-base) var(--motion-ease-out);
-}
-
-.ui-rise-leave-active {
-  transition:
-    opacity var(--motion-duration-fast) var(--motion-ease-in),
-    transform var(--motion-duration-fast) var(--motion-ease-in);
 }
 
 .ui-rise-enter-from {
@@ -267,11 +276,34 @@
   transform: translate3d(0, calc(-1 * var(--motion-rise)), 0);
 }
 
+/* Pop: panels anchored under a trigger. No `scale()` in the recipe: a scaled layer is re-rasterized at the off-scale size
+   for the duration of the transition, so the text inside the panel renders soft and only snaps sharp once the transform
+   settles. A short slide gives the same "it arrived" cue without ever resampling the text. */
 .ui-pop-enter-active {
   transform-origin: top center;
   transition:
     opacity var(--motion-duration-base) var(--motion-ease-emphasized),
     transform var(--motion-duration-base) var(--motion-ease-emphasized);
+}
+
+.ui-pop-enter-from,
+.ui-pop-leave-to {
+  opacity: 0;
+  transform: translate3d(0, calc(-1 * var(--motion-pop)), 0);
+}
+
+/* Sheet: the panel that owns the bottom edge on a phone and fades up under its trigger on a pointer device. */
+.ui-sheet-enter-active {
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-emphasized),
+    transform var(--motion-duration-base) var(--motion-ease-emphasized);
+}
+
+.ui-rise-leave-active,
+.ui-sheet-leave-active {
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-in),
+    transform var(--motion-duration-fast) var(--motion-ease-in);
 }
 
 .ui-pop-leave-active {
@@ -281,30 +313,11 @@
     transform var(--motion-duration-fast) var(--motion-ease-in);
 }
 
-/* No `scale()` in the panel recipes: a scaled layer is re-rasterized at the off-scale size for the duration of the
-   transition, so the text inside the panel renders soft and only snaps sharp once the transform settles. A short
-   slide gives the same "it arrived" cue without ever resampling the text. */
-.ui-pop-enter-from,
-.ui-pop-leave-to {
-  opacity: 0;
-  transform: translate3d(0, calc(-1 * var(--motion-pop)), 0);
-}
+/* ---------- 8. Sheet travel ---------- */
 
-.ui-sheet-enter-active {
-  transition:
-    opacity var(--motion-duration-base) var(--motion-ease-emphasized),
-    transform var(--motion-duration-base) var(--motion-ease-emphasized);
-}
-
-.ui-sheet-leave-active {
-  transition:
-    opacity var(--motion-duration-fast) var(--motion-ease-in),
-    transform var(--motion-duration-fast) var(--motion-ease-in);
-}
-
-/* The bottom sheet changes between a slide-up and a fade at the same width the shell switches to its bottom nav
-   (768px, see src/client/device.ts). At 640–767 the app was already a bottom-bar layout whose sheets faded in from the
-   centre instead of rising from the edge the thumb reaches for. */
+/* The bottom sheet changes between a slide-up and a fade at the same width the shell switches to its bottom nav (768px,
+   see src/client/device.ts). At 640–767 the app was already a bottom-bar layout whose sheets faded in from the centre
+   instead of rising from the edge the thumb reaches for. */
 @media (width < 768px) {
   .ui-sheet-enter-from,
   .ui-sheet-leave-to {
@@ -330,6 +343,10 @@
   }
 }
 
+/* ---------- 9. Reduced motion ---------- */
+
+/* The tokens collapse, and the blanket rule catches anything that carries a transition of its own (Vue's recipes above,
+   Tailwind's `transition` utilities, the smooth scroll). */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-duration-instant: 1ms;

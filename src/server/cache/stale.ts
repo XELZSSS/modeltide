@@ -18,6 +18,8 @@ export interface StaleCandidate<T> {
   value: T;
   expiresAt: number;
   storedTtl: number;
+  /** The serialized body the candidate was stored with, when it has one. */
+  body?: string;
 }
 
 /** How long past its TTL a stored copy may still be served. */

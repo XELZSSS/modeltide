@@ -17,7 +17,7 @@ function reload(): void {
     <span>{{ t("contractSkewNotice") }}</span>
     <button
       type="button"
-      class="-my-1 ml-1 inline-flex min-h-9 shrink-0 items-center px-1 font-medium text-accent underline-offset-2 ui-motion hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+      class="ml-1 inline-flex min-h-9 shrink-0 items-center px-1 font-medium text-text-primary underline-offset-2 ui-motion focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none hoverable:hover:underline"
       @click="reload"
     >
       {{ t("reloadAction") }}

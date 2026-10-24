@@ -57,12 +57,13 @@ export function navigate(to: string, replace = false): void {
   }
   popstateNavigation = false;
   const target = `${url.pathname}${url.search}${url.hash}`;
+  // `push`/`replace` return a promise. A plain navigation failure (aborted, cancelled, duplicated) resolves rather than
+  // rejects; what rejects is a throwing guard or a lazy chunk that failed to load, and an unhandled rejection there would
+  // leave the URL unchanged with nothing reported.
   const task = replace ? router.replace(target) : router.push(target);
-  if (task && typeof (task as Promise<unknown>).catch === "function") {
-    (task as Promise<unknown>).catch((err: unknown) => {
-      console.warn("[router] navigation failed:", err);
-    });
-  }
+  task.catch((err: unknown) => {
+    console.warn("[router] navigation failed:", err);
+  });
 }
 
 export function usePathname(): ComputedRef<string> {

@@ -11,7 +11,7 @@ import ProviderSpeedCard from "./provider-speed-card.vue";
 import HallucinationCard from "./hallucination-card.vue";
 import TextToImageSection from "./text-to-image-section.vue";
 
-const IndexAreaChart = loadableView(() => import("./home-charts.vue"));
+const IndexRankingChart = loadableView(() => import("./home-charts.vue"));
 const OpenSourceCard = loadableView(() => import("./open-source-card.vue"));
 
 const { t } = useTranslation();
@@ -31,21 +31,22 @@ const partial = computed(() => dashboardData.value.partial);
 
 <template>
   <PartialNotice v-if="partial" />
+  <p class="mb-3 ui-meta">{{ t("dataDisclaimer") }}</p>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-stretch">
-    <div class="md:col-span-2 lg:col-span-6 ui-anim-rise" :style="staggerStyle(0)">
-      <IndexAreaChart :models="dashboardData.chart" />
+  <div class="grid grid-cols-1 items-stretch gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-12">
+    <div class="ui-anim-rise md:col-span-2 lg:col-span-6" :style="staggerStyle(0)">
+      <IndexRankingChart :models="dashboardData.chart" />
     </div>
-    <div class="md:col-span-2 lg:col-span-6 ui-anim-rise" :style="staggerStyle(1)">
-      <OpenSourceCard :models="dashboardData.opensource" :trending="trendingStats" />
+    <div class="ui-anim-rise md:col-span-2 lg:col-span-6" :style="staggerStyle(1)">
+      <OpenSourceCard :tasks="dashboardData.openSourceTasks" :trending="trendingStats" />
     </div>
-    <div class="lg:col-span-4 ui-anim-rise" :style="staggerStyle(2)">
+    <div class="ui-anim-rise lg:col-span-4" :style="staggerStyle(2)">
       <ProviderSpeedCard :provider-stats="providerStats" />
     </div>
-    <div class="lg:col-span-4 ui-anim-rise" :style="staggerStyle(3)">
+    <div class="ui-anim-rise lg:col-span-4" :style="staggerStyle(3)">
       <HallucinationCard :rows="hallucinationStats" />
     </div>
-    <div class="md:col-span-2 lg:col-span-4 ui-anim-rise" :style="staggerStyle(4)">
+    <div class="ui-anim-rise md:col-span-2 lg:col-span-4" :style="staggerStyle(4)">
       <TextToImageSection :models="t2iModels" />
     </div>
   </div>

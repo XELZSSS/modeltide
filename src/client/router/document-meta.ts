@@ -10,6 +10,7 @@ const ROBOTS_SELECTOR = 'meta[name="robots"]';
  * the index). Kept module-level because `useDocumentMeta` owns the title and the robots tag.
  */
 const softNotFound = ref(false);
+let softNotFoundOwner = 0;
 
 /**
  * Title a detail view wants instead of the route's generic one — a model name, so the tab keeps it across a
@@ -25,14 +26,18 @@ let detailOwner = 0;
  * crawlers as a real page.
  */
 export function useSoftNotFound(missing: MaybeRefOrGetter<boolean>): void {
+  // Keyed by owner for the same reason as `useDocumentViewTitle`: the incoming detail view mounts before the outgoing
+  // one unmounts, so an outgoing instance must not clear the flag the incoming one has just set.
+  const owner = ++softNotFoundOwner;
   watch(
     () => toValue(missing),
     (value) => {
-      softNotFound.value = value;
+      if (owner === softNotFoundOwner) softNotFound.value = value;
     },
     { immediate: true },
   );
   onScopeDispose(() => {
+    if (owner !== softNotFoundOwner) return;
     softNotFound.value = false;
   });
 }

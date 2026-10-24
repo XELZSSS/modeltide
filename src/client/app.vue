@@ -22,7 +22,9 @@ watch(lang, (value) => syncDocumentMeta(value), { immediate: true });
 <template>
   <AppShell>
     <SuspenseQuery :key="routeKey">
-      <RouterView />
+      <!-- The wrapper is keyed with the route (through the SuspenseQuery key above), so a page switch mounts a fresh
+           cross-fade instead of snapping the old view out and the new one in on the same frame. -->
+      <div class="ui-anim-swap"><RouterView /></div>
     </SuspenseQuery>
   </AppShell>
 </template>

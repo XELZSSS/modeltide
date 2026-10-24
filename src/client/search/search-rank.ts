@@ -1,5 +1,5 @@
 import { modelDetailPath } from "@/shared/utils/models";
-import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/nav/nav-config";
+import { SEARCH_SOURCE_TO_MODEL_SOURCE } from "@/client/nav/sources";
 import { matchFolded, fuzzyHit, preparedFieldsFor, type PreparedFields } from "./match";
 import { normalizeModelKey } from "@/shared/utils";
 import type { SearchResult, SearchResultSource } from "./types";
@@ -43,25 +43,30 @@ export function defineSource<T extends SearchItem>(
   };
 }
 
+interface Candidate {
+  item: SearchItem;
+  match: number;
+}
+
 export function collect(
   config: SourceConfig,
   needle: string,
   limit: number = MAX_PER_SOURCE,
 ): { result: SearchResult; match: number }[] {
-  const out: { result: SearchResult; match: number }[] = [];
+  const candidates: Candidate[] = [];
   const missed: PreparedEntry[] = [];
   for (const entry of config.entries) {
     const { matched, score } = matchFolded(entry.fields.folded, needle);
-    if (matched) {
-      out.push({ result: config.map(entry.item), match: score });
-      if (out.length >= limit) return topPerSource(out, limit);
-    } else missed.push(entry);
+    if (matched) candidates.push({ item: entry.item, match: score });
+    else missed.push(entry);
   }
   for (const entry of missed) {
-    if (out.length >= limit) break;
-    if (fuzzyHit(entry.fields, needle)) out.push({ result: config.map(entry.item), match: 1 });
+    if (candidates.length >= limit) break;
+    if (fuzzyHit(entry.fields, needle)) candidates.push({ item: entry.item, match: 1 });
   }
-  return topPerSource(out, limit);
+  // Map only the survivors: `config.map` builds a result object plus a detail URL, and a two-letter query can match
+  // hundreds of rows in one source before the strongest `limit` are picked.
+  return topPerSource(candidates, limit).map(({ item, match }) => ({ result: config.map(item), match }));
 }
 
 function topPerSource<T extends { match: number }>(hits: T[], limit: number): T[] {

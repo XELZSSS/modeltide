@@ -363,11 +363,13 @@ describe("toClosedReleases", () => {
       "https://artificialanalysis.ai",
     );
     expect(entries.map((e) => e.id)).toEqual(["claude-opus-4-5", "mystery-1", "llama-3-3"]);
+    // The row is identified by its release slug but links to the model page: AA serves the model at
+    // `claude-opus-4-5-thinking`, and a release slug only coincides with a page for some releases.
     expect(entries[0]).toMatchObject({
       model: "Claude Opus 4.5",
       provider: "Anthropic",
       releaseDate: "2025-11-24",
-      link: "https://artificialanalysis.ai/models/claude-opus-4-5",
+      link: "https://artificialanalysis.ai/models/claude-opus-4-5-thinking",
     });
   });
 });

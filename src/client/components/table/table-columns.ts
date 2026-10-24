@@ -1,3 +1,10 @@
+/**
+ * The data-table contract: what a column is, how to build one, and the props/emits the desktop and mobile bodies share.
+ *
+ * Views never declare these shapes themselves — `data-table.vue`, the two bodies and the pages building columns all
+ * speak this one vocabulary, which is what keeps a column definition working in both layouts.
+ */
+
 import { h, type FunctionalComponent, type VNodeChild } from "vue";
 import { cn } from "@/client/utils/cn";
 import RankingNameCell from "./ranking-name-cell.vue";
@@ -21,14 +28,26 @@ export interface RowAccessors<T> {
   getRowName?: (row: T) => string;
 }
 
+/**
+ * The row decorations a ranking table adds to its model-name cell: the row's rank in the delivered ranking, and the link to
+ * its detail page. Both are optional and both sit outside the column contract proper, because a table that is not a ranking
+ * — or a row with no id to link to — simply omits them.
+ */
+export interface NameCellExtras<T> {
+  rankOf?: (row: T) => number | null;
+  hrefOf?: (row: T) => string | undefined;
+}
+
 export interface RowListProps<T> extends RowAccessors<T> {
   pagedData: T[];
   columns: DataTableColumn<T>[];
   isExpandable: boolean;
   expandedRowId?: string | null;
   renderExpandedRow?: (row: T) => VNodeChild;
-  stagger?: boolean;
 }
+
+/** What a table body emits: the row id to expand, or `null` when the open row is collapsed again. */
+export type RowListEmits = { toggleExpand: [rowId: string | null] };
 
 interface ColOpts {
   width?: number | string;
@@ -90,16 +109,21 @@ export function modelNameCol<T>(
   header: string,
   titleOf: (row: T) => string,
   textOf: (row: T) => string,
-  width = "40%",
+  opts?: NameCellExtras<T> & { width?: number | string },
 ): DataTableColumn<T> {
   return {
     id: "model",
     header,
-    width,
+    width: opts?.width ?? "40%",
     cell: (row) => {
       const title = titleOf(row);
       const text = textOf(row);
-      return h(RankingNameCell, { name: text, title });
+      return h(RankingNameCell, {
+        name: text,
+        title,
+        rank: opts?.rankOf?.(row) ?? null,
+        href: opts?.hrefOf?.(row),
+      });
     },
   };
 }

@@ -1,5 +1,6 @@
 import {
-  L1_MAX_TTL_MS,
+  L1_FALLBACK_TTL_MS,
+  L1_OBJECT_BYTES_FACTOR,
   L1_RESIDENT_BYTES_FACTOR,
   L1_TTL_CAP_MS,
   MEMORY_CACHE_MAX_BYTES,
@@ -11,6 +12,8 @@ export interface MemoryEntry<T> {
   d: T;
   e: number;
   t: number;
+  /** The serialized response body, kept only for sources a route actually returns. */
+  s?: string;
 }
 
 /** Per-isolate LRU of decoded values, bounded by entry count and estimated resident bytes. */
@@ -33,10 +36,11 @@ export class MemoryL1 {
     this.map.delete(vk);
   }
 
-  set(vk: string, data: unknown, ttl: number, serializedBytes: number, effectiveTtl = ttl): boolean {
-    this.delete(vk);
-    const bytes = serializedBytes * L1_RESIDENT_BYTES_FACTOR;
+  set(vk: string, data: unknown, ttl: number, serializedBytes: number, effectiveTtl: number, body?: string): boolean {
+    const bytes = serializedBytes * (body === undefined ? L1_OBJECT_BYTES_FACTOR : L1_RESIDENT_BYTES_FACTOR);
+    // Reject before evicting: an oversized replacement must not cost the caller the copy that is already resident.
     if (bytes > MEMORY_CACHE_MAX_BYTES) return false;
+    this.delete(vk);
     // Reclaim entries that are already past every stale budget before evicting one that can still be served: they
     // hold resident bytes without being reachable through `usableStale`, so they are dead weight under pressure.
     if (this.bytes + bytes > MEMORY_CACHE_MAX_BYTES) this.sweepDead(Date.now());
@@ -45,7 +49,7 @@ export class MemoryL1 {
       if (oldest.done) break;
       this.delete(oldest.value);
     }
-    this.map.set(vk, { entry: { d: data, e: Date.now() + ttl, t: effectiveTtl }, bytes });
+    this.map.set(vk, { entry: { d: data, e: Date.now() + ttl, t: effectiveTtl, s: body }, bytes });
     this.bytes += bytes;
     return true;
   }
@@ -63,7 +67,7 @@ export class MemoryL1 {
 }
 
 export function l1TtlFor(effective: number): number {
-  if (!Number.isFinite(effective) || effective <= 0) return L1_MAX_TTL_MS;
+  if (!Number.isFinite(effective) || effective <= 0) return L1_FALLBACK_TTL_MS;
   return Math.min(effective, L1_TTL_CAP_MS);
 }
 

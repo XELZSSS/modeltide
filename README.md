@@ -9,7 +9,7 @@
 <p>
   <a href="https://vuejs.org"><img src="https://img.shields.io/badge/Vue-3-41B883?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue" /></a>
   <a href="https://vite.dev"><img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" /></a>
-  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-7-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/Tailwind-4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" /></a>
   <a href="https://pages.cloudflare.com"><img src="https://img.shields.io/badge/Cloudflare-Pages-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Pages" /></a>
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT" />
@@ -28,7 +28,7 @@
 
 ## Architecture
 
-- **Client**: Vite SPA — static output in `dist`, SPA fallback via `public/_redirects`
+- **Frontend**: Vite SPA, static output in `dist`, SPA fallback via `public/_redirects`
 - **API**: `/api/*` runs as Pages Functions (`functions/api/`), cached in KV / memory
 
 ## Structure
@@ -52,18 +52,22 @@ npm run dev    # http://localhost:5173
 
 ## Commands
 
-| Command           | Description                                        |
-| ----------------- | -------------------------------------------------- |
-| `npm run dev`     | Dev server                                         |
-| `npm run build`   | Full gate: types, lint, tests, production build    |
-| `npm run preview` | Serve the built `dist` (run `npm run build` first) |
-| `npm run test`    | Tests only (`test:watch` to watch)                 |
-| `npm run lint`    | Lint                                               |
-| `npm run format`  | Format                                             |
+| Command           | Description                       |
+| ----------------- | --------------------------------- |
+| `npm run dev`     | Dev server                        |
+| `npm run build`   | Types, lint, format, tests, build |
+| `npm run preview` | Serve the built `dist`            |
+| `npm run test`    | Tests (`test:watch` to watch)     |
+| `npm run lint`    | Lint                              |
+| `npm run format`  | Format                            |
 
 ## Deployment
 
-Connect the repository to Cloudflare Pages with Framework `Vue`, Build command `npm run build` and Output directory `dist`, `functions/` deploys automatically, optionally bind a KV namespace named `CACHE` for persistent caching
+Connect the repository to Cloudflare Pages with Framework `Vue`, build command `npm run build` and output directory
+`dist`, optionally binding a KV namespace named `CACHE` (case-sensitive) for persistent caching
+
+Keep `npm run build` as the build command: it generates `functions/api/[[route]].js`, so a bare `vite build` deploys a
+site whose `/api/*` requests all answer 404
 
 ## License
 
