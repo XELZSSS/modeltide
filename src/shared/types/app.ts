@@ -1,9 +1,16 @@
-import type { TextToImageModel } from "./catalog";
-import type { OpenRouterRankEntry, OpenSourceModelEntry } from "./rankings";
+import type { TextToImageModel } from "./catalog.ts";
+import type { OpenSourceModelEntry } from "./rankings.ts";
 
 export type ThemeMode = "system" | "light" | "dark";
 
-export type ModelSource = "aa" | "or" | "os" | "hall";
+/**
+ * The theme modes as a value, not only a type: `index.html` resolves the stored preference before the SPA boots, and
+ * `settings-store` accepts a persisted value, so both carry their own copy of this enum. `consistency-guard` compares
+ * the html against this list — a new mode that only reached the store would flash the OS preference on first paint.
+ */
+export const THEME_MODES = ["system", "light", "dark"] as const;
+
+export type ModelSource = "aa" | "or" | "os" | "hall" | "decision";
 
 export type HomeOpenSourceEntry = Pick<OpenSourceModelEntry, "id" | "downloads" | "task">;
 
@@ -22,7 +29,8 @@ export interface HomeProviderSpeed {
    * is unknown and the client substitutes a translated label; an empty string is never sent.
    */
   name: string | null;
-  /** A creator's brand colour, or a CSS custom property (`var(--text-tertiary)`) when the creator has none. */
+  /** A creator's dot colour as `hsl(…)`, produced by `providerDotColor`; a brand colour without a usable hue still
+   * yields one, so this is never a CSS custom property. */
   color: string;
   avgSpeed: number;
 }
@@ -40,7 +48,6 @@ export interface TaskSlice {
 }
 
 export interface HomeDashboardData {
-  orRankings: OpenRouterRankEntry[];
   opensource: HomeOpenSourceEntry[];
   /** The full HF page's task histogram, so the client never needs the thousand rows behind it. */
   openSourceTasks: TaskSlice[];

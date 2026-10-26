@@ -7,6 +7,13 @@ interface TooltipState {
 
 const states = new WeakMap<HTMLElement, TooltipState>();
 
+/**
+ * The current binding per element. `mounted` closes over the binding object it was called with, and Vue hands the
+ * directive a fresh one on every update, so reading the mount-time copy left an updated `v-tooltip` value showing the
+ * text it had when the element was created. `updated` refreshes this; `enter` reads it.
+ */
+const bindings = new WeakMap<HTMLElement, DirectiveBinding>();
+
 function textOf(el: HTMLElement, binding: DirectiveBinding): string {
   const v = binding.value;
   if (v != null && String(v).trim() !== "") return String(v).trim();
@@ -57,13 +64,17 @@ function show(el: HTMLElement, text: string): void {
 
 export const vTooltip: Directive<HTMLElement, string | null | undefined> = {
   mounted(el, binding) {
+    bindings.set(el, binding);
     const enter = () => {
-      const text = textOf(el, binding);
+      const current = bindings.get(el);
+      if (!current) return;
+      const text = textOf(el, current);
       if (!text) return;
       // Only show when the content is actually truncated (overflowing its box).
       if (el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1) return;
       show(el, text);
     };
+    // `hide` is a no-op when nothing is showing, so this stays cheap on the common path where `enter` declined.
     const leave = () => hide(el);
     el.addEventListener("mouseenter", enter);
     el.addEventListener("mouseleave", leave);
@@ -75,6 +86,7 @@ export const vTooltip: Directive<HTMLElement, string | null | undefined> = {
     };
   },
   updated(el, binding) {
+    bindings.set(el, binding);
     const state = states.get(el);
     if (state && textOf(el, binding) !== state.tip.textContent) {
       hide(el);
@@ -89,6 +101,7 @@ export const vTooltip: Directive<HTMLElement, string | null | undefined> = {
       el.removeEventListener("focus", handlers.enter);
       el.removeEventListener("blur", handlers.leave);
     }
+    bindings.delete(el);
     hide(el);
   },
 };

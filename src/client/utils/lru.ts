@@ -1,7 +1,10 @@
 /**
- * "Keep the newest N entries" is needed twice in the client: the per-id query memo in `api/catalog.ts` and the
- * per-route search term memory in `stores/search-store.ts`. Both had their own hand-rolled eviction; this is the
- * single owner of that policy.
+ * "Keep the newest N entries" is the one eviction policy the client has: the per-id query memo in `api/catalog.ts`,
+ * the last `ETag` per request URL in `api/api-client.ts` and the partial-poll counters in `api/partial-poll.ts`. Each
+ * used to carry its own `delete` + `set` + evict-the-oldest loop.
+ *
+ * `set` returns the value so a caller can write `cache.get(k) ?? cache.set(k, create(k))`. Recency is insertion order,
+ * which is what a bare `Map` already maintains.
  */
 export class LruCache<K, V> {
   private readonly map = new Map<K, V>();
@@ -25,6 +28,10 @@ export class LruCache<K, V> {
       this.map.delete(oldest.value);
     }
     return value;
+  }
+
+  delete(key: K): boolean {
+    return this.map.delete(key);
   }
 }
 

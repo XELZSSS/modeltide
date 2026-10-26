@@ -33,10 +33,6 @@ const BROWSER_MIN_MAX_AGE_S = 30;
 const BROWSER_TTL_DIVISOR = 2;
 const SWR_HEADER_CAP_S = 300;
 
-const PARTIAL_BROWSER_MAX_AGE_S = 30;
-const PARTIAL_CDN_MAX_AGE_S = 60;
-const PARTIAL_SWR_CAP_S = 60;
-
 /**
  * The shortest windows the API hands out: what `renderPartialCacheSpec` clamps a degraded payload to. Exported so a
  * route that must never be pinned at the edge — the Hugging Face by-id miss — reuses these numbers instead of
@@ -46,9 +42,9 @@ const PARTIAL_SWR_CAP_S = 60;
  * not serve the answer after the origin failed.
  */
 export const SHORTEST_CACHE_DURATIONS: CacheDurations = {
-  browserMaxAgeS: PARTIAL_BROWSER_MAX_AGE_S,
-  cdnMaxAgeS: PARTIAL_CDN_MAX_AGE_S,
-  swrCapS: PARTIAL_SWR_CAP_S,
+  browserMaxAgeS: 30,
+  cdnMaxAgeS: 60,
+  swrCapS: 60,
 };
 
 /**
@@ -87,9 +83,9 @@ export function renderCacheSpec(durations: CacheDurations): CacheSpec {
 export function renderPartialCacheSpec(durations: CacheDurations): CacheSpec {
   return renderCacheSpec({
     ...durations,
-    browserMaxAgeS: Math.min(durations.browserMaxAgeS, PARTIAL_BROWSER_MAX_AGE_S),
-    cdnMaxAgeS: Math.min(durations.cdnMaxAgeS, PARTIAL_CDN_MAX_AGE_S),
-    swrCapS: Math.min(durations.swrCapS, PARTIAL_SWR_CAP_S),
+    browserMaxAgeS: Math.min(durations.browserMaxAgeS, SHORTEST_CACHE_DURATIONS.browserMaxAgeS),
+    cdnMaxAgeS: Math.min(durations.cdnMaxAgeS, SHORTEST_CACHE_DURATIONS.cdnMaxAgeS),
+    swrCapS: Math.min(durations.swrCapS, SHORTEST_CACHE_DURATIONS.swrCapS),
   });
 }
 
@@ -102,7 +98,7 @@ interface EtagVariant {
   partial?: boolean;
 }
 
-export function payloadEtag(fetchedAt: string, variant: EtagVariant = {}): string {
+export function payloadEtag(fetchedAt: string, variant: EtagVariant): string {
   const rows = variant.rows === undefined ? "" : `-${variant.rows}`;
   const partial = variant.partial === true ? "-p" : "";
   return `W/"${fetchedAt}${rows}${partial}"`;

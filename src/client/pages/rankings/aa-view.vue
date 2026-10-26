@@ -14,7 +14,7 @@ import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
 import TabButton from "@/client/components/navigation/tab-button.vue";
 import { useRovingRadio } from "@/client/components/navigation/tabs";
 import SearchableDataTable from "@/client/components/table/data-table.vue";
-import ModelExpandedDetail from "./aa/aa-cells.vue";
+import AaDetail from "@/client/pages/model/aa-detail.vue";
 import { buildRankingColumns } from "./aa/aa-rank-columns";
 import { buildPricingColumns, type PricingRow } from "./aa/aa-price-columns";
 import { useRankExtras } from "@/client/hooks/use-rank-extras";
@@ -111,24 +111,26 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
       v-if="pricingMode"
       :data="pricingRows"
       :columns="pricingColumns"
+      :caption-key="'pricing'"
       :get-row-id="getPricingRowId"
       :get-row-name="getPricingRowName"
       :get-search-fields="getPricingSearchFields"
     >
       <template #expandedRow="{ row }">
-        <ModelExpandedDetail :model="row.model" />
+        <AaDetail :model="row.model" :show-benchmarks="false" />
       </template>
     </SearchableDataTable>
     <SearchableDataTable
       v-else
       :data="rankings"
       :columns="rankingColumns"
+      :caption-key="'modelRankings'"
       :get-row-id="getAARowId"
       :get-row-name="getAARowName"
       :get-search-fields="SEARCH_FIELDS.aa"
     >
       <template #expandedRow="{ row }">
-        <ModelExpandedDetail :model="row" />
+        <AaDetail :model="row" :show-benchmarks="false" />
       </template>
     </SearchableDataTable>
   </div>

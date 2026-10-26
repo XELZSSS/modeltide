@@ -34,7 +34,9 @@ export function usePagedData<T>(
     if (page.value > total) page.value = total;
   });
 
-  const currentPage = computed(() => (totalPages.value === 0 ? 1 : Math.min(page.value, totalPages.value)));
+  // `page` never leaves 1..`safeTotal` (it starts at 1, `goToPage` clamps it and the watcher above only lowers it),
+  // so clamping against `safeTotal` already answers 1 for an empty set.
+  const currentPage = computed(() => Math.min(page.value, safeTotal.value));
 
   const pagedData = computed(() => {
     const size = safePageSize.value;

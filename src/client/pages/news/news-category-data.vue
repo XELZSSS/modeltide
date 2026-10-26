@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed } from "vue";
 import { Clock, ExternalLink, Search } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { useDevice } from "@/client/device";
-import { useSuspenseNewsState } from "@/client/api/hooks";
-import { assertPayloadShape } from "@/client/api/payload-normalize";
+import { useSuspenseNewsState } from "@/client/api/view-models";
+import { useMalformedGuard } from "@/client/hooks/use-malformed-guard";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import Pagination from "@/client/components/navigation/pagination.vue";
@@ -12,8 +12,9 @@ import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "@/client/comp
 import { formatDate, formatRelativeTime, safeHref } from "@/shared/utils";
 import type { NewsCategory, NewsItem } from "@/shared/types";
 import { ROW_PADDING } from "@/client/nav/layout";
+import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 
-const ROW_CLASS = `group flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-4 ${ROW_PADDING} ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset hoverable:hover:bg-surface-hover`;
+const ROW_CLASS = `group flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-4 ${ROW_PADDING} ui-motion ${FOCUS_RING} focus-visible:ring-inset hoverable:hover:bg-surface-hover`;
 
 const props = defineProps<{ categoryId: NewsCategory }>();
 
@@ -22,13 +23,8 @@ const isMobile = useDevice();
 
 const state = await useSuspenseNewsState(props.categoryId);
 
-// A malformed payload is a failure, not an empty category: it has to reach the error boundary on every refetch, the
-// way the releases and home views do, instead of rendering "no results" over a broken response.
-watch(
-  () => state.value.malformed,
-  (malformed) => assertPayloadShape(malformed, "news"),
-  { immediate: true },
-);
+// A malformed payload is a failure, not an empty category: see `use-malformed-guard.ts`.
+useMalformedGuard(() => state.value.malformed, "news");
 
 const paged = usePagedData(
   // A row with no usable link has nowhere to go, so it is not rendered at all: the parser already refuses such an item,
@@ -39,7 +35,7 @@ const paged = usePagedData(
 );
 
 const rows = computed(() =>
-  paged.pagedData.value.map((item) => ({ item, id: getRowId(item), href: safeHref(item.link) })),
+  paged.pagedData.value.map((item) => ({ item, id: getRowId(item), href: safeHref(item.link)! })),
 );
 
 /**
@@ -50,20 +46,6 @@ const rows = computed(() =>
 function getRowId(item: NewsItem): string {
   return item.link || `${item.source}::${item.title}::${item.pubDate}`;
 }
-
-function rowTag(href: string | undefined): string {
-  return href ? "a" : "div";
-}
-
-function rowAttrs(item: NewsItem, href: string | undefined): Record<string, string> {
-  if (!href) return {};
-  return {
-    href,
-    target: "_blank",
-    rel: "noopener noreferrer",
-    "aria-label": t("newsItemLabel", { title: item.title, source: item.source }),
-  };
-}
 </script>
 
 <template>
@@ -72,14 +54,20 @@ function rowAttrs(item: NewsItem, href: string | undefined): Record<string, stri
   <div v-else class="flex flex-col gap-2">
     <ul class="flex ui-card flex-col divide-y divide-border overflow-hidden">
       <li v-for="row in rows" :key="row.id">
-        <component :is="rowTag(row.href)" v-bind="rowAttrs(row.item, row.href)" :class="ROW_CLASS">
+        <a
+          :href="row.href"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="t('newsItemLabel', { title: row.item.title, source: row.item.source })"
+          :class="ROW_CLASS"
+        >
           <h2
             class="min-w-0 ui-body font-medium break-words decoration-text-primary/40 underline-offset-4 ui-motion [@media(hover:hover)]:group-hover:underline"
           >
             {{ row.item.title }}
           </h2>
           <div class="flex items-center gap-3 ui-caption md:shrink-0">
-            <span class="max-w-48 truncate" v-tooltip="row.item.source">{{ row.item.source }}</span>
+            <span class="max-w-48 break-words md:truncate" v-tooltip="row.item.source">{{ row.item.source }}</span>
             <span class="flex shrink-0 items-center gap-1.5" :title="formatDate(row.item.pubDate, lang)">
               <Clock :size="12" aria-hidden="true" />
               {{ formatRelativeTime(row.item.pubDate, t, lang) }}
@@ -90,7 +78,7 @@ function rowAttrs(item: NewsItem, href: string | undefined): Record<string, stri
               aria-hidden="true"
             />
           </div>
-        </component>
+        </a>
       </li>
     </ul>
     <Pagination :page="paged.page.value" :total-pages="paged.totalPages.value" @change="paged.goToPage" />

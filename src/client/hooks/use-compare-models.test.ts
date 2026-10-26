@@ -1,13 +1,11 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import type { ArtificialAnalysisModel } from "@/shared/types";
 import { aaModel } from "@/test/fixtures";
 import { useCompareStore } from "@/client/stores/compare-store";
 import { usePruneCompareIds } from "./use-compare-models";
 
 const catalogue = (...ids: string[]) => ref(ids.map((id) => aaModel({ id, slug: id })));
-const emptyCatalogue = () => ref<ArtificialAnalysisModel[]>([]);
 
 describe("usePruneCompareIds", () => {
   beforeEach(() => {
@@ -19,7 +17,7 @@ describe("usePruneCompareIds", () => {
     store.compareIds = ["a", "b"];
     const onPruned = vi.fn();
 
-    usePruneCompareIds(emptyCatalogue(), onPruned);
+    usePruneCompareIds(catalogue(), onPruned);
 
     expect(store.compareIds).toEqual(["a", "b"]);
     expect(onPruned).not.toHaveBeenCalled();

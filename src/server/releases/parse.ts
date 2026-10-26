@@ -1,4 +1,4 @@
-import { isoDateOnly, sortByDateDesc } from "@/server/formats/dates";
+import { isoDatePrefix, sortByDateDesc } from "@/server/formats/dates";
 import { MAX_ID_CHARS, MAX_NAME_CHARS } from "@/shared/config";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 
@@ -21,7 +21,7 @@ function toClosedEntry(
   if (!cleanId || !cleanModel || !cleanProvider) return null;
   if (cleanId.length > MAX_ID_CHARS || cleanModel.length > MAX_ID_CHARS || cleanProvider.length > MAX_NAME_CHARS)
     return null;
-  const date = isoDateOnly(rawDate.slice(0, 10));
+  const date = isoDatePrefix(rawDate);
   if (!date) return null;
   return {
     id: cleanId,
@@ -58,7 +58,7 @@ export function toClosedReleasesFromIndex(
     .map((m) => toClosedReleaseFromIndex(m, modelsBaseUrl))
     .filter((e): e is ClosedReleaseEntry => e !== null);
   const deduped = dedupeBy(entries, (e) => e.id);
-  deduped.sort((a, b) => (a.releaseDate === b.releaseDate ? 0 : a.releaseDate < b.releaseDate ? 1 : -1));
+  sortByDateDesc(deduped, (e) => e.releaseDate);
   return deduped;
 }
 
@@ -66,13 +66,8 @@ export function toClosedReleases(changelog: ChangelogModel[], modelsBaseUrl: str
   // Sorted in place: this function owns the output order, and the array is the changelog parse's own with no other
   // reader.
   sortByDateDesc(changelog, (e) => e.releaseDate);
-  const entries: ClosedReleaseEntry[] = [];
-  const seen = new Set<string>();
-  for (const record of changelog) {
-    const entry = toClosedRelease(record, modelsBaseUrl);
-    if (!entry || seen.has(entry.id)) continue;
-    seen.add(entry.id);
-    entries.push(entry);
-  }
-  return entries;
+  const entries = changelog
+    .map((record) => toClosedRelease(record, modelsBaseUrl))
+    .filter((entry): entry is ClosedReleaseEntry => entry !== null);
+  return dedupeBy(entries, (e) => e.id);
 }

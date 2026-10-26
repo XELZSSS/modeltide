@@ -3,7 +3,12 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { ModelSource } from "@/shared/types/app";
 import { PATHS, TAB_PARAM, VIEW_PARAM } from "@/client/router/paths";
 
-type RankTabId = "modelRankings" | "openRouterRankings" | "openSourceRankings" | "hallucinationRankings";
+type RankTabId =
+  | "modelRankings"
+  | "openRouterRankings"
+  | "openSourceRankings"
+  | "hallucinationRankings"
+  | "decisionRankings";
 
 interface SourceDecl {
   labelKey: TranslationKey;
@@ -39,6 +44,11 @@ export const SOURCES: Record<ModelSource, SourceDecl> = {
     backTo: rankingTabHref("hallucinationRankings"),
     backLabelKey: "backToHallucinationRankings",
   },
+  decision: {
+    labelKey: "decisionSource",
+    backTo: rankingTabHref("decisionRankings"),
+    backLabelKey: "backToDecisionRankings",
+  },
 };
 
 export const SEARCH_SOURCE_TO_MODEL_SOURCE: Record<SearchResultSource, ModelSource> = {
@@ -46,4 +56,5 @@ export const SEARCH_SOURCE_TO_MODEL_SOURCE: Record<SearchResultSource, ModelSour
   openRouterRankings: "or",
   openSourceRankings: "os",
   hallucinationRankings: "hall",
+  decisionRankings: "decision",
 };

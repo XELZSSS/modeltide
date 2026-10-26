@@ -1,6 +1,5 @@
-import { presentAlias } from "./benchmark-fields";
+import { modelsBenchmarkWireNames, omniscienceBenchmarkWireNames, presentAlias } from "./benchmark-fields";
 import { modalityWireNames, omniscienceModalityWireNames } from "./model-compact";
-import { modelsBenchmarkWireNames, omniscienceBenchmarkWireNames } from "./benchmark-fields";
 
 const ENRICH_BASE_FIELDS = [
   "id",

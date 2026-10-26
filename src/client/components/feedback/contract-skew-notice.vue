@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { contractSkew } from "@/client/api/api-client";
+import { contractSkew } from "@/client/api/transport/client";
 import { useTranslation } from "@/client/i18n";
 import Notice from "@/client/components/feedback/notice.vue";
+import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 
 const { t } = useTranslation();
 
@@ -17,7 +18,7 @@ function reload(): void {
     <span>{{ t("contractSkewNotice") }}</span>
     <button
       type="button"
-      class="ml-1 inline-flex min-h-9 shrink-0 items-center px-1 font-medium text-text-primary underline-offset-2 ui-motion focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none hoverable:hover:underline"
+      :class="`ml-1 inline-flex min-h-10 shrink-0 items-center px-1 font-medium text-text-primary underline-offset-2 ui-motion md:min-h-9 ${FOCUS_RING} hoverable:hover:underline`"
       @click="reload"
     >
       {{ t("reloadAction") }}

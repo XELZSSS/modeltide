@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { modelPricing } from "@/test/fixtures";
 import { estimateCost, type CostScenario } from "./cost";
+import type { ModelPricing } from "@/shared/types/catalog";
 
 const scenario = (fields: Partial<CostScenario> = {}): CostScenario => ({
   dailyInputM: 2,
@@ -12,31 +13,34 @@ const scenario = (fields: Partial<CostScenario> = {}): CostScenario => ({
   ...fields,
 });
 
-const monthlyOf = (pricing = modelPricing(), fields: Partial<CostScenario> = {}) =>
+const monthlyOf = (pricing: ModelPricing | null = modelPricing(), fields: Partial<CostScenario> = {}) =>
   estimateCost(pricing, scenario(fields))?.monthlyCost ?? null;
 
-const blendedOf = (pricing = modelPricing(), fields: Partial<CostScenario> = {}) =>
+const blendedOf = (pricing: ModelPricing | null = modelPricing(), fields: Partial<CostScenario> = {}) =>
   estimateCost(pricing, scenario(fields))?.blendedPrice ?? null;
 
+const MONTHLY_CASES: ReadonlyArray<[title: string, pricing: ModelPricing, expected: number]> = [
+  ["mixes the cache tiers, the write tier and the uncached remainder", modelPricing(), 292.6],
+  [
+    "falls back to the input rate when there is no cache-hit leg",
+    modelPricing({ cacheHit: null, cacheWrite: null }),
+    308,
+  ],
+  ["ignores a write rate when the model has no cache-write leg", modelPricing({ cacheWrite: null }), 13.25 * 22],
+];
+
 describe("estimateCost", () => {
-  it("returns null when the pricing legs the estimate needs are missing", () => {
-    expect(estimateCost(null, scenario())).toBeNull();
-    expect(estimateCost(modelPricing({ input: null }), scenario())).toBeNull();
-    expect(estimateCost(modelPricing({ output: null }), scenario())).toBeNull();
+  it.each(MONTHLY_CASES)("%s", (_title, pricing, expected) => {
+    expect(monthlyOf(pricing)).toBeCloseTo(expected, 6);
   });
 
-  it("mixes the cache tiers, the write tier and the uncached remainder", () => {
-    expect(monthlyOf()).toBeCloseTo(292.6, 6);
-  });
-
-  it("falls back to the input rate when there is no cache-hit leg", () => {
-    const pricing = modelPricing({ cacheHit: null, cacheWrite: null });
-    expect(monthlyOf(pricing)).toBeCloseTo(308, 6);
-  });
-
-  it("ignores a write rate when the model has no cache-write leg", () => {
-    const pricing = modelPricing({ cacheWrite: null });
-    expect(monthlyOf(pricing)).toBeCloseTo(13.25 * 22, 6);
+  it.each<[title: string, pricing: ModelPricing | null]>([
+    ["a null pricing object", null],
+    ["a missing input leg", modelPricing({ input: null })],
+    ["a missing output leg", modelPricing({ output: null })],
+  ])("returns no estimate for %s", (_title, pricing) => {
+    expect(estimateCost(pricing, scenario())).toBeNull();
+    expect(blendedOf(pricing)).toBeNull();
   });
 
   it("clamps the write rate so hit and write cannot exceed the input volume", () => {
@@ -59,7 +63,6 @@ describe("estimateCost", () => {
 
   it("derives the blended price from the same numbers as the monthly cost", () => {
     const estimate = estimateCost(modelPricing(), scenario())!;
-    expect(estimate.monthlyCost).toBeCloseTo(292.6, 6);
     expect(estimate.blendedPrice).toBeCloseTo(2.66, 6);
     // The invariant the two displayed figures are read against.
     expect(estimate.blendedPrice! * estimate.dailyTokensM * scenario().daysPerMonth).toBeCloseTo(
@@ -87,9 +90,5 @@ describe("estimateCost", () => {
     const estimate = estimateCost(modelPricing(), scenario({ dailyInputM: 0, dailyOutputM: 0, dailyReasoningM: 0 }))!;
     expect(estimate.monthlyCost).toBe(0);
     expect(estimate.blendedPrice).toBeNull();
-  });
-
-  it("returns null weights without the two required legs", () => {
-    expect(blendedOf(null as never)).toBeNull();
   });
 });

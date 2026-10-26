@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { Search, X } from "@lucide/vue";
 import { cn } from "@/client/utils/cn";
 import Input from "@/client/components/ui/input.vue";
+import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 import { useTranslation } from "@/client/i18n";
 import type { ComboboxController } from "./use-combobox";
+import { usePanelFit } from "./use-panel-fit";
+import { useOverflowShadow } from "@/client/hooks/use-overflow-shadow";
 
 const props = defineProps<{ controller: ComboboxController; status?: string; class?: string }>();
 
 const { t } = useTranslation();
+
+const panelBody = ref<HTMLElement | null>(null);
+const { moreBelow, measure: measurePanel } = useOverflowShadow(panelBody);
 
 const {
   containerRef,
@@ -34,66 +40,11 @@ const classes = computed(() => cn("relative w-full max-w-full min-w-0 sm:w-72", 
 
 const clearClasses = computed(() =>
   cn(
-    "shrink-0 rounded-md p-1 text-text-secondary ui-motion focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary",
+    `shrink-0 rounded-md p-1 text-text-secondary ui-motion ${FOCUS_RING} hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary`,
     !inputValue.value && "pointer-events-none invisible",
   ),
 );
 
-const PANEL_MAX_PX = 448;
-const PANEL_MIN_PX = 176;
-const PANEL_GAP_PX = 6;
-const PANEL_EDGE_PX = 8;
-
-const panelStyle = ref<Record<string, string>>({});
-let fitFrame = 0;
-
-/**
- * The panel is clipped by the scrolling `<main>`, and on small screens the fixed bottom bar covers the same area, so a
- * long result list would be cut off or painted over. Capping the height to the room actually left keeps the whole list
- * reachable. The panel sits at `z-20`: above page content (the table's sticky column is `z-10`), below the nav bars
- * (`z-30`) and the modal layer (`z-40`/`z-50`).
- */
-function fitPanel(): void {
-  const input = inputRef.value;
-  if (!input) return;
-  const clipBottom = Math.min(
-    input.closest("main")?.getBoundingClientRect().bottom ?? window.innerHeight,
-    window.innerHeight,
-  );
-  // `clipBottom` is the scrollport's bottom edge, and the bottom bar is a row of that layout rather than an overlay, so
-  // the space below the input is already net of the bar; subtracting it again cost the panel 64px of height.
-  const room = clipBottom - input.getBoundingClientRect().bottom - PANEL_GAP_PX - PANEL_EDGE_PX;
-  const height = Math.max(PANEL_MIN_PX, Math.min(PANEL_MAX_PX, Math.round(room)));
-  panelStyle.value = { maxHeight: `${height}px` };
-}
-
-function scheduleFit(): void {
-  if (!isOpen.value || !canSearch.value || fitFrame !== 0) return;
-  fitFrame = requestAnimationFrame(() => {
-    fitFrame = 0;
-    fitPanel();
-  });
-}
-
-watch(
-  [isOpen, canSearch],
-  ([open, searchable]) => {
-    if (open && searchable) scheduleFit();
-  },
-  { flush: "post" },
-);
-
-onMounted(() => {
-  window.addEventListener("resize", scheduleFit, { passive: true });
-  // `scroll` does not bubble, so capture it from whichever ancestor actually scrolls.
-  window.addEventListener("scroll", scheduleFit, { passive: true, capture: true });
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("resize", scheduleFit);
-  window.removeEventListener("scroll", scheduleFit, { capture: true });
-  if (fitFrame !== 0) cancelAnimationFrame(fitFrame);
-});
 const inputInstance = ref<InstanceType<typeof Input> | null>(null);
 
 watch(
@@ -103,6 +54,13 @@ watch(
   },
   { immediate: true },
 );
+
+// The panel's geometry is measured from the input, so it is not this component's concern; see `use-panel-fit.ts`.
+const { panelStyle } = usePanelFit({
+  isOpen: () => isOpen.value,
+  canSearch: () => canSearch.value,
+  inputRef,
+});
 
 function setContainerEl(el: unknown): void {
   containerRef.value = el instanceof HTMLDivElement ? el : null;
@@ -117,7 +75,7 @@ function setListEl(el: unknown): void {
   <div :ref="setContainerEl" :class="classes">
     <label :for="inputId" class="sr-only">{{ t("searchPlaceholder") }}</label>
     <div
-      class="flex h-9 max-w-full ui-card min-w-0 items-center gap-2 px-3 ui-motion focus-within:border-ring focus-within:ring-2 focus-within:ring-ring"
+      class="flex h-10 max-w-full ui-card min-w-0 items-center gap-2 px-3 ui-motion focus-within:border-ring focus-within:ring-2 focus-within:ring-ring md:h-9"
     >
       <Search :size="16" class="shrink-0 text-text-secondary" aria-hidden="true" />
       <Input
@@ -126,8 +84,8 @@ function setListEl(el: unknown): void {
         type="text"
         :model-value="inputValue"
         role="combobox"
-        :aria-expanded="isOpen"
-        :aria-controls="isOpen ? listboxId : undefined"
+        :aria-expanded="isOpen && canSearch"
+        :aria-controls="isOpen && canSearch ? listboxId : undefined"
         :aria-activedescendant="activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined"
         aria-autocomplete="list"
         :aria-describedby="statusId"
@@ -156,15 +114,27 @@ function setListEl(el: unknown): void {
     <Transition name="ui-pop">
       <div
         v-if="isOpen && canSearch"
-        class="absolute top-full right-0 left-0 z-20 mt-1.5 no-scrollbar max-h-[28rem] ui-overlay overflow-y-auto overscroll-contain sm:right-0 sm:left-auto sm:w-72 sm:max-w-[calc(100vw-2rem)]"
-        :style="panelStyle"
+        class="absolute top-full right-0 left-0 z-20 mt-1.5 sm:right-0 sm:left-auto sm:w-72 sm:max-w-[calc(100vw-2rem)]"
       >
-        <div class="p-1.5">
-          <slot name="status" />
-          <div :id="listboxId" :ref="setListEl" role="listbox">
-            <slot />
+        <div
+          ref="panelBody"
+          class="max-h-[28rem] ui-overlay overflow-y-auto overscroll-contain"
+          :style="panelStyle"
+          @scroll.passive="measurePanel"
+        >
+          <div class="p-1.5">
+            <slot name="status" />
+            <div :id="listboxId" :ref="setListEl" role="listbox">
+              <slot />
+            </div>
           </div>
         </div>
+        <!-- The bar is hidden app-wide, so the fade is what says "more results below"; it drops away at the end. -->
+        <div
+          v-if="moreBelow"
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-x-0 bottom-0 h-8 rounded-b-xl bg-linear-to-t from-popover to-transparent"
+        />
       </div>
     </Transition>
     <div :id="statusId" role="status" aria-live="polite" aria-atomic="true" class="sr-only">

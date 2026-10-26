@@ -1,10 +1,9 @@
 interface KvBinding {
   getWithMetadata(key: string): Promise<{ value: string | null; metadata: unknown }>;
   put(key: string, value: string, options?: { expirationTtl?: number; metadata?: unknown }): Promise<void>;
-  delete(key: string): Promise<void>;
 }
 
-export interface KvRead {
+interface KvRead {
   value: string | null;
   metadata: unknown;
 }
@@ -23,9 +22,5 @@ export class KvStore {
 
   async put(key: string, value: string, opts?: { expirationTtl?: number; metadata?: unknown }): Promise<void> {
     await this.binding.put(key, value, opts);
-  }
-
-  async delete(key: string): Promise<void> {
-    await this.binding.delete(key);
   }
 }

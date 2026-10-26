@@ -1,4 +1,4 @@
-import { queryClient } from "@/client/api/query-client";
+import { queryClient } from "@/client/api/query/client";
 import type { Prefetchable } from "./route-meta";
 
 export interface PrefetchTarget {

@@ -12,6 +12,6 @@ const classes = computed(() => cn("flex min-w-0 items-center gap-2", props.class
 <template>
   <span :class="classes">
     <Dot size="sm" :color="color" />
-    <span class="min-w-0 truncate text-sm font-medium" v-tooltip="title ?? undefined"><slot /></span>
+    <span class="min-w-0 truncate ui-body font-medium" v-tooltip="title ?? undefined"><slot /></span>
   </span>
 </template>

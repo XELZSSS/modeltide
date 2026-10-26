@@ -27,15 +27,15 @@ const themeOptions = computed(() => [
 </script>
 
 <template>
-  <Sheet :open="open" :aria-label="t('settings')" @close="emit('close')">
+  <Sheet :open="open" :label="t('settings')" @close="emit('close')">
     <SheetBody>
       <SheetHeader :title="t('settings')" @close="emit('close')" />
 
       <div class="divide-y divide-border">
-        <div class="flex items-center justify-between gap-3 px-4 py-3">
+        <div class="flex items-center justify-between gap-3 py-3">
           <div class="flex min-w-0 items-center gap-2">
-            <span class="shrink-0 text-text-secondary"><Languages :size="16" /></span>
-            <p class="text-sm">{{ t("language") }}</p>
+            <span class="shrink-0 text-text-secondary"><Languages :size="16" aria-hidden="true" /></span>
+            <p class="ui-body">{{ t("language") }}</p>
           </div>
           <SettingsSegmented
             :label="t('language')"
@@ -45,10 +45,10 @@ const themeOptions = computed(() => [
             @change="(value) => (value === 'zh' || value === 'en') && setLang(value)"
           />
         </div>
-        <div class="flex items-center justify-between gap-3 px-4 py-3">
+        <div class="flex items-center justify-between gap-3 py-3">
           <div class="flex min-w-0 items-center gap-2">
-            <span class="shrink-0 text-text-secondary"><SunMoon :size="16" /></span>
-            <p class="text-sm">{{ t("themeToggle") }}</p>
+            <span class="shrink-0 text-text-secondary"><SunMoon :size="16" aria-hidden="true" /></span>
+            <p class="ui-body">{{ t("themeToggle") }}</p>
           </div>
           <SettingsSegmented
             :label="t('themeToggle')"

@@ -63,8 +63,10 @@ watch(
   () => route.fullPath,
   (now, was) => {
     openSheet.value = null;
-    const pathOf = (fullPath: string): string => fullPath.split("?")[0]!.split("#")[0]!;
-    if (pathOf(now) !== pathOf(was)) restoreScroll();
+    // Any navigation resets or restores the scroll, query included: a tab switch (`?tab=`, `?view=`) is a push onto a
+    // new history entry with different content lengths, and comparing only the path left the viewport where the
+    // previous tab had scrolled to.
+    if (now !== was) restoreScroll();
   },
   { flush: "post" },
 );
@@ -95,17 +97,16 @@ onBeforeUnmount(() => {
       {{ t("skipToContent") }}
     </a>
     <DesktopNav @settings-open="openSheet = 'settings'" />
-    <!-- `scrollbar-gutter: stable` reserves the thin bar's 10px on touch widths, where that bar is still painted: the
-         scrollport is `auto`, so switching between ranking tabs of different heights used to add and remove the strip
-         and shift the centred content sideways. Desktop hides the bar (see utilities.css), so nothing is reserved
-         there. The x axis is clipped explicitly: `overflow-y: auto` alone computes `overflow-x` to `auto` as well,
-         which turned this column into a sideways-scrollable box whose scrollbar is invisible on desktop. -->
+    <!-- No `scrollbar-gutter`: every scrollport hides its bar (see src/styles/scrollbar.css), so there is no strip and
+         nothing to reserve — a `stable` gutter would have kept an empty 10px column and shifted the centred content.
+         The x axis is still clipped explicitly: `overflow-y: auto` alone computes `overflow-x` to `auto` as well, which
+         turned this column into a sideways-scrollable box. -->
     <main
       ref="mainRef"
       id="main-content"
       tabindex="-1"
       :aria-label="t('mainContent')"
-      class="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-x-hidden overflow-y-auto overscroll-contain focus:outline-none md:[scrollbar-gutter:auto]"
+      class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain focus:outline-none"
     >
       <div :class="[PAGE_WIDTH, PAGE_GUTTER]">
         <ContractSkewNotice />

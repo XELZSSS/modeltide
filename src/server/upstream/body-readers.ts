@@ -1,4 +1,5 @@
 import { utf8ByteLength } from "@/server/util/hash";
+import { raceAbort } from "@/server/util/abort";
 import { UpstreamError, errMsg } from "@/server/api/errors";
 
 const CONTENT_LENGTH_DIGITS_RE = /^\d+$/;
@@ -59,25 +60,9 @@ async function readBodyText(
   try {
     for (;;) {
       if (signal.aborted) throw readAbortError(signal);
-      const readPromise = reader.read();
-      const { done, value } = await new Promise<Awaited<ReturnType<typeof reader.read>>>((resolve, reject) => {
-        const onAbort = (): void => reject(readAbortError(signal));
-        if (signal.aborted) {
-          onAbort();
-          return;
-        }
-        signal.addEventListener("abort", onAbort, { once: true });
-        readPromise.then(
-          (r) => {
-            signal.removeEventListener("abort", onAbort);
-            resolve(r);
-          },
-          (e) => {
-            signal.removeEventListener("abort", onAbort);
-            reject(e);
-          },
-        );
-      });
+      // Reading a chunk is the one await in this loop that no `AbortSignal` reaches by itself, so it is raced against
+      // the shared helper instead of a hand-written listener per chunk.
+      const { done, value } = await raceAbort(reader.read(), signal, () => readAbortError(signal));
       if (done) break;
       if (value) {
         total += value.byteLength;

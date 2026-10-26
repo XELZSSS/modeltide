@@ -1,5 +1,6 @@
 import type { HomeDashboardData, HomeOpenSourceEntry } from "@/shared/types";
 import { isPartialPayload } from "@/shared/types/payload";
+import { malformedPayload } from "../transport/error";
 
 function payloadData(payload: unknown, label: string): unknown {
   if (payload == null) throw new Error(`${label}: payload is null`);
@@ -7,7 +8,7 @@ function payloadData(payload: unknown, label: string): unknown {
   throw new Error(`${label}: invalid payload shape`);
 }
 
-export function unwrapList<T>(payload: unknown, label: string): T[] {
+function unwrapList<T>(payload: unknown, label: string): T[] {
   const data = payloadData(payload, label);
   if (Array.isArray(data)) return data;
   throw new Error(`${label}: payload.data is not an array`);
@@ -18,7 +19,6 @@ function unwrapObject<T>(payload: unknown, label: string): T {
 }
 
 export interface NormalizedHomeDashboard {
-  orRankings: HomeDashboardData["orRankings"];
   textToImage: HomeDashboardData["textToImage"];
   opensource: HomeOpenSourceEntry[];
   openSourceTasks: HomeDashboardData["openSourceTasks"];
@@ -29,45 +29,44 @@ export interface NormalizedHomeDashboard {
   malformed: boolean;
 }
 
-function listField<T>(value: unknown): T[] | null {
-  return Array.isArray(value) ? (value as T[]) : null;
-}
+const LIST_FIELDS = [
+  "textToImage",
+  "opensource",
+  "openSourceTasks",
+  "chart",
+  "providers",
+  "hallucinations",
+] as const satisfies readonly (keyof HomeDashboardData)[];
 
+type HomeListField = (typeof LIST_FIELDS)[number];
+
+/**
+ * The envelope has already been validated by `payloadData`; each list field is read as its declared type and a
+ * missing or wrongly-typed one degrades to `[]` while `malformed` records it, so one bad field cannot blank the
+ * dashboard the other five still fill.
+ */
 export function normalizeHomeDashboard(payload: unknown): NormalizedHomeDashboard {
   const label = "homeDashboard";
   let raw: HomeDashboardData | null = null;
   try {
-    // `unwrapObject` throws unless the envelope is an object carrying `data`, so `raw` is either a usable payload or
-    // still `null`; a second shape check here would only restate what the decoder already established.
     raw = unwrapObject<HomeDashboardData>(payload, label);
   } catch (err) {
     console.warn(`[api] dropping malformed ${label} payload:`, err);
   }
-  const orRankings = raw ? listField<HomeDashboardData["orRankings"][number]>(raw.orRankings) : null;
-  const textToImage = raw ? listField<HomeDashboardData["textToImage"][number]>(raw.textToImage) : null;
-  const opensource = raw ? listField<HomeOpenSourceEntry>(raw.opensource) : null;
-  const openSourceTasks = raw ? listField<HomeDashboardData["openSourceTasks"][number]>(raw.openSourceTasks) : null;
-  const chart = raw ? listField<HomeDashboardData["chart"][number]>(raw.chart) : null;
-  const providers = raw ? listField<HomeDashboardData["providers"][number]>(raw.providers) : null;
-  const hallucinations = raw ? listField<HomeDashboardData["hallucinations"][number]>(raw.hallucinations) : null;
+  const lists = {} as Record<HomeListField, unknown[]>;
+  let malformed = raw == null;
+  for (const field of LIST_FIELDS) {
+    const value = raw?.[field];
+    if (Array.isArray(value)) lists[field] = value;
+    else {
+      lists[field] = [];
+      malformed = true;
+    }
+  }
   return {
-    orRankings: orRankings ?? [],
-    textToImage: textToImage ?? [],
-    opensource: opensource ?? [],
-    openSourceTasks: openSourceTasks ?? [],
-    chart: chart ?? [],
-    providers: providers ?? [],
-    hallucinations: hallucinations ?? [],
+    ...(lists as unknown as Pick<NormalizedHomeDashboard, HomeListField>),
     partial: isPartialPayload(payload),
-    malformed:
-      raw == null ||
-      orRankings == null ||
-      textToImage == null ||
-      opensource == null ||
-      openSourceTasks == null ||
-      chart == null ||
-      providers == null ||
-      hallucinations == null,
+    malformed,
   };
 }
 
@@ -88,5 +87,5 @@ export function unwrapListPartial<T>(
 }
 
 export function assertPayloadShape(malformed: boolean, label: string): void {
-  if (malformed) throw new Error(`${label}: malformed payload`);
+  if (malformed) throw malformedPayload(`${label}: malformed payload`);
 }

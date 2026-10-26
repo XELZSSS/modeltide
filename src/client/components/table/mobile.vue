@@ -38,11 +38,18 @@ const CARD_CLASS_EXPANDED = cn(
   "border-text-tertiary/40",
 );
 
+/**
+ * The card layout for a phone: the primary column becomes the title, the `mobilePrimary` column the right-hand figure,
+ * and the rest a two-column label/value grid. `hiddenMd` columns are dropped — they exist so a value already shown in
+ * the primary column is not repeated on a wide screen.
+ *
+ * `null` means this table cannot be a card: an empty definition, or one whose columns are all `hiddenMd`. Both are
+ * table-definition mistakes, but answering `null` renders nothing instead of picking a column that would print a blank
+ * card, so the failure shows up in the view rather than in a non-null assertion.
+ */
 function resolveMobileColumns(columns: DataTableColumn<T>[]): MobileColumnLayout<T> | null {
-  if (columns.length === 0) return null;
-  // `hiddenMd` only hides a column on a phone, so every table definition keeps at least one visible column — the card
-  // has no other way to render the row. `columns.length === 0` already returned above.
-  const primaryCol = columns.find((col) => !col.hiddenMd)!;
+  const primaryCol = columns.find((col) => !col.hiddenMd);
+  if (!primaryCol) return null;
   const others = columns.filter((col) => col !== primaryCol);
   const mainStatCol = others.find((col) => col.mobilePrimary) ?? others.find((col) => !col.hiddenMd);
   const secondaryCols = others.filter((col) => !col.hiddenMd && col !== mainStatCol);

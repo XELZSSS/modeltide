@@ -23,7 +23,13 @@ const ROW_CLASS = cn(
   "ui-anim-swap",
   "hoverable:hover:bg-surface-hover",
 );
-const ROW_CLASS_EXPANDED = cn("bg-bg-secondary", "ui-anim-swap", "hoverable:hover:bg-surface-hover");
+const ROW_CLASS_EXPANDED = cn(
+  // The same bottom edge `ROW_CLASS` draws: it is the divider between the row and its detail panel, and without it the
+  // opened row also lost that 1px of height against its collapsed neighbours.
+  "border-b border-border bg-bg-secondary",
+  "ui-anim-swap",
+  "hoverable:hover:bg-surface-hover",
+);
 </script>
 
 <template>

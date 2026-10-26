@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
 import type { TranslationKey } from "@/shared/i18n";
-import { MODALITY_KEYS, type ModalityKey } from "@/shared/config";
+import type { ModalityKey } from "@/shared/config";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import Badge from "@/client/components/ui/badge.vue";
 import PageSection from "@/client/components/layout/page-section.vue";
@@ -20,27 +20,12 @@ const props = defineProps<{ model: ArtificialAnalysisModel }>();
 
 const { t } = useTranslation();
 
-function modalitiesFor(prefix: "input" | "output"): ModalityKey[] {
-  return MODALITY_KEYS.filter((key) =>
-    Boolean(props.model[`${prefix}_modality_${key}` as keyof ArtificialAnalysisModel]),
-  );
-}
-
-const inputModalities = computed(() => modalitiesFor("input"));
-const outputModalities = computed(() => modalitiesFor("output"));
-
-const hasAnyModality = computed(() =>
-  MODALITY_KEYS.some((key) =>
-    Boolean(
-      props.model[`input_modality_${key}` as keyof ArtificialAnalysisModel] ||
-      props.model[`output_modality_${key}` as keyof ArtificialAnalysisModel],
-    ),
-  ),
-);
+const inputModalities = computed(() => props.model.modalities.in);
+const outputModalities = computed(() => props.model.modalities.out);
 </script>
 
 <template>
-  <PageSection v-if="hasAnyModality" :title="t('modalities')">
+  <PageSection :title="t('modalities')">
     <div class="flex flex-col gap-4 sm:flex-row sm:gap-6">
       <div class="min-w-0">
         <div class="mb-2 ui-caption font-medium">{{ t("inputModality") }}</div>

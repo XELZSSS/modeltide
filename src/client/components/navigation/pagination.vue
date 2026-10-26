@@ -3,21 +3,18 @@
  * Previous/next paging with the page counter announced politely. It renders nothing for a single page, so a short list
  * does not grow a control that cannot do anything.
  */
-import { computed } from "vue";
 import { ChevronLeft, ChevronRight } from "@lucide/vue";
-import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
 import Button from "@/client/components/ui/button.vue";
 
-const props = defineProps<{ page: number; totalPages: number; class?: string }>();
+defineProps<{ page: number; totalPages: number }>();
 const emit = defineEmits<{ change: [page: number] }>();
 
 const { t } = useTranslation();
-const classes = computed(() => cn("flex items-center justify-center gap-3 pt-2", props.class));
 </script>
 
 <template>
-  <nav v-if="totalPages > 1" :aria-label="t('pagination')" :class="classes">
+  <nav v-if="totalPages > 1" :aria-label="t('pagination')" class="flex items-center justify-center gap-3 pt-2">
     <Button
       variant="outline"
       size="icon"

@@ -11,7 +11,7 @@ export const numCoerce = (v: unknown): number | null => {
   return null;
 };
 
-export const numOr = (v: unknown, fallback = 0): number => numCoerce(v) ?? fallback;
+export const numOr = (v: unknown): number => numCoerce(v) ?? 0;
 
 export const numCoerceNonNegative = (v: unknown): number | null => {
   const n = numCoerce(v);
@@ -28,6 +28,19 @@ export function numericLabel(v: unknown): string | null {
 }
 
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");
+
+/**
+ * A trimmed string, empty when the value is not one: the parser layer's default for a text field. Every wire reader
+ * used to spell this as `str(v).trim()`, and the two other spellings of the same idea (`strOr`'s null/undefined pass-
+ * through and the client's `toStringOrNull`) made a row's identity depend on which one a parser happened to import.
+ */
+export const text = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+/** The trimmed string, or `null` when it is absent or empty — what an optional text field is stored as. */
+export const textOrNull = (v: unknown): string | null => {
+  const t = text(v);
+  return t === "" ? null : t;
+};
 
 export const strOr = (v: unknown): string | null | undefined => (v == null ? v : typeof v === "string" ? v : undefined);
 

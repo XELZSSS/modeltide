@@ -18,6 +18,8 @@ export interface StaleCandidate<T> {
   value: T;
   expiresAt: number;
   storedTtl: number;
+  /** When the payload was produced (epoch ms); the ETag names it, and the body no longer carries it. */
+  storedAt: number;
   /** The serialized body the candidate was stored with, when it has one. */
   body?: string;
 }
@@ -33,16 +35,21 @@ function staleLimitMs(storedTtl: number, budget: StaleBudget, capMs?: number): n
   return capMs == null ? base : Math.min(capMs, base);
 }
 
-/** The freshest copy that is still inside its stale budget, or `undefined` when every candidate is too old. */
+/**
+ * The freshest copy that is still inside its stale budget, or `undefined` when every candidate is too old.
+ *
+ * `capFor` answers the per-copy cap rather than taking one number for the whole call: a source whose *miss* must not be
+ * pinned (the Hugging Face by-id lookup) still wants the full budget for the copies it found something in.
+ */
 export function pickFreshestStale<T>(
   candidates: readonly StaleCandidate<T>[],
   budget: StaleBudget,
-  capMs?: number,
-  now = Date.now(),
+  capFor?: (candidate: StaleCandidate<T>) => number | undefined,
 ): StaleCandidate<T> | undefined {
+  const now = Date.now();
   let freshest: StaleCandidate<T> | undefined;
   for (const candidate of candidates) {
-    if (now - candidate.expiresAt > staleLimitMs(candidate.storedTtl, budget, capMs)) continue;
+    if (now - candidate.expiresAt > staleLimitMs(candidate.storedTtl, budget, capFor?.(candidate))) continue;
     if (freshest === undefined || candidate.expiresAt > freshest.expiresAt) freshest = candidate;
   }
   return freshest;

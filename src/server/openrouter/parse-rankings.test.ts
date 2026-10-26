@@ -13,9 +13,9 @@ type TestRow = ModelRow & { rankingMetricValue?: number };
 function row(over: Partial<TestRow> = {}): TestRow {
   return {
     date: "2026-08-01",
-    model_permaslug: "openai/gpt-5",
+    model_permaslug: "openai/gpt-6-1-sol-20260922",
     variant: "std",
-    variant_permaslug: "openai/gpt-5",
+    variant_permaslug: "openai/gpt-6-1-sol-20260922",
     total_completion_tokens: 50,
     total_prompt_tokens: 100,
     count: 2,
@@ -24,13 +24,45 @@ function row(over: Partial<TestRow> = {}): TestRow {
   };
 }
 
+/** A usage row filed under one model id, for the cases where a variant adds nothing to the grouping. */
+function sameSlugRow(modelPermaslug: string, over: Partial<TestRow> = {}): TestRow {
+  return row({ model_permaslug: modelPermaslug, variant_permaslug: modelPermaslug, ...over });
+}
+
+/** A usage row with no completion tokens: the ranking metric alone decides its place. */
+function metricRow(modelPermaslug: string, promptTokens: number, rankingMetricValue?: number): TestRow {
+  return sameSlugRow(modelPermaslug, {
+    total_prompt_tokens: promptTokens,
+    total_completion_tokens: 0,
+    rankingMetricValue,
+  });
+}
+
+const FREE_PRICING: PricingEntry = { input: 0, output: 0, cacheHit: 0, cacheWrite: 0 };
+
 const pricing = new Map<string, PricingEntry>([
-  ["openai/gpt-5", { input: 1, output: 2, cacheHit: 0.5, cacheWrite: 1.5 }],
+  ["openai/gpt-6-1-sol-20260922", { input: 1, output: 2, cacheHit: 0.5, cacheWrite: 1.5 }],
 ]);
+
+/** The pricing lookup of a run that has seen no directory page. */
+const noPricing = new Map<string, PricingEntry>();
+const freePricing = new Map<string, PricingEntry>([["a/b", FREE_PRICING]]);
+
+/** The scan counters before `mapModels` has read a row. */
+function emptyStats(): RankingScanStats {
+  return { scannedRows: 0, validRows: 0, expiredRows: 0, ratioFormChanges: 0, percentFormChanges: 0 };
+}
+
+function metaWith(entries: Record<string, { expiresAt: string }>): MetaLookup {
+  return entries as unknown as MetaLookup;
+}
+
+/** Directory meta that retired `old-model` in 2020, long before any ranking window opens. */
+const retiredOldModel = metaWith({ "old-model": { expiresAt: "2020-01-01" } });
 
 describe("creatorFromSlug / categoryFrom", () => {
   it.each([
-    ["openai/gpt-5", "OpenAI"],
+    ["openai/gpt-6-1-sol-20260922", "OpenAI"],
     ["constructor/x", "Constructor"],
     ["z-ai/glm-5", "Z.ai"],
     ["nvidia/nemotron-4", "NVIDIA"],
@@ -51,19 +83,15 @@ describe("creatorFromSlug / categoryFrom", () => {
 });
 
 describe("mapModels", () => {
-  it("aggregates rows by permaslug, taking variant and pricing from the dominant row and change from the newest date", () => {
+  it("aggregates rows by permaslug: dominant variant and pricing, newest change", () => {
     const models = mapModels(
       [
         row(),
-        row({
-          date: "2026-08-02",
-          total_prompt_tokens: 10,
-          change: null,
-        }),
+        row({ date: "2026-08-02", total_prompt_tokens: 10, change: null }),
         row({
           date: "2026-08-03",
           variant: "batch",
-          variant_permaslug: "openai/gpt-5:batch",
+          variant_permaslug: "openai/gpt-6-1-sol-20260922:batch",
           total_prompt_tokens: 0,
           total_completion_tokens: 0,
           count: 0,
@@ -74,8 +102,8 @@ describe("mapModels", () => {
     );
     expect(models).toHaveLength(1);
     expect(models[0]).toMatchObject({
-      id: "openai/gpt-5",
-      name: "GPT 5",
+      id: "openai/gpt-6-1-sol-20260922",
+      name: "GPT 6 1 SOL 20260922",
       creator: "OpenAI",
       variant: "std",
       promptTokens: 110,
@@ -83,85 +111,54 @@ describe("mapModels", () => {
       totalTokens: 210,
       requestCount: 4,
       change: -90,
-      pricing: pricing.get("openai/gpt-5"),
+      pricing: pricing.get("openai/gpt-6-1-sol-20260922"),
     });
     expect(models[0]!.isFree).toBe(false);
   });
 
-  it("marks free models and leaves pricing null when absent", () => {
-    const free = new Map([["a/b", { input: 0, output: 0, cacheHit: 0, cacheWrite: 0 }]]);
-    const [m] = mapModels([row({ model_permaslug: "a/b", variant_permaslug: "a/b" })], free);
-    expect(m!.isFree).toBe(true);
+  it.each([
+    ["maps a zero-priced model to free", freePricing, { pricing: FREE_PRICING, isFree: true }],
+    ["leaves pricing null and the model paid when the directory has none", noPricing, { pricing: null, isFree: false }],
+  ])("%s", (_title, lookup, expected) => {
+    const [model] = mapModels([sameSlugRow("a/b")], lookup);
+    expect(model).toMatchObject(expected);
+  });
 
-    const [noPricing] = mapModels([row({ model_permaslug: "x/y", variant_permaslug: "x/y" })], new Map());
-    expect(noPricing!.pricing).toBeNull();
-    expect(noPricing!.isFree).toBe(false);
+  it("counts each reading of the ambiguous change unit so a payload that needs both is visible", () => {
+    const stats = emptyStats();
+    mapModels([sameSlugRow("a/ratio", { change: -0.9 }), sameSlugRow("b/percent", { change: 12 })], noPricing, stats);
+    expect(stats.ratioFormChanges).toBe(1);
+    expect(stats.percentFormChanges).toBe(1);
   });
 
   it("ranks by the upstream metric, not by the summed window total", () => {
     const models = mapModels(
       [
-        row({
-          model_permaslug: "a/window",
-          variant_permaslug: "a/window",
-          total_prompt_tokens: 500,
-          total_completion_tokens: 0,
-          rankingMetricValue: 400,
-        }),
-        row({
-          model_permaslug: "a/window",
+        metricRow("a/window", 500, 400),
+        sameSlugRow("a/window", {
           variant_permaslug: "a/window:batch",
           date: "2026-07-20",
           total_prompt_tokens: 500,
           total_completion_tokens: 0,
           rankingMetricValue: 600,
         }),
-        row({
-          model_permaslug: "b/day",
-          variant_permaslug: "b/day",
-          total_prompt_tokens: 700,
-          total_completion_tokens: 0,
-          rankingMetricValue: 700,
-        }),
+        metricRow("b/day", 700, 700),
       ],
-      new Map(),
+      noPricing,
     );
     expect(models.map((m) => m.id)).toEqual(["b/day", "a/window"]);
     expect(models.map((m) => m.totalTokens)).toEqual([700, 1000]);
   });
 
-  it("keeps metric-less groups below metric-bearing ones and breaks metric ties by the derived total", () => {
+  it("keeps metric-less groups last and breaks metric ties by the derived total", () => {
     const models = mapModels(
       [
-        row({
-          model_permaslug: "no/metric",
-          variant_permaslug: "no/metric",
-          total_prompt_tokens: 9_000_000,
-          total_completion_tokens: 0,
-        }),
-        row({
-          model_permaslug: "with/small-metric",
-          variant_permaslug: "with/small-metric",
-          total_prompt_tokens: 1,
-          total_completion_tokens: 0,
-          rankingMetricValue: 1,
-        }),
-        row({
-          model_permaslug: "tie/lower",
-          variant_permaslug: "tie/lower",
-          total_prompt_tokens: 5,
-          total_completion_tokens: 0,
-          rankingMetricValue: 42,
-        }),
-        row({
-          model_permaslug: "tie/higher",
-          variant_permaslug: "tie/higher",
-          total_prompt_tokens: 50,
-          total_completion_tokens: 0,
-          rankingMetricValue: 42,
-        }),
+        metricRow("no/metric", 9_000_000),
+        metricRow("with/small-metric", 1, 1),
+        metricRow("tie/lower", 5, 42),
+        metricRow("tie/higher", 50, 42),
       ],
-      new Map(),
+      noPricing,
     );
     expect(models.map((m) => m.id)).toEqual(["tie/higher", "tie/lower", "with/small-metric", "no/metric"]);
   });
@@ -203,40 +200,23 @@ describe("mapModels", () => {
 });
 
 describe("mapModels retirement accounting", () => {
-  const expiryRow = (id: string) => row({ model_permaslug: id, variant_permaslug: id });
-  const emptyStats = (): RankingScanStats => ({ scannedRows: 0, validRows: 0, expiredRows: 0 });
-  const metaWith = (entries: Record<string, { expiresAt: string }>) => entries as unknown as MetaLookup;
-
-  it("drops retired models and counts them apart from the valid rows", () => {
+  it.each([
+    [
+      "drops retired models, keeps the surviving order and counts the drop",
+      [sameSlugRow("old-model"), sameSlugRow("live-model"), sameSlugRow("other-model")],
+      retiredOldModel,
+      { ids: ["live-model", "other-model"], validRows: 3, expiredRows: 1 },
+    ],
+    [
+      "leaves the retired counter at zero when nothing has expired",
+      [sameSlugRow("live-model")],
+      metaWith({}),
+      { ids: ["live-model"], validRows: 1, expiredRows: 0 },
+    ],
+  ])("%s", (_title, rows, meta, expected) => {
     const stats = emptyStats();
-    const models = mapModels(
-      [expiryRow("old-model"), expiryRow("live-model")],
-      {},
-      stats,
-      metaWith({ "old-model": { expiresAt: "2020-01-01" } }),
-    );
-
-    expect(models.map((model) => model.id)).toEqual(["live-model"]);
-    expect(stats.validRows).toBe(2);
-    expect(stats.expiredRows).toBe(1);
-  });
-
-  it("leaves the retired counter at zero when nothing has expired", () => {
-    const stats = emptyStats();
-    const models = mapModels([expiryRow("live-model")], {}, stats, metaWith({}));
-
-    expect(models).toHaveLength(1);
-    expect(stats.expiredRows).toBe(0);
-  });
-
-  it("keeps the surviving models in order after one is dropped", () => {
-    const models = mapModels(
-      [expiryRow("old-model"), expiryRow("live-model"), expiryRow("other-model")],
-      {},
-      emptyStats(),
-      metaWith({ "old-model": { expiresAt: "2020-01-01" } }),
-    );
-
-    expect(models.map((model) => model.id)).toEqual(["live-model", "other-model"]);
+    expect(mapModels(rows, {}, stats, meta).map((model) => model.id)).toEqual(expected.ids);
+    expect(stats.validRows).toBe(expected.validRows);
+    expect(stats.expiredRows).toBe(expected.expiredRows);
   });
 });

@@ -13,7 +13,6 @@ const props = withDefaults(
   defineProps<{
     tabs: TabItem[];
     activeTab: string;
-    class?: string;
     tabSize?: "sm" | "md";
     fill?: boolean;
     ariaLabel?: string;
@@ -26,10 +25,6 @@ const emit = defineEmits<{ tabChange: [tabId: string]; tabIntent: [tabId: string
 // Wrap rather than scroll: an edge fade over a strip that already fits faded the last tab's own label, and a hidden
 // scroller with no affordance left tabs 4 and 5 invisible on a phone.
 const groupClasses = computed(() => cn("w-fit max-w-full flex-wrap", props.fill && "w-full sm:w-full"));
-// `ui-anim-swap` is the vocabulary's "content that replaces other content in place" step: a fast cross-fade with no
-// stagger and no travel. The panel is keyed per tab, so each switch mounts this fade — without it the old panel vanished
-// and the new one appeared in the same frame.
-const panelClasses = computed(() => cn("flex min-w-0 ui-anim-swap flex-col gap-4", props.class));
 
 const { onKeydown } = useRovingRadio({
   items: () => props.tabs.map((tab) => tab.id),
@@ -57,13 +52,16 @@ const { onKeydown } = useRovingRadio({
         {{ tab.label }}
       </TabButton>
     </SegmentedGroup>
+    <!-- `ui-anim-swap` is the vocabulary's "content that replaces other content in place" step: a fast cross-fade with no
+         stagger and no travel. The panel is keyed per tab, so each switch mounts this fade — without it the old panel
+         vanished and the new one appeared in the same frame. -->
     <div
       :key="activeTab"
       role="tabpanel"
       :id="`panel-${activeTab}`"
       :aria-labelledby="`tab-${activeTab}`"
       tabindex="0"
-      :class="panelClasses"
+      class="flex min-w-0 ui-anim-swap flex-col gap-4"
     >
       <slot />
     </div>

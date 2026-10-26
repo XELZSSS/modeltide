@@ -9,7 +9,7 @@ import {
   queryKeys,
 } from "@/shared/config";
 import { openSourceModelsQueryString } from "@/shared/query-schemas";
-import { isPartialPayload } from "./payload-normalize";
+import { isPartialPayload } from "../decode/payload";
 import { createApiQuery } from "./factory";
 import { LruCache } from "@/client/utils/lru";
 import type { NewsCategory } from "@/shared/types";
@@ -43,34 +43,24 @@ export const qOpenSourceModelsList = createApiQuery("openSourceModels", queryKey
   query: openSourceModelsQueryString(OPEN_SOURCE_SORT),
 });
 
-function memoQuery<K extends string, T>(
-  max: number,
-  resolveKey: (input: string) => K,
-  create: (key: K) => T,
-): (input: string) => T {
+function memoQuery<K extends string, T>(max: number, create: (key: K) => T): (input: K) => T {
   const cache = new LruCache<K, T>(max);
-  return (input: string) => {
-    const key = resolveKey(input);
-    return cache.get(key) ?? cache.set(key, create(key));
-  };
+  return (input: K) => cache.get(input) ?? cache.set(input, create(input));
 }
 
 type NewsQuery = ReturnType<typeof createApiQuery<"news">>;
 
 /**
- * One query per news category. The API serves a single category per request (firing all 14 feeds at once was the heaviest
- * thing an invocation did), so each tab owns its cache entry, its partial flag and its refetch timing.
+ * One query per news category. The API serves a single category per request (firing every category's feeds at once was
+ * the heaviest thing an invocation did), so each tab owns its cache entry, its partial flag and its refetch timing.
  */
-export const qNewsByCategory: (category: NewsCategory) => NewsQuery = memoQuery<NewsCategory, NewsQuery>(
-  8,
-  (category) => category as NewsCategory,
-  (category): NewsQuery =>
-    createApiQuery("news", queryKeys.news(category), {
-      ttl: NEWS_TTL_MS,
-      partialRefetchMs: PARTIAL_FAIL_TTL_MS,
-      isPartialData: isPartialPayload,
-      query: { category },
-    }),
+export const qNewsByCategory: (category: NewsCategory) => NewsQuery = memoQuery(8, (category): NewsQuery =>
+  createApiQuery("news", queryKeys.news(category), {
+    ttl: NEWS_TTL_MS,
+    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+    isPartialData: isPartialPayload,
+    query: { category },
+  }),
 );
 
 export const qClosedReleasesList = createApiQuery("closedReleases", queryKeys.closedReleases, {
@@ -81,14 +71,19 @@ export const qClosedReleasesList = createApiQuery("closedReleases", queryKeys.cl
 
 type OpenSourceModelQuery = ReturnType<typeof createApiQuery<"openSourceModels">>;
 
-export const qOpenSourceModelById: (id: string) => OpenSourceModelQuery = memoQuery<string, OpenSourceModelQuery>(
-  64,
-  (id) => id,
-  (id: string): OpenSourceModelQuery =>
-    createApiQuery("openSourceModels", queryKeys.openSourceModels(OPEN_SOURCE_SORT, id), {
-      ttl: FIVE_MINUTES,
-      partialRefetchMs: PARTIAL_FAIL_TTL_MS,
-      isPartialData: isPartialPayload,
-      query: openSourceModelsQueryString(OPEN_SOURCE_SORT, id),
-    }),
+export const qOpenSourceModelById: (id: string) => OpenSourceModelQuery = memoQuery(64, (id): OpenSourceModelQuery =>
+  createApiQuery("openSourceModels", queryKeys.openSourceModels(OPEN_SOURCE_SORT, id), {
+    ttl: FIVE_MINUTES,
+    // Matches the origin's own window for a by-id miss (`cacheFor` in server/registry.ts), so a model indexed a minute
+    // after the first read is found on the next visit instead of after five.
+    missTtlMs: ONE_MINUTE,
+    partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+    isPartialData: isPartialPayload,
+    query: openSourceModelsQueryString(OPEN_SOURCE_SORT, id),
+  }),
 );
+
+export const qDecisionIndex = createApiQuery("decisionIndex", queryKeys.decisionIndex, {
+  partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+  isPartialData: isPartialPayload,
+});

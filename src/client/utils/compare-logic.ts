@@ -85,9 +85,11 @@ interface RadarRow {
 /**
  * The metrics the radar plots *and* the table below it lists. One table, because the two are read together: a metric
  * added to one of two hand-written lists is a metric the other one silently lacks. Only 0..100 values belong here — the
- * indexes (`nonNegative` is for their nullable arrival) and the benchmarks `benchmarkScaleOf` calls percent; an
- * absolute-scale key would put a 1500 next to an 83 on a single axis.
+ * indexes as they are, and a benchmark ratio through `percentOf`, because the benchmarks themselves are stored exactly
+ * as the upstream sent them (0-1) and one axis cannot carry both 0.83 and 1500.
  */
+const percentOf = (v: number | null | undefined): number | null => (v == null ? null : Math.min(100, v * 100));
+
 const COMPARE_METRICS: readonly {
   id: TranslationKey;
   get: (m: ArtificialAnalysisModel) => number | null;
@@ -95,10 +97,10 @@ const COMPARE_METRICS: readonly {
   { id: "intelligence", get: (m) => nonNegative(m.intelligence_index) },
   { id: "coding", get: (m) => nonNegative(m.coding_index) },
   { id: "agentic", get: (m) => nonNegative(m.agentic_index) },
-  { id: "gpqa", get: (m) => m.benchmarks?.gpqa ?? null },
-  { id: "hle", get: (m) => m.benchmarks?.hle ?? null },
-  { id: "scicode", get: (m) => m.benchmarks?.scicode ?? null },
-  { id: "ifbench", get: (m) => m.benchmarks?.ifbench ?? null },
+  { id: "gpqa", get: (m) => percentOf(m.benchmarks?.gpqa) },
+  { id: "hle", get: (m) => percentOf(m.benchmarks?.hle) },
+  { id: "scicode", get: (m) => percentOf(m.benchmarks?.scicode) },
+  { id: "ifbench", get: (m) => percentOf(m.benchmarks?.ifbench) },
 ];
 
 function buildRadarRows(t: TFunction, models: ArtificialAnalysisModel[], keys: readonly string[]): RadarRow[] {

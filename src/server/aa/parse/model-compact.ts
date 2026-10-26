@@ -1,7 +1,13 @@
-import { bool, numCoerce, numCoerceNonNegative, numericLabel, obj, str, strOr } from "@/server/formats/scalars";
+import { bool, numCoerce, numCoerceNonNegative, numericLabel, obj, str, strOr, text } from "@/server/formats/scalars";
 import { isoDate } from "@/server/formats/dates";
-import { BENCHMARK_KEYS, MODALITY_KEYS, ABSOLUTE_SCORE_BENCHMARKS, type BenchmarkKey } from "@/shared/config";
-import type { ArtificialAnalysisModel, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
+import {
+  BENCHMARK_KEYS,
+  MODALITY_KEYS,
+  ABSOLUTE_SCORE_BENCHMARKS,
+  type BenchmarkKey,
+  type ModalityKey,
+} from "@/shared/config";
+import type { ArtificialAnalysisModel, ModelModalities, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
 import { ratioToPercent } from "@/shared/utils";
 import { benchmarkWireName, presentAlias } from "./benchmark-fields";
 
@@ -14,14 +20,29 @@ function ratioScore(field: string, raw: number | null, warn?: RatioWarn): number
   return percent;
 }
 
+/**
+ * A benchmark declared as a 0-1 ratio, kept exactly as the upstream sent it: the detail page exists to show the source
+ * value, so rescaling here would put this site's arithmetic between the reader and the payload. The 0-1 bound is still
+ * checked, because a value outside it means the upstream changed scale (an Elo, a percentage) and must drop out loudly
+ * instead of being printed as a fraction it is not.
+ */
+function ratioAsIs(field: string, raw: number | null, warn?: RatioWarn): number | null {
+  if (raw == null) return null;
+  if (raw < 0 || raw > 1) {
+    warn?.(field, raw);
+    return null;
+  }
+  return raw;
+}
+
 function compactBenchmarks(m: Record<string, unknown>, warn?: RatioWarn): Partial<Record<BenchmarkKey, number | null>> {
   const benchmarks: Partial<Record<BenchmarkKey, number | null>> = {};
   for (const key of BENCHMARK_KEYS) {
     const wire = benchmarkWireName(key);
     const alias = presentAlias(m, wire);
     const raw = alias === undefined ? null : numCoerce(m[alias]);
-    // Briefcase Elo, the Cyber index and the signed omniscience index are already on their own scale.
-    const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : ratioScore(wire, raw, warn);
+    // The index benchmarks are already on their own scale; a ratio one is kept exactly as the upstream sent it.
+    const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : ratioAsIs(wire, raw, warn);
     if (value != null) benchmarks[key] = value;
   }
   return benchmarks;
@@ -30,9 +51,9 @@ function compactBenchmarks(m: Record<string, unknown>, warn?: RatioWarn): Partia
 function compactCodingIndex(m: Record<string, unknown>, warn?: RatioWarn): number | null {
   const tb = ratioScore("terminalBench21", numCoerce(m.terminalBench21), warn);
   const sc = ratioScore("scicode", numCoerce(m.scicode), warn);
-  if (tb == null && sc == null) return null;
-  const values = [tb, sc].filter((v): v is number => v != null);
-  return values.reduce((a, b) => a + b, 0) / values.length;
+  if (tb == null) return sc;
+  if (sc == null) return tb;
+  return (tb + sc) / 2;
 }
 
 function compactPricing(m: Record<string, unknown>): ModelPricing | null {
@@ -53,9 +74,9 @@ function compactOmniscience(
   if (omniscienceBreakdown == null && omniscience == null && hallucinationRate == null) return null;
   return {
     total: {
-      accuracy: ratioScore("omniscienceBreakdown.accuracy", numCoerce(omniscienceBreakdown?.accuracy), warn),
-      attempt_rate: ratioScore("omniscienceBreakdown.attemptRate", numCoerce(omniscienceBreakdown?.attemptRate), warn),
-      hallucination_rate: ratioScore(
+      accuracy: ratioAsIs("omniscienceBreakdown.accuracy", numCoerce(omniscienceBreakdown?.accuracy), warn),
+      attempt_rate: ratioAsIs("omniscienceBreakdown.attemptRate", numCoerce(omniscienceBreakdown?.attemptRate), warn),
+      hallucination_rate: ratioAsIs(
         "omniscienceBreakdown.hallucinationRate",
         numCoerce(omniscienceBreakdown?.hallucinationRate) ?? hallucinationRate,
         warn,
@@ -79,20 +100,26 @@ export const modalityWireNames = MODALITY_WIRES.flatMap((wire) => [wire.input, w
 
 export const omniscienceModalityWireNames = ["inputModalityImage", "inputModalitySpeech", "inputModalityVideo"];
 
-function assignModalities(model: ArtificialAnalysisModel, m: Record<string, unknown>): void {
-  for (const wire of MODALITY_WIRES) {
-    const inputMo = bool(m[wire.input]);
-    if (inputMo !== undefined) model[`input_modality_${wire.key}`] = inputMo;
-    const outputMo = bool(m[wire.output]);
-    if (outputMo !== undefined) model[`output_modality_${wire.key}`] = outputMo;
-  }
+/**
+ * One array per direction, in `MODALITY_KEYS` order. A modality the upstream omits keeps the historical default —
+ * text only — and one it declares wins, which is what the eight per-row booleans said at ten times the size.
+ */
+function pickModalities(m: Record<string, unknown>, prefix: "input" | "output"): ModalityKey[] {
+  return MODALITY_WIRES.filter((wire) => {
+    const declared = bool(m[wire[prefix]]);
+    return declared === undefined ? wire.key === "text" : declared;
+  }).map((wire) => wire.key);
+}
+
+function compactModalities(m: Record<string, unknown>): ModelModalities {
+  return { in: pickModalities(m, "input"), out: pickModalities(m, "output") };
 }
 
 export function compact(m: Record<string, unknown>, warn?: RatioWarn): ArtificialAnalysisModel {
   const rec = m;
   const creator = obj(rec.creator);
-  const creatorName = creator ? str(creator.name).trim() : "";
-  const creatorColor = creator ? str(creator.color).trim() : "";
+  const creatorName = creator ? text(creator.name) : "";
+  const creatorColor = creator ? text(creator.color) : "";
   const parameters = numCoerce(rec.parameters);
   const speed = numCoerce(rec.medianCanonicalAnswerOutputSpeed);
   const model: ArtificialAnalysisModel = {
@@ -107,19 +134,13 @@ export function compact(m: Record<string, unknown>, warn?: RatioWarn): Artificia
     is_open_weights: bool(rec.isOpenWeights) ?? false,
     parameters: parameters != null && parameters > 0 ? parameters : null,
     size_class: strOr(rec.sizeClass) ?? numericLabel(rec.sizeClass),
+    context_window_tokens: numCoerceNonNegative(rec.contextWindowTokens),
     coding_index: compactCodingIndex(rec, warn),
     agentic_index: ratioScore("analystAgent", numCoerce(rec.analystAgent), warn),
     benchmarks: compactBenchmarks(rec, warn),
     pricing: compactPricing(rec),
     speed: speed == null ? null : { median_output_speed: speed },
-    input_modality_text: true,
-    input_modality_image: false,
-    input_modality_speech: false,
-    input_modality_video: false,
-    output_modality_text: true,
-    output_modality_image: false,
-    output_modality_speech: false,
-    output_modality_video: false,
+    modalities: compactModalities(rec),
     omniscience_breakdown: compactOmniscience(
       obj(rec.omniscienceBreakdown),
       numCoerce(rec.omniscience),
@@ -127,6 +148,5 @@ export function compact(m: Record<string, unknown>, warn?: RatioWarn): Artificia
       warn,
     ),
   };
-  assignModalities(model, rec);
   return model;
 }

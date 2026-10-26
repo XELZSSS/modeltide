@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useSuspenseOpenSourceModelsState } from "@/client/api/hooks";
+import { useSuspenseOpenSourceModelsState } from "@/client/api/view-models";
 import TabStateShell from "@/client/components/navigation/tab-state-shell.vue";
 import OpenSourceRankingsView from "./open-source-view.vue";
 

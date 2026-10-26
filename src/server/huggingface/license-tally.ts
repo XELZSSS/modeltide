@@ -1,6 +1,6 @@
 import { isRecognizedNonOpenLicense } from "@/server/formats/licenses";
 
-export interface LicenseDrops {
+interface LicenseDrops {
   withoutTag: number;
   declaredNonOpen: number;
   unknownTags: string[];

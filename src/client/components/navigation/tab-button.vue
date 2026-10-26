@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { cva } from "class-variance-authority";
 import { cn } from "@/client/utils/cn";
+import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 
 /**
  * One tab in a tab strip, acting as a `tab` in a tablist or a `radio` in a segmented control — hence the selected state
@@ -15,7 +16,7 @@ import { cn } from "@/client/utils/cn";
  * always supplied by them and a second set could only drift.
  */
 const tabButtonVariants = cva(
-  "relative inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap ui-motion focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+  `relative inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap ui-motion ${FOCUS_RING} disabled:pointer-events-none disabled:opacity-50`,
   {
     variants: {
       active: {

@@ -9,9 +9,9 @@ export interface ReleaseRow {
   link: string | null;
 }
 
-function fromClosedReleases(releases: ClosedReleaseEntry[]): ReleaseRow[] {
+export function buildClosedReleaseRows(closedReleases: ClosedReleaseEntry[]): ReleaseRow[] {
   const rows: ReleaseRow[] = [];
-  for (const e of releases) {
+  for (const e of closedReleases) {
     rows.push({
       id: `aa:${e.id}`,
       name: e.model,
@@ -21,11 +21,7 @@ function fromClosedReleases(releases: ClosedReleaseEntry[]): ReleaseRow[] {
       link: e.link,
     });
   }
-  return rows;
-}
-
-export function buildClosedReleaseRows(closedReleases: ClosedReleaseEntry[]): ReleaseRow[] {
-  return fromClosedReleases(closedReleases).sort((a, b) => b.ts - a.ts);
+  return rows.sort((a, b) => b.ts - a.ts);
 }
 
 export const getReleaseRowId = (row: ReleaseRow) => row.id;

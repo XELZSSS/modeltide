@@ -20,7 +20,7 @@ const TRIM_WHITESPACE = new Set([
 
 const isTrimWhitespace = (c: number): boolean => TRIM_WHITESPACE.has(c);
 
-/** Advances past whitespace as JSON defines it, which is wider than `String.prototype.trim`. */
+/** Advances past the whitespace `String.prototype.trimStart` skips — wider than the four characters JSON allows between tokens, which keeps the needle gate as loose as the gate it replaced. */
 function skipTrimWhitespace(text: string, pos: number): number {
   let at = pos;
   while (at < text.length && isTrimWhitespace(text.charCodeAt(at))) at++;
@@ -53,8 +53,8 @@ export function markerValueAt(text: string, at: number, needle: string): number 
 }
 
 /** The value position of the first `"needle": value` pair in `text`, or null when the key never carries a value. */
-export function findMarkerValue(text: string, needle: string, from = 0): number | null {
-  let at = text.indexOf(needle, from);
+export function findMarkerValue(text: string, needle: string): number | null {
+  let at = text.indexOf(needle);
   while (at !== -1) {
     const valueAt = markerValueAt(text, at, needle);
     if (valueAt !== null) return valueAt;

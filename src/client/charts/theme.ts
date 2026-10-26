@@ -107,16 +107,18 @@ export function applyChartDefaults(chart: typeof ChartJS): void {
   tooltip.animations.opacity.duration = animations.opacity.duration;
 }
 
+/**
+ * Responsive base for every chart: `maintainAspectRatio: false` lets the frame own the height. There is deliberately no
+ * `animation` here — the charts show snapshots and `ChartCanvas` sets `animation: { duration: 0 }` for them, because that
+ * component is also what calls `chart.update("none")` and therefore the only place that can guarantee it. Setting it
+ * here too would be a second copy of the same decision.
+ */
 export const chartBase = {
   responsive: true,
   maintainAspectRatio: false,
-  // A zero-length data animation, not `false`: these charts show snapshots and must settle in the same frame, but the
-  // plugin resolves its own tooltip animation from `chart.options.animation`, so `false` here switched off every hover
-  // transition and the panel jumped into place.
-  animation: { duration: 0 },
 } as const;
 
-export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tickSecondary, font: { size: 11 } });
+export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tickSecondary, font: { size: 12 } });
 
 const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
 
@@ -153,7 +155,7 @@ export function defaultTooltipOptions(theme: ChartTheme): Partial<TooltipOptions
     borderWidth: 1,
     // The last square surface in the UI: every other floating panel is `rounded-lg`, and the tooltip is the one the
     // pointer sees most often.
-    cornerRadius: 8,
+    cornerRadius: 10,
     padding: 10,
     boxPadding: 4,
     titleFont: { size: 12, weight: 600 },

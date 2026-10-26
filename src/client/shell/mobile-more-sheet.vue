@@ -16,7 +16,7 @@ const prefetch = usePrefetch();
 </script>
 
 <template>
-  <Sheet :open="open" :aria-label="t('navMore')" @close="emit('close')">
+  <Sheet :open="open" :label="t('navMore')" @close="emit('close')">
     <SheetBody>
       <SheetHeader :title="t('more')" @close="emit('close')" />
 
@@ -27,7 +27,7 @@ const prefetch = usePrefetch();
           :href="item.path"
           :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
-            'flex items-center justify-between gap-3 px-4 py-3 ui-motion focus-visible:bg-surface-hover focus-visible:outline-none',
+            'flex items-center justify-between gap-3 py-3 ui-motion focus-visible:bg-surface-hover focus-visible:outline-none',
             isActive(item) ? 'text-text-primary' : 'text-text-secondary hoverable:hover:bg-surface-hover',
           ]"
           @click="emit('close')"
@@ -39,9 +39,9 @@ const prefetch = usePrefetch();
         >
           <span class="flex min-w-0 items-center gap-2">
             <span :class="isActive(item) ? 'shrink-0 text-text-primary' : 'shrink-0 text-text-secondary'">
-              <component :is="item.icon" :size="18" />
+              <component :is="item.icon" :size="18" aria-hidden="true" />
             </span>
-            <span class="text-sm">{{ item.label }}</span>
+            <span class="ui-body">{{ item.label }}</span>
           </span>
           <ChevronRight :size="16" class="shrink-0 text-text-tertiary" aria-hidden="true" />
         </SafeLink>

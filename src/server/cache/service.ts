@@ -28,6 +28,25 @@ interface CacheOptions {
 
 type Loader<T> = () => Promise<{ data: T; ttl?: number }>;
 
+/**
+ * Everything the miss/expired path needs, as one object: the same values as positional parameters made
+ * `refreshOrStale`'s call site unreadable and let `serveBody` travel beside the `scope` it was derived from.
+ */
+interface Miss<T> {
+  vk: string;
+  ttl: number;
+  fn: Loader<T>;
+  mem: MemoryEntry<T> | undefined;
+  kvHit: DecodedEnvelope<T> | undefined;
+  kv: KvStore | undefined;
+  scope: CacheScope | undefined;
+}
+
+/** One definition for the two places that need it, so `scope` and `serveBody` cannot disagree. */
+function serveBodyOf(scope: CacheScope | undefined): boolean {
+  return scope?.serveBody !== false;
+}
+
 export class CacheService {
   private tier: TierStore;
   private refreshRunner: RefreshRunner;
@@ -41,55 +60,46 @@ export class CacheService {
     opts?: CacheOptions,
   ) {
     this.tier = new TierStore(version, sharedL1, opts?.onDetach, opts?.log);
-    this.refreshRunner = new RefreshRunner(this.tier, sharedInflight);
+    this.refreshRunner = new RefreshRunner(this.tier);
     this.callerSignal = opts?.callerSignal;
     this.onDetach = opts?.onDetach;
     this.log = opts?.log ?? logger;
   }
 
   /** The freshest expired copy still inside `budget`, drawn from the KV entry and the L1 mirror together. */
-  private usableStale<T>(
-    ttl: number,
-    mem: MemoryEntry<T> | undefined,
-    kvHit: DecodedEnvelope<T> | undefined,
-    budget: StaleBudget,
-    capMs: number | undefined,
-    includeBody: boolean,
-  ): StaleCandidate<T> | undefined {
+  private usableStale<T>(miss: Miss<T>, budget: StaleBudget): StaleCandidate<T> | undefined {
+    const includeBody = serveBodyOf(miss.scope);
     const candidates: StaleCandidate<T>[] = [];
-    if (kvHit) {
+    if (miss.kvHit) {
       candidates.push({
-        value: kvHit.env.d,
-        expiresAt: kvHit.env.e,
-        storedTtl: kvHit.env.t ?? ttl,
-        body: includeBody ? kvHit.body : undefined,
+        value: miss.kvHit.env.d,
+        expiresAt: miss.kvHit.env.e,
+        storedTtl: miss.kvHit.env.t,
+        storedAt: miss.kvHit.env.f,
+        body: includeBody ? miss.kvHit.body : undefined,
       });
     }
-    if (mem) {
+    if (miss.mem) {
       candidates.push({
-        value: mem.d,
-        expiresAt: mem.e,
-        storedTtl: mem.t,
-        body: includeBody ? mem.s : undefined,
+        value: miss.mem.d,
+        expiresAt: miss.mem.e,
+        storedTtl: miss.mem.t,
+        storedAt: miss.mem.f,
+        body: includeBody ? miss.mem.s : undefined,
       });
     }
-    return pickFreshestStale(candidates, budget, capMs);
+    const capOf = miss.scope?.staleCapMs;
+    const capFor = (candidate: StaleCandidate<T>): number | undefined => capOf?.(candidate.value);
+    return pickFreshestStale(candidates, budget, capFor);
   }
 
   /**
    * Miss/expired tail: serve a stale copy stale-while-revalidate when possible, otherwise refresh in-band and fall
    * back to the freshest stale copy within the fallback budget when the refresh fails.
    */
-  private async refreshOrStale<T>(
-    vk: string,
-    ttl: number,
-    fn: Loader<T>,
-    mem: MemoryEntry<T> | undefined,
-    kvHit: DecodedEnvelope<T> | undefined,
-    kv: KvStore | undefined,
-    scope: CacheScope | undefined,
-    serveBody: boolean,
-  ): Promise<CacheResult<T>> {
+  private async refreshOrStale<T>(miss: Miss<T>): Promise<CacheResult<T>> {
+    const { vk, ttl, fn, kv } = miss;
+    const serveBody = serveBodyOf(miss.scope);
     // Serving a complete-but-stale copy while a detached refresh runs is normal stale-while-revalidate, not a data
     // gap: flagging it degraded would show "some sources failed" on routine post-TTL requests.
     //
@@ -101,7 +111,7 @@ export class CacheService {
     // attempt is inside the cooldown `RefreshRunner` sets when it awaits a failure itself.
     const degraded = refreshFailureCooldown.isFailing(vk);
     if (this.onDetach) {
-      const stale = this.usableStale(ttl, mem, kvHit, "swr", scope?.staleCapMs, serveBody);
+      const stale = this.usableStale(miss, "swr");
       if (stale) {
         // The entry is expired, so this request is a miss for the same reason the in-band refresh below is: nothing
         // fresh was served. Counting it only on the synchronous path left `l1Hits + kvHits + cacheMisses` short of the
@@ -118,27 +128,26 @@ export class CacheService {
         } catch (err) {
           this.log("warn", `[cache] onDetach callback failed: ${errMsg(err)}`);
         }
-        return { value: stale.value, degraded, body: stale.body };
+        return { value: stale.value, degraded, body: stale.body, producedAt: stale.storedAt };
       }
     }
     try {
       noteCacheStat("cacheMisses");
       const refreshed = await this.refreshRunner.run(vk, ttl, fn, kv, serveBody);
-      return { value: refreshed.value, degraded: false, body: refreshed.body };
+      return { value: refreshed.value, degraded: false, body: refreshed.body, producedAt: refreshed.producedAt };
     } catch (err) {
-      const stale = this.usableStale(ttl, mem, kvHit, "fallback", scope?.staleCapMs, serveBody);
+      const stale = this.usableStale(miss, "fallback");
       if (!stale) throw err;
       noteCacheStat("staleServed");
-      return { value: stale.value, degraded: true, body: stale.body };
+      return { value: stale.value, degraded: true, body: stale.body, producedAt: stale.storedAt };
     }
   }
 
   async withTtlResult<T>(k: string, ttl: number, fn: Loader<T>, scope?: CacheScope): Promise<CacheResult<T>> {
-    const serveBody = scope?.serveBody !== false;
     const signal = this.callerSignal;
-    if (!signal) return this.withTtlInner(k, ttl, fn, scope, serveBody);
+    if (!signal) return this.withTtlInner(k, ttl, fn, scope);
     if (signal.aborted) throw new ClientAbortError(`Client aborted request for ${k}`);
-    const work = this.withTtlInner(k, ttl, fn, scope, serveBody);
+    const work = this.withTtlInner(k, ttl, fn, scope);
     return raceAbort(
       work,
       signal,
@@ -152,25 +161,33 @@ export class CacheService {
     ttl: number,
     fn: Loader<T>,
     scope: CacheScope | undefined,
-    serveBody: boolean,
   ): Promise<CacheResult<T>> {
     const now = Date.now();
     try {
       const kv = this.kv;
       const vk = this.tier.vk(k);
+      const serveBody = serveBodyOf(scope);
       const mem = sharedL1.get<T>(vk);
       if (mem && mem.e > now) {
         noteCacheStat("l1Hits");
-        return { value: mem.d, degraded: false, body: serveBody ? mem.s : undefined };
+        return { value: mem.d, degraded: false, body: serveBody ? mem.s : undefined, producedAt: mem.f };
       }
       const hit = kv ? await this.tier.getVersioned<T>(kv, k) : undefined;
       if (hit && hit.env.e > now) {
+        // The KV read above is an await, so a concurrent refresh may have stored a fresher generation in this isolate's
+        // L1 while it was in flight. Serving and then re-storing the older KV copy would hand out superseded data as
+        // fresh and pin it there until that L1 entry aged out, so the newer copy wins and is never overwritten.
+        const fresher = sharedL1.get<T>(vk);
+        if (fresher !== undefined && fresher.e > now && fresher.f > hit.env.f) {
+          noteCacheStat("l1Hits");
+          return { value: fresher.d, degraded: false, body: serveBody ? fresher.s : undefined, producedAt: fresher.f };
+        }
         noteCacheStat("kvHits");
         const retained = serveBody ? hit.body : undefined;
-        sharedL1.set(vk, hit.env.d, l1TtlFor(hit.env.e - now), hit.bytes, hit.env.t ?? ttl, retained);
-        return { value: hit.env.d, degraded: false, body: retained };
+        sharedL1.set(vk, hit.env.d, l1TtlFor(hit.env.e - now), hit.bytes, hit.env.t, hit.env.f, retained);
+        return { value: hit.env.d, degraded: false, body: retained, producedAt: hit.env.f };
       }
-      return this.refreshOrStale(vk, ttl, fn, mem, hit, kv, scope, serveBody);
+      return this.refreshOrStale({ vk, ttl, fn, mem, kvHit: hit, kv, scope });
     } finally {
       flushCacheStats(this.log);
     }

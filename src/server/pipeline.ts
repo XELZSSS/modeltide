@@ -5,7 +5,7 @@ import type { ParseResult } from "./formats/parse-result";
 import { UpstreamError, zeroUpstream } from "./api/errors";
 import type { Logger } from "./api/logger";
 import type { CacheScope } from "./cache/types";
-import { attachSerializedBody } from "./serialized-body";
+import { degraded, served, type ServedPayload } from "./served-payload";
 
 // All four callers pass both a logger and a label, so `log` was never the no-logger path and `label` never the
 // `"parser"` default: requiring them drops the dead optional-chain branch and the untaken default.
@@ -48,13 +48,16 @@ interface SourceSpec<P, TRaw, TData> {
   partialWhen?: (stats: { raw: TRaw }) => PartialVerdict;
 }
 
-/** A source with a fixed cache key: `(ctx) => SourcePayload<T>`. */
-export type FixedSource<T> = (ctx: AppContext) => Promise<SourcePayload<T>>;
+/**
+ * A source with a fixed cache key. The envelope it answers is the one a route returns — `{ data, partial }` — so a
+ * source never states a `partial` flag it did not compute.
+ */
+export type FixedSource<T> = (ctx: AppContext) => Promise<ServedPayload<T>>;
 
 /** A source whose cache key and upstream request depend on the validated query. */
-export type ParamSource<P, T> = (ctx: AppContext, params: P) => Promise<SourcePayload<T>>;
+type ParamSource<P, T> = (ctx: AppContext, params: P) => Promise<ServedPayload<T>>;
 
-function buildSource<P, TRaw, TData>(
+export function defineParamSource<P, TRaw, TData>(
   keyOf: (params: P) => string,
   spec: SourceSpec<P, TRaw, TData>,
 ): ParamSource<P, TData> {
@@ -77,31 +80,62 @@ function buildSource<P, TRaw, TData>(
           if (verdict?.log) refreshCtx.log("warn", `[${spec.label}] partial`, verdict.log);
           const partial = truncated || verdict?.partial === true;
           return {
-            data: { data, fetchedAt: new Date().toISOString(), partial },
+            data: { data, partial },
             ttl: verdict?.ttl ?? ttlFor(partial, spec.ttl),
           };
         },
         { ...spec.scope, serveBody: spec.served === true },
       )
-      .then(({ value, degraded, body }) => {
+      .then(({ value, degraded: isDegraded, body, producedAt }) =>
         // A stale fallback rewrites the stored copy into a partial response, so the body stored beside it still says
         // `partial: false`. Serving those bytes would ship a payload whose flag, ETag and cache headers disagree with
         // its own body, and the client would never show the partial notice or start polling. Only an unchanged payload
         // may be served from the copy the cache encoded.
-        if (degraded) return { ...value, partial: true };
-        return body === undefined ? value : attachSerializedBody(value, body);
-      });
+        isDegraded ? degraded<TData>(value, producedAt) : served<TData>(value, { body, producedAt }),
+      );
   };
 }
 
 export function defineSource<TRaw, TData>(spec: SourceSpec<void, TRaw, TData> & { key: string }): FixedSource<TData> {
-  const run = buildSource<void, TRaw, TData>(() => spec.key, spec);
+  const run = defineParamSource<void, TRaw, TData>(() => spec.key, spec);
   return (ctx) => run(ctx, undefined);
 }
 
-export function defineParamSource<P, TRaw, TData>(
-  keyOf: (params: P) => string,
-  spec: SourceSpec<P, TRaw, TData>,
-): ParamSource<P, TData> {
-  return buildSource(keyOf, spec);
+interface PartialSourceSpec<TRaw extends { partial: boolean }, T> {
+  key: string;
+  ttl: number;
+  label: string;
+  served?: boolean;
+  cap?: number;
+  fetch: (ctx: AppContext) => Promise<TRaw>;
+  pick: (raw: TRaw) => T;
+  /**
+   * Runs on the picked value before it is cached — the row check that would otherwise sit in a `parse` of its own.
+   * It reports failure the way every other source does: by throwing.
+   */
+  refine?: (data: T, raw: TRaw) => void;
+}
+
+/**
+ * A source whose `fetch` already knows whether its payload is partial. The wrapper derives `parse` and `partialWhen`
+ * from the one shape, so the four sources that used to write `parse: (raw) => raw.data` next to
+ * `partialWhen: ({ raw }) => ({ partial: raw.partial })` cannot report a flag their own fetch did not set.
+ */
+export function definePartialSource<TRaw extends { partial: boolean }, T>(
+  spec: PartialSourceSpec<TRaw, T>,
+): FixedSource<T> {
+  return defineSource<TRaw, T>({
+    key: spec.key,
+    ttl: spec.ttl,
+    label: spec.label,
+    served: spec.served,
+    cap: spec.cap,
+    fetch: spec.fetch,
+    parse: (raw) => {
+      const data = spec.pick(raw);
+      spec.refine?.(data, raw);
+      return data;
+    },
+    partialWhen: ({ raw }) => ({ partial: raw.partial }),
+  });
 }

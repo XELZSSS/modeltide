@@ -28,7 +28,7 @@ const { t } = useTranslation();
       <h1 class="ui-section-title">{{ t(props.headingKey) }}</h1>
       <p class="max-w-md ui-body-secondary text-balance">{{ t(props.bodyKey) }}</p>
       <SafeLink href="/" :class="cn('mt-2', buttonVariants({ variant: 'primary', size: 'md' }))">
-        <ArrowLeft :size="14" />
+        <ArrowLeft :size="14" aria-hidden="true" />
         {{ t("backToHome") }}
       </SafeLink>
     </div>

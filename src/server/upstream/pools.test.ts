@@ -5,8 +5,14 @@ import { UPSTREAM_MAX_CONNECTIONS } from "./timeouts";
 /** Every production caller passes a composed attempt signal; the pool only needs one it can listen on. */
 const live = (): AbortSignal => new AbortController().signal;
 
-async function fillPool(pool: SlotPool): Promise<void> {
+/** The reason a reader hands up: both abort cases abort with exactly this. */
+const handedUp = (): DOMException => new DOMException("handed up", "AbortError");
+
+/** A pool with every slot taken, which is the starting point of every queueing case. */
+async function filledPool(): Promise<SlotPool> {
+  const pool = createSlotPool();
   for (let i = 0; i < pool.max; i++) await acquireSlot(live(), pool);
+  return pool;
 }
 
 describe("createSlotPool", () => {
@@ -20,9 +26,7 @@ describe("createSlotPool", () => {
 
 describe("acquireSlot / releaseSlot", () => {
   it("queues an acquire past the cap until a slot is released", async () => {
-    const pool = createSlotPool();
-    await fillPool(pool);
-    expect(pool.active).toBe(UPSTREAM_MAX_CONNECTIONS);
+    const pool = await filledPool();
 
     let settled = false;
     const pending = acquireSlot(live(), pool).then(() => {
@@ -41,8 +45,7 @@ describe("acquireSlot / releaseSlot", () => {
   });
 
   it("wakes queued waiters in FIFO order", async () => {
-    const pool = createSlotPool();
-    await fillPool(pool);
+    const pool = await filledPool();
 
     const order: string[] = [];
     const a = acquireSlot(live(), pool).then(() => order.push("a"));
@@ -64,11 +67,9 @@ describe("acquireSlot / releaseSlot", () => {
   });
 
   it("rejects a queued waiter on abort and removes it from the queue", async () => {
-    const pool = createSlotPool();
-    await fillPool(pool);
-
+    const pool = await filledPool();
     const controller = new AbortController();
-    const reason = new DOMException("handed up", "AbortError");
+    const reason = handedUp();
     const pending = acquireSlot(controller.signal, pool);
     await Promise.resolve();
     expect(pool.waiters).toHaveLength(1);
@@ -78,14 +79,13 @@ describe("acquireSlot / releaseSlot", () => {
     expect(pool.waiters).toHaveLength(0);
 
     releaseSlot(pool);
-    expect(pool.waiters).toHaveLength(0);
-    expect(pool.active).toBeLessThanOrEqual(UPSTREAM_MAX_CONNECTIONS);
+    expect(pool.active).toBe(UPSTREAM_MAX_CONNECTIONS - 1);
   });
 
-  it("rejects immediately for an already-aborted signal without queueing", async () => {
+  it("rejects an already-aborted signal without queueing", async () => {
     const pool = createSlotPool();
     const controller = new AbortController();
-    const reason = new DOMException("handed up", "AbortError");
+    const reason = handedUp();
     controller.abort(reason);
 
     await expect(acquireSlot(controller.signal, pool)).rejects.toBe(reason);

@@ -4,8 +4,8 @@ import { cellClasses, cellInnerClasses, type HeaderColumn } from "./cell-classes
 
 /**
  * The `<thead>` of a data table: a functional component rather than an SFC because it renders a single `<tr>` of `<th>`s
- * with no state. The leading 7px spacer appears only when the body has row expanders, so the header labels line up with
- * the cell text and not with the chevron.
+ * with no state. The leading 28px (`w-7`) spacer appears only when the body has row expanders, so the header labels line
+ * up with the cell text and not with the chevron.
  */
 export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpandable: boolean }> = (props) =>
   h(

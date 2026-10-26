@@ -11,6 +11,7 @@ import OpenSourceDetail from "./open-source-detail.vue";
 import HallucinationDetail from "./hallucination-detail.vue";
 import AaDetailView from "./aa-detail-view.vue";
 import OrDetailView from "./or-detail-view.vue";
+import DecisionDetail from "./decision-detail.vue";
 
 function isModelSource(value: string): value is ModelSource {
   return Object.hasOwn(SOURCES, value);
@@ -43,5 +44,6 @@ useSoftNotFound(computed(() => !source.value || !decodedId.value));
     <OrDetailView v-else-if="source === 'or'" :key="decodedId" :decoded-id="decodedId" />
     <OpenSourceDetail v-else-if="source === 'os'" :key="decodedId" :decoded-id="decodedId" />
     <HallucinationDetail v-else-if="source === 'hall'" :key="decodedId" :decoded-id="decodedId" />
+    <DecisionDetail v-else-if="source === 'decision'" :key="decodedId" :decoded-id="decodedId" />
   </SuspenseQuery>
 </template>

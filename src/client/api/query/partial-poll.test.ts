@@ -3,8 +3,10 @@ import { partialPollInterval } from "./partial-poll";
 
 const REFETCH_MS = 600_000;
 
-const PARTIAL = { partial: true, data: [], fetchedAt: "2026-01-01T00:00:00.000Z" };
-const COMPLETE = { partial: false, data: [], fetchedAt: "2026-01-01T00:00:00.000Z" };
+const PARTIAL = { partial: true, data: [] };
+const COMPLETE = { partial: false, data: [] };
+/** Every settled update count that still falls inside one polling budget. */
+const SETTLED_COUNTS = [0, 1, 2, 3, 4];
 
 const isPartial = (data: unknown): boolean => (data as { partial?: unknown } | null)?.partial === true;
 
@@ -17,11 +19,8 @@ function poll(key: string, data: unknown, dataUpdateCount = 0, errorUpdateCount 
 }
 
 describe("partialPollInterval", () => {
-  it("never polls a complete payload", () => {
+  it("never polls a complete or missing payload", () => {
     expect(poll("complete", COMPLETE, 3)).toBe(false);
-  });
-
-  it("never polls before the payload arrived", () => {
     expect(poll("missing", undefined)).toBe(false);
   });
 
@@ -30,15 +29,9 @@ describe("partialPollInterval", () => {
     expect(poll("keeps", PARTIAL, 1)).toBe(REFETCH_MS);
   });
 
-  it("stops after five settlements inside one polling window", () => {
+  it("spends five settlements then opens a fresh window", () => {
     const key = "budget";
-    for (const settled of [0, 1, 2, 3, 4]) expect(poll(key, PARTIAL, settled)).toBe(REFETCH_MS);
-    expect(poll(key, PARTIAL, 5)).toBe(false);
-  });
-
-  it("opens a fresh window once the spent one is evicted", () => {
-    const key = "budget-reopen";
-    for (const settled of [0, 1, 2, 3, 4]) expect(poll(key, PARTIAL, settled)).toBe(REFETCH_MS);
+    for (const settled of SETTLED_COUNTS) expect(poll(key, PARTIAL, settled)).toBe(REFETCH_MS);
     expect(poll(key, PARTIAL, 5)).toBe(false);
     expect(poll(key, PARTIAL, 6)).toBe(REFETCH_MS);
   });

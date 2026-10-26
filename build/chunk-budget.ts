@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { Plugin } from "vite";
 import { rootDir } from "../vite.shared.ts";
+import { CLIENT_OUT_DIR_NAME } from "./constants.ts";
 
 /**
  * Vite warns above 500 KB per chunk, which is far past the point where a route chunk has already stopped being a lazy
@@ -9,8 +10,8 @@ import { rootDir } from "../vite.shared.ts";
  * This turns the size into a build error instead, so a dependency that quietly pulls its own copy of a charting or
  * parsing library fails locally rather than shipping.
  *
- * The budget is per chunk and deliberately generous against today's numbers (~1.9× the largest one) — it is a guard
- * against a regression, not a target to grow into.
+ * The budget is per chunk and deliberately generous against today's numbers (240 KB against a 187 KB largest chunk, ~1.3×)
+ * — it is a guard against a regression, not a target to grow into.
  */
 const MAX_CHUNK_BYTES = 240 * 1024;
 
@@ -23,7 +24,7 @@ interface ChunkInfo {
 }
 
 function readEmittedAssets(): ChunkInfo[] {
-  const assetsDir = path.join(rootDir, "dist", "assets");
+  const assetsDir = path.join(rootDir, CLIENT_OUT_DIR_NAME, "assets");
   const out: ChunkInfo[] = [];
   for (const entry of fs.readdirSync(assetsDir, { withFileTypes: true })) {
     if (!entry.isFile()) continue;

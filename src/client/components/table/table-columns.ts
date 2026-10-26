@@ -88,6 +88,20 @@ const MONO_EMPHASIS_CLASS = {
   muted: "ui-mono-value font-normal text-text-secondary",
 } as const;
 
+/**
+ * A right-aligned column: the shape `rightCol` and `mobilePrimaryCol` both produce, with the choice between them kept in
+ * one place. A value that is also the phone card's primary cell opts into `mobilePrimary`. No `width`: the primary cell
+ * is sized by the mobile card layout, so width rides on `rightCol` directly.
+ */
+export function rightAlignedCol<T>(
+  id: string,
+  header: string,
+  cell: (row: T) => VNodeChild,
+  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean },
+): DataTableColumn<T> {
+  return opts?.mobilePrimary ? mobilePrimaryCol(id, header, cell, opts) : rightCol(id, header, cell, opts);
+}
+
 export function monoCol<T>(
   id: string,
   header: string,
@@ -96,8 +110,7 @@ export function monoCol<T>(
 ): DataTableColumn<T> {
   const className = opts?.emphasis ? MONO_EMPHASIS_CLASS[opts.emphasis] : "ui-mono-value";
   const cell = (row: T): VNodeChild => h("span", { class: className }, [format(row)]);
-  const alignOpts = opts?.hiddenMd ? { hiddenMd: true } : undefined;
-  return opts?.mobilePrimary ? mobilePrimaryCol(id, header, cell, alignOpts) : rightCol(id, header, cell, alignOpts);
+  return rightAlignedCol(id, header, cell, { mobilePrimary: opts?.mobilePrimary, hiddenMd: opts?.hiddenMd });
 }
 
 export const RightAlignedText: FunctionalComponent<{ class?: string }> = (props, { slots }) =>

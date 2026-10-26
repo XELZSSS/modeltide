@@ -7,7 +7,7 @@
     "dev": "node build/gen-cache-version.cjs && vite",
     "gen:cache-version": "node build/gen-cache-version.cjs",
     "postinstall": "node build/gen-cache-version.cjs",
-    "build": "npm run type-check && npm run lint && npm run format:check && npm run test && npm run build:app",
+    "build": "npm run clean && npm run type-check && npm run lint && npm run format:check && npm run test && npm run build:app",
     "build:app": "node build/gen-cache-version.cjs && node build/bundle-functions.mjs && vite build",
     "preview": "vite preview",
     "type-check": "node build/gen-cache-version.cjs && vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.functions.json",

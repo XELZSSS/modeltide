@@ -43,8 +43,12 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
 }
 
-/** The longest placeholder is "undefined", so anything longer skips the lowercase copy entirely. */
-const MAX_PLACEHOLDER_CHARS = 9;
+/**
+ * `PLACEHOLDER_TEXTS` holds only short words, so the lowercase copy is skipped past the longest of them. The length
+ * bound is derived from the set instead of hardcoded: a longer placeholder added later would otherwise be silently
+ * unreachable behind this guard.
+ */
+const MAX_PLACEHOLDER_CHARS = Math.max(...[...PLACEHOLDER_TEXTS].map((t) => t.length));
 
 function isPlaceholderText(t: string): boolean {
   if (t.length > MAX_PLACEHOLDER_CHARS) return false;
@@ -86,6 +90,6 @@ export function isSuitableNewsItem(title: unknown, link: unknown): boolean {
   if (typeof title !== "string" || typeof link !== "string") return false;
   const t = title.trim();
   const l = link.trim();
-  if (!t || !l || t.length > MAX_NEWS_TITLE_CHARS) return false;
+  if (!t || !l) return false;
   return !isJunkText(t) && !NEWS_TITLE_BAD_RE.test(t) && isHttpUrl(l);
 }

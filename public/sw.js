@@ -29,18 +29,19 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") void self.skipWaiting();
 });
 
-function isCacheable(request) {
-  if (request.method !== "GET") return false;
+/** The URL this request may be answered from our cache, or null when it has to go straight to the network. */
+function cacheableUrl(request) {
+  if (request.method !== "GET") return null;
   let url;
   try {
     url = new URL(request.url);
   } catch {
-    return false;
+    return null;
   }
-  if (url.origin !== self.location.origin) return false;
-  if (url.pathname === API_PREFIX || url.pathname.startsWith(`${API_PREFIX}/`)) return false;
-  if (url.pathname === "/sw.js") return false;
-  return true;
+  if (url.origin !== self.location.origin) return null;
+  if (url.pathname === API_PREFIX || url.pathname.startsWith(`${API_PREFIX}/`)) return null;
+  if (url.pathname === "/sw.js") return null;
+  return url;
 }
 
 function isImmutableAsset(pathname) {
@@ -74,12 +75,8 @@ async function handleAsset(event) {
 const PROTECTED_PATHS = new Set(PRECACHE_URLS);
 
 function isTrimmable(request) {
-  try {
-    const { pathname } = new URL(request.url);
-    return !PROTECTED_PATHS.has(pathname) && !isImmutableAsset(pathname);
-  } catch {
-    return false;
-  }
+  const { pathname } = new URL(request.url);
+  return !PROTECTED_PATHS.has(pathname) && !isImmutableAsset(pathname);
 }
 
 async function trimOtherCache(cache) {
@@ -111,13 +108,8 @@ async function handleOther(event) {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (!isCacheable(request)) return;
-  let url;
-  try {
-    url = new URL(request.url);
-  } catch {
-    return;
-  }
+  const url = cacheableUrl(request);
+  if (!url) return;
   if (request.mode === "navigate") {
     event.respondWith(handleNavigation(event));
   } else if (isImmutableAsset(url.pathname)) {

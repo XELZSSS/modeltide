@@ -4,6 +4,7 @@ import { MoreHorizontal, Settings } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { useNavigation, usePrefetch } from "@/client/nav/navigation";
 import SafeLink from "@/client/components/ui/safe-link.vue";
+import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 
 const emit = defineEmits<{ moreOpen: []; settingsOpen: [] }>();
 
@@ -11,8 +12,7 @@ const { t } = useTranslation();
 const { mobilePrimary, mobileMore, isActive } = useNavigation();
 const { touch } = usePrefetch();
 
-const BAR_BUTTON =
-  "flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium ui-motion ui-press focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring min-h-16 py-2";
+const BAR_BUTTON = `flex-1 flex flex-col items-center justify-center gap-1 text-center text-xs font-medium ui-motion ui-press ${FOCUS_RING} focus-visible:ring-inset min-h-16 py-2`;
 
 // Selection is the raised pill behind the glyph, the same surface change the desktop segmented controls use.
 const barItemClass = (active: boolean) =>
@@ -45,19 +45,19 @@ const isMoreActive = computed(() => mobileMore.value.some(isActive));
       @touchstart="touch(item.path)"
     >
       <span :class="iconWrapClass(isActive(item))">
-        <component :is="item.icon" :size="18" />
+        <component :is="item.icon" :size="18" aria-hidden="true" />
       </span>
       <span>{{ item.label }}</span>
     </SafeLink>
     <button type="button" :aria-label="t('more')" :class="barItemClass(isMoreActive)" @click="emit('moreOpen')">
       <span :class="iconWrapClass(isMoreActive)">
-        <MoreHorizontal :size="18" />
+        <MoreHorizontal :size="18" aria-hidden="true" />
       </span>
       <span>{{ t("more") }}</span>
     </button>
     <button type="button" :aria-label="t('settings')" :class="barItemClass(false)" @click="emit('settingsOpen')">
       <span :class="iconWrapClass(false)">
-        <Settings :size="18" />
+        <Settings :size="18" aria-hidden="true" />
       </span>
       <span>{{ t("settings") }}</span>
     </button>

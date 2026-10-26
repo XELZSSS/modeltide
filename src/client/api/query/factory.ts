@@ -4,7 +4,7 @@ import type { MaybeRefOrGetter } from "vue";
 import { ONE_DAY, THIRTY_MINUTES, apiPaths } from "@/shared/config";
 import type { ApiDomain, PayloadOf } from "@/shared/contract";
 import type { SourcePayload } from "@/shared/types";
-import { fetcher } from "./api-client";
+import { fetcher } from "../transport/client";
 import { partialPollInterval } from "./partial-poll";
 
 type RawPayload<D extends ApiDomain> = SourcePayload<PayloadOf<D>>;
@@ -24,7 +24,12 @@ const QUERY_DEFAULTS = {
 
 interface ApiQueryOptions<T> {
   ttl?: number;
-  gcTime?: number;
+  /**
+   * Staleness for a payload that arrived empty. The origin answers a miss with its shortest cache window (the Hugging
+   * Face by-id lookup files "not found" for a minute), so keeping an empty list fresh for the full `ttl` left a model
+   * that had just been indexed showing the not-found page until the entry went stale.
+   */
+  missTtlMs?: number;
   // Every caller in `catalog.ts` registers the partial-poll pair together, so both are required: the "this query never
   // polls" arm they used to feed is unreachable.
   partialRefetchMs: number;
@@ -38,29 +43,36 @@ export function createApiQuery<D extends ApiDomain>(
   key: readonly (string | number)[],
   opts: ApiQueryOptions<PayloadOf<D>>,
 ) {
-  const { ttl, gcTime, partialRefetchMs, isPartialData, query } = opts;
+  const { ttl, missTtlMs, partialRefetchMs, isPartialData, query } = opts;
   const path = query ? `${apiPaths[domain]}?${new URLSearchParams(query)}` : apiPaths[domain];
   const queryFn = fetcher<PayloadOf<D>>(path);
   const ttlMs = ttl ?? QUERY_DEFAULTS.ttlMs;
+  const staleTimeFor = (payload: RawPayload<D> | undefined): number =>
+    missTtlMs !== undefined && payload !== undefined && Array.isArray(payload.data) && payload.data.length === 0
+      ? missTtlMs
+      : ttlMs;
   const residentMs = Math.min(
     Math.max(ttlMs * QUERY_DEFAULTS.gcTimeMultiplier, QUERY_DEFAULTS.gcTimeMs),
     QUERY_DEFAULTS.maxGcTimeMs,
   );
   const refetchInterval: PollFn<D> = (q) =>
     partialPollInterval(q, isPartialData as (data: unknown) => boolean, partialRefetchMs);
-  const timing = {
-    gcTime: gcTime ?? residentMs,
-    refetchInterval,
-    staleTime: ttlMs,
-  };
-  const use = (enabled?: MaybeRefOrGetter<boolean>): UseQueryReturnType<RawPayload<D>, Error> =>
-    useQuery<RawPayload<D>, Error>({ queryKey: key, queryFn, ...timing, enabled });
   return {
-    domain,
-    key,
-    queryFn,
-    use,
+    use: (enabled?: MaybeRefOrGetter<boolean>): UseQueryReturnType<RawPayload<D>, Error> =>
+      useQuery<RawPayload<D>, Error>({
+        queryKey: key,
+        queryFn,
+        refetchInterval,
+        staleTime: (query) => staleTimeFor(query.state.data),
+        gcTime: residentMs,
+        enabled,
+      }),
     prefetch: (client: QueryClient) =>
-      client.prefetchQuery({ queryKey: key, queryFn, staleTime: timing.staleTime, gcTime: timing.gcTime }),
+      client.prefetchQuery({
+        queryKey: key,
+        queryFn,
+        staleTime: (query) => staleTimeFor(query.state.data),
+        gcTime: residentMs,
+      }),
   };
 }

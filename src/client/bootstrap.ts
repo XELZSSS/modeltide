@@ -6,7 +6,6 @@ import { preloadChunk } from "./router/lazy-view";
 import { loadMobileMoreSheet, loadSettingsSheet } from "./shell/sheet-loaders";
 
 function loadFonts(): void {
-  if (!("fonts" in document)) return;
   for (const spec of FONT_LOAD_SPECS) void document.fonts.load(spec);
 }
 

@@ -1,6 +1,5 @@
 export const FONT_FILES = [
   "/fonts/plex-sans-latin.woff2",
-  "/fonts/plex-sans-latin-ext.woff2",
   "/fonts/plex-mono-400-latin.woff2",
   "/fonts/plex-mono-500-latin.woff2",
   "/fonts/plex-mono-600-latin.woff2",

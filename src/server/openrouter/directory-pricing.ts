@@ -1,6 +1,6 @@
-import { numCoerce, numCoerceNonNegative } from "@/server/formats/scalars";
+import { numCoerce, numCoerceNonNegative, textOrNull } from "@/server/formats/scalars";
 import { PER_MILLION, perMillionOrNull } from "@/server/formats/limits";
-import { normalizeModelKey, toStringOrNull } from "@/shared/utils";
+import { fillModelKeys } from "./lookup";
 import type { PricingRow } from "@/server/formats/wire-types";
 
 export interface PricingEntry {
@@ -53,21 +53,15 @@ export function hasDynamicPricing(raw: PricingRow): boolean {
  * variant suffix, each in lowercase and normalized form. `seen` is reused across rows by the caller.
  */
 export function recordPricing(record: PricingRecord, raw: PricingRow, entry: PricingEntry, seen: Set<string>): void {
-  const idKey = toStringOrNull(raw.id);
-  const slugKey = toStringOrNull(raw.canonical_slug);
-  let variantSlugKey: string | null = null;
-  if (idKey && slugKey) {
-    const variantAt = idKey.lastIndexOf(":");
-    if (variantAt > 0) variantSlugKey = `${slugKey}${idKey.slice(variantAt)}`;
-  }
-  seen.clear();
-  for (const key of [idKey, slugKey, variantSlugKey]) {
-    if (!key) continue;
-    for (let form = 0; form < 2; form++) {
-      const index = form === 0 ? key.toLowerCase() : normalizeModelKey(key);
-      if (!index || seen.has(index)) continue;
-      seen.add(index);
-      if (record[index] === undefined) record[index] = entry;
-    }
-  }
+  const id = textOrNull(raw.id);
+  const slug = textOrNull(raw.canonical_slug);
+  const variantAt = id === null ? -1 : id.lastIndexOf(":");
+  const variantSuffix = id !== null && variantAt > 0 ? id.slice(variantAt) : "";
+  // A variant row (`v/m:free`, `v/m:thinking`) is indexed under its own id and under the variant slug, never under the
+  // bare canonical slug: the whole family shares that slug, so the first variant listed would hand its price — a free
+  // row's $0 — to the paid base model, whose own row then arrives as a duplicate and is dropped.
+  const variantSlug = slug !== null && variantSuffix !== "" ? `${slug}${variantSuffix}` : null;
+  const bareSlug = variantSuffix === "" ? slug : null;
+  fillModelKeys(seen, [id, bareSlug, variantSlug]);
+  for (const index of seen) if (record[index] === undefined) record[index] = entry;
 }

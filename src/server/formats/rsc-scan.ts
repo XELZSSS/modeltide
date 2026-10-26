@@ -64,6 +64,9 @@ function oversizedTrees(
   };
   const start = Math.max(0, idx - WINDOW_PREFIX_CHARS);
   for (const step of WINDOW_STEPS_CHARS) {
+    // Every step slices up to `step` characters before `parse` can reject it, so a spent-out budget used to keep
+    // building multi-MB strings for the remaining steps and candidates without charging for them.
+    if (budgetChars - spent <= 0) break;
     for (const candidate of jsonCandidates(line.slice(start, Math.min(line.length, idx + step)))) {
       const tree = parse(candidate);
       if (tree !== undefined) return { trees: [tree], spent };
@@ -75,10 +78,14 @@ function oversizedTrees(
   if (valueAt === null) return { trees: [], spent };
   const open = line.charAt(valueAt);
   if (open !== "[" && open !== "{") return { trees: [], spent };
-  const slice = balancedJsonSlice(line, valueAt, Math.min(MAX_SCAN_CHARS, budgetChars - spent));
+  // Charge the structural walk to `spend`: it can step over `MAX_SCAN_CHARS` characters per call, and leaving it out
+  // let each of the `MAX_NEEDLE_CANDIDATES` positions scan a multi-MB line again on a budget it never consumed.
+  const scan: ScanSpend = { chars: 0 };
+  const slice = balancedJsonSlice(line, valueAt, Math.min(MAX_SCAN_CHARS, budgetChars - spent), scan);
+  spent += scan.chars;
   if (slice == null) return { trees: [], spent };
   try {
-    return { trees: [{ [marker]: JSON.parse(slice) }], spent: spent + slice.length };
+    return { trees: [{ [marker]: JSON.parse(slice) }], spent };
   } catch {
     return { trees: [], spent };
   }
@@ -123,11 +130,18 @@ export function scanOversizedMarkers<T>(
 
 // --- Needle scan: parse every `"needle": [ ... ]` array inside windows around each locator occurrence. ---
 
-export interface NeedleScanOptions {
+interface NeedleScanOptions {
   prefixChars: number;
   smallSuffixChars: number;
   maxSuffixChars: number;
-  unescape?: boolean;
+}
+
+/**
+ * What a needle pass could not turn into JSON. `balancedJsonSlice` guarantees balanced brackets and closed strings, so
+ * a parse failure is a real wire problem; counting it keeps it visible without aborting the scan of later arrays.
+ */
+export interface NeedleScanStats {
+  unparsableSlices: number;
 }
 
 interface NeedleCandidate {
@@ -162,6 +176,8 @@ function unescapeEmbedded(window: string): string {
 
 function collectNeedleCandidates(text: string, locators: readonly string[]): NeedleCandidate[] {
   const candidates: NeedleCandidate[] = [];
+  // Headroom on purpose: the caller keeps only the first `MAX_NEEDLE_CANDIDATES` candidates whose value is an array,
+  // and a needle plus its escaped copy are both searched, so a 1:1 cap could end the scan before the arrays appear.
   const cap = MAX_NEEDLE_CANDIDATES * 4;
   for (const locator of locators) {
     let from = 0;
@@ -178,7 +194,14 @@ function collectNeedleCandidates(text: string, locators: readonly string[]): Nee
   return candidates;
 }
 
-/** Parses every `"needle": [ ... ]` value in `[from, to)`, appending rows to `found`. */
+/**
+ * Parses every `"needle": [ ... ]` value in `[from, to)`, appending rows to `found`.
+ *
+ * `balancedJsonSlice` has already checked that the slice is bracket- and string-balanced, so a `JSON.parse` failure
+ * here means the payload was not valid JSON despite its shape. That is counted and reported through `stats` rather
+ * than swallowed: the scan continues (one malformed array must not hide the arrays after it), but the caller can see
+ * that this pass found less than the document contained.
+ */
 function scanArrayValues(
   src: string,
   from: number,
@@ -186,6 +209,7 @@ function scanArrayValues(
   needle: string,
   found: unknown[],
   spend: ScanSpend,
+  stats: NeedleScanStats,
 ): boolean {
   let parsed = false;
   let at = src.indexOf(needle, from);
@@ -198,7 +222,9 @@ function scanArrayValues(
         try {
           found.push(JSON.parse(slice));
           parsed = true;
-        } catch {}
+        } catch {
+          stats.unparsableSlices += 1;
+        }
       }
     }
     at = src.indexOf(needle, at + needle.length);
@@ -207,28 +233,32 @@ function scanArrayValues(
 }
 
 /**
- * Scans `[from, to)` raw; when that finds nothing and `unescape` is set, scans an unescaped copy of the same range
- * (RSC payloads embed documents as escaped strings).
+ * Scans `[from, to)` raw; when that finds nothing, scans an unescaped copy of the same range (RSC payloads embed
+ * documents as escaped strings).
  */
 function scanWindow(
   text: string,
   from: number,
   to: number,
   needle: string,
-  unescape: boolean,
   found: unknown[],
   spend: ScanSpend,
+  stats: NeedleScanStats,
 ): boolean {
   spend.chars += to - from;
-  if (scanArrayValues(text, from, to, needle, found, spend)) return true;
-  if (!unescape) return false;
+  if (scanArrayValues(text, from, to, needle, found, spend, stats)) return true;
   const escapeAt = text.indexOf("\\", from);
   if (escapeAt === -1 || escapeAt >= to) return false;
   const segment = unescapeEmbedded(text.slice(from, to));
-  return scanArrayValues(segment, 0, segment.length, needle, found, spend);
+  return scanArrayValues(segment, 0, segment.length, needle, found, spend, stats);
 }
 
-export function extractNeedleJsonArrays(text: string, needle: string, opts: NeedleScanOptions): unknown[] {
+export function extractNeedleJsonArrays(
+  text: string,
+  needle: string,
+  opts: NeedleScanOptions,
+  stats: NeedleScanStats,
+): unknown[] {
   const found: unknown[] = [];
   const escaped = needle.replace(/"/g, '\\"');
   const locators = escaped === needle ? [needle] : [needle, escaped];
@@ -242,9 +272,9 @@ export function extractNeedleJsonArrays(text: string, needle: string, opts: Need
     const smallEnd = Math.min(text.length, start + opts.smallSuffixChars);
     // The small window is re-scanned as part of the max window: it found nothing, so a straddling array can only
     // be found once here — no double pushes.
-    if (!scanWindow(text, windowStart, smallEnd, needle, opts.unescape === true, found, spend)) {
+    if (!scanWindow(text, windowStart, smallEnd, needle, found, spend, stats)) {
       const maxEnd = Math.min(text.length, start + opts.maxSuffixChars);
-      scanWindow(text, windowStart, maxEnd, needle, opts.unescape === true, found, spend);
+      scanWindow(text, windowStart, maxEnd, needle, found, spend, stats);
     }
   }
   return found;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
-import { useSuspenseHomeDashboard } from "@/client/api/hooks";
-import { assertPayloadShape } from "@/client/api/payload-normalize";
+import { computed } from "vue";
+import { useSuspenseHomeDashboard } from "@/client/api/view-models";
+import { useMalformedGuard } from "@/client/hooks/use-malformed-guard";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import { loadableView } from "@/client/router/lazy-view";
 import { useTranslation } from "@/client/i18n";
@@ -18,11 +18,7 @@ const { t } = useTranslation();
 
 const dashboardData = await useSuspenseHomeDashboard();
 
-watch(
-  () => dashboardData.value.malformed,
-  () => assertPayloadShape(dashboardData.value.malformed, "homeDashboard"),
-  { immediate: true },
-);
+useMalformedGuard(() => dashboardData.value.malformed, "homeDashboard");
 
 const { trendingStats, hallucinationStats, providerStats, t2iModels } = useHomeStats(dashboardData, t);
 

@@ -1,5 +1,5 @@
 import { CACHE_ENTRY_KV_TTL_S } from "./config";
-import { decodeStored, jitteredTtl, kvMetadata, type DecodedEnvelope } from "./envelope";
+import { decodeStored, jitteredTtl, type DecodedEnvelope } from "./envelope";
 import { sharedReads } from "./inflight";
 import { l1TtlFor, type MemoryL1 } from "./l1";
 import { maxStaleMs } from "./stale";
@@ -7,7 +7,6 @@ import { noteCacheStat } from "./stats";
 import { kvReadWarnGate } from "@/server/util/throttle";
 import { logger, type Logger } from "@/server/api/logger";
 import { errMsg } from "@/server/api/errors";
-import { utf8ByteLength } from "@/server/util/hash";
 import type { KvStore } from "./kv";
 
 function warnKvReadFailure(log: Logger, err: unknown): void {
@@ -62,23 +61,25 @@ export class TierStore {
     data: T,
     ttl: number,
     serveBody = true,
-  ): Promise<string | undefined> {
+  ): Promise<{ body: string | undefined; producedAt: number }> {
     const effective = jitteredTtl(vk, ttl);
+    // Captured before the body is encoded: this is when the payload was produced, which is what the ETag names.
+    const producedAt = Date.now();
     let body: string | undefined;
     try {
       body = JSON.stringify(data);
     } catch (err) {
       this.log("warn", `[cache] serialize failed for ${vk}: ${errMsg(err)}`);
     }
-    if (body === undefined) return undefined;
-    const expiresAt = Date.now() + effective;
+    if (body === undefined) return { body: undefined, producedAt };
+    const expiresAt = producedAt + effective;
     // The L1 lifetime must not depend on whether KV is bound: without KV an entry kept its full TTL (up to 6 h) in the
     // same isolate instead of being re-read. Cap it, and keep the jittered TTL as the stale budget.
     const retained = serveBody ? body : undefined;
-    const cached = this.l1.set(vk, data, l1TtlFor(effective), utf8ByteLength(body), effective, retained);
+    const cached = this.l1.set(vk, data, l1TtlFor(effective), body.length, effective, producedAt, retained);
     if (!cached) this.log("warn", `[cache] L1 skipped oversized entry for ${vk}`);
-    if (!kv) return retained;
-    const put = this.putEntry(kv, vk, body, expiresAt, effective).catch((err: unknown) => {
+    if (!kv) return { body: retained, producedAt };
+    const put = this.putEntry(kv, vk, body, expiresAt, effective, producedAt).catch((err: unknown) => {
       this.log("warn", `[cache] KV write failed for ${vk}: ${errMsg(err)}`);
     });
     if (this.onDetach) {
@@ -91,12 +92,19 @@ export class TierStore {
         this.log("warn", `[cache] onDetach callback failed: ${errMsg(err)}`);
       }
     } else await put;
-    return retained;
+    return { body: retained, producedAt };
   }
 
-  private async putEntry(kv: KvStore, k: string, body: string, expiresAt: number, ttl: number): Promise<void> {
+  private async putEntry(
+    kv: KvStore,
+    k: string,
+    body: string,
+    expiresAt: number,
+    ttl: number,
+    producedAt: number,
+  ): Promise<void> {
     const expirationTtl = Math.min(Math.max(Math.ceil((ttl + maxStaleMs(ttl)) / 1000), 60), CACHE_ENTRY_KV_TTL_S);
     noteCacheStat("kvWrites");
-    await kv.put(k, body, { expirationTtl, metadata: kvMetadata(expiresAt, ttl) });
+    await kv.put(k, body, { expirationTtl, metadata: { e: expiresAt, t: ttl, f: producedAt } });
   }
 }

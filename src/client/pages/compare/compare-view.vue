@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, h, type VNodeChild } from "vue";
+import { computed } from "vue";
 import { useTranslation } from "@/client/i18n";
 import { SOURCES } from "@/client/nav/sources";
 import { loadableView } from "@/client/router/lazy-view";
-import { formatIndex } from "@/shared/utils";
-import type { ArtificialAnalysisModel } from "@/shared/types";
-import CompareTable, { WinnerValue } from "./compare-table.vue";
+import { formatScore } from "@/shared/utils";
+import CompareTable from "./compare-table.vue";
 import ComparePageLayout from "./compare-layout.vue";
-import { buildMetricRows, type CompareRow, type Winner } from "@/client/utils/compare-logic";
+import { buildMetricRows } from "@/client/utils/compare-logic";
+import { makeWinnerRenderer } from "./winner-renderer";
 
 const CompareRadarChart = loadableView(() => import("./compare-radar-chart.vue"));
 
@@ -19,16 +19,7 @@ const metricRows = computed(() => buildMetricRows(t));
  * One cell of the metric matrix. A missing index stays blank instead of reading as 0 — the two mean different things —
  * and the winner marks only appear on rows where at least two models carry a number.
  */
-function renderMetric(
-  row: CompareRow<ArtificialAnalysisModel>,
-  model: ArtificialAnalysisModel,
-  winner: Winner | null,
-): VNodeChild {
-  const value = row.getNumeric(model);
-  return typeof value === "number"
-    ? h(WinnerValue, { value: formatIndex(value), winner })
-    : h("span", { class: "text-text-tertiary" }, t("notAvailable"));
-}
+const renderMetric = makeWinnerRenderer(t, (value) => formatScore(value, t));
 </script>
 
 <template>

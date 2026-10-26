@@ -1,3 +1,5 @@
+import { OPEN_SOURCE_SORTS } from "../query-schemas.ts";
+
 export const MAX_ID_CHARS = 500;
 export const MAX_NAME_CHARS = 200;
 
@@ -6,7 +8,7 @@ export const MAX_NAME_CHARS = 200;
 export const MAX_MODEL_ID_CHARS = 195;
 
 export const OPEN_SOURCE_MODELS_DEFAULTS = {
-  sort: "trendingScore",
+  sort: OPEN_SOURCE_SORTS[0],
 } as const;
 
 const API_DOMAINS = {
@@ -16,6 +18,7 @@ const API_DOMAINS = {
   openRouterRankings: "openrouter-rankings",
   closedReleases: "closed-releases",
   homeDashboard: "home-dashboard",
+  decisionIndex: "decision-index",
 } as const;
 
 export const API_PREFIX = "/api";
@@ -37,6 +40,7 @@ export const queryKeys = {
   openRouterRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.openRouterRankings],
   closedReleases: [...QUERY_KEY_PREFIX, API_DOMAINS.closedReleases],
   homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],
+  decisionIndex: [...QUERY_KEY_PREFIX, API_DOMAINS.decisionIndex],
 } as const satisfies Record<ApiDomain, unknown>;
 
 export const apiPaths = {
@@ -46,4 +50,5 @@ export const apiPaths = {
   openRouterRankings: `${API_PREFIX}/${API_DOMAINS.openRouterRankings}`,
   closedReleases: `${API_PREFIX}/${API_DOMAINS.closedReleases}`,
   homeDashboard: `${API_PREFIX}/${API_DOMAINS.homeDashboard}`,
+  decisionIndex: `${API_PREFIX}/${API_DOMAINS.decisionIndex}`,
 } as const satisfies Record<ApiDomain, string>;

@@ -5,16 +5,16 @@
  */
 import { useId } from "vue";
 
-const props = defineProps<{ title?: string; class?: string }>();
+defineProps<{ title?: string }>();
 
 const headingId = useId();
 </script>
 
 <template>
-  <div v-if="!title" :class="props.class">
+  <div v-if="!title">
     <slot />
   </div>
-  <section v-else :class="props.class" :aria-labelledby="headingId">
+  <section v-else :aria-labelledby="headingId">
     <div class="mb-3 flex items-baseline justify-between gap-2 sm:mb-5">
       <h2 :id="headingId" class="min-w-0 ui-section-title break-words">{{ title }}</h2>
     </div>

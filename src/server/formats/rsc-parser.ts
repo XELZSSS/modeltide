@@ -20,21 +20,14 @@ function resolveLine<T>(
     if (!results[mi] && findMarkerValue(line, needles[mi]!) !== null) hits.push(mi);
   }
   if (hits.length === 0) return 0;
-  const trees = new Map<string, unknown>();
-  const treeOf = (raw: string): unknown => {
-    if (!trees.has(raw)) {
-      try {
-        trees.set(raw, JSON.parse(raw));
-      } catch {
-        trees.set(raw, undefined);
-      }
-    }
-    return trees.get(raw);
-  };
   let resolved = 0;
   for (const raw of jsonCandidates(line)) {
-    const tree = treeOf(raw);
-    if (tree === undefined) continue;
+    let tree: unknown;
+    try {
+      tree = JSON.parse(raw);
+    } catch {
+      continue;
+    }
     for (const mi of hits) {
       if (results[mi]) continue;
       const value = extract(tree, markers[mi]!);
@@ -54,9 +47,7 @@ export function parseRscPayloads<T>(
   extract: RscExtractor<T>,
 ): ParseResult<T[][]> {
   if (typeof body !== "string") return parseFail("RSC body is not a string");
-  if (markers.length === 0 || markers.some((m) => !m)) {
-    return parseFail("RSC markers are invalid");
-  }
+  // `markers` comes from the caller's own constant list, so only the upstream body is validated.
   // `body.length` counts UTF-16 code units and one costs at most 3 UTF-8 bytes, so the exact O(n) byte count is only
   // needed in the band where the cheap bounds cannot decide.
   const oversized =

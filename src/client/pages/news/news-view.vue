@@ -5,7 +5,7 @@ import TabbedPage from "@/client/components/navigation/tabbed-page.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { useClientTab } from "@/client/hooks/use-client-tab";
 import { usePrefetchIntent } from "@/client/hooks/use-prefetch";
-import { qNewsByCategory } from "@/client/api/catalog";
+import { qNewsByCategory } from "@/client/api/query/catalog";
 import type { TabItem } from "@/client/components/navigation/tabs";
 import type { TranslationKey } from "@/shared/i18n";
 import type { NewsCategory } from "@/shared/types";

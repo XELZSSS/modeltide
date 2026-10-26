@@ -1,14 +1,13 @@
-import { isRecord, numIntCoerceNonNegative } from "@/server/formats/scalars";
+import { isRecord, numIntCoerceNonNegative, text, textOrNull } from "@/server/formats/scalars";
 import { isoDate } from "@/server/formats/dates";
 import { isValidRowId } from "@/server/formats/content-guards";
-import { toStringOrNull } from "@/shared/utils";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import { getOpenLicenseId, licenseTagId } from "@/server/formats/licenses";
 import type { HFModel } from "@/server/formats/wire-types";
 import type { LicenseDropTally } from "./license-tally";
 
 function resolveAuthor(m: HFModel, id: string): string | null {
-  const explicit = toStringOrNull(m.author);
+  const explicit = textOrNull(m.author);
   if (explicit) return explicit;
   const slash = id.indexOf("/");
   const owner = slash === -1 ? id : id.slice(0, slash);
@@ -33,7 +32,7 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
   if (!isRecord(m)) return null;
   const model = m as HFModel;
   if (!isValidRowId(model.id)) return null;
-  const id = (model.id as string).trim();
+  const id = text(model.id);
   const downloads = numIntCoerceNonNegative(model.downloads) ?? 0;
   const likes = numIntCoerceNonNegative(model.likes) ?? 0;
   const tags = Array.isArray(model.tags) ? model.tags.filter((t): t is string => typeof t === "string") : [];
@@ -50,12 +49,12 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
     downloads,
     likes,
     license,
-    task: toStringOrNull(model.pipeline_tag),
+    task: textOrNull(model.pipeline_tag),
     createdAt: isoDate(model.createdAt),
     lastModified: isoDate(model.lastModified),
-    // Tags belong to the detail payload only. A ranking row is one of up to 1000 and tags are the largest field on it,
-    // so `mapListModel` leaves them out; the expanded row renders the facts the row actually carries.
-    tags: includeTags ? tags.slice(0, 100) : [],
   };
+  // Tags belong to the detail payload only. A ranking row is one of up to 1000 and tags are the largest field on it,
+  // so `mapListModel` leaves the key out entirely; the expanded row renders the facts the row actually carries.
+  if (includeTags) entry.tags = tags.slice(0, 100);
   return entry;
 }

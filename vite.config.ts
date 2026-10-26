@@ -26,7 +26,6 @@ export default defineConfig({
   },
   build: {
     outDir: CLIENT_OUT_DIR_NAME,
-    emptyOutDir: true,
   },
   // The API answers same-origin GET/HEAD only and ships no CORS headers, so keep vite's dev CORS layer off too.
   server: { cors: false },

@@ -3,14 +3,13 @@ import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatDollar, orNA } from "@/shared/utils";
 import {
-  col,
   mobilePrimaryCol,
   rightCol,
   RightAlignedText,
   type DataTableColumn,
   type NameCellExtras,
 } from "@/client/components/table/table-columns.ts";
-import CompareModelCell from "./compare-model-cell.vue";
+import { modelCol } from "./aa-column-shared";
 import type { CostEstimate } from "@/shared/utils/cost";
 import { modelId } from "@/shared/utils/models";
 import { resolveEffectivePricing, PRICE_LEGS, type EffectivePricing, type PriceLegPick } from "@/shared/utils/pricing";
@@ -30,18 +29,10 @@ export function buildPricingColumns(
     effectiveMap.get(modelId(model)) ?? resolveEffectivePricing(model.pricing);
   const pricingLegCol = (id: string, header: string, getLeg: PriceLegPick) =>
     rightCol(id, header, (row: PricingRow) => formatDollar(getLeg(getEff(row.model)), t));
+
+  const modelNameColumn = modelCol<PricingRow, ArtificialAnalysisModel>(t, extras, "35%", (row) => row.model);
   return [
-    col(
-      "model",
-      t("model"),
-      (row) =>
-        h(CompareModelCell, {
-          model: row.model,
-          rank: extras?.rankOf?.(row.model) ?? null,
-          href: extras?.hrefOf?.(row.model),
-        }),
-      { width: "35%" },
-    ),
+    modelNameColumn,
     rightCol("provider", t("provider"), (row) =>
       h(RightAlignedText, null, () => orNA(row.model.model_creators?.name, t)),
     ),

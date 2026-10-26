@@ -29,7 +29,12 @@ function cleanTitle(raw: string): string {
   return truncateSafe(clean, MAX_NEWS_TITLE_CHARS).trim();
 }
 
-export function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string {
+/**
+ * The name a feed's items are attributed to: its channel title, or the host of the feed URL when the feed gave none.
+ * `sourceNameFromUrl` answers `null` for an unparseable feed URL, and a channel with neither a title nor a host is
+ * reported rather than labelled with a placeholder — the feed is already suspect at that point.
+ */
+export function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string | null {
   const text = textOf(channel.title) ?? "";
   return cleanTitle(text) || channelHost(sourceUrl);
 }

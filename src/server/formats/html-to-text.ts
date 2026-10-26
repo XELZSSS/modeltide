@@ -74,11 +74,16 @@ export function stripHtml(s: unknown): string {
     }
     if (s.startsWith("<![CDATA[", i)) {
       const end = s.indexOf("]]>", i + 9);
-      if (end === -1) {
-        parts.push(s.slice(i + 9));
-        break;
+      // The CDATA payload is markup by definition (`content:encoded` is HTML in an XML wrapper), so its text is folded
+      // back into the same scan instead of being emitted verbatim: pushing it raw left every tag inside `<![CDATA[…]]>`
+      // in the output, and `feed-fields` had to strip the decoded title a second time to cover it.
+      const inner = end === -1 ? s.slice(i + 9) : s.slice(i + 9, end);
+      if (inner.includes("<")) {
+        parts.push(stripHtml(inner));
+      } else {
+        parts.push(inner);
       }
-      parts.push(s.slice(i + 9, end));
+      if (end === -1) break;
       i = end + 3;
       continue;
     }

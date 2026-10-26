@@ -14,22 +14,25 @@ function* traverse(root: unknown): Generator<unknown> {
   }
 }
 
-export function findNextData<T>(root: unknown, key: string): T[] | null {
-  if (!key || root === null || typeof root !== "object") return null;
+/** Every array stored under `key`, in the order `traverse` reaches it. */
+function* dataArrays<T>(root: unknown, key: string): Generator<T[]> {
   for (const node of traverse(root)) {
     const raw = (node as Record<string, unknown>)[key];
-    if (Array.isArray(raw)) return raw as T[];
+    if (Array.isArray(raw)) yield raw as T[];
   }
-  return null;
+}
+
+// `key` is one of the caller's own marker constants, so only the tree is unvalidated: a falsy marker would match
+// nothing, and returning `null` for it would hide a caller mistake behind a parse failure.
+export function findNextData<T>(root: unknown, key: string): T[] | null {
+  const first = dataArrays<T>(root, key).next();
+  return first.done ? null : first.value;
 }
 
 export function findLongestData<T>(root: unknown, key: string): T[] | null {
-  if (!key || root === null || typeof root !== "object") return null;
   let best: T[] | null = null;
-  for (const node of traverse(root)) {
-    const raw = (node as Record<string, unknown>)[key];
-    if (!Array.isArray(raw)) continue;
-    if (!best || raw.length > best.length) best = raw as T[];
+  for (const rows of dataArrays<T>(root, key)) {
+    if (best === null || rows.length > best.length) best = rows;
   }
   return best;
 }

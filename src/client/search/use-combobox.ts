@@ -43,7 +43,9 @@ export function useCombobox({
 
   const select = (index: number) => {
     if (index < 0 || index >= toValue(itemCount)) return;
-    setDebouncedDirect("");
+    // Only the panel closes: the term stays in the route's memory. Clearing it here told `search-input.vue`'s
+    // `debounced` watcher to write "" back into the search store, so returning from a result — the one trip the
+    // per-route memory exists for — dropped the query and the table filter with it.
     isOpen.value = false;
     onSelect(index);
   };
@@ -63,7 +65,7 @@ export function useCombobox({
       if (!isOpen.value || activeIndex.value < 0) return;
       // `scrollIntoView` is absent in older engines; there is nothing to fall back to and the list stays usable.
       listRef.value
-        ?.querySelector(`#${escapeSelectorId(`${listboxId}-option-${activeIndex.value}`)}`)
+        ?.querySelector(`#${CSS.escape(`${listboxId}-option-${activeIndex.value}`)}`)
         ?.scrollIntoView({ block: "nearest" });
     },
     { flush: "post" },
@@ -144,11 +146,3 @@ export function useCombobox({
 }
 
 export type ComboboxController = ReturnType<typeof useCombobox>;
-
-/**
- * `CSS.escape` is in the browser baseline Vite targets and the ids this component mints are its plain-identifier case;
- * the manual replacement it used to fall back to could only run on an engine the build never targets.
- */
-function escapeSelectorId(id: string): string {
-  return CSS.escape(id);
-}

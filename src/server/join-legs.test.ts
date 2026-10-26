@@ -2,13 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ClientAbortError } from "./api/errors";
 import { runLegs } from "./join-legs";
 
-const ok = <T>(label: string, value: T) => ({ label, run: async () => value });
-const failing = (label: string, reason: unknown) => ({
-  label,
-  run: async () => {
-    throw reason;
-  },
-});
+import { failingLeg as failing, okLeg as ok } from "@/test/fixtures";
 
 describe("runLegs", () => {
   it("keeps values aligned with their legs and reports failures by label", async () => {
@@ -29,8 +23,10 @@ describe("runLegs", () => {
     await expect(runLegs([failing("a", abort), failing("b", abort)])).rejects.toBe(abort);
   });
 
-  it("keeps the surviving legs when only some were aborted", async () => {
-    const { values, failures } = await runLegs([ok("a", 1), failing("b", new ClientAbortError("gone"))]);
+  it("keeps the surviving legs when only some fail, even with an all-failed message", async () => {
+    const { values, failures } = await runLegs([ok("a", 1), failing("b", new ClientAbortError("gone"))], {
+      allFailedMessage: "all failed",
+    });
     expect(values).toEqual([1, undefined]);
     expect(failures).toHaveLength(1);
   });
@@ -39,11 +35,6 @@ describe("runLegs", () => {
     await expect(
       runLegs([failing("a", new Error("x"))], { allFailedMessage: "all feeds failed" }),
     ).rejects.toMatchObject({ name: "UpstreamError", message: "all feeds failed", retryable: true });
-  });
-
-  it("does not wrap a partial failure even when a message is supplied", async () => {
-    const { failures } = await runLegs([ok("a", 1), failing("b", new Error("x"))], { allFailedMessage: "all failed" });
-    expect(failures).toHaveLength(1);
   });
 
   it("never exceeds the requested concurrency", async () => {

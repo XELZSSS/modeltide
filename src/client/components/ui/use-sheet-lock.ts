@@ -5,8 +5,9 @@ import { nextTick, onMounted, onUnmounted, watch, type Ref } from "vue";
  * panel.
  *
  * The lock is global while the machine is per sheet: the shell mounts sheets on first use and can have several open in
- * sequence, so only the topmost entry in `lockStack` holds <body> — closing the second hands the lock back to the first
- * one still open instead of releasing it outright.
+ * sequence, so only the oldest entry in `lockStack` holds <body> — entries are pushed on open and removed on close, so
+ * the first one is the sheet that was opened first, and closing a later one hands the lock back to it instead of
+ * releasing it outright.
  */
 
 const FOCUSABLE_SELECTOR =
@@ -62,7 +63,7 @@ function syncLock(): void {
   if (owner) applyLock(owner);
 }
 
-export interface SheetLockOptions {
+interface SheetLockOptions {
   /** Whether the sheet is open. Watched post-flush so the teleported panel already exists when the lock runs. */
   open: () => boolean;
   /** The panel that receives focus and traps Tab. */
@@ -78,7 +79,9 @@ export function useSheetLock(options: SheetLockOptions): void {
   let openToken = 0;
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === "Escape") options.onClose();
+    // A sheet can hold a text field, so an Escape that dismisses an IME candidate list belongs to the field: the
+    // composition state says whether that is what the key is doing.
+    if (event.key === "Escape" && !event.isComposing) options.onClose();
     if (event.key !== "Tab") return;
     const panel = options.panel.value;
     if (!panel) return;

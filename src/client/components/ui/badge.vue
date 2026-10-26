@@ -15,7 +15,7 @@ const props = defineProps<{ class?: string }>();
 
 const classes = computed(() =>
   cn(
-    "inline-flex w-fit max-w-full shrink-0 items-center gap-1 overflow-hidden rounded-md border border-transparent bg-secondary px-2 py-0.5 text-xs leading-4 font-medium whitespace-nowrap text-text-secondary ui-motion",
+    "inline-flex w-fit max-w-full shrink-0 items-center gap-1 overflow-hidden rounded-md border border-transparent bg-secondary px-2 py-0.5 ui-caption font-medium whitespace-nowrap ui-motion",
     props.class,
   ),
 );

@@ -4,6 +4,7 @@ import { useTranslation } from "@/client/i18n";
 import { REPO_URL } from "@/client/nav/nav-config";
 import { useNavigation, usePrefetch } from "@/client/nav/navigation";
 import SafeLink from "@/client/components/ui/safe-link.vue";
+import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";
 
 const emit = defineEmits<{ settingsOpen: [] }>();
@@ -12,8 +13,7 @@ const { all, isActive } = useNavigation();
 const { t } = useTranslation();
 const { hover, cancel } = usePrefetch();
 
-const ICON_BUTTON =
-  "rounded-md p-2 text-text-secondary hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary ui-motion focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const ICON_BUTTON = `rounded-md p-2 text-text-secondary hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary ui-motion ${FOCUS_RING}`;
 
 const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
 </script>
@@ -32,7 +32,7 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           :aria-label="item.label"
           :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
-            'inline-flex h-8 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap ui-motion focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+            `inline-flex h-8 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap ui-motion ${FOCUS_RING}`,
             isActive(item)
               ? 'bg-surface-hover text-text-primary'
               : 'text-text-secondary hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary',
@@ -54,7 +54,7 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           </svg>
         </SafeLink>
         <button type="button" :aria-label="t('settings')" :class="ICON_BUTTON" @click="emit('settingsOpen')">
-          <Settings :size="16" />
+          <Settings :size="16" aria-hidden="true" />
         </button>
       </div>
     </div>

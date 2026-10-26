@@ -18,9 +18,11 @@ export function ratioToPercent(value: number | null | undefined): number | null 
   return value * 100;
 }
 
-export function approxEq(a: number, b: number, eps = 1e-9): boolean {
+const APPROX_EPS = 1e-9;
+
+export function approxEq(a: number, b: number): boolean {
   if (a === b) return true;
-  return Math.abs(a - b) < eps * Math.max(1, Math.abs(a), Math.abs(b));
+  return Math.abs(a - b) < APPROX_EPS * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
 function compactParts(n: number) {
@@ -30,29 +32,38 @@ function compactParts(n: number) {
 const PROMOTE_2DEC = 999.995;
 const PROMOTE_1DEC = 999.95;
 
-const SHORT_SCALES: { min: number; div: number; suffix: string }[] = [
-  { min: PROMOTE_2DEC * 1e9, div: 1e12, suffix: "T" },
-  { min: PROMOTE_2DEC * 1e6, div: 1e9, suffix: "B" },
-  { min: PROMOTE_2DEC * 1e3, div: 1e6, suffix: "M" },
-  { min: 1e3, div: 1e3, suffix: "K" },
-];
-
-const TOKEN_SCALES: { min: number; div: number; suffix: string }[] = [
-  { min: PROMOTE_1DEC * 1e9, div: 1e12, suffix: "T" },
-  { min: PROMOTE_1DEC * 1e6, div: 1e9, suffix: "B" },
-  { min: PROMOTE_1DEC * 1e3, div: 1e6, suffix: "M" },
-  { min: 1e3, div: 1e3, suffix: "K" },
-];
-
 interface ScaleEntry {
   min: number;
   div: number;
   suffix: string;
 }
 
-function formatScaled(abs: number, sign: string, value: number, scales: ScaleEntry[], decimals: number): string | null {
+/** The K/M/B/T ladder both formatters walk: they differ only in how early a value promotes to the next suffix. */
+const scaleLadder = (promote: number): ScaleEntry[] => [
+  { min: promote * 1e9, div: 1e12, suffix: "T" },
+  { min: promote * 1e6, div: 1e9, suffix: "B" },
+  { min: promote * 1e3, div: 1e6, suffix: "M" },
+  { min: 1e3, div: 1e3, suffix: "K" },
+];
+
+const SHORT_SCALES = scaleLadder(PROMOTE_2DEC);
+const TOKEN_SCALES = scaleLadder(PROMOTE_1DEC);
+
+/** A scaled figure split from its unit, so a caller that prints the number differently keeps the suffix intact. */
+interface ScaledText {
+  num: string;
+  suffix: string;
+}
+
+function formatScaled(
+  abs: number,
+  sign: string,
+  value: number,
+  scales: ScaleEntry[],
+  decimals: number,
+): ScaledText | null {
   for (const s of scales) {
-    if (abs >= s.min) return `${sign}${(value / s.div).toFixed(decimals)}${s.suffix}`;
+    if (abs >= s.min) return { num: `${sign}${(value / s.div).toFixed(decimals)}`, suffix: s.suffix };
   }
   return null;
 }
@@ -62,17 +73,13 @@ function formatScaled(abs: number, sign: string, value: number, scales: ScaleEnt
  * branch no caller ever reached — `formatTokens` picks the token scales itself — so the parameter is gone instead of
  * staying as a choice that cannot be made.
  */
-function formatCompact(n: number | null | undefined, fallback = FALLBACK_DASH): string {
+export function formatShortNumber(n: number | null | undefined, fallback = FALLBACK_DASH): string {
   if (!isFiniteNumber(n)) return fallback;
   const { abs, sign } = compactParts(n);
   const scaled = formatScaled(abs, sign, abs, SHORT_SCALES, 2);
-  if (scaled) return scaled;
+  if (scaled) return `${scaled.num}${scaled.suffix}`;
   if (Number.isInteger(abs)) return `${sign}${abs}`;
   return `${sign}${parseFloat(abs.toFixed(2))}`;
-}
-
-export function formatShortNumber(n: number | null | undefined, fallback = FALLBACK_DASH): string {
-  return formatCompact(n, fallback);
 }
 
 export function formatTokens(n: number | null | undefined, t?: TFunction): string {
@@ -81,10 +88,7 @@ export function formatTokens(n: number | null | undefined, t?: TFunction): strin
   // division — a negative token count reads as negative for the same reason a positive one does.
   const { abs, sign } = compactParts(n);
   const scaled = formatScaled(abs, sign, abs, TOKEN_SCALES, 1);
-  if (scaled) {
-    const num = scaled.slice(0, -1);
-    return `${num.endsWith(".0") ? num.slice(0, -2) : num}${scaled.charAt(scaled.length - 1)}`;
-  }
+  if (scaled) return `${scaled.num.replace(/\.0$/, "")}${scaled.suffix}`;
   if (Number.isInteger(n)) return String(n);
   return String(parseFloat(n.toFixed(1)));
 }
@@ -112,6 +116,24 @@ export function formatScore(n: number | null | undefined, t: TFunction): string 
   if (magnitude >= SCORE_INTEGER_AT) return n.toFixed(0);
   if (magnitude >= SCORE_ONE_DECIMAL_AT) return n.toFixed(1);
   return n.toFixed(2);
+}
+
+/**
+ * A benchmark value on the scale the upstream sent it — no scaling, no percentage — printed to exactly `RATIO_DECIMALS`
+ * places: `0.917171717171717` prints `0.92`, `0.8` prints `0.80`. Twelve float digits are not a measurement anyone
+ * took, and a fixed two places keeps a grid of them aligned.
+ */
+const RATIO_DECIMALS = 2;
+
+export function formatRatio(v: number | null | undefined, t: TFunction): string {
+  if (!isFiniteNumber(v)) return t("notAvailable");
+  const text = v.toFixed(RATIO_DECIMALS);
+  // Below the printable step the value is not zero, so it reports its bound — the way a sub-cent price prints "<$0.0001".
+  if (Number(text) === 0 && v !== 0) {
+    const bound = (10 ** -RATIO_DECIMALS).toFixed(RATIO_DECIMALS);
+    return v < 0 ? `>-${bound}` : `<${bound}`;
+  }
+  return text;
 }
 
 export function formatIndex(v: number, fallback = FALLBACK_DASH): string {

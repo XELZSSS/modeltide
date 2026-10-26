@@ -2,6 +2,7 @@ import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue"
 import type {
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
+  DecisionIndexEntry,
   HallucinationRankingEntry,
   NewsCategory,
   NewsItem,
@@ -9,16 +10,18 @@ import type {
   OpenSourceModelEntry,
 } from "@/shared/types";
 import { buildHallucinationRankings } from "@/shared/utils/hallucination";
-import { normalizeHomeDashboard, unwrapListPartial, type NormalizedHomeDashboard } from "./payload-normalize";
+import { normalizeHomeDashboard, unwrapListPartial, type NormalizedHomeDashboard } from "./decode/payload";
+import { malformedPayload } from "./transport/error";
 import {
   qArtificialList,
   qClosedReleasesList,
+  qDecisionIndex,
   qHomeDashboard,
   qNewsByCategory,
   qOpenSourceModelById,
   qOpenSourceModelsList,
   qOpenRouterList,
-} from "./catalog";
+} from "./query/catalog";
 
 interface ListState<T> {
   readonly items: T[];
@@ -49,7 +52,7 @@ function suspendedListState<T>(
     partial: decoded.partial,
     malformed: decoded.malformed,
     pending: false,
-    error: decoded.malformed ? new Error(`Malformed ${label} payload`) : null,
+    error: decoded.malformed ? malformedPayload(`Malformed ${label} payload`) : null,
   };
 }
 
@@ -64,7 +67,7 @@ function enabledListState<T>(query: ListQueryLike, label: string, enabled: Maybe
     partial: unwrapped.partial,
     malformed: unwrapped.malformed,
     pending,
-    error: failed ? (query.error.value ?? new Error(`Malformed ${label} payload`)) : null,
+    error: failed ? (query.error.value ?? malformedPayload(`Malformed ${label} payload`)) : null,
   };
 }
 
@@ -120,6 +123,19 @@ export const useSuspenseOpenSourceModelsState = () =>
  */
 export const useSuspenseOpenSourceModelState = (id: string) =>
   suspenseListState<OpenSourceModelEntry>(qOpenSourceModelById(id).use(), "openSourceModels");
+
+/**
+ * Non-suspense Decision Index query. The search layer folds every ranking list in as it loads, so it needs the same
+ * `partial`/`malformed`/`error` view the ranking tab gets, without suspending the page that happens to be open.
+ */
+export function useDecisionIndex(enabled: MaybeRefOrGetter<boolean> = true) {
+  const query = qDecisionIndex.use(enabled);
+  const state = computed(() => enabledListState<DecisionIndexEntry>(query, "decisionIndex", enabled));
+  return { query, state };
+}
+
+export const useSuspenseDecisionIndexState = () =>
+  suspenseListState<DecisionIndexEntry>(qDecisionIndex.use(), "decisionIndex");
 
 export const useSuspenseClosedReleasesState = () =>
   suspenseListState<ClosedReleaseEntry>(qClosedReleasesList.use(), "closedReleases");

@@ -6,7 +6,9 @@ import DelayedDots from "@/client/components/feedback/delayed-dots.vue";
 const queryClient = useQueryClient();
 
 function reset(): void {
-  void queryClient.resetQueries({ type: "active" });
+  // Only what actually failed: `resetQueries({ type: "active" })` also dropped healthy caches, so retrying one broken
+  // panel blanked the search lists and any other live data instead of retrying the failing route.
+  void queryClient.resetQueries({ predicate: (query) => query.state.status === "error" });
 }
 </script>
 

@@ -15,7 +15,7 @@ interface AssembleInput {
   meta: Record<string, ModelMetaEntry> | null;
 }
 
-export interface AssembledModels {
+interface AssembledModels {
   models: ArtificialAnalysisModel[];
   outOfRatio: string[];
   backfilled: number;

@@ -48,8 +48,8 @@ export async function runLegs<L extends readonly Leg<unknown>[]>(
   });
   rethrowIfAllAborted(settled);
 
-  // Every call site passes a non-empty literal leg list, so `legs.length > 0` guarded a shape that cannot arrive; the
-  // comparison against `legs.length` already covers it.
+  // News is the one dynamic list: `rssFeeds[category].map(...)` with three feeds in every category (see feeds.ts), so a
+  // zero-leg fan-out cannot arrive — which is also why `legs.length > 0` is not guarded here.
   if (opts.allFailedMessage != null && failures.length === legs.length) {
     throw new UpstreamError(opts.allFailedMessage, { retryable: true });
   }

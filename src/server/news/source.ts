@@ -15,21 +15,34 @@ import { normalizeNewsLink } from "@/server/formats/url";
 
 import { defineParamSource, requireParsed, requireRows } from "@/server/pipeline";
 
+/**
+ * The items a category serves: newest first, deduped on the normalised link, capped at `newsPerCategory`.
+ *
+ * An item whose link cannot be parsed is dropped here rather than keyed by its raw text — `normalizeNewsLink` reports
+ * that as `null` instead of inventing a comparable form, so the count below is what tells the reader the feed was
+ * partly unusable.
+ */
 function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsItem[]): NewsItem[] {
   let invalidDates = 0;
+  let invalidLinks = 0;
   const dated = allItems
     .map((item) => {
       const ts = parseTs(item.pubDate, true);
       if (ts === Number.NEGATIVE_INFINITY) invalidDates += 1;
-      return { item, ts };
+      const key = normalizeNewsLink(item.link);
+      if (key === null) invalidLinks += 1;
+      return { item, ts, key };
     })
-    .filter((entry) => Number.isFinite(entry.ts));
+    .filter((entry) => entry.key !== null && Number.isFinite(entry.ts));
   if (invalidDates > 0) {
     ctx.log("info", `[news] dropped ${invalidDates}/${allItems.length} items with invalid dates for "${category}"`);
   }
+  if (invalidLinks > 0) {
+    ctx.log("info", `[news] dropped ${invalidLinks}/${allItems.length} items with unparseable links for "${category}"`);
+  }
   return dedupeBy(
     dated.sort((a, b) => b.ts - a.ts),
-    (entry) => normalizeNewsLink(entry.item.link),
+    (entry) => entry.key,
   )
     .slice(0, SOURCE_LIMITS.newsPerCategory)
     .map((entry) => entry.item);
@@ -46,15 +59,10 @@ async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<Ne
   const feeds = rssFeeds[category];
   const legs: { label: string; run: () => Promise<NewsItem[]> }[] = feeds.map((feed) => ({
     label: feed.id,
-    run: async () =>
-      requireParsed(
-        parseFeed(await ctx.http.getFeed(feed.url, FEED_ACCEPT, MAX_FEED_BYTES), feed.url, {
-          maxBytes: MAX_FEED_BYTES,
-          maxItems: SOURCE_LIMITS.feedItemsPerFeed,
-        }),
-        ctx.log,
-        feed.id,
-      ),
+    run: async () => {
+      const xml = await ctx.http.getFeed(feed.url, FEED_ACCEPT, MAX_FEED_BYTES);
+      return requireParsed(parseFeed(xml, feed.url), ctx.log, feed.id);
+    },
   }));
   const { values, failures } = await runLegs(legs, {
     concurrency: NEWS_LEG_CONCURRENCY,
@@ -72,16 +80,10 @@ async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<Ne
   return { category, items: allItems, failCount: failures.length, total: values.length };
 }
 
-/**
- * How long a news category may stay cached at the origin in the healthy case. `src/server/registry.ts` reads this same
- * constant for the route's HTTP cache headers, so the edge window cannot drift from the origin window.
- */
-export const NEWS_CATEGORY_TTL_MS = NEWS_TTL_MS;
-
-const newsCategorySource = defineParamSource<{ category: NewsCategory }, NewsRaw, NewsItem[]>(
+export const getNews = defineParamSource<{ category: NewsCategory }, NewsRaw, NewsItem[]>(
   ({ category }) => cacheKeys.news(category),
   {
-    ttl: NEWS_CATEGORY_TTL_MS,
+    ttl: NEWS_TTL_MS,
     label: "news",
     served: true,
     fetch: (ctx, { category }) => fetchNewsRaw(ctx, category),
@@ -92,18 +94,12 @@ const newsCategorySource = defineParamSource<{ category: NewsCategory }, NewsRaw
         "usable items",
         "all filtered?",
       ),
-    // A category that lost even one feed is cached for the degraded TTL, so the next visit retries the gap instead of
-    // serving it for the full news TTL.
+    // A category that lost even one of its feeds is cached for the degraded TTL, so the next visit retries the gap
+    // instead of serving it for the full news TTL. Losing every feed in a category is "all legs failed" (`runLegs`
+    // throws), which the cache answers from its stale copy.
     partialWhen: ({ raw }) => ({
       partial: raw.failCount > 0,
-      ttl: ttlFor(raw.failCount > 0, NEWS_CATEGORY_TTL_MS),
+      ttl: ttlFor(raw.failCount > 0, NEWS_TTL_MS),
     }),
   },
 );
-
-/**
- * One category per request. A tab only ever renders one of them, and fanning out to all four (14 feeds, ~0.8 MB of XML)
- * was the heaviest thing a single invocation did — work the free plan's 10 ms CPU budget cannot pay for. Each category
- * keeps its own cache entry and its own partial flag.
- */
-export const getNews = newsCategorySource;

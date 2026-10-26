@@ -39,21 +39,30 @@ function writePersisted<T>(storage: Storage | null, key: string, version: number
 }
 
 const pendingFlushes = new Map<string, () => void>();
+const flushTimers = new Map<string, number>();
+
+/** Long enough to fold a burst of keystrokes into one write, short enough that a reload keeps the last edit. */
+const FLUSH_DELAY_MS = 250;
 
 function scheduleFlush(key: string, write: () => void): void {
-  if (pendingFlushes.has(key)) {
-    pendingFlushes.set(key, write);
-    return;
-  }
   pendingFlushes.set(key, write);
-  queueMicrotask(() => {
-    const latest = pendingFlushes.get(key);
-    pendingFlushes.delete(key);
-    latest?.();
-  });
+  if (flushTimers.has(key)) return;
+  // A store event per keystroke (the cost form writes on every character) meant a synchronous `localStorage.setItem` and
+  // one JSON.stringify per character, each one a blocking main-thread write. `pagehide` still flushes whatever is pending.
+  flushTimers.set(
+    key,
+    window.setTimeout(() => {
+      flushTimers.delete(key);
+      const latest = pendingFlushes.get(key);
+      pendingFlushes.delete(key);
+      latest?.();
+    }, FLUSH_DELAY_MS),
+  );
 }
 
 function flushPersistedWrites(): void {
+  for (const timer of flushTimers.values()) window.clearTimeout(timer);
+  flushTimers.clear();
   while (pendingFlushes.size > 0) {
     const entries = [...pendingFlushes.entries()];
     pendingFlushes.clear();
@@ -97,7 +106,12 @@ export function makeStorageSync<TStore extends Subscribable, TSnapshot>(def: {
     window.addEventListener("storage", (event) => {
       if (event.key !== key || event.newValue == null) return;
       try {
-        onStorageEvent(store, JSON.parse(event.newValue));
+        const payload = JSON.parse(event.newValue) as { state?: unknown; version?: unknown };
+        // The rule `readPersisted` applies on load, applied to the cross-tab path too: a tab still running the previous
+        // build writes its own `version`, and adopting its state here was the one route that skipped the check — the
+        // same bytes a reload drops were accepted live.
+        if (payload == null || typeof payload !== "object" || payload.version !== def.version) return;
+        onStorageEvent(store, payload);
       } catch (err) {
         console.warn(`[storage] ignoring malformed "${key}" event: ${errMsg(err)}`);
       }

@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { modelPricing } from "@/test/fixtures";
 import { PRICE_LEG_IDS, PRICE_LEGS, resolveEffectivePricing } from "./pricing";
 
+/** What every unusable or absent leg resolves to. */
+const ALL_NULL_PRICING = { input: null, output: null, cacheHit: null, cacheWrite: null };
+
+/** Each leg id and the pricing field it reads, so the map and its ids stay in step. */
+const LEG_FIELDS = [
+  ["promptPrice", "input"],
+  ["completionPrice", "output"],
+  ["cacheHitPrice", "cacheHit"],
+  ["cacheWritePrice", "cacheWrite"],
+] as const;
+
+const UNUSABLE_LEGS = {
+  input: Number.NaN,
+  output: Number.POSITIVE_INFINITY,
+  cacheHit: null,
+  cacheWrite: undefined as unknown as null,
+};
+
 describe("resolveEffectivePricing", () => {
   it("passes finite legs through unchanged", () => {
     expect(resolveEffectivePricing(modelPricing())).toEqual({
@@ -12,30 +30,16 @@ describe("resolveEffectivePricing", () => {
     });
   });
 
-  it("normalises every unusable leg to null", () => {
-    const resolved = resolveEffectivePricing({
-      input: Number.NaN,
-      output: Number.POSITIVE_INFINITY,
-      cacheHit: null,
-      cacheWrite: undefined as unknown as null,
-    });
-    expect(resolved).toEqual({ input: null, output: null, cacheHit: null, cacheWrite: null });
-  });
-
-  it("returns all nulls for a model without pricing", () => {
-    expect(resolveEffectivePricing(null)).toEqual({ input: null, output: null, cacheHit: null, cacheWrite: null });
-    expect(resolveEffectivePricing(undefined)).toEqual({ input: null, output: null, cacheHit: null, cacheWrite: null });
+  it.each([UNUSABLE_LEGS, null, undefined])("normalises the unusable or absent pricing %s to nulls", (pricing) => {
+    expect(resolveEffectivePricing(pricing)).toEqual(ALL_NULL_PRICING);
   });
 });
 
 describe("PRICE_LEGS", () => {
   const pricing = modelPricing();
 
-  it("maps each leg id onto its pricing field", () => {
-    expect(PRICE_LEGS.promptPrice(pricing)).toBe(pricing.input);
-    expect(PRICE_LEGS.completionPrice(pricing)).toBe(pricing.output);
-    expect(PRICE_LEGS.cacheHitPrice(pricing)).toBe(pricing.cacheHit);
-    expect(PRICE_LEGS.cacheWritePrice(pricing)).toBe(pricing.cacheWrite);
+  it.each(LEG_FIELDS)("%s maps onto the %s pricing field", (leg, field) => {
+    expect(PRICE_LEGS[leg](pricing)).toBe(pricing[field]);
   });
 
   it("keeps the id list in display order and in step with the leg map", () => {

@@ -1,6 +1,5 @@
 import { BENCHMARK_LABELS } from "@/shared/config/benchmarks";
 import type { TFunction, TranslationKey } from "@/shared/i18n";
-import { safeHref } from "./url";
 
 export function formatBoolean(value: boolean | null | undefined, t: TFunction) {
   if (value === true) return t("yes");
@@ -28,5 +27,3 @@ export function benchmarkLabel(key: string, t: TFunction): string {
     : undefined;
   return labelKey ? t(labelKey) : key;
 }
-
-export { safeHref };

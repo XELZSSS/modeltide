@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpClient } from "./client";
 import { USER_AGENT } from "./upstream";
 
+/** The body every healthy stub serves. */
+const OK_JSON = { ok: true };
+
 const fetchSpy = vi.spyOn(globalThis, "fetch");
 
 afterEach(() => {
@@ -22,81 +25,80 @@ function alwaysRespond(make: () => Response): void {
   fetchSpy.mockImplementation(async () => make());
 }
 
+/** Stubs every fetch with a healthy JSON response: the setup of every case that is not about a status code. */
+function healthyJson(): void {
+  alwaysRespond(() => okJson(OK_JSON));
+}
+
 function headersOfCall(index = 0): Record<string, string> {
   return fetchSpy.mock.calls[index]![1]!.headers as Record<string, string>;
 }
 
 describe("HttpClient abort classification", () => {
-  it("reports a caller hang-up as a 499 ClientAbortError", async () => {
-    alwaysRespond(() => okJson({ ok: true }));
-    const http = new HttpClient({ signal: abortedSignal("AbortError", "gone") });
-    await expect(http.getFeed("https://example.test/feed", "application/rss+xml", 1024)).rejects.toMatchObject({
-      name: "ClientAbortError",
-      status: 499,
-    });
+  it.each<[title: string, reason: string, message: string, expected: object]>([
+    [
+      "reports a caller hang-up as a 499 ClientAbortError",
+      "AbortError",
+      "gone",
+      { name: "ClientAbortError", status: 499 },
+    ],
+    [
+      "reports an expired execution budget as a 504 timeout instead of a hang-up",
+      "TimeoutError",
+      "Timed out",
+      { name: "UpstreamError", status: 504, causedByTimeout: true },
+    ],
+  ])("%s", async (_title, reason, message, expected) => {
+    healthyJson();
+    const http = new HttpClient({ signal: abortedSignal(reason, message) });
+    await expect(http.getFeed("https://example.test/feed", "application/rss+xml", 1024)).rejects.toMatchObject(
+      expected,
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("reports an expired execution budget as a 504 timeout instead of a hang-up", async () => {
-    alwaysRespond(() => okJson({ ok: true }));
-    const http = new HttpClient({ signal: abortedSignal("TimeoutError", "Timed out") });
-    await expect(http.getFeed("https://example.test/feed", "application/rss+xml", 1024)).rejects.toMatchObject({
-      name: "UpstreamError",
-      status: 504,
-      causedByTimeout: true,
-    });
-  });
-
   it("reports an already-aborted per-call signal as a 499 without touching fetch", async () => {
-    alwaysRespond(() => okJson({ ok: true }));
-    const http = new HttpClient();
+    healthyJson();
     await expect(
-      http.text("https://example.test/feed", { signal: abortedSignal("AbortError", "gone") }),
+      new HttpClient().text("https://example.test/feed", { signal: abortedSignal("AbortError", "gone") }),
     ).rejects.toMatchObject({ name: "ClientAbortError", status: 499 });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("still returns the body for a healthy request", async () => {
-    alwaysRespond(() => okJson({ ok: true }));
-    const http = new HttpClient();
-    await expect(http.getJson("https://example.test/x")).resolves.toEqual({ ok: true });
+    healthyJson();
+    await expect(new HttpClient().json("https://example.test/x")).resolves.toEqual({ ok: true });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("HttpClient status handling", () => {
-  it("throws a non-retryable 429 immediately and surfaces Retry-After as milliseconds", async () => {
-    alwaysRespond(() => new Response(null, { status: 429, headers: { "retry-after": "3" } }));
-    const http = new HttpClient();
-
-    await expect(http.getJson("https://example.test/limited")).rejects.toMatchObject({
-      name: "UpstreamError",
-      statusCode: 429,
-      retryable: false,
-      retryAfterMs: 3000,
-    });
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("throws on a 404 without retrying", async () => {
-    alwaysRespond(() => new Response("missing", { status: 404 }));
-    const http = new HttpClient();
-
-    await expect(http.getJson("https://example.test/missing")).rejects.toMatchObject({
-      name: "UpstreamError",
-      statusCode: 404,
-      retryable: false,
-    });
+  it.each<[title: string, path: string, make: () => Response, expected: object]>([
+    [
+      "throws a non-retryable 429 immediately and surfaces Retry-After as milliseconds",
+      "limited",
+      () => new Response(null, { status: 429, headers: { "retry-after": "3" } }),
+      { name: "UpstreamError", statusCode: 429, retryable: false, retryAfterMs: 3000 },
+    ],
+    [
+      "throws on a 404 without retrying",
+      "missing",
+      () => new Response("missing", { status: 404 }),
+      { name: "UpstreamError", statusCode: 404, retryable: false },
+    ],
+  ])("%s", async (_title, path, make, expected) => {
+    alwaysRespond(make);
+    await expect(new HttpClient().json(`https://example.test/${path}`)).rejects.toMatchObject(expected);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it("retries a 500 once and returns the body when the retry succeeds", async () => {
     fetchSpy
       .mockImplementationOnce(async () => new Response("boom", { status: 500 }))
-      .mockImplementationOnce(async () => okJson({ ok: true }));
+      .mockImplementationOnce(async () => okJson(OK_JSON));
     const http = new HttpClient();
 
-    await expect(http.getJson("https://example.test/flaky")).resolves.toEqual({ ok: true });
+    await expect(http.json("https://example.test/flaky")).resolves.toEqual({ ok: true });
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -104,7 +106,7 @@ describe("HttpClient status handling", () => {
     alwaysRespond(() => new Response("boom", { status: 500 }));
     const http = new HttpClient();
 
-    await expect(http.getJson("https://example.test/down")).rejects.toMatchObject({
+    await expect(http.json("https://example.test/down")).rejects.toMatchObject({
       name: "UpstreamError",
       statusCode: 500,
       retryable: false,
@@ -125,25 +127,25 @@ describe("HttpClient status handling", () => {
 });
 
 describe("HttpClient headers", () => {
-  it("sends the shared User-Agent and the JSON accept header", async () => {
-    alwaysRespond(() => okJson({ ok: true }));
-    await new HttpClient().getJson("https://example.test/headers");
-    expect(headersOfCall()).toEqual({ "user-agent": USER_AGENT, accept: "application/json" });
-  });
-
-  it("uses the HTML accept header and the RSC marker for RSC reads", async () => {
-    alwaysRespond(() => new Response("<html></html>", { status: 200 }));
-    await new HttpClient().getRsc("https://example.test", "/page");
-    expect(headersOfCall()).toEqual({
-      "user-agent": USER_AGENT,
-      accept: "text/html,application/xhtml+xml,*/*",
-      RSC: "1",
-    });
-  });
-
-  it("lets a per-call accept header replace the default without dropping the User-Agent", async () => {
-    alwaysRespond(() => new Response("<rss></rss>", { status: 200 }));
-    await new HttpClient().getFeed("https://example.test/feed", "application/rss+xml", 1024);
-    expect(headersOfCall()).toEqual({ "user-agent": USER_AGENT, accept: "application/rss+xml" });
+  it.each<[title: string, call: (http: HttpClient) => Promise<unknown>, expected: Record<string, string>]>([
+    [
+      "sends the shared user-agent and the json accept header",
+      (http) => http.json("https://example.test/headers"),
+      { "user-agent": USER_AGENT, accept: "application/json" },
+    ],
+    [
+      "uses the html accept header and the RSC marker for RSC reads",
+      (http) => http.getRsc("https://example.test", "/page"),
+      { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml,*/*", RSC: "1" },
+    ],
+    [
+      "lets a per-call accept header replace the default without dropping the user-agent",
+      (http) => http.getFeed("https://example.test/feed", "application/rss+xml", 1024),
+      { "user-agent": USER_AGENT, accept: "application/rss+xml" },
+    ],
+  ])("%s", async (_title, call, expected) => {
+    healthyJson();
+    await call(new HttpClient());
+    expect(headersOfCall()).toEqual(expected);
   });
 });

@@ -4,54 +4,60 @@ import Card from "@/client/components/layout/card.vue";
 import CardContent from "@/client/components/layout/card-content.vue";
 import CardHeader from "@/client/components/layout/card-header.vue";
 import { useTranslation } from "@/client/i18n";
-import { formatDollar } from "@/shared/utils";
-import { staggerStyle } from "@/client/motion";
+import type { TFunction } from "@/shared/i18n";
+import { formatDollar, formatScore } from "@/shared/utils";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
+import RankedListRows from "./ranked-list-rows.vue";
 import type { TextToImageModel } from "@/shared/types";
+
+interface ImageModelRow {
+  /** The name, which is what `RankedListRows` keys a row on. */
+  label: string;
+  creatorName: string | null;
+  rating: string;
+  price: string | null;
+}
 
 const props = defineProps<{ models: TextToImageModel[] }>();
 
 const { t } = useTranslation();
 
-function formatRatingInterval(entry: TextToImageModel): string {
+function formatRatingInterval(entry: TextToImageModel, t: TFunction): string {
   if (entry.eloUpper == null || entry.eloLower == null) return "";
-  return ` (${entry.eloLower.toFixed(0)}–${entry.eloUpper.toFixed(0)})`;
+  return ` (${formatScore(entry.eloLower, t)}–${formatScore(entry.eloUpper, t)})`;
 }
 
-function ratingText(entry: TextToImageModel): string {
-  return entry.elo != null ? `${entry.elo.toFixed(0)}${formatRatingInterval(entry)}` : t("notAvailable");
+function ratingText(entry: TextToImageModel, t: TFunction): string {
+  return entry.elo != null ? `${formatScore(entry.elo, t)}${formatRatingInterval(entry, t)}` : t("notAvailable");
 }
 
-const rows = computed(() =>
+const rows = computed<ImageModelRow[]>(() =>
   props.models.map((entry) => ({
-    id: entry.id,
-    name: entry.name,
+    label: entry.name,
     creatorName: entry.creatorName,
-    rating: ratingText(entry),
+    rating: ratingText(entry, t),
     price: entry.pricePer1kImages != null ? `${formatDollar(entry.pricePer1kImages, t)}${t("per1kImages")}` : null,
   })),
 );
+
+function tooltipOf(row: ImageModelRow): string {
+  return row.creatorName ? `${row.label} (${row.creatorName})` : row.label;
+}
 </script>
 
 <template>
   <Card class="h-full">
     <CardContent class="flex h-full flex-col">
       <CardHeader :title="t('textToImage')" :subtitle="t('artificialSource')" />
-      <EmptyState v-if="rows.length === 0" variant="plain" compact :message="t('notAvailable')" />
-      <!-- The same 40px row as the ranked lists: the height separates the rows, so no divider is drawn. -->
-      <div v-else class="flex flex-1 flex-col justify-between">
-        <div
-          v-for="(row, i) in rows"
-          :key="row.id"
-          class="flex min-h-10 min-w-0 ui-anim-rows items-center gap-3"
-          :style="staggerStyle(i)"
-        >
-          <span class="w-6 shrink-0 text-center ui-meta font-medium tabular-nums">
-            {{ i + 1 }}
-          </span>
+      <!-- Five 40px rows when filled: the same box here, so the card does not collapse and shift the grid. -->
+      <EmptyState v-if="rows.length === 0" variant="plain" compact class="min-h-[200px]" :message="t('notAvailable')" />
+      <!-- The same 40px row as the ranked lists: the height separates the rows, so no divider is drawn. The label slot
+           carries the name and its figures, which is why this card's rows have no right-aligned value. -->
+      <RankedListRows v-else :rows="rows">
+        <template #label="{ row }">
           <div class="min-w-0 flex-1">
-            <p class="truncate text-sm" v-tooltip="row.creatorName ? `${row.name} (${row.creatorName})` : row.name">
-              {{ row.name }}
+            <p class="ui-body break-words md:truncate" v-tooltip="tooltipOf(row)">
+              {{ row.label }}
               <span v-if="row.creatorName" class="ui-caption">({{ row.creatorName }})</span>
             </p>
             <p class="ui-caption">
@@ -63,8 +69,9 @@ const rows = computed(() =>
               </template>
             </p>
           </div>
-        </div>
-      </div>
+        </template>
+        <template #value />
+      </RankedListRows>
     </CardContent>
   </Card>
 </template>

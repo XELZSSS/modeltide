@@ -16,7 +16,7 @@ interface SeedEntry {
 
 function fakeKv(seed: Record<string, SeedEntry> = {}) {
   const data = new Map<string, SeedEntry>(Object.entries(seed));
-  const stats = { gets: 0, puts: 0, deletes: 0 };
+  const stats = { gets: 0, puts: 0 };
   const kv = new KvStore({
     async getWithMetadata(key: string): Promise<{ value: string | null; metadata: unknown }> {
       stats.gets += 1;
@@ -27,21 +27,17 @@ function fakeKv(seed: Record<string, SeedEntry> = {}) {
       stats.puts += 1;
       data.set(key, { value, metadata: options?.metadata });
     },
-    async delete(key: string): Promise<void> {
-      stats.deletes += 1;
-      data.delete(key);
-    },
   });
   return { kv, data, stats };
 }
 
 function entryOf(value: unknown, expiresAt: number, ttl: number = ONE_MINUTE): SeedEntry {
-  return { value: JSON.stringify(value), metadata: { e: expiresAt, t: ttl } };
+  return { value: JSON.stringify(value), metadata: { e: expiresAt, t: ttl, f: expiresAt - ttl } };
 }
 
-/** Every path below delivers the payload together with its exact encoded body. */
+/** Every path below delivers the payload together with its exact encoded body and the stamp that names the ETag. */
 function delivered(value: unknown, degraded = false) {
-  return { value, degraded, body: JSON.stringify(value) };
+  return { value, degraded, body: JSON.stringify(value), producedAt: expect.any(Number) };
 }
 
 function service(kv?: KvStore, opts?: { callerSignal?: AbortSignal; onDetach?: (work: Promise<unknown>) => void }) {
@@ -60,15 +56,45 @@ function gatedLoader(value: unknown) {
   return { fn, release };
 }
 
+/** A loader that always resolves with `value` and the standard TTL. */
+function loaderOf(value: unknown) {
+  return vi.fn(async () => ({ data: value, ttl: ONE_MINUTE }));
+}
+
+/** A loader that always rejects with `err`, which is the setup of every failure path. */
+function failingLoader(err: unknown) {
+  return vi.fn(async () => {
+    throw err;
+  });
+}
+
+/** A service over an empty fake KV, plus the stats its binding records. */
+function kvService(opts?: { callerSignal?: AbortSignal; onDetach?: (work: Promise<unknown>) => void }) {
+  const { kv, stats } = fakeKv();
+  return { stats, cache: service(kv, opts) };
+}
+
+/** The stale copy each detached-refresh case seeds under `${VERSION}:<key>`. */
+function staleKv(key: string, value: unknown) {
+  return fakeKv({ [`${VERSION}:${key}`]: entryOf(value, Date.now() - 1_000) });
+}
+
+/** Collects the detached promises so a case can settle them before asserting. */
+function detachSink() {
+  const detached: Promise<unknown>[] = [];
+  return { detached, onDetach: (work: Promise<unknown>) => detached.push(work) };
+}
+
+const UPSTREAM_DOWN = "upstream down";
+
 beforeEach(() => {
   resetModuleCachesForTests();
 });
 
 describe("CacheService.withTtlResult", () => {
   it("runs the loader once and serves the second call from L1", async () => {
-    const { kv, stats } = fakeKv();
-    const cache = service(kv);
-    const fn = vi.fn(async () => ({ data: { n: 1 }, ttl: ONE_MINUTE }));
+    const { stats, cache } = kvService();
+    const fn = loaderOf({ n: 1 });
 
     await expect(cache.withTtlResult("warm", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 1 }));
     await expect(cache.withTtlResult("warm", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 1 }));
@@ -76,13 +102,19 @@ describe("CacheService.withTtlResult", () => {
     expect(fn).toHaveBeenCalledTimes(1);
     expect(stats.gets).toBe(1);
     expect(stats.puts).toBe(1);
+
+    // Without a CACHE KV binding the memory tier is the whole store, so the second call still cannot reach the loader.
+    const memCache = service(undefined);
+    const memFn = loaderOf({ n: 6 });
+    await expect(memCache.withTtlResult("mem", ONE_MINUTE, memFn)).resolves.toEqual(delivered({ n: 6 }));
+    await expect(memCache.withTtlResult("mem", ONE_MINUTE, memFn)).resolves.toEqual(delivered({ n: 6 }));
+    expect(memFn).toHaveBeenCalledTimes(1);
   });
 
   it("serves an unexpired KV entry without calling the loader and backfills L1 with the same body", async () => {
     const { kv } = fakeKv({ [`${VERSION}:kv-hit`]: entryOf({ n: 2 }, Date.now() + ONE_MINUTE) });
     const cache = service(kv);
     const fn = vi.fn(async () => ({ data: { n: 99 } }));
-
     await expect(cache.withTtlResult("kv-hit", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 2 }));
     expect(fn).not.toHaveBeenCalled();
     const l1 = sharedL1.get<{ n: number }>(`${VERSION}:kv-hit`);
@@ -93,21 +125,16 @@ describe("CacheService.withTtlResult", () => {
   it("returns a stale KV value with degraded=true when the refresh fails", async () => {
     const { kv } = fakeKv({ [`${VERSION}:stale`]: entryOf({ n: 3 }, Date.now() - 1_000) });
     const cache = service(kv);
-    const fn = vi.fn(async () => {
-      throw new Error("upstream down");
-    });
+    const fn = failingLoader(new Error(UPSTREAM_DOWN));
 
     await expect(cache.withTtlResult("stale", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 3 }, true));
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
   it("rethrows the original refresh error when no usable stale copy exists", async () => {
-    const { kv } = fakeKv();
-    const cache = service(kv);
-    const boom = new Error("upstream down");
-    const fn = vi.fn(async () => {
-      throw boom;
-    });
+    const { cache } = kvService();
+    const boom = new Error(UPSTREAM_DOWN);
+    const fn = failingLoader(boom);
 
     await expect(cache.withTtlResult("cold", ONE_MINUTE, fn)).rejects.toBe(boom);
   });
@@ -118,16 +145,13 @@ describe("CacheService.withTtlResult", () => {
     const { kv } = fakeKv({ [`${VERSION}:too-stale`]: entryOf({ n: 4 }, expiredAt, ttl) });
     const cache = service(kv);
     const boom = new UpstreamError("refresh failed", { status: 503 });
-    const fn = vi.fn(async () => {
-      throw boom;
-    });
+    const fn = failingLoader(boom);
 
     await expect(cache.withTtlResult("too-stale", ttl, fn)).rejects.toBe(boom);
   });
 
   it("coalesces two concurrent refreshes of the same key into a single loader call", async () => {
-    const { kv } = fakeKv();
-    const cache = service(kv);
+    const { cache } = kvService();
     const { fn, release } = gatedLoader({ n: 5 });
 
     const first = cache.withTtlResult("shared", ONE_MINUTE, fn);
@@ -140,21 +164,10 @@ describe("CacheService.withTtlResult", () => {
     expect(b).toEqual(delivered({ n: 5 }));
   });
 
-  it("serves the second call from L1 when no CACHE KV binding is configured", async () => {
-    const cache = service(undefined);
-    const fn = vi.fn(async () => ({ data: { n: 6 }, ttl: ONE_MINUTE }));
-
-    await expect(cache.withTtlResult("mem", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 6 }));
-    await expect(cache.withTtlResult("mem", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 6 }));
-
-    expect(fn).toHaveBeenCalledTimes(1);
-  });
-
   it("rejects with a 499 ClientAbortError when the caller signal is already aborted", async () => {
     const controller = new AbortController();
     controller.abort(new DOMException("gone", "AbortError"));
-    const { kv } = fakeKv();
-    const cache = service(kv, { callerSignal: controller.signal });
+    const { cache } = kvService({ callerSignal: controller.signal });
     const fn = vi.fn(async () => ({ data: { n: 7 } }));
 
     await expect(cache.withTtlResult("aborted", ONE_MINUTE, fn)).rejects.toMatchObject({
@@ -165,12 +178,9 @@ describe("CacheService.withTtlResult", () => {
   });
 
   it("does not call the loader again inside the failure-cooldown window", async () => {
-    const { kv } = fakeKv();
-    const cache = service(kv);
+    const { cache } = kvService();
     const boom = new UpstreamError("upstream exploded", { retryable: true });
-    const fn = vi.fn(async () => {
-      throw boom;
-    });
+    const fn = failingLoader(boom);
 
     await expect(cache.withTtlResult("cool", ONE_MINUTE, fn)).rejects.toBe(boom);
     await expect(cache.withTtlResult("cool", ONE_MINUTE, fn)).rejects.toMatchObject({
@@ -183,10 +193,10 @@ describe("CacheService.withTtlResult", () => {
 
   it("serves stale immediately and refreshes in the background when onDetach is provided", async () => {
     const key = `${VERSION}:bg`;
-    const { kv, data } = fakeKv({ [key]: entryOf({ n: 8 }, Date.now() - 1_000) });
-    const detached: Promise<unknown>[] = [];
-    const cache = service(kv, { onDetach: (work) => detached.push(work) });
-    const fn = vi.fn(async () => ({ data: { n: 9 }, ttl: ONE_MINUTE }));
+    const { kv, data } = staleKv("bg", { n: 8 });
+    const { detached, onDetach } = detachSink();
+    const cache = service(kv, { onDetach });
+    const fn = loaderOf({ n: 9 });
 
     await expect(cache.withTtlResult("bg", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 8 }));
     expect(detached.length).toBeGreaterThanOrEqual(1);
@@ -198,12 +208,10 @@ describe("CacheService.withTtlResult", () => {
   });
 
   it("reports the stale copy as degraded once its detached refresh is known to have failed", async () => {
-    const { kv } = fakeKv({ [`${VERSION}:bg-fail`]: entryOf({ n: 10 }, Date.now() - 1_000) });
-    const detached: Promise<unknown>[] = [];
-    const cache = service(kv, { onDetach: (work) => detached.push(work) });
-    const fn = vi.fn(async () => {
-      throw new UpstreamError("upstream exploded", { status: 503 });
-    });
+    const { kv } = staleKv("bg-fail", { n: 10 });
+    const { detached, onDetach } = detachSink();
+    const cache = service(kv, { onDetach });
+    const fn = failingLoader(new UpstreamError("upstream exploded", { status: 503 }));
 
     // The request that starts the refresh still answers from the stale copy as complete: the refresh had not failed yet.
     await expect(cache.withTtlResult("bg-fail", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 10 }));
@@ -215,12 +223,10 @@ describe("CacheService.withTtlResult", () => {
   });
 
   it("keeps a stale copy complete when the detached refresh was cancelled by the reader", async () => {
-    const { kv } = fakeKv({ [`${VERSION}:bg-abort`]: entryOf({ n: 11 }, Date.now() - 1_000) });
-    const detached: Promise<unknown>[] = [];
-    const cache = service(kv, { onDetach: (work) => detached.push(work) });
-    const fn = vi.fn(async () => {
-      throw new ClientAbortError("reader left");
-    });
+    const { kv } = staleKv("bg-abort", { n: 11 });
+    const { detached, onDetach } = detachSink();
+    const cache = service(kv, { onDetach });
+    const fn = failingLoader(new ClientAbortError("reader left"));
 
     await expect(cache.withTtlResult("bg-abort", ONE_MINUTE, fn)).resolves.toEqual(delivered({ n: 11 }));
     await Promise.allSettled(detached);

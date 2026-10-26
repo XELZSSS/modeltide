@@ -2,7 +2,7 @@ export interface ScanSpend {
   chars: number;
 }
 
-function balancedJsonEnd(text: string, openIdx: number, budget: number, spend?: ScanSpend): number {
+function balancedJsonEnd(text: string, openIdx: number, budget: number, spend: ScanSpend): number {
   if (budget <= 0 || openIdx < 0 || openIdx >= text.length) return -1;
   const open = text.charCodeAt(openIdx);
   if (open !== 0x5b && open !== 0x7b) return -1;
@@ -27,16 +27,16 @@ function balancedJsonEnd(text: string, openIdx: number, budget: number, spend?: 
     } else if (c === 0x5d || c === 0x7d) {
       depth--;
       if (depth === 0) {
-        if (spend) spend.chars += i + 1 - openIdx;
+        spend.chars += i + 1 - openIdx;
         return i + 1;
       }
     }
   }
-  if (spend) spend.chars += maxEnd - openIdx;
+  spend.chars += maxEnd - openIdx;
   return -1;
 }
 
-export function balancedJsonSlice(text: string, openAt: number, budgetChars: number, spend?: ScanSpend): string | null {
+export function balancedJsonSlice(text: string, openAt: number, budgetChars: number, spend: ScanSpend): string | null {
   const end = balancedJsonEnd(text, openAt, budgetChars, spend);
   return end === -1 ? null : text.slice(openAt, end);
 }

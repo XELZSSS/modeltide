@@ -1,5 +1,5 @@
-import { en } from "./en";
-import { zh } from "./zh";
+import { en } from "./en.ts";
+import { zh } from "./zh.ts";
 
 export type Lang = "en" | "zh";
 export type TranslationKey = keyof typeof en;

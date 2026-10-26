@@ -3,14 +3,13 @@ import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatScore, orNA } from "@/shared/utils";
 import {
-  col,
-  mobilePrimaryCol,
+  rightAlignedCol,
   rightCol,
   RightAlignedText,
   type DataTableColumn,
   type NameCellExtras,
 } from "@/client/components/table/table-columns.ts";
-import CompareModelCell from "./compare-model-cell.vue";
+import { modelCol } from "./aa-column-shared";
 
 function scoreColumn(
   id: string,
@@ -25,8 +24,7 @@ function scoreColumn(
       formatScore(value, t),
     );
   };
-  const alignOpts = opts?.hiddenMd ? { hiddenMd: true } : undefined;
-  return opts?.mobilePrimary ? mobilePrimaryCol(id, header, cell, alignOpts) : rightCol(id, header, cell, alignOpts);
+  return rightAlignedCol(id, header, cell, { mobilePrimary: opts?.mobilePrimary, hiddenMd: opts?.hiddenMd });
 }
 
 export function buildRankingColumns(
@@ -34,17 +32,7 @@ export function buildRankingColumns(
   extras?: NameCellExtras<ArtificialAnalysisModel>,
 ): DataTableColumn<ArtificialAnalysisModel>[] {
   return [
-    col(
-      "model",
-      t("model"),
-      (model) =>
-        h(CompareModelCell, {
-          model,
-          rank: extras?.rankOf?.(model) ?? null,
-          href: extras?.hrefOf?.(model),
-        }),
-      { width: "40%" },
-    ),
+    modelCol(t, extras, "40%", (row) => row),
     rightCol("creator", t("creator"), (model) => h(RightAlignedText, null, () => orNA(model.model_creators?.name, t))),
     scoreColumn("intelligence", t("intelligenceIndex"), (m) => m.intelligence_index, t, { mobilePrimary: true }),
     scoreColumn("coding", t("coding"), (m) => m.coding_index, t),

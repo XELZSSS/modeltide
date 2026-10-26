@@ -4,7 +4,7 @@ import { pruneBounded } from "@/server/util/throttle";
 const FAILURE_COOLDOWN_MS = 45_000;
 const FAILURE_COOLDOWN_MAX_KEYS = 512;
 
-export interface CooldownEntry {
+interface CooldownEntry {
   at: number;
   timeout: boolean;
   statusCode?: number;
@@ -13,7 +13,7 @@ export interface CooldownEntry {
 }
 
 /** Remembers the last refresh failure per key so a dead upstream is not retried on every request. */
-export class FailureCooldown {
+class FailureCooldown {
   private lastFail = new Map<string, CooldownEntry>();
   /** Keys whose detached refresh failed: the failure is known, but no attempt was awaited, so there is no cooldown. */
   private staleFailures = new Map<string, number>();

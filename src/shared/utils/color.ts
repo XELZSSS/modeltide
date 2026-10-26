@@ -1,21 +1,27 @@
-export function hexToRgba(hex: string, alpha: number): string {
-  if (!hex.trim()) return `rgba(136, 136, 136, ${alpha})`;
-  const value = hex.replace("#", "");
-  if (!/^[0-9a-f]{3}$/i.test(value) && !/^[0-9a-f]{6}$/i.test(value)) {
-    const pct = Math.round(alpha * 100);
-    return `color-mix(in srgb, ${hex.trim()} ${pct}%, transparent)`;
-  }
-  const full =
-    value.length === 3
-      ? value
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : value;
+import { fnv1aHashUint32 } from "./hash";
+
+/**
+ * `#abc` / `#aabbcc` (the `#` is optional, case-insensitive) to channels, or `null` when the value is not a hex
+ * colour. `hexToRgba` and `parseRgb` used to decode this separately; a brand colour is upstream data, so the `null`
+ * arm is a real one: those callers fall back to `color-mix` / a derived hue.
+ */
+function parseHexChannels(value: string): [number, number, number] | null {
+  const hex = value.startsWith("#") ? value.slice(1) : value;
+  const full = hex.length === 3 ? hex.replace(/./g, (c) => c + c) : hex;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
   const int = Number.parseInt(full, 16);
-  const r = (int >> 16) & 255;
-  const g = (int >> 8) & 255;
-  const b = int & 255;
+  return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+}
+
+export function hexToRgba(hex: string, alpha: number): string {
+  const trimmed = hex.trim();
+  if (!trimmed) return `rgba(136, 136, 136, ${alpha})`;
+  const channels = parseHexChannels(trimmed);
+  if (!channels) {
+    const pct = Math.round(alpha * 100);
+    return `color-mix(in srgb, ${trimmed} ${pct}%, transparent)`;
+  }
+  const [r, g, b] = channels;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
@@ -41,11 +47,7 @@ function parseRgb(color: string): [number, number, number] | null {
   const value = color.trim().toLowerCase();
   if (value === "black") return [0, 0, 0];
   if (value === "white") return [255, 255, 255];
-  const hex = value.startsWith("#") ? value.slice(1) : value;
-  const full = hex.length === 3 ? hex.replace(/./g, (c) => c + c) : hex;
-  if (!/^[0-9a-f]{6}$/.test(full)) return null;
-  const int = Number.parseInt(full, 16);
-  return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+  return parseHexChannels(value);
 }
 
 /** Hue in degrees, or `null` for a grey (black/white/silver) that carries no hue to preserve. */
@@ -93,12 +95,7 @@ function midToneAt(hue: number): string {
 
 /** A stable hue for a provider whose brand colour is black, white or missing. */
 function hueFromSeed(seed: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    hash ^= seed.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) % 360;
+  return fnv1aHashUint32(seed) % 360;
 }
 
 /**

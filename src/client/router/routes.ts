@@ -6,17 +6,17 @@ import {
   qHomeDashboard,
   qNewsByCategory,
   qOpenRouterList,
-} from "@/client/api/catalog";
+} from "@/client/api/query/catalog";
 import { NEWS_CATEGORIES } from "@/shared/types/news";
 import { DEFAULT_RANKING_TAB } from "@/client/nav/nav-config";
 import { loadableView, preloadChunk } from "./lazy-view";
-import { RANKING_TAB_LOADS, RANKING_TAB_QUERIES } from "@/client/pages/rankings/tab-loaders";
+import { RANKING_TAB_DEFS } from "@/client/pages/rankings/tab-loaders";
 import type { Prefetchable } from "./route-meta";
 import { PATHS } from "./paths";
 
 const loadHomeView = () => import("@/client/pages/home/home-view.vue");
 const loadRankingsHubView = () => {
-  preloadChunk(RANKING_TAB_LOADS[DEFAULT_RANKING_TAB]);
+  preloadChunk(RANKING_TAB_DEFS[DEFAULT_RANKING_TAB].load);
   return import("@/client/pages/rankings/rankings-hub-view.vue");
 };
 const loadModelView = () => import("@/client/pages/model/model-view.vue");
@@ -49,12 +49,14 @@ export const ROUTES: RouteRecordRaw[] = [
   },
   {
     path: PATHS.rankings,
-    name: "models",
+    // Named for the page it renders rather than for its path segment: this is the ranking hub whose tabs are
+    // `RANKING_TABS` in `nav/nav-config.ts`, and a route named after the URL segment read as if it were a model list.
+    name: "rankings",
     component: RankingsHubView,
     meta: {
       titleKey: "rankings",
       load: loadRankingsHubView,
-      prefetch: RANKING_TAB_QUERIES[DEFAULT_RANKING_TAB],
+      prefetch: RANKING_TAB_DEFS[DEFAULT_RANKING_TAB].queries,
       nav: {
         group: "primary",
         labelKey: "rankings",
@@ -71,7 +73,7 @@ export const ROUTES: RouteRecordRaw[] = [
   },
   {
     path: PATHS.priceCompare,
-    name: "price",
+    name: "priceCompare",
     component: PriceCompareView,
     meta: { titleKey: "priceComparison", load: loadPriceCompareView, prefetch: [qArtificialList] },
   },

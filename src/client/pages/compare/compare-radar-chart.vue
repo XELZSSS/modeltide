@@ -26,6 +26,7 @@ import ChartCanvas from "@/client/components/charts/chart-canvas.vue";
 import ChartFrame from "@/client/components/charts/chart-frame.vue";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { modelDisplayName, modelId } from "@/shared/utils/models";
+import { formatScore } from "@/shared/utils";
 import { buildRadarData, radarMaxFor } from "@/client/utils/compare-logic";
 
 const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
@@ -112,7 +113,7 @@ const caption = computed(() =>
     .map((row) => {
       const values = display.value.map(({ key, name }) => {
         const v = key ? row.values[key] : null;
-        return `${name}: ${typeof v === "number" ? v.toFixed(1) : "—"}`;
+        return `${name}: ${typeof v === "number" ? formatScore(v, t) : t("notAvailable")}`;
       });
       return `${row.metric} — ${values.join(", ")}`;
     })
@@ -121,7 +122,7 @@ const caption = computed(() =>
 </script>
 
 <template>
-  <Card class="w-full">
+  <Card>
     <CardContent class="flex h-full items-center justify-center p-3 sm:p-6">
       <ChartFrame :height="RADAR_CHART_HEIGHT">
         <ChartCanvas type="radar" :data="data" :options="options" role="img" :aria-label="t('modelComparison')" />

@@ -20,7 +20,8 @@ let chart: Chart | null = null;
 /**
  * A chart here shows a snapshot, so a data update must land in the same frame. `animation: { duration: 0 }` does that while
  * keeping the animation system alive: `animation: false` also silenced the tooltip, which resolves its own animation from
- * `chart.options.animation`, so hover panels used to appear in one hard step.
+ * `chart.options.animation`, so hover panels used to appear in one hard step. This is the one place the rule lives — the
+ * charts' own `chartBase` no longer repeats it.
  */
 function withoutDataAnimation(options: ChartOptions): ChartOptions {
   return { ...options, animation: { duration: 0 } };

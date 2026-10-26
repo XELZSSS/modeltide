@@ -1,13 +1,12 @@
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type { TFunction } from "@/shared/i18n";
 import type { TextToImageModel } from "@/shared/types";
-import type { NormalizedHomeDashboard } from "@/client/api/payload-normalize";
+import type { NormalizedHomeDashboard } from "@/client/api/decode/payload";
 import { shortModelId } from "@/shared/utils/models";
-import { formatPercent, formatShortNumber } from "@/shared/utils";
+import { formatRatio, formatShortNumber } from "@/shared/utils";
 
 export interface HomeBarStat {
   label: string;
-  value: number;
   valueLabel: string;
 }
 
@@ -34,7 +33,6 @@ export function useHomeStats(dashboardData: MaybeRefOrGetter<NormalizedHomeDashb
   const trendingStats = computed<HomeBarStat[]>(() =>
     toValue(dashboardData).opensource.map((model) => ({
       label: shortModelId(model.id),
-      value: model.downloads,
       valueLabel: formatShortNumber(model.downloads, t("notAvailable")),
     })),
   );
@@ -42,8 +40,7 @@ export function useHomeStats(dashboardData: MaybeRefOrGetter<NormalizedHomeDashb
   const hallucinationStats = computed<HomeBarStat[]>(() =>
     toValue(dashboardData).hallucinations.map((entry) => ({
       label: entry.name,
-      value: entry.accuracy,
-      valueLabel: formatPercent(entry.accuracy, t),
+      valueLabel: formatRatio(entry.accuracy, t),
     })),
   );
 

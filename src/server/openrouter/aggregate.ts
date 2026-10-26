@@ -3,7 +3,7 @@ import { parseTs } from "@/server/formats/dates";
 import { isValidRowId } from "@/server/formats/content-guards";
 import { isModelRow } from "@/server/formats/wire-guards";
 import { MAX_RANKING_ROWS } from "@/server/formats/limits";
-import { lookupHit, normalizeKeyCached, type Lookup } from "./lookup";
+import { lookupHit, modelKeyCandidates, type Lookup } from "./lookup";
 
 import type { ModelMetaEntry, ModelRow } from "@/server/formats/wire-types";
 import type { PricingEntry } from "./parse-directory";
@@ -36,22 +36,27 @@ interface Group {
  * -90%) and an already-percent number (`1`, i.e. 1%). Magnitude tells them apart — every ratio the feed emits is below 1
  * in absolute value — and that is the single heuristic this pipeline relies on. `parse-rankings.test.ts` pins both
  * cases, so a change in upstream meaning fails the suite instead of quietly scaling every trend by 100.
+ *
+ * One figure cannot say which form it is in, so the two counts are recorded on the scan stats: a payload that needed
+ * both readings is the signature of an upstream mid-change, and the ranking's own numbers are then scaled by two
+ * different factors. `rankings.ts` reports it. A ratio above 1 (+150% over a period) also lands in the percent count,
+ * so this is a signal to go look at, not a verdict.
  */
-function changeToPercent(value: unknown): number | null {
+function changeToPercent(value: unknown, stats?: RankingScanStats): number | null {
   const n = numCoerce(value);
   if (n == null) return null;
-  return Math.abs(n) < 1 ? n * 100 : n;
+  if (Math.abs(n) < 1) {
+    if (stats) stats.ratioFormChanges += 1;
+    return n * 100;
+  }
+  if (stats) stats.percentFormChanges += 1;
+  return n;
 }
 
 export type PricingLookup = Lookup<PricingEntry>;
 
 function resolvePricing(pricing: PricingLookup, id: string, variantKey: string | undefined): PricingEntry | undefined {
-  const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
-  const candidates = [
-    ...keys.map((key) => key.toLowerCase()),
-    ...keys.map(normalizeKeyCached).filter((key): key is string => key !== ""),
-  ];
-  for (const key of candidates) {
+  for (const key of modelKeyCandidates([variantKey, id])) {
     const hit = lookupHit(pricing, key);
     if (hit) return hit;
   }
@@ -62,15 +67,15 @@ export interface RankingScanStats {
   scannedRows: number;
   validRows: number;
   expiredRows: number;
+  ratioFormChanges: number;
+  percentFormChanges: number;
 }
 
 export type MetaLookup = Lookup<ModelMetaEntry>;
 
 export function resolveExpiry(meta: MetaLookup | undefined, id: string, variantKey: string | undefined): string | null {
   if (!meta) return null;
-  const keys = [variantKey, id].filter((k): k is string => typeof k === "string" && k !== "");
-  const candidates = [...keys.map((key) => key.toLowerCase()), ...keys.map(normalizeKeyCached)];
-  for (const key of candidates) {
+  for (const key of modelKeyCandidates([variantKey, id])) {
     const hit = lookupHit(meta, key);
     if (hit?.expiresAt) return hit.expiresAt;
   }
@@ -123,10 +128,12 @@ function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> 
     }
     if (metric != null && (group.metric == null || metric > group.metric)) group.metric = metric;
   }
+  // `groupRows` owns the counters it is the only producer of: `scannedRows` and `validRows` are read straight off the
+  // rows it just walked. `expiredRows` is not one of them — `mapModels` counts retired groups after this returns — so
+  // resetting it here made the count depend on call order instead of on what the scan found.
   if (stats) {
     stats.scannedRows = count;
     stats.validRows = valid;
-    stats.expiredRows = 0;
   }
   return grouped;
 }

@@ -25,15 +25,16 @@ import {
 } from "@/client/charts/theme";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
-import { formatIndex } from "@/shared/utils";
+import { formatIndex, formatScore } from "@/shared/utils";
 import { shortModelId } from "@/shared/utils/models";
 import { FALLBACK_DASH } from "@/shared/config/ui";
 import { cn } from "@/client/utils/cn";
 import { useDevice } from "@/client/device";
 import type { HomeChartPoint } from "@/shared/types";
 
-const SERIES_KEYS = ["intelligence", "coding"] as const;
-const SERIES_LABEL_KEYS = ["intelligence", "coding"] as const;
+/** Coding first: the card is the coding-index ranking, and the intelligence bar is the reference beside it. */
+const SERIES_KEYS = ["coding", "intelligence"] as const;
+const SERIES_LABEL_KEYS = ["coding", "intelligence"] as const;
 /** The bar is ~26px thick on a desktop card, so 3px rounds the ends without turning it into a capsule. */
 const BAR_RADIUS = 3;
 /**
@@ -48,7 +49,7 @@ const MOBILE_AXIS_LABEL_MAX_CHARS = 16;
 type IndexSeriesKey = (typeof SERIES_KEYS)[number];
 type IndexRow = HomeChartPoint & Record<IndexSeriesKey, number>;
 
-/** The payload arrives sliced to `HOME_CHART_ROWS` and ordered by intelligence: this drops only the rows a bar cannot draw. */
+/** The payload arrives sliced to `HOME_CHART_ROWS` and ordered by the coding index: this drops only the rows a bar cannot draw. */
 function buildIndexRows(models: readonly HomeChartPoint[]): IndexRow[] {
   return models.filter((model): model is IndexRow =>
     SERIES_KEYS.every((key) => typeof model[key] === "number" && Number.isFinite(model[key])),
@@ -90,8 +91,8 @@ const data = computed<ChartData<"bar">>(() => ({
     backgroundColor: seriesColor(theme.value, slot),
     borderRadius: BAR_RADIUS,
     borderSkipped: false,
-    // Ten categories of two bars: the category band is 70% of the slot and each bar 90% of its half, which is what makes
-    // the bars thick enough to read in a card this wide.
+    // Seven categories of two bars: the category band is 70% of the slot and each bar 90% of its half, which is what
+    // makes the bars thick enough to read in a card this wide.
     categoryPercentage: 0.7,
     barPercentage: 0.9,
   })),
@@ -104,13 +105,13 @@ const options = computed<ChartOptions<"bar">>(() =>
       type: "category",
       ticks: {
         ...axisTickStyle(theme.value),
-        // 10px because the slot is ~60px on a desktop card: an 11-character name fits, a second tick font size does not.
+        // 10px because the slot is ~81px on a desktop card: a 15-character name fits, a second tick font size does not.
         font: { size: 10 },
         autoSkip: false,
         maxRotation: isMobile.value ? 45 : 0,
         minRotation: isMobile.value ? 45 : 0,
       },
-      // Category gridlines only add ten vertical rules behind ten bars.
+      // Category gridlines only add seven vertical rules behind seven bars.
       grid: { display: false },
     },
     y: {
@@ -124,7 +125,7 @@ const options = computed<ChartOptions<"bar">>(() =>
         label: (ctx) => {
           // The bar's `parsed.y` is `number | null` in chart.js's own types, so the fallback branch is reachable here.
           const value = ctx.parsed.y;
-          return `${ctx.dataset.label}: ${value == null ? FALLBACK_DASH : formatIndex(value)}`;
+          return `${ctx.dataset.label}: ${value == null ? FALLBACK_DASH : formatScore(value, t)}`;
         },
       },
     },
@@ -136,7 +137,7 @@ const caption = computed(() =>
     .map(
       (m) =>
         `${m.shortName || m.name}: ${SERIES_KEYS.map(
-          (key, slot) => `${t(SERIES_LABEL_KEYS[slot]!)} ${formatIndex(m[key])}`,
+          (key, slot) => `${t(SERIES_LABEL_KEYS[slot]!)} ${formatScore(m[key], t)}`,
         ).join(", ")}`,
     )
     .join("; "),
@@ -146,7 +147,7 @@ const caption = computed(() =>
 <template>
   <Card class="h-full">
     <CardContent class="flex h-full flex-col">
-      <CardHeader :title="t('intelligenceIndex')" :subtitle="t('artificialSource')" />
+      <CardHeader :title="t('codeIndex')" :subtitle="t('artificialSource')" />
       <EmptyState
         v-if="rows.length === 0"
         variant="plain"
@@ -154,7 +155,7 @@ const caption = computed(() =>
         :class="cn(CHART_EMPTY_CLASS, RANKING_CHART_HEIGHT)"
       />
       <ChartFrame v-else :height="RANKING_CHART_HEIGHT">
-        <ChartCanvas type="bar" :data="data" :options="options" :aria-label="t('intelligenceIndex')" role="img" />
+        <ChartCanvas type="bar" :data="data" :options="options" :aria-label="t('codeIndex')" role="img" />
         <figcaption class="sr-only">{{ caption }}</figcaption>
       </ChartFrame>
     </CardContent>

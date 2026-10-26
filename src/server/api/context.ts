@@ -36,7 +36,7 @@ export function buildContext(
   });
   const base: AppContext = {
     cache,
-    http: new HttpClient(),
+    http: new HttpClient({ log: logger }),
     kv,
     log: logger,
     onDetach: init?.onDetach,
@@ -50,7 +50,11 @@ export function buildContext(
         ...base,
         cache: new CacheService(kv, CACHE_VERSION, { onDetach: init?.onDetach, log: logger }),
         // Share the base pools: the connection budget is per invocation.
-        http: new HttpClient({ signal: AbortSignal.timeout(SHARED_REFRESH_TIMEOUT_MS), pools: base.http.pools }),
+        http: new HttpClient({
+          signal: AbortSignal.timeout(SHARED_REFRESH_TIMEOUT_MS),
+          pools: base.http.pools,
+          log: logger,
+        }),
       };
       return refresh;
     },

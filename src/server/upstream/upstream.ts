@@ -10,6 +10,7 @@ export const upstreamEndpoints = {
   aaLeaderboard: "/leaderboards/models",
   aaModels: "/models",
   aaOmniscience: "/evaluations/omniscience",
+  aaDecisionIndex: "/evaluations/artificial-analysis-decision-index",
   aaTextToImage: "/image/models",
   openRouterRankings: "/api/frontend/v1/rankings/models",
 

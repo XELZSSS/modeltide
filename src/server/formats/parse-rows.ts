@@ -1,6 +1,6 @@
 import { isRecord } from "./scalars";
 
-export interface MappedRows<T> {
+interface MappedRows<T> {
   rows: T[];
   dropped: number;
 }

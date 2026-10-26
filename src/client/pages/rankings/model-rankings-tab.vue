@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useSuspenseArtificialRankingsState } from "@/client/api/hooks";
+import { useSuspenseArtificialRankingsState } from "@/client/api/view-models";
 import TabStateShell from "@/client/components/navigation/tab-state-shell.vue";
 import ArtificialAnalysisView from "./aa-view.vue";
 

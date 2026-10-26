@@ -3,7 +3,7 @@
   "printWidth": 120,
   "sortPackageJson": false,
   // Generated files a formatter must not touch: `functions/` is esbuild output, and
-  // `src/shared/config/cache-version.gen.ts` is compared byte-for-byte by `npm run gen:cache-version:check`.
+  // `src/shared/config/cache-version.gen.ts` is rewritten by `npm run gen:cache-version` on every entry point.
   "ignorePatterns": [
     "dist/**",
     "node_modules/**",

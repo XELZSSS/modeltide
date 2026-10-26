@@ -1,9 +1,10 @@
 import { computed, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type { TranslationKey } from "@/shared/i18n";
-import type { CostFieldId } from "@/shared/scenario";
+// The form's validity rule and the parser that prices the scenario are the same rule, owned by `@/shared/scenario`: two
+// copies had drifted, so a field the reader was told is invalid (`1e3`, `-1`) was still priced as 1000 / 0.
+import { type CostFieldId } from "@/shared/scenario";
 import { usePricingMaps } from "@/client/hooks/use-pricing-maps";
 import { useCostStore } from "@/client/stores";
-
 import type { ArtificialAnalysisModel } from "@/shared/types";
 
 export const COST_FIELDS = [
@@ -38,7 +39,4 @@ export function useMonthlyCosts(models: MaybeRefOrGetter<ArtificialAnalysisModel
   return { ...estimator, monthlyCosts };
 }
 
-export function isCostFieldInput(value: string): boolean {
-  const trimmed = value.trim();
-  return trimmed === "" || /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed);
-}
+export { isCostFieldInput } from "@/shared/scenario";

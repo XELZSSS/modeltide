@@ -1,23 +1,12 @@
 import { MAX_JSON_BYTES, MAX_RSC_BYTES, USER_AGENT, upstreamUrl } from "./upstream";
-import { FEED_FETCH_OPTS, UPSTREAM_FETCH_OPTS } from "./timeouts";
+import { FEED_FETCH_OPTS, NETWORK_RETRY_BACKOFF_MS, UPSTREAM_FETCH_OPTS } from "./timeouts";
 import { ClientAbortError, UpstreamError, errMsg } from "@/server/api/errors";
+import type { Logger } from "@/server/api/logger";
 import { acquireSlot, createSlotPool, releaseSlot, type SlotPool } from "./pools";
 import { fetchBodyText, parseJsonBody } from "./body-readers";
 import { parseRetryAfterMs, computeBackoff, sleepAbortable } from "./retry";
 
-type FetchPolicyName = "interactive" | "slowFeed";
-
-// Interactive calls may retry once; feed reads get their own single retry with a shorter per-attempt budget.
-const FETCH_POLICIES = {
-  interactive: UPSTREAM_FETCH_OPTS,
-  slowFeed: FEED_FETCH_OPTS,
-} as const;
-
-function fetchPolicy(name: FetchPolicyName): FetchPolicy {
-  return { ...FETCH_POLICIES[name] };
-}
-
-/** The two numbers a policy is made of. `doFetch` needs both; the public entry points default them. */
+/** The two numbers a policy is made of: `doFetch` needs both, and each entry point passes the pair it wants. */
 interface FetchPolicy {
   timeoutMs: number;
   retries: number;
@@ -55,6 +44,20 @@ function describeFetchError(err: unknown): string {
   return joined || "unknown fetch failure";
 }
 
+/** The socket-level reason only: `ENOTFOUND` and `UND_ERR_CONNECT_TIMEOUT` are what tell a DNS blip from a dead origin. */
+function failureCode(cause: unknown): string {
+  const code = (cause as { code?: unknown } | null | undefined)?.code;
+  if (typeof code === "string" && code !== "") return code;
+  return errMsg(cause ?? "unknown").slice(0, 80);
+}
+
+/** `host + path`, dropping the query: the identifiers in it are long and never the point of the line. */
+function shortTarget(url: string): string {
+  const parsed = new URL(url);
+  const target = `${parsed.host}${parsed.pathname}`;
+  return target.length > 64 ? `${target.slice(0, 61)}...` : target;
+}
+
 /**
  * Both a client hang-up and a watchdog deadline abort the same signal. Only the former is a client
  * disconnect: the shared refresh context hands this client an `AbortSignal.timeout()`, and reporting
@@ -78,6 +81,26 @@ type AttemptOutcome<T> =
   | { kind: "throw"; error: unknown }
   | { kind: "abort" }
   | { kind: "fail"; message: string | null; cause: unknown; status: number | null; timedOut: boolean };
+
+/**
+ * What one attempt can report about itself: time to the response *headers* (DNS + connect + TLS + first byte), the size
+ * when the upstream declared one, and the status. The body is read after `ttfbMs`, so `total - ttfb` is the body time.
+ */
+interface AttemptTiming {
+  ttfbMs: number | null;
+  bytes: number | null;
+  status: number | null;
+}
+
+interface AttemptInput<T> {
+  url: string;
+  headers: Record<string, string>;
+  read: (res: Response, signal: AbortSignal) => Promise<T>;
+  signal: AbortSignal;
+  deadline: AbortSignal;
+  initSignal: AbortSignal | undefined;
+  rest: Omit<FetchOptions, "timeoutMs" | "retries" | "headers" | "signal">;
+}
 
 function finalError<T>(url: string, fail: Extract<AttemptOutcome<T>, { kind: "fail" }>): UpstreamError {
   const err = new UpstreamError(
@@ -116,9 +139,12 @@ function classifyResponse(res: Response, url: string): AttemptOutcome<never> {
 export class HttpClient {
   private defaultSignal?: AbortSignal;
   readonly pools: SlotPool;
-  constructor(opts?: { signal?: AbortSignal; pools?: SlotPool }) {
+  /** Optional on purpose: the test suite builds a client without one and stays quiet. `buildContext` passes the logger. */
+  private log?: Logger;
+  constructor(opts?: { signal?: AbortSignal; pools?: SlotPool; log?: Logger }) {
     this.defaultSignal = opts?.signal;
     this.pools = opts?.pools ?? createSlotPool();
+    this.log = opts?.log;
   }
 
   private async withSlot<T>(signal: AbortSignal, run: () => Promise<T>, onAbort: () => T): Promise<T> {
@@ -134,15 +160,9 @@ export class HttpClient {
     }
   }
 
-  private async attemptFetch<T>(
-    url: string,
-    headers: Record<string, string>,
-    read: (res: Response, signal: AbortSignal) => Promise<T>,
-    signal: AbortSignal,
-    deadline: AbortSignal,
-    initSignal: AbortSignal | undefined,
-    rest: Omit<FetchOptions, "timeoutMs" | "retries" | "headers" | "signal">,
-  ): Promise<AttemptOutcome<T>> {
+  private async attemptFetch<T>(input: AttemptInput<T>, timing: AttemptTiming): Promise<AttemptOutcome<T>> {
+    const { url, headers, read, signal, deadline, initSignal, rest } = input;
+    const startedAt = Date.now();
     let res: Response | null = null;
     try {
       // Resolve `fetch` per call: never capture the Pages Functions global ahead of time.
@@ -166,6 +186,10 @@ export class HttpClient {
         timedOut,
       };
     }
+    timing.ttfbMs = Date.now() - startedAt;
+    timing.status = res.status;
+    const declared = Number(res.headers.get("content-length"));
+    timing.bytes = Number.isFinite(declared) && declared > 0 ? declared : null;
     if (res.ok) {
       try {
         return { kind: "return", value: await read(res, signal) };
@@ -198,38 +222,70 @@ export class HttpClient {
     for (let attempt = 0; attempt <= retries; attempt++) {
       const deadline = AbortSignal.timeout(timeoutMs);
       const signal = initSignal ? AbortSignal.any([initSignal, deadline]) : deadline;
+      const timing: AttemptTiming = { ttfbMs: null, bytes: null, status: null };
+      const startedAt = Date.now();
       const outcome = await this.withSlot(
         signal,
-        () => this.attemptFetch(url, headers, read, signal, deadline, initSignal, rest),
+        () => this.attemptFetch({ url, headers, read, signal, deadline, initSignal, rest }, timing),
         // Slot-race loss is either the caller hanging up or this attempt's own deadline.
         (): AttemptOutcome<T> =>
           initSignal?.aborted ? { kind: "throw", error: abortFailure(url, initSignal) } : { kind: "abort" },
       );
+      this.logAttempt(url, { attempt, retries, startedAt, timing, outcome });
       if (outcome.kind === "return") return outcome.value;
       if (outcome.kind === "throw") throw outcome.error;
       if (outcome.kind === "abort") {
         throw new UpstreamError(`Upstream deadline exceeded for ${url}`, { timeout: true });
       }
       if (attempt === retries) throw finalError(url, outcome);
-      await sleepAbortable(computeBackoff(attempt), initSignal);
+      // A failure that never reached the upstream — DNS, refused, reset — spends none of this attempt's timeout, and the
+      // 500 ms an attempt-0 backoff waits lands inside the very blip that caused it. `NETWORK_RETRY_BACKOFF_MS` waits
+      // past that blip while staying inside the budget `timeouts.ts` documents for this call.
+      const networkFailure = outcome.status === null && !outcome.timedOut;
+      await sleepAbortable(networkFailure ? NETWORK_RETRY_BACKOFF_MS : computeBackoff(attempt), initSignal);
       if (initSignal?.aborted) throw abortFailure(url, initSignal);
     }
+    // Not reachable from the loop above — every `attempt` either returns, throws, or is the last one — but the loop is
+    // the function's only exit, so TypeScript needs a terminator for `Promise<T>`. Kept as a throw rather than a bare
+    // `return` so a future edit that does fall through fails loudly instead of resolving `undefined` as a payload.
     throw new UpstreamError(`HTTP failed for ${url}`);
   }
 
-  private readJson<T, R>(
+  /**
+   * One line per upstream attempt, and every data source the API reads goes through this client (Artificial Analysis'
+   * RSC pages and JSON, OpenRouter's directory and rankings, Hugging Face, the news feeds). The leg-level warnings that
+   * already exist cannot tell a stalled local network from a slow origin — both read "fetch failed" — so this is the line
+   * that separates them: `ttfb` covers DNS + connect + TLS + first byte, `total - ttfb` is the body.
+   */
+  private logAttempt<T>(
     url: string,
-    init: FetchOptionsInput | undefined,
-    maxBytes: number,
-    wrap: (res: Response, body: T) => R,
-  ): Promise<R> {
-    return this.doFetch(url, { ...UPSTREAM_FETCH_OPTS, ...init }, "application/json", async (res, signal) =>
-      wrap(res, await parseJsonBody<T>(url, res, maxBytes, signal)),
-    );
+    attempt: {
+      attempt: number;
+      retries: number;
+      startedAt: number;
+      timing: AttemptTiming;
+      outcome: AttemptOutcome<T>;
+    },
+  ): void {
+    if (!this.log) return;
+    const { timing, outcome } = attempt;
+    const parts = [
+      `status=${timing.status ?? "-"}`,
+      `ttfb=${timing.ttfbMs == null ? "-" : `${timing.ttfbMs}ms`}`,
+      `total=${Date.now() - attempt.startedAt}ms`,
+      `attempt=${attempt.attempt + 1}/${attempt.retries + 1}`,
+    ];
+    if (timing.bytes != null) parts.push(`bytes=${timing.bytes}`);
+    if (outcome.kind === "fail") parts.push(`cause=${outcome.timedOut ? "timeout" : failureCode(outcome.cause)}`);
+    if (outcome.kind === "throw") parts.push(`cause=${failureCode(outcome.error)}`);
+    if (outcome.kind === "abort") parts.push("cause=aborted");
+    this.log("info", `[upstream] ${shortTarget(url)} ${parts.join(" ")}`);
   }
 
   async json<T>(url: string, init?: FetchOptionsInput, maxBytes: number = MAX_JSON_BYTES): Promise<T> {
-    return this.readJson<T, T>(url, init, maxBytes, (_res, body) => body);
+    return this.doFetch(url, { ...UPSTREAM_FETCH_OPTS, ...init }, "application/json", (res, signal) =>
+      parseJsonBody<T>(url, res, maxBytes, signal),
+    );
   }
 
   async text(url: string, init?: FetchOptionsInput, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
@@ -240,17 +296,11 @@ export class HttpClient {
       (res, signal) => fetchBodyText(url, res, maxBytes, signal),
     );
   }
-
-  async getJson<T>(url: string): Promise<T> {
-    return this.json<T>(url, fetchPolicy("interactive"));
-  }
-
   async getRsc(base: string, path: string): Promise<string> {
-    const policy = fetchPolicy("interactive");
-    return this.text(upstreamUrl(base, path), { headers: { RSC: "1" }, ...policy }, MAX_RSC_BYTES);
+    return this.text(upstreamUrl(base, path), { headers: { RSC: "1" } }, MAX_RSC_BYTES);
   }
 
   async getFeed(url: string, accept: string, maxBytes: number): Promise<string> {
-    return this.text(url, { headers: { accept }, ...fetchPolicy("slowFeed") }, maxBytes);
+    return this.text(url, { headers: { accept }, ...FEED_FETCH_OPTS }, maxBytes);
   }
 }

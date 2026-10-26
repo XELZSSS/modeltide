@@ -10,14 +10,14 @@ import { cn } from "@/client/utils/cn";
 const props = defineProps<{ title?: string; subtitle?: string; class?: string }>();
 const slots = useSlots();
 const hasSubtitle = computed(() => slots.subtitle != null || (props.subtitle != null && props.subtitle !== ""));
-const wrapperClass = computed(() => cn("ui-card-title", props.class));
+const wrapperClass = computed(() => cn("mb-3 min-w-0", props.class));
 </script>
 
 <template>
-  <p v-if="!hasSubtitle" :class="cn(wrapperClass, 'mb-3')">
+  <p v-if="!hasSubtitle" :class="cn('ui-card-title', props.class, 'mb-3')">
     <slot name="title">{{ title }}</slot>
   </p>
-  <div v-else :class="cn('mb-3 min-w-0', wrapperClass)">
+  <div v-else :class="wrapperClass">
     <p class="mb-0.5 ui-card-title">
       <slot name="title">{{ title }}</slot>
     </p>

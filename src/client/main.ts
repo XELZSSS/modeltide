@@ -3,7 +3,7 @@ import { createPinia } from "pinia";
 import { VueQueryPlugin } from "@tanstack/vue-query";
 import App from "./app.vue";
 import { router } from "./router";
-import { queryClient } from "./api/query-client";
+import { queryClient } from "./api/query/client";
 import { initBootstrap } from "./bootstrap";
 import { installClientErrorReporting, reportClientError } from "./monitoring";
 import { vTooltip } from "./directives/tooltip";
@@ -33,7 +33,12 @@ if (!root) throw new Error("missing #root element");
  */
 router.onError((err) => reportClientError("router", err));
 
+// Mount *before* the first navigation resolves: the shell and its `Suspense` plate then paint while the route
+// component's chunk is still in flight, instead of the reader waiting on a blank page for it. `RouterView` fills the
+// plate the moment the navigation lands, and bootstrap still waits for it so the idle work below never competes with
+// that chunk.
+app.mount(root);
+
 await router.isReady().catch((err: unknown) => reportClientError("router.isReady", err));
 
-app.mount(root);
 initBootstrap();

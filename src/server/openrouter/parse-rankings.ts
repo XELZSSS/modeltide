@@ -33,7 +33,7 @@ export function mapModels(
     const { agg: row, dominant, latest } = ranked[i]!.group;
     const id = row.model_permaslug;
     const name = titleFromSlug(id) || id;
-    const variantKey = typeof dominant.variant_permaslug === "string" ? dominant.variant_permaslug : undefined;
+    const variantKey = dominant.variant_permaslug;
     const expiresAt = resolveExpiry(meta, id, variantKey);
     if (isRetiredRankEntry(expiresAt, today)) {
       if (stats) stats.expiredRows += 1;
@@ -51,12 +51,12 @@ export function mapModels(
       name,
       creator: creatorFromSlug(id),
       category: categoryFrom(id, name),
-      variant: typeof dominant.variant === "string" && dominant.variant ? dominant.variant : null,
-      totalTokens: numOr(row.total_prompt_tokens, 0) + numOr(row.total_completion_tokens, 0),
-      promptTokens: numOr(row.total_prompt_tokens, 0),
-      completionTokens: numOr(row.total_completion_tokens, 0),
-      requestCount: numOr(row.count, 0),
-      change: changeToPercent(latest.change),
+      variant: dominant.variant || null,
+      totalTokens: numOr(row.total_prompt_tokens) + numOr(row.total_completion_tokens),
+      promptTokens: numOr(row.total_prompt_tokens),
+      completionTokens: numOr(row.total_completion_tokens),
+      requestCount: numOr(row.count),
+      change: changeToPercent(latest.change, stats),
       pricing: resolved ?? null,
       isFree,
       expiresAt,

@@ -8,8 +8,8 @@ import { cn } from "@/client/utils/cn";
 import Card from "@/client/components/layout/card.vue";
 import CardContent from "@/client/components/layout/card-content.vue";
 
-const props = defineProps<{ title: string; class?: string }>();
-const classes = computed(() => cn("flex min-w-0 flex-col gap-2", props.class));
+defineProps<{ title: string }>();
+const classes = computed(() => cn("flex min-w-0 flex-col gap-2"));
 </script>
 
 <template>

@@ -1,17 +1,16 @@
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { normalizeModelKey } from "@/shared/utils";
 import type { ModelMetaEntry } from "@/server/formats/wire-types";
+import { INDEX_FIELDS } from "@/server/formats/meta-fields";
 
 const TRAILING_VERSION_DIGITS_RE = /\d{4,8}$/;
 
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {
-  const keys: string[] = [];
-  for (const raw of [m.slug, m.name, m.short_name]) {
-    if (typeof raw !== "string" || !raw) continue;
-    const key = normalizeModelKey(raw);
-    if (key) keys.push(key);
-  }
-  const valued = (e: ModelMetaEntry): boolean => e.intelligenceIndex != null || e.agenticIndex != null;
+  const keys: string[] = [m.slug, m.name, m.short_name]
+    .filter((v): v is string => v != null)
+    .map(normalizeModelKey)
+    .filter((key) => key !== "");
+  const valued = (e: ModelMetaEntry): boolean => INDEX_FIELDS.some((field) => e[field.meta] != null);
   let looseHit: ModelMetaEntry | undefined;
   for (const key of keys) {
     const e = meta[key];
@@ -35,16 +34,10 @@ export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record
   for (const m of models) {
     const entry = matchMeta(m, meta);
     if (!entry) continue;
-    if (m.intelligence_index == null && entry.intelligenceIndex != null) {
-      m.intelligence_index = entry.intelligenceIndex;
-      filled++;
-    }
-    if (m.agentic_index == null && entry.agenticIndex != null) {
-      m.agentic_index = entry.agenticIndex;
-      filled++;
-    }
-    if (m.coding_index == null && entry.codingIndex != null) {
-      m.coding_index = entry.codingIndex;
+    for (const field of INDEX_FIELDS) {
+      const value = entry[field.meta];
+      if (value == null || m[field.model] != null) continue;
+      m[field.model] = value;
       filled++;
     }
   }

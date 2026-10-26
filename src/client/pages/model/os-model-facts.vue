@@ -7,6 +7,7 @@ import { encodeModelIdPath } from "@/shared/utils/models";
 import { SITE_URLS } from "@/shared/config/sites";
 import { TASK_LABEL_KEYS } from "@/shared/i18n/task-labels";
 import InfoCard from "@/client/components/layout/info-card.vue";
+import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 import InfoGrid from "@/client/components/layout/info-grid.vue";
 import InfoRow from "@/client/components/layout/info-row.vue";
 import type { OpenSourceModelEntry } from "@/shared/types";
@@ -51,11 +52,11 @@ const repoHref = computed(() => safeHref(`${SITE_URLS.huggingface}/${encodeModel
         :href="repoHref"
         target="_blank"
         rel="noopener noreferrer"
-        class="text-sm break-all text-text-primary underline-offset-4 ui-motion focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none hoverable:hover:underline"
+        :class="`ui-body break-all underline-offset-4 ui-motion ${FOCUS_RING} hoverable:hover:underline`"
       >
         {{ entry.id }}
       </a>
-      <span v-else class="text-sm text-text-tertiary">{{ t("notAvailable") }}</span>
+      <span v-else class="ui-body text-text-tertiary">{{ t("notAvailable") }}</span>
     </InfoCard>
   </InfoGrid>
 </template>

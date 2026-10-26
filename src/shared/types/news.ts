@@ -1,11 +1,6 @@
-export type NewsCategory = "industry" | "opensource" | "hardware" | "research";
+export const NEWS_CATEGORIES = ["industry", "opensource", "hardware", "research"] as const;
 
-export const NEWS_CATEGORIES = [
-  "industry",
-  "opensource",
-  "hardware",
-  "research",
-] as const satisfies readonly NewsCategory[];
+export type NewsCategory = (typeof NEWS_CATEGORIES)[number];
 /**
  * One aggregated news row. `link` is the identity: it is the only field guaranteed non-empty by the parser, it is what
  * deduplication keys on (`news/source.ts`), and it is the row's render key on the client. There is deliberately no

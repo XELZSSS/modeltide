@@ -6,14 +6,14 @@
 import Card from "@/client/components/layout/card.vue";
 import CardContent from "@/client/components/layout/card-content.vue";
 
-defineProps<{ label: string; class?: string }>();
+defineProps<{ label: string }>();
 </script>
 
 <template>
   <Card>
     <CardContent compact class="flex flex-col items-center justify-center gap-1.5 text-center">
       <div class="flex max-w-full min-w-0 items-center justify-center gap-1.5">
-        <p class="truncate ui-meta font-medium" v-tooltip="label">{{ label }}</p>
+        <p class="min-w-0 ui-meta font-medium break-words md:truncate" v-tooltip="label">{{ label }}</p>
       </div>
       <div class="ui-metric"><slot /></div>
     </CardContent>

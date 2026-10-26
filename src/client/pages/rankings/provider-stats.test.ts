@@ -12,7 +12,7 @@ const models = [
   model("OpenAI", 200),
   model("Anthropic", null),
   model("Google", null),
-  model("Mistral", 50),
+  model("DeepSeek", 50),
 ];
 
 describe("useProviderStats", () => {
@@ -32,7 +32,7 @@ describe("useProviderStats", () => {
 
   it("replaces near-black brand colours with readable, distinct hues", () => {
     const blackBrand = (creator: string) => aaModel({ model_creators: { name: creator, color: "#000000" } });
-    const stats = useProviderStats([blackBrand("OpenAI"), blackBrand("Liquid AI")], t).value;
+    const stats = useProviderStats([blackBrand("OpenAI"), blackBrand("Z.ai")], t).value;
     expect(stats.map((s) => s.color)).not.toContain("#000000");
     expect(new Set(stats.map((s) => s.color)).size).toBe(2);
   });

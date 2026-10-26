@@ -44,6 +44,7 @@
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
   --color-bg-card: var(--bg-card);
+  --color-scrim: var(--scrim);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
@@ -53,21 +54,17 @@
   --color-hover: var(--hover);
   --color-selected: var(--selected);
   --color-accent: var(--accent);
-  --color-accent-light: var(--accent-light);
   --color-accent-contrast: var(--accent-contrast);
   --color-ring: var(--ring);
 
   /* Status */
   --color-destructive: var(--destructive);
   --color-success: var(--success);
-  --color-success-light: var(--success-light);
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
   --color-info: var(--info);
-  --color-info-light: var(--info-light);
 
-  /* Radii: one base value, the four steps the components use */
-  --radius-sm: calc(var(--radius) - 4px);
+  /* Radii: one base value, the three steps the components use */
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
@@ -110,6 +107,9 @@
   --bg-secondary: #f4f4f5;
   --bg-card: #ffffff;
   --bg-overlay: #ffffff;
+  /* The dimmed page behind a modal. Its own token because it is a shadow over the page, not a surface: at 50% it
+     separates the sheet from the content on the light palette. */
+  --scrim: color-mix(in srgb, #000000 50%, transparent);
 
   /* Text */
   --text-primary: #09090b;
@@ -120,7 +120,6 @@
      only ever shows up in data. */
   --border: #e4e4e7;
   --accent: #18181b;
-  --accent-light: color-mix(in srgb, var(--accent) 8%, transparent);
   --accent-contrast: #fafafa;
   --hover: color-mix(in srgb, var(--accent) 6%, transparent);
   --selected: color-mix(in srgb, var(--accent) 9%, transparent);
@@ -139,11 +138,9 @@
   /* Status */
   --destructive: #c81e1e;
   --success: #047857;
-  --success-light: color-mix(in srgb, var(--success) 8%, transparent);
   --warning: #ab4e08;
   --warning-light: color-mix(in srgb, var(--warning) 8%, transparent);
   --info: #0369a1;
-  --info-light: color-mix(in srgb, var(--info) 8%, transparent);
 
   /* Data viz: the categorical scale canvas charts read (see src/client/charts/theme.ts), then the shorter donut ramp. */
   --chart-1: #f54900;
@@ -172,6 +169,7 @@
   --bg-secondary: #27272a;
   --bg-card: #18181b;
   --bg-overlay: #18181b;
+  --scrim: color-mix(in srgb, #000000 70%, transparent);
 
   --text-primary: #fafafa;
   --text-secondary: #9f9fa9;
@@ -179,7 +177,6 @@
 
   --border: color-mix(in srgb, #fafafa 10%, transparent);
   --accent: #e4e4e7;
-  --accent-light: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-contrast: #18181b;
   --hover: color-mix(in srgb, var(--accent) 10%, transparent);
   --selected: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -187,11 +184,9 @@
 
   --destructive: #ff6467;
   --success: #34d399;
-  --success-light: color-mix(in srgb, var(--success) 14%, transparent);
   --warning: #fbbf24;
   --warning-light: color-mix(in srgb, var(--warning) 14%, transparent);
   --info: #38bdf8;
-  --info-light: color-mix(in srgb, var(--info) 14%, transparent);
 
   --chart-1: #38bdf8;
   --chart-2: #00bc7d;

@@ -2,7 +2,7 @@
 
 # ModelTide
 
-**AI model data dashboard** — rankings, releases, news, comparison
+**Lightweight AI model data aggregator** — deployable on Cloudflare
 
 [中文](./README_CN.md) · English
 

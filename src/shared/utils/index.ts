@@ -2,6 +2,7 @@ export {
   approxEq,
   formatIndex,
   formatPercent,
+  formatRatio,
   formatScore,
   formatShortNumber,
   formatSpeed,
@@ -10,7 +11,8 @@ export {
   ratioToPercent,
 } from "./number";
 export { formatDollar, formatPricePerMillion } from "./money";
-export { formatDate, formatRelativeTime } from "./time";
-export { benchmarkLabel, categoryLabel, formatBoolean, orNA, safeHref } from "./text-format";
+export { formatDate, formatDurationMs, formatRelativeTime } from "./time";
+export { benchmarkLabel, categoryLabel, formatBoolean, orNA } from "./text-format";
 export { dedupeBy, toStringOrNull, normalizeModelKey, errMsg, titleCase } from "./text";
+export { safeHref } from "./url";
 export { aggregateTaskShare } from "./task-share";

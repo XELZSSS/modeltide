@@ -1,7 +1,7 @@
 <script setup lang="ts" generic="T extends object">
 import { computed, type VNodeChild } from "vue";
 import { useTranslation } from "@/client/i18n";
-import type { TFunction } from "@/shared/i18n";
+import type { TFunction, TranslationKey } from "@/shared/i18n";
 import SearchableDataTable from "./data-table.vue";
 import type { DataTableColumn, RowAccessors } from "./table-columns.ts";
 
@@ -14,6 +14,8 @@ import type { DataTableColumn, RowAccessors } from "./table-columns.ts";
 const props = defineProps<
   RowAccessors<T> & {
     rows: T[];
+    /** Forwarded to the table's own `<caption>`; see `data-table.vue`. */
+    captionKey: TranslationKey;
     getSearchFields: (row: T) => (string | null | undefined)[];
     buildBodyColumns: (t: TFunction) => DataTableColumn<T>[];
     renderExpandedRow?: (row: T) => VNodeChild;
@@ -31,6 +33,7 @@ const columns = computed(() => props.buildBodyColumns(t));
   <SearchableDataTable
     :data="rows"
     :columns="columns"
+    :caption-key="captionKey"
     :get-row-id="getRowId"
     :get-row-name="getRowName"
     :get-search-fields="getSearchFields"

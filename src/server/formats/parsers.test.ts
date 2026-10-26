@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeEntities } from "./html-entities";
 import { stripHtml } from "./html-to-text";
-import { parseFeed as parseFeedResult } from "./rss-feed-parser";
+import { parseFeed as parseFeedResult, capItems } from "./rss-feed-parser";
 import { findNextData, findLongestData } from "./rsc-data";
 import { parseRscPayload, parseRscPayloads } from "./rsc-parser";
 import { findMarkerValue } from "./rsc-text";
@@ -9,23 +9,60 @@ import { getOpenLicenseId, licenseTagId } from "./licenses";
 import { sortByDateDesc, isoDate } from "./dates";
 import { numCoerce } from "./scalars";
 
-function readFeed(xml: string, url = "https://x.example/feed") {
-  const res = parseFeedResult(xml, url);
-  if (!res.ok) throw new Error(res.error);
-  return res.data;
-}
-
 function unwrap<T>(res: { ok: true; data: T } | { ok: false; error: string }): T {
   if (!res.ok) throw new Error(res.error);
   return res.data;
 }
 
+function readFeed(xml: string, url = "https://x.example/feed") {
+  return unwrap(parseFeedResult(xml, url));
+}
+
 const rss = (items: string) =>
   `<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>${items}</channel></rss>`;
 const rssItem = (inner: string) => `<item>${inner}</item>`;
+const rssFeed = (...inners: string[]) => rss(inners.map(rssItem).join(""));
 const atom = (entries: string) =>
   `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>T</title>${entries}</feed>`;
 const atomEntry = (inner: string) => `<entry>${inner}</entry>`;
+
+describe("capItems", () => {
+  const manyItems = (count: number) =>
+    Array.from({ length: count }, (_, i) => `<item><title>t${i}</title></item>`).join("");
+
+  it.each([
+    ["keeps the first `keep` items and reuses the document's own tail", rss(manyItems(200)), "</channel></rss>"],
+    // Namespaced tags, a comment between the closers and CRLF are shapes a literal tail list would miss, and an
+    // un-capped feed is the 19 ms of a 10 ms CPU budget this function exists to prevent.
+    [
+      "caps a namespaced container with a comment and CRLF tail",
+      `<rss:rss><rss:channel><title>T</title>${manyItems(200)}</rss:channel>\r\n<!--f--></rss:rss>`,
+      "\r\n<!--f--></rss:rss>",
+    ],
+  ])("%s", (_label, xml, tail) => {
+    const capped = capItems(xml, 120);
+    expect(capped.split("</item>")).toHaveLength(121);
+    expect(capped.endsWith(tail)).toBe(true);
+  });
+
+  it("does not count a closer carried inside a CDATA body", () => {
+    // The 50 closers inside the CDATA are HTML in a description, not items: counting them would put the cut inside the
+    // first item and leave the document malformed.
+    const body = `<item><description><![CDATA[${manyItems(50)}]]></description></item>`;
+    const capped = capItems(rss(body + manyItems(200)), 120);
+    expect(capped).toContain("<title>t118</title>");
+    expect(capped).not.toContain("<title>t119</title>");
+    expect(capped.endsWith("</channel></rss>")).toBe(true);
+  });
+
+  it.each([
+    ["a document with no tail after its last item", `<rss><channel><title>T</title>${manyItems(200)}`],
+    ["a feed carrying no more than `keep` items", rss(manyItems(5))],
+  ])("leaves %s untouched", (_label, xml) => {
+    expect(capItems(xml, 120)).toBe(xml);
+  });
+});
+
 const oversizedLine = (inner: string) => `1:{"pad":"${"x".repeat(2 * 1024 * 1024 + 16)}",${inner}}\n`;
 
 describe("decodeEntities", () => {
@@ -51,18 +88,26 @@ describe("stripHtml", () => {
 });
 
 describe("findNextData / findLongestData", () => {
-  it("finds the first array under a key in a nested tree", () => {
-    expect(findNextData({ leaderboard: { entries: [{ rank: 1 }] } }, "entries")).toEqual([{ rank: 1 }]);
+  const LOOKUPS: [string, () => unknown, unknown][] = [
+    [
+      "finds the first array under a key in a nested tree",
+      () => findNextData({ leaderboard: { entries: [{ rank: 1 }] } }, "entries"),
+      [{ rank: 1 }],
+    ],
+    [
+      "returns the longest array found under the key",
+      () => findLongestData({ a: { initialModels: [1] }, b: { initialModels: [1, 2, 3] } }, "initialModels"),
+      [1, 2, 3],
+    ],
+  ];
+
+  it.each(LOOKUPS)("%s", (_label, run, expected) => {
+    expect(run()).toEqual(expected);
   });
 
   it("returns null when the key is absent", () => {
     expect(findNextData({ other: [1] }, "entries")).toBeNull();
     expect(findLongestData({}, "initialModels")).toBeNull();
-  });
-
-  it("returns the longest array found under the key", () => {
-    const tree = { a: { initialModels: [1] }, b: { initialModels: [1, 2, 3] } };
-    expect(findLongestData(tree, "initialModels")).toEqual([1, 2, 3]);
   });
 });
 
@@ -83,11 +128,12 @@ describe("findMarkerValue", () => {
     "\ufeff",
   ];
 
-  it("treats every character trimStart skips as whitespace around the colon", () => {
-    for (const ws of WHITESPACE) {
-      expect(valueAt(`{"m"${ws}:[]}`, "m")).not.toBeNull();
-      expect(valueAt(`{"m":${ws}[]}`, "m")).not.toBeNull();
-    }
+  it.each(WHITESPACE)("treats %j as the whitespace trimStart skips around the colon", (ws) => {
+    expect(valueAt(`{"m"${ws}:[]}`, "m")).not.toBeNull();
+    expect(valueAt(`{"m":${ws}[]}`, "m")).not.toBeNull();
+  });
+
+  it("rejects a character trimStart does not skip and a key that only mentions the marker", () => {
     expect(valueAt('{"m"\u00b7:[]}', "m")).toBeNull();
     expect(valueAt('{"x":["m"]}', "m")).toBeNull();
   });
@@ -126,12 +172,12 @@ describe("parseRscPayload", () => {
 
   it("parses hex-prefixed chunk lines (Next.js flight ids are hex, e.g. c:)", () => {
     const body =
-      '0:{"$a":1}\nc:["$","$L5",null,{"models":[{"slug":"claude-opus-5"},{"slug":"gpt-5"}]}]\n1:{"ignore":true}\n';
+      '0:{"$a":1}\nc:["$","$L5",null,{"models":[{"slug":"claude-opus-5-5"},{"slug":"gpt-6-1-sol"}]}]\n1:{"ignore":true}\n';
     expect(
       unwrap(
         parseRscPayload<{ slug: string }>(body, "models", (tree) => findNextData<{ slug: string }>(tree, "models")),
       ),
-    ).toEqual([{ slug: "claude-opus-5" }, { slug: "gpt-5" }]);
+    ).toEqual([{ slug: "claude-opus-5-5" }, { slug: "gpt-6-1-sol" }]);
   });
 });
 
@@ -204,7 +250,7 @@ describe("parseFeed", () => {
 
   it("drops entries that expose no usable link", () => {
     const items = readFeed(
-      rss(rssItem(`<title>Only Title</title>`) + rssItem(`<title>Keep</title><link>https://y.example/keep</link>`)),
+      rssFeed(`<title>Only Title</title>`, `<title>Keep</title><link>https://y.example/keep</link>`),
     );
     expect(items).toHaveLength(1);
     expect(items[0]?.title).toBe("Keep");
@@ -217,33 +263,33 @@ describe("parseFeed", () => {
   });
 
   it("decodes XML entities in links once (processEntities is off)", () => {
-    const items = readFeed(rss(rssItem(`<title>A</title><link>https://y.example/a?b=1&amp;c=2&amp;amp;d=3</link>`)));
+    const items = readFeed(rssFeed(`<title>A</title><link>https://y.example/a?b=1&amp;c=2&amp;amp;d=3</link>`));
     expect(items[0]?.link).toBe("https://y.example/a?b=1&c=2&amp;d=3");
   });
 
   it("strips HTML and truncates abusive titles", () => {
     const longTitle = `A${"x".repeat(500)}`;
-    const items = readFeed(
-      rss(rssItem(`<title><![CDATA[<p>${longTitle}</p>]]></title><link>https://y.example/a</link>`)),
-    );
+    const items = readFeed(rssFeed(`<title><![CDATA[<p>${longTitle}</p>]]></title><link>https://y.example/a</link>`));
     expect(items[0]?.title.length).toBeLessThanOrEqual(300);
   });
 
   it("strips tags decoded from entities instead of rendering them", () => {
-    const xml = rss(
-      rssItem(`<title>&lt;script&gt;alert(1)&lt;/script&gt;Real News</title><link>https://y.example/a</link>`),
+    const xml = rssFeed(
+      `<title>&lt;script&gt;alert(1)&lt;/script&gt;Real News</title><link>https://y.example/a</link>`,
     );
     expect(readFeed(xml)[0]?.title).toBe("Real News");
   });
 });
 
 describe("primitives", () => {
-  it("numCoerce accepts numeric strings and rejects non-numeric input", () => {
-    expect(numCoerce("85.5")).toBe(85.5);
-    expect(numCoerce(85.5)).toBe(85.5);
-    expect(numCoerce("")).toBeNull();
-    expect(numCoerce(true)).toBeNull();
-    expect(numCoerce(Number.NaN)).toBeNull();
+  it.each<[string, unknown, unknown]>([
+    ["a numeric string", "85.5", 85.5],
+    ["a number", 85.5, 85.5],
+    ["an empty string", "", null],
+    ["a boolean", true, null],
+    ["NaN", Number.NaN, null],
+  ])("numCoerce: %s", (_label, input, expected) => {
+    expect(numCoerce(input)).toBe(expected);
   });
 
   it("isoDate rejects loose date shapes", () => {

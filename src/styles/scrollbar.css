@@ -1,59 +1,21 @@
 /*
- * One global rule themes every scrollport — the page's `main`, any `overflow-*-auto` block — and one utility opts a
- * scrollport out of the theme.
+ * Scrollbars are hidden at every width, on every scrollport the app owns: `html` (the browser-level one), `main` (the
+ * shell's scroll box) and the `overflow-*-auto` blocks (sheets, the search panel, a wide table).
  *
- * Widths follow the input device: touch (< 768px) gets a 4px bar, the only affordance that a horizontal strip is
- * scrollable; pointer (>= 768px) gets none, because the wheel/trackpad is the affordance and the strip only cost
- * layout.
+ * Pointer widths already hid them — the wheel or trackpad is the affordance, and the strip only cost layout. Touch
+ * widths hid them too now: on a phone the themed 4px strip was a second indicator that ate content width (iOS paints
+ * its own overlay indicator while a finger scrolls, which no stylesheet can style either way; Android Chrome's is the
+ * one this rule removes).
+ *
+ * Hiding the bar does not disable scrolling — `overflow` is untouched — and nothing reserves a gutter for a bar that is
+ * never painted.
  */
 
 html,
 main,
-.overflow-y-auto:not(.no-scrollbar),
-.overflow-x-auto:not(.no-scrollbar) {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--text-secondary) 20%, transparent) transparent;
-
-  &::-webkit-scrollbar-track,
-  &::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background-color: color-mix(in srgb, var(--text-secondary) 20%, transparent);
-    border: 2px solid transparent;
-    border-radius: 0;
-    background-clip: content-box;
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background-color: color-mix(in srgb, var(--text-secondary) 40%, transparent);
-  }
-
-  @media (width < 768px) {
-    &::-webkit-scrollbar {
-      width: 4px;
-      height: 4px;
-    }
-  }
-
-  @media (width >= 768px) {
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
-}
-
-/* Hides the bar on any scrollport, at any width: used where the caller draws its own affordance (the search panel, a
-   ranking strip that already shows an overflow edge). */
-@utility no-scrollbar {
+.overflow-auto,
+.overflow-x-auto,
+.overflow-y-auto {
   scrollbar-width: none;
 
   &::-webkit-scrollbar {

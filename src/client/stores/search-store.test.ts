@@ -11,9 +11,9 @@ describe("useSearchStore", () => {
 
   it("remembers a term per route", () => {
     const store = useSearchStore();
-    store.setTerm("/models", "qwen");
-    store.setTerm("/news", "gpu");
-    expect(store.terms).toEqual({ "/models": "qwen", "/news": "gpu" });
+    store.setTerm("/models", "claude opus 5.5");
+    store.setTerm("/news", "deepseek v4");
+    expect(store.terms).toEqual({ "/models": "claude opus 5.5", "/news": "deepseek v4" });
   });
 
   it("caps the record so it cannot grow without bound", () => {

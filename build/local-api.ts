@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin, ViteDevServer } from "vite";
 import { API_PREFIX, FUNCTIONS_ROUTE } from "./constants.ts";
+import { errMsg } from "../src/shared/utils/text.ts";
 
 function nodeHeadersToWeb(headers: IncomingMessage["headers"]): Headers {
   const out = new Headers();
@@ -54,7 +55,7 @@ export function localApi(): Plugin {
             // hid it from everyone but the refresh runner's own log line.
             waitUntil: (work) =>
               void work.catch((err: unknown) => {
-                console.warn(`[dev-api] detached work failed: ${err instanceof Error ? err.message : String(err)}`);
+                console.warn(`[dev-api] detached work failed: ${errMsg(err)}`);
               }),
           });
           await writeWebResponse(response, res);

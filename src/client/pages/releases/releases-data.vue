@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, h, watch, withDirectives, type VNodeChild } from "vue";
+import { computed, h, withDirectives, type VNodeChild } from "vue";
 import { vTooltip } from "@/client/directives/tooltip";
 import { ExternalLink } from "@lucide/vue";
 import { col, rightCol, RightAlignedText, type DataTableColumn } from "@/client/components/table/table-columns.ts";
 import SearchableDataTable from "@/client/components/table/data-table.vue";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import { useTranslation } from "@/client/i18n";
-import { useSuspenseClosedReleasesState } from "@/client/api/hooks";
-import { assertPayloadShape } from "@/client/api/payload-normalize";
+import { useSuspenseClosedReleasesState } from "@/client/api/view-models";
+import { useMalformedGuard } from "@/client/hooks/use-malformed-guard";
+import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
+import { filterByTerm } from "@/client/search/match";
+import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 import { formatDate, safeHref } from "@/shared/utils";
 import {
   buildClosedReleaseRows,
@@ -20,15 +23,16 @@ const { t: translate, lang } = useTranslation();
 
 const state = await useSuspenseClosedReleasesState();
 
-// A degraded/changelog-fallback list already arrives as `partial`; a malformed payload is a different failure and
-// must reach the error boundary instead of rendering as an empty table.
-watch(
-  () => state.value.malformed,
-  (malformed) => assertPayloadShape(malformed, "closedReleases"),
-  { immediate: true },
-);
+// A malformed payload is a failure, not an empty table; see `use-malformed-guard.ts`.
+useMalformedGuard(() => state.value.malformed, "closedReleases");
 
 const rows = computed(() => buildClosedReleaseRows(state.value.items));
+
+const { term } = useRouteSearchTerm();
+
+// What the table below actually shows: `data-table` filters by the same route term, so counting the whole feed read as a
+// lie the moment a search narrowed the list ("1,204 events" over three rows).
+const visibleRows = computed(() => filterByTerm(rows.value, term.value, getReleaseSearchFields));
 
 const dateLabels = computed(() => {
   const labels = new Map<string, string>();
@@ -48,7 +52,7 @@ const columns = computed<DataTableColumn<ReleaseRow>[]>(() => [
       ]),
     ]),
   ),
-  rightCol("provider", translate("provider"), (row) => h(RightAlignedText, { class: "text-sm" }, () => row.provider), {
+  rightCol("provider", translate("provider"), (row) => h(RightAlignedText, { class: "ui-body" }, () => row.provider), {
     width: "24%",
     hiddenMd: true,
   }),
@@ -62,7 +66,7 @@ const columns = computed<DataTableColumn<ReleaseRow>[]>(() => [
 
 function renderExpandedRow(row: ReleaseRow): VNodeChild {
   const href = safeHref(row.link);
-  if (!href) return null;
+  if (!href) return h("p", { class: "ui-caption" }, translate("notAvailable"));
   return h("div", { class: "flex flex-col gap-3" }, [
     h(
       "a",
@@ -70,8 +74,7 @@ function renderExpandedRow(row: ReleaseRow): VNodeChild {
         href,
         target: "_blank",
         rel: "noopener noreferrer",
-        class:
-          "group inline-flex items-center gap-1.5 text-sm text-text-primary w-fit underline-offset-4 ui-motion hoverable:hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        class: `group inline-flex items-center gap-1.5 ui-body w-fit underline-offset-4 ui-motion hoverable:hover:underline ${FOCUS_RING}`,
       },
       [
         translate("aaModelPage"),
@@ -89,11 +92,12 @@ const getRowName = (row: ReleaseRow) => row.name;
 
 <template>
   <div class="flex flex-col gap-4">
-    <span class="ui-meta tabular-nums">{{ translate("events", { count: rows.length }) }}</span>
+    <span class="ui-meta tabular-nums">{{ translate("events", { count: visibleRows.length }) }}</span>
     <PartialNotice v-if="state.partial" />
     <SearchableDataTable
       :data="rows"
       :columns="columns"
+      :caption-key="'navReleases'"
       :get-row-id="getReleaseRowId"
       :get-row-name="getRowName"
       :get-search-fields="getReleaseSearchFields"

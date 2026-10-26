@@ -2,7 +2,7 @@
 
 # ModelTide
 
-**AI 模型数据看板** — 排行、发布、资讯、对比
+**轻量化 AI 聚合模型数据看板** — 支持 Cloudflare 部署
 
 中文 · [English](./README.md)
 

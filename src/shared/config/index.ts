@@ -1,6 +1,12 @@
-export { queryKeys, apiPaths } from "./api";
+export {
+  apiPaths,
+  MAX_ID_CHARS,
+  MAX_MODEL_ID_CHARS,
+  MAX_NAME_CHARS,
+  OPEN_SOURCE_MODELS_DEFAULTS,
+  queryKeys,
+} from "./api";
 export { STORAGE_KEYS, SETTINGS_STORAGE_VERSION } from "./storage";
-export { MAX_ID_CHARS, MAX_MODEL_ID_CHARS, MAX_NAME_CHARS, OPEN_SOURCE_MODELS_DEFAULTS } from "./api";
 export { MODALITY_KEYS, type ModalityKey } from "./ui";
 export {
   ONE_MINUTE,
@@ -17,11 +23,12 @@ export {
   ttlFor,
 } from "./time";
 export { NEWS_CATEGORIES } from "@/shared/types/news";
+export { BENCHMARK_KEYS, type BenchmarkKey } from "@/shared/types/benchmark";
 export {
-  BENCHMARK_KEYS,
-  type BenchmarkKey,
   ABSOLUTE_SCORE_BENCHMARKS,
+  BENCHMARK_GROUPS,
+  BENCHMARK_GROUP_OF,
   benchmarkScaleOf,
-  type BenchmarkScale,
+  type BenchmarkGroupId,
 } from "./benchmarks";
 export { THEME_COLORS } from "./ui";

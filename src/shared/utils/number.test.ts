@@ -26,26 +26,28 @@ describe("isFiniteNumber", () => {
 });
 
 describe("ratioToPercent", () => {
-  it("scales a 0-1 ratio onto a percent scale", () => {
-    expect(ratioToPercent(0)).toBe(0);
-    expect(ratioToPercent(0.5)).toBe(50);
-    expect(ratioToPercent(1)).toBe(100);
-  });
-
-  it("drops values outside 0-1 instead of guessing a scale", () => {
-    expect(ratioToPercent(1.5)).toBeNull();
-    expect(ratioToPercent(42)).toBeNull();
-    expect(ratioToPercent(-0.5)).toBeNull();
-    expect(ratioToPercent(null)).toBeNull();
-    expect(ratioToPercent(Number.NaN)).toBeNull();
+  // Out-of-range ratios are dropped rather than rescaled by a guess.
+  it.each([
+    [0, 0],
+    [0.5, 50],
+    [1, 100],
+    [1.5, null],
+    [42, null],
+    [-0.5, null],
+    [null, null],
+    [Number.NaN, null],
+  ])("scales %s onto %s", (ratio, expected) => {
+    expect(ratioToPercent(ratio)).toBe(expected);
   });
 });
 
 describe("approxEq", () => {
-  it("tolerates floating point noise but not real differences", () => {
-    expect(approxEq(0.1 + 0.2, 0.3)).toBe(true);
-    expect(approxEq(1, 2)).toBe(false);
-    expect(approxEq(0, 1e-12)).toBe(true);
+  it.each([
+    [0.1 + 0.2, 0.3, true],
+    [1, 2, false],
+    [0, 1e-12, true],
+  ])("compares %s with %s as %s", (a, b, expected) => {
+    expect(approxEq(a, b)).toBe(expected);
   });
 });
 
@@ -57,25 +59,22 @@ describe("formatShortNumber", () => {
     [1200, "1.20K"],
     [1_500_000, "1.50M"],
     [-1200, "-1.20K"],
+    // Missing or non-finite input falls back to the dash.
+    [null, "—"],
+    [Number.NaN, "—"],
   ])("%s -> %s", (value, expected) => {
     expect(formatShortNumber(value)).toBe(expected);
-  });
-
-  it("falls back for a missing or non-finite value", () => {
-    expect(formatShortNumber(null)).toBe("—");
-    expect(formatShortNumber(Number.NaN)).toBe("—");
   });
 });
 
 describe("formatTokens", () => {
-  it("uses one decimal and drops a trailing .0", () => {
-    expect(formatTokens(1500)).toBe("1.5K");
-    expect(formatTokens(2000)).toBe("2K");
-    expect(formatTokens(1_500_000)).toBe("1.5M");
-  });
-
-  it("leaves small values as plain integers", () => {
-    expect(formatTokens(500)).toBe("500");
+  it.each([
+    [1500, "1.5K"],
+    [2000, "2K"],
+    [1_500_000, "1.5M"],
+    [500, "500"],
+  ])("uses one decimal, dropping a trailing .0: %s -> %s", (tokens, expected) => {
+    expect(formatTokens(tokens)).toBe(expected);
   });
 
   it("falls back through the translator", () => {
@@ -84,10 +83,12 @@ describe("formatTokens", () => {
 });
 
 describe("formatTrend", () => {
-  it("prefixes a rise with a plus and never for a fall", () => {
-    expect(formatTrend(2.5)).toBe("+2.5%");
-    expect(formatTrend(-1)).toBe("-1.0%");
-    expect(formatTrend(0)).toBe("0.0%");
+  it.each([
+    [2.5, "+2.5%"],
+    [-1, "-1.0%"],
+    [0, "0.0%"],
+  ])("formats the trend %s as %s", (change, expected) => {
+    expect(formatTrend(change)).toBe(expected);
   });
 
   it("falls back for a missing value", () => {
@@ -96,12 +97,14 @@ describe("formatTrend", () => {
 });
 
 describe("formatIndex / formatSpeed", () => {
-  it("groups thousands with at most one decimal", () => {
-    expect(formatIndex(1234.56)).toBe("1,234.6");
+  it.each([
+    [1234.56, "1,234.6"],
+    [Number.NaN, "—"],
+  ])("groups thousands with at most one decimal: %s -> %s", (value, expected) => {
+    expect(formatIndex(value)).toBe(expected);
   });
 
-  it("falls back for a non-finite input", () => {
-    expect(formatIndex(Number.NaN)).toBe("—");
+  it("falls back for a non-finite speed", () => {
     expect(formatSpeed(null, t)).toBe("notAvailable");
   });
 });

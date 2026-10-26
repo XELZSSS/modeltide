@@ -11,9 +11,9 @@ import { keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
 import { LicenseDropTally } from "./license-tally";
 import type { HFModel } from "@/server/formats/wire-types";
 
-import type { SourcePayload } from "@/shared/types";
 import type { OpenSourceModelsQuery } from "@/shared/query-schemas";
 import { defineParamSource, requireArrayBody, requireRows } from "@/server/pipeline";
+import { served, type ServedPayload } from "@/server/served-payload";
 
 const HF_API = upstreamConfig.huggingface;
 const HF_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,96}(?:\/[A-Za-z0-9][A-Za-z0-9._-]{0,96})?$/;
@@ -28,7 +28,7 @@ const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", 
 const HF_PAGE_LIMIT = 1000;
 
 // A healthy list page answers in ~1.3 s, so the 12 s interactive default would let two attempts eat most of
-// INFLIGHT_HANG_GUARD_MS (30 s) and drop the whole refresh instead of degrading it.
+// INFLIGHT_HANG_GUARD_MS (28 s) and drop the whole refresh instead of degrading it.
 const HF_PAGE_TIMEOUT_MS = 8_000;
 
 /**
@@ -102,24 +102,17 @@ function parseHFItems(items: HFModel[], ctx: AppContext, rankByUsage: boolean): 
   return bucket;
 }
 
-/**
- * How long an open-source payload may stay cached at the origin. `src/server/registry.ts` reads this same constant for
- * the route's HTTP cache headers, so the edge window cannot drift from the origin window.
- */
-export const OPEN_SOURCE_MODELS_TTL_MS = SLOW_TTL_MS;
-
-/** The ranking list and the home dashboard ask for the same page at the same depth: one cache entry, one upstream call. */
-
 /** The page together with the sort it was fetched for, because `parse` receives no params and the gates depend on it. */
 interface HFPage {
   rows: HFModel[];
   sort: string;
 }
 
-const listSource = defineParamSource<OpenSourceModelsQuery, HFPage, OpenSourceModelEntry[]>(
+/** The ranking list and the home dashboard ask for the same page at the same depth: one cache entry, one upstream call. */
+export const getHomeOpenSourceModels = defineParamSource<OpenSourceModelsQuery, HFPage, OpenSourceModelEntry[]>(
   (params) => cacheKeys.openSourceModels(params.sort),
   {
-    ttl: OPEN_SOURCE_MODELS_TTL_MS,
+    ttl: SLOW_TTL_MS,
     label: "HuggingFace",
     // Shared with the home dashboard, but the list route returns this payload, so the entry keeps its body.
     served: true,
@@ -128,16 +121,11 @@ const listSource = defineParamSource<OpenSourceModelsQuery, HFPage, OpenSourceMo
   },
 );
 
-export const getHomeOpenSourceModels = (
-  ctx: AppContext,
-  p: OpenSourceModelsQuery,
-): Promise<SourcePayload<OpenSourceModelEntry[]>> => listSource(ctx, p);
-
 async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
   const encoded = encodeModelIdPath(id);
   let raw: HFModel;
   try {
-    raw = await ctx.http.getJson<HFModel>(`${HF_API}/${encoded}`);
+    raw = await ctx.http.json<HFModel>(`${HF_API}/${encoded}`);
   } catch (err) {
     // A missing repo answers 404, a private or gated one 401/403: from the public API both mean "this id is not
     // readable". A 4xx never retries, so treating only 404 as a miss pinned the detail page on the error boundary
@@ -152,31 +140,36 @@ async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSource
 
 const NEGATIVE_STALE_CAP_MS = 5 * ONE_MINUTE;
 
-// An id that cannot exist on Hugging Face is a miss, not a bad request: the API would answer 400, and a 4xx never
-// retries, so a junk URL pinned the detail page on the error boundary forever (HF itself answers 404). Cache the miss
-// as briefly as the real 404 path.
+/**
+ * An id that cannot exist on Hugging Face is a miss, not a bad request: the API would answer 400, and a 4xx never
+ * retries, so a junk URL pinned the detail page on the error boundary forever (HF itself answers 404). The miss is
+ * cached as briefly as the real 404 path — and the stale cap reaches *only* the not-found copy: applying it to the
+ * source as a whole also expired the entries that had found a model, five minutes after the detail page last loaded.
+ */
 const modelByIdSource = defineParamSource<string, OpenSourceModelEntry | null, OpenSourceModelEntry | null>(
   (id) => cacheKeys.openSourceModel(id),
   {
-    ttl: OPEN_SOURCE_MODELS_TTL_MS,
+    ttl: SLOW_TTL_MS,
     label: "HuggingFace model",
     served: true,
-    scope: { staleCapMs: NEGATIVE_STALE_CAP_MS },
+    scope: { staleCapMs: (value) => (value === null ? NEGATIVE_STALE_CAP_MS : undefined) },
     fetch: (ctx, id) => (isValidHFModelId(id) ? fetchHFModelById(ctx, id) : Promise.resolve(null)),
     parse: (raw) => raw,
     partialWhen: ({ raw }) => (raw == null ? { partial: false, ttl: ONE_MINUTE } : { partial: false }),
   },
 );
 
+/**
+ * The list route and the by-id lookup answer one domain, so the by-id result is composed into the list envelope here.
+ * The composed payload is a different shape from the one the cache stored, so it carries no body: the router encodes
+ * this envelope itself, and only the timestamp — which names the ETag — travels from the lookup.
+ */
 export async function getOpenSourceModels(
   ctx: AppContext,
   p: OpenSourceModelsQuery,
-): Promise<SourcePayload<OpenSourceModelEntry[]>> {
-  if (!p.id) return listSource(ctx, p);
+): Promise<ServedPayload<OpenSourceModelEntry[]>> {
+  if (!p.id) return getHomeOpenSourceModels(ctx, p);
   const single = await modelByIdSource(ctx, p.id.trim());
-  return {
-    data: single.data == null ? [] : [single.data],
-    fetchedAt: single.fetchedAt,
-    partial: single.partial,
-  };
+  const rows = single.payload.data == null ? [] : [single.payload.data];
+  return served({ data: rows, partial: single.payload.partial }, { producedAt: single.producedAt });
 }

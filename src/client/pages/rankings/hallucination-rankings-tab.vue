@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useHallucinationRankings, useSuspenseArtificialRankingsState } from "@/client/api/hooks";
+import { useHallucinationRankings, useSuspenseArtificialRankingsState } from "@/client/api/view-models";
 import TabStateShell from "@/client/components/navigation/tab-state-shell.vue";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";

@@ -7,6 +7,7 @@ import { useDevice } from "@/client/device";
 import { filterByTerm, foldSearchStr } from "@/client/search/match";
 import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
 import type { DataTableColumn, RowAccessors } from "./table-columns.ts";
+import type { TranslationKey } from "@/shared/i18n";
 import { DEFAULT_PAGE_SIZE, MOBILE_PAGE_SIZE, usePagedData } from "./paging";
 import { rowKeyOf } from "./use-row-list";
 import TableBody from "./desktop.vue";
@@ -23,6 +24,11 @@ const props = defineProps<
   RowAccessors<T> & {
     data: T[];
     columns: DataTableColumn<T>[];
+    /**
+     * The table's accessible name: every rankings table is a landmark of its own, so an unnamed one is announced bare.
+     * A key rather than a string keeps the name in the dictionary the rest of the view reads.
+     */
+    captionKey: TranslationKey;
     getSearchFields: (row: T) => (string | null | undefined)[];
     renderExpandedRow?: (row: T) => VNodeChild;
   }
@@ -91,14 +97,17 @@ function handlePageChange(next: number): void {
   <div class="flex min-w-0 flex-col gap-4">
     <EmptyState v-if="dedupedData.length === 0" :message="emptyMessage" />
     <template v-else>
-      <div class="flex min-w-0 flex-col gap-4">
-        <MobileTableBody v-if="isMobile" v-bind="bodyBindings" @toggle-expand="setExpandedId" />
-        <div v-else class="ui-card overflow-x-auto">
-          <table class="w-full table-fixed text-sm">
-            <TableHeader :columns="columns" :is-expandable="isExpandable" />
-            <TableBody v-bind="bodyBindings" @toggle-expand="setExpandedId" />
-          </table>
-        </div>
+      <MobileTableBody v-if="isMobile" v-bind="bodyBindings" @toggle-expand="setExpandedId" />
+      <div v-else class="ui-card overflow-x-auto">
+        <table class="w-full table-fixed text-sm">
+          <caption class="sr-only">
+            {{
+              t(captionKey)
+            }}
+          </caption>
+          <TableHeader :columns="columns" :is-expandable="isExpandable" />
+          <TableBody v-bind="bodyBindings" @toggle-expand="setExpandedId" />
+        </table>
       </div>
       <Pagination :page="page" :total-pages="totalPages" @change="handlePageChange" />
     </template>

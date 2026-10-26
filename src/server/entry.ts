@@ -12,10 +12,6 @@ function normalizePathname(pathname: string): string {
   return trimmed === "" ? "/" : trimmed;
 }
 
-function resolveRoute(pathname: string): RouteEntry | undefined {
-  return ROUTES.get(pathname);
-}
-
 function methodResponse(method: string): Response | null {
   return method === "GET" || method === "HEAD" ? null : methodNotAllowedResponse();
 }
@@ -34,7 +30,7 @@ interface PagesFunctionContext {
 export async function onRequest(context: PagesFunctionContext): Promise<Response> {
   const { request, env } = context;
   const url = new URL(request.url);
-  const route = resolveRoute(normalizePathname(url.pathname));
+  const route = ROUTES.get(normalizePathname(url.pathname));
   if (!route) return notFoundForMethod(request.method);
   const early = methodResponse(request.method);
   if (early) return early;

@@ -8,7 +8,7 @@ export function decodeEntities(s: unknown): string {
   return s.replace(ENTITY_RE, (m, hex?: string, dec?: string, name?: string) => {
     if (hex) return safeFromCodePoint(parseInt(hex, 16));
     if (dec) return safeFromCodePoint(parseInt(dec, 10));
-    if (name && Object.hasOwn(NAMED_ENTITIES, name)) return NAMED_ENTITIES[name] ?? m;
+    if (name && Object.hasOwn(NAMED_ENTITIES, name)) return NAMED_ENTITIES[name]!;
     return m;
   });
 }

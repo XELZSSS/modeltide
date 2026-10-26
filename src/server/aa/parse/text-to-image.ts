@@ -1,43 +1,40 @@
-import { isRecord, numCoerce, numCoerceNonNegative } from "@/server/formats/scalars";
-import { mapRows } from "@/server/formats/parse-rows";
-import { toStringOrNull } from "@/shared/utils";
+import { isRecord, numCoerce, numCoerceNonNegative, textOrNull } from "@/server/formats/scalars";
+import { findLongestData } from "@/server/formats/rsc-data";
+import { parseRscRows } from "@/server/formats/rsc-rows";
+import type { ParseResult } from "@/server/formats/parse-result";
 import type { TextToImageModel } from "@/shared/types";
 import type { RawEntry } from "@/server/formats/wire-types";
-import { findLongestData } from "@/server/formats/rsc-data";
-import { parseRscPayload } from "@/server/formats/rsc-parser";
-import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
 
+/**
+ * `RawEntry`'s fields are all `unknown`, so reading one out of the wire record needs no check of its own: every field
+ * is narrowed by `textOrNull` / `numCoerce` on the way in. The cast is the only place the two shapes meet.
+ */
 export function parseTextToImageRows(body: unknown): ParseResult<TextToImageModel[]> {
-  if (typeof body !== "string" || !body) return parseFail("Text-to-image returned an empty body");
-  const scanned = parseRscPayload<Record<string, unknown>>(
-    body,
-    "textToImage",
-    // `findNextData` walks the same tree with the same predicate, so the `??` it sat behind could only ever run on a
-    // failure path where it also returned null — one extra full traversal of the page on every failed parse.
-    (tree) => findLongestData(tree, "textToImage"),
-  );
-  if (!scanned.ok) return parseFail(`Text-to-image parse failed: ${scanned.error}`);
-  const { rows, dropped } = mapRows(scanned.data, mapEntry);
-  return parseOk(rows, dropped > 0 ? [`Dropped ${dropped} text-to-image rows without a usable identity or elo`] : []);
+  return parseRscRows<TextToImageModel>(body, {
+    label: "Text-to-image",
+    marker: "textToImage",
+    find: findLongestData,
+    map: (row) => mapEntry(row as RawEntry),
+    dropped: (count) => `Dropped ${count} text-to-image rows without a usable identity or elo`,
+  });
 }
 
-export function mapEntry(raw: unknown): TextToImageModel | null {
-  if (!isRecord(raw)) return null;
-  const entry = raw as RawEntry;
-  const id = toStringOrNull(entry.id);
-  const slug = toStringOrNull(entry.slug);
-  const name = toStringOrNull(entry.name);
+/** `mapRows` already rejected every non-object, so this receives the record it hands over — no re-check here. */
+export function mapEntry(entry: RawEntry): TextToImageModel | null {
+  const id = textOrNull(entry.id);
+  const slug = textOrNull(entry.slug);
+  const name = textOrNull(entry.name);
   const elo = numCoerce(entry.elo);
-  if (id == null || slug == null || name == null || elo == null || !Number.isFinite(elo)) return null;
+  if (id == null || slug == null || name == null || elo == null) return null;
 
   return {
     id,
     slug,
-    name: name.trim(),
+    name,
     elo,
     eloLower: numCoerce(entry.lower95ci),
     eloUpper: numCoerce(entry.upper95ci),
     pricePer1kImages: numCoerceNonNegative(entry.price),
-    creatorName: isRecord(entry.creator) ? toStringOrNull(entry.creator.name) : null,
+    creatorName: isRecord(entry.creator) ? textOrNull(entry.creator.name) : null,
   };
 }

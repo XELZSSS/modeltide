@@ -14,13 +14,13 @@ import OpenRouterModelDetail from "@/client/pages/model/openrouter-detail.vue";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { cn } from "@/client/utils/cn";
 import { formatShortNumber, formatTrend } from "@/shared/utils";
-import { useRankExtras } from "@/client/hooks/use-rank-extras";
+import { useRankedColumns } from "@/client/hooks/use-rank-extras";
 import type { TFunction } from "@/shared/i18n";
 import type { OpenRouterRankEntry } from "@/shared/types";
 
 function buildOpenRouterBodyColumns(
   t: TFunction,
-  extras?: NameCellExtras<OpenRouterRankEntry>,
+  extras: NameCellExtras<OpenRouterRankEntry>,
 ): DataTableColumn<OpenRouterRankEntry>[] {
   return [
     modelNameCol(
@@ -62,15 +62,13 @@ const props = defineProps<{ rows: OpenRouterRankEntry[] }>();
 
 // The usage ranking arrives ordered by the metric the tab sorts on, so a row's position in it is its rank; the name opens
 // the OpenRouter detail page, which is also where the expanded row's own numbers come from.
-const rowExtras = useRankExtras(() => props.rows, getModelRowId, "or");
-
-const buildColumns = (t: TFunction): DataTableColumn<OpenRouterRankEntry>[] =>
-  buildOpenRouterBodyColumns(t, rowExtras.value);
+const buildColumns = useRankedColumns(() => props.rows, getModelRowId, "or", buildOpenRouterBodyColumns);
 </script>
 
 <template>
   <RankedTableView
     :rows="props.rows"
+    :caption-key="'openRouterRankings'"
     :get-row-id="getModelRowId"
     :get-row-name="getModelRowName"
     :get-search-fields="SEARCH_FIELDS.or"

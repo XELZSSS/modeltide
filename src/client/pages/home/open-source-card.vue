@@ -130,7 +130,14 @@ const caption = computed(() =>
         </div>
         <div class="flex min-w-0 flex-col">
           <p class="mb-2 ui-caption font-medium">{{ t("downloads") }}</p>
-          <EmptyState v-if="trending.length === 0" variant="plain" compact :message="t('notAvailable')" />
+          <!-- Five 40px rows when filled: the same box here, so the column does not collapse and shift the card. -->
+          <EmptyState
+            v-if="trending.length === 0"
+            variant="plain"
+            compact
+            class="min-h-[200px]"
+            :message="t('notAvailable')"
+          />
           <RankedListRows v-else :rows="trending" />
         </div>
       </div>

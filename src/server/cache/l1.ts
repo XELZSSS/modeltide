@@ -12,6 +12,8 @@ export interface MemoryEntry<T> {
   d: T;
   e: number;
   t: number;
+  /** When the payload was produced, in epoch ms: the ETag's basis, kept here because the payload no longer carries it. */
+  f: number;
   /** The serialized response body, kept only for sources a route actually returns. */
   s?: string;
 }
@@ -24,6 +26,12 @@ export class MemoryL1 {
   get<T>(vk: string): MemoryEntry<T> | undefined {
     const item = this.map.get(vk);
     if (!item) return undefined;
+    // An entry past every stale budget can never be served again (`pickFreshestStale` drops it), so it must not be
+    // promoted to the MRU end: that promotion kept a dead entry resident while eviction dropped one that was live.
+    if (Date.now() - item.entry.e > maxStaleMs(item.entry.t)) {
+      this.delete(vk);
+      return undefined;
+    }
     this.map.delete(vk);
     this.map.set(vk, item);
     return item.entry as MemoryEntry<T>;
@@ -36,7 +44,15 @@ export class MemoryL1 {
     this.map.delete(vk);
   }
 
-  set(vk: string, data: unknown, ttl: number, serializedBytes: number, effectiveTtl: number, body?: string): boolean {
+  set(
+    vk: string,
+    data: unknown,
+    ttl: number,
+    serializedBytes: number,
+    effectiveTtl: number,
+    producedAt: number,
+    body?: string,
+  ): boolean {
     const bytes = serializedBytes * (body === undefined ? L1_OBJECT_BYTES_FACTOR : L1_RESIDENT_BYTES_FACTOR);
     // Reject before evicting: an oversized replacement must not cost the caller the copy that is already resident.
     if (bytes > MEMORY_CACHE_MAX_BYTES) return false;
@@ -49,7 +65,7 @@ export class MemoryL1 {
       if (oldest.done) break;
       this.delete(oldest.value);
     }
-    this.map.set(vk, { entry: { d: data, e: Date.now() + ttl, t: effectiveTtl, s: body }, bytes });
+    this.map.set(vk, { entry: { d: data, e: Date.now() + ttl, t: effectiveTtl, f: producedAt, s: body }, bytes });
     this.bytes += bytes;
     return true;
   }

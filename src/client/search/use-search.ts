@@ -2,9 +2,10 @@ import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue"
 import {
   useAllOpenSourceModels,
   useArtificialRankings,
+  useDecisionIndex,
   useHallucinationRankings,
   useOpenRouterRankings,
-} from "@/client/api/hooks";
+} from "@/client/api/view-models";
 import type { SearchResult } from "@/client/search/types";
 import { SEARCH_FIELDS } from "@/client/search/search-fields";
 import { foldSearchStr } from "@/client/search/match";
@@ -17,6 +18,7 @@ interface SearchState {
   results: ComputedRef<SearchResult[]>;
   isPending: ComputedRef<boolean>;
   isError: ComputedRef<boolean>;
+  /** The first source that failed, for naming the failure rather than reporting one shared one. */
   error: ComputedRef<Error | null>;
   partial: ComputedRef<boolean>;
 }
@@ -33,18 +35,13 @@ export function useSearchAllRankings(
   const artificialQ = useArtificialRankings(enabled);
   const openSourceQ = useAllOpenSourceModels(enabled);
   const orQ = useOpenRouterRankings(enabled);
+  const decisionQ = useDecisionIndex(enabled);
 
   const artificialData = computed(() => artificialQ.state.value.items);
   const openSourceRankings = computed(() => openSourceQ.state.value.items);
   const openRouter = computed(() => orQ.state.value);
+  const decisionIndex = computed(() => decisionQ.state.value.items);
   const hallucinationRankings = useHallucinationRankings(artificialData, enabled);
-
-  const error = computed(
-    () =>
-      [artificialQ.state.value.error, openSourceQ.state.value.error, openRouter.value.error].find(
-        (e): e is Error => e != null,
-      ) ?? null,
-  );
 
   const sources = {
     aa: computed<SourceConfig>(() =>
@@ -92,6 +89,17 @@ export function useSearchAllRankings(
         link: detailLink("hallucinationRankings", modelId(e)),
       })),
     ),
+    decision: computed<SourceConfig>(() =>
+      defineSource(decisionIndex.value, SEARCH_FIELDS.decision, (c) => ({
+        id: c.id,
+        name: c.name,
+        source: "decisionRankings",
+        score: c.index,
+        scoreLabel: "decisionIndex",
+        provider: c.creator || null,
+        link: detailLink("decisionRankings", c.id),
+      })),
+    ),
   };
 
   const results = computed(() => {
@@ -102,26 +110,39 @@ export function useSearchAllRankings(
       ...collect(sources.or.value, needle),
       ...collect(sources.os.value, needle),
       ...collect(sources.hall.value, needle),
+      ...collect(sources.decision.value, needle),
     ]);
   });
+
+  // The first source that failed, so the popup can name that failure instead of one shared "search failed": the four
+  // lists come from four different upstreams and which one broke is the only actionable part.
+  const error = computed(() =>
+    enabled.value
+      ? (artificialQ.state.value.error ??
+        openSourceQ.state.value.error ??
+        openRouter.value.error ??
+        decisionQ.state.value.error)
+      : null,
+  );
 
   return {
     results,
     isPending: computed(
       () =>
         enabled.value &&
-        (artificialQ.state.value.pending || openSourceQ.state.value.pending || openRouter.value.pending),
+        (artificialQ.state.value.pending ||
+          openSourceQ.state.value.pending ||
+          openRouter.value.pending ||
+          decisionQ.state.value.pending),
     ),
-    isError: computed(
-      () =>
-        enabled.value &&
-        (artificialQ.state.value.error != null ||
-          openSourceQ.state.value.error != null ||
-          openRouter.value.error != null),
-    ),
+    isError: computed(() => error.value !== null),
     error,
     partial: computed(
-      () => artificialQ.state.value.partial || openSourceQ.state.value.partial || openRouter.value.partial,
+      () =>
+        artificialQ.state.value.partial ||
+        openSourceQ.state.value.partial ||
+        openRouter.value.partial ||
+        decisionQ.state.value.partial,
     ),
   };
 }

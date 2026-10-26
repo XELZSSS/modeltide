@@ -6,12 +6,9 @@
 import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 
-const props = defineProps<{ label: string; class?: string }>();
+defineProps<{ label: string }>();
 const classes = computed(() =>
-  cn(
-    "flex min-w-0 flex-row items-baseline justify-between gap-3 border-b border-border/60 py-1.5 last:border-0",
-    props.class,
-  ),
+  cn("flex min-w-0 flex-row items-baseline justify-between gap-3 border-b border-border/60 py-1.5 last:border-0"),
 );
 </script>
 

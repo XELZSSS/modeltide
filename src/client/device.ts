@@ -1,6 +1,6 @@
 import { ref, type Ref } from "vue";
+import { MOBILE_MAX_WIDTH_PX } from "@/shared/config/ui";
 
-const MOBILE_MAX_WIDTH_PX = 767;
 const MOBILE_QUERY = `(max-width: ${MOBILE_MAX_WIDTH_PX}px)`;
 
 // `window.matchMedia` is part of the browser baseline Vite builds for, and this module only ever loads in the app bundle,

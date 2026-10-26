@@ -13,11 +13,13 @@ const props = withDefaults(
     icon?: Component;
     message: string;
     title?: string;
+    /** Localized technical lines shown under the message: which source failed, which statuses came back. */
+    details?: string[];
     variant?: "empty" | "error" | "plain";
     compact?: boolean;
     class?: string;
   }>(),
-  { variant: "empty", compact: false },
+  { variant: "empty", compact: false, details: () => [] },
 );
 
 const classes = computed(() =>
@@ -43,5 +45,8 @@ const classes = computed(() =>
     />
     <p v-if="title" class="text-center ui-card-title text-text-primary">{{ title }}</p>
     <p class="max-w-md text-center ui-body-secondary text-balance">{{ message }}</p>
+    <ul v-if="props.details.length > 0" class="max-w-md space-y-0.5 text-center ui-meta">
+      <li v-for="line in props.details" :key="line" class="font-mono break-words">{{ line }}</li>
+    </ul>
   </component>
 </template>

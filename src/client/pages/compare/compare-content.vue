@@ -2,7 +2,7 @@
 import { computed, onUnmounted, ref } from "vue";
 import { useTranslation } from "@/client/i18n";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
-import { useSuspenseArtificialRankingsState } from "@/client/api/hooks";
+import { useSuspenseArtificialRankingsState } from "@/client/api/view-models";
 import { useCompareStore } from "@/client/stores";
 import { useCompareModels, usePruneCompareIds } from "@/client/hooks/use-compare-models";
 import { navigate } from "@/client/router";

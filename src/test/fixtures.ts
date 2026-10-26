@@ -16,19 +16,13 @@ export function aaModel(fields: Partial<ArtificialAnalysisModel> = {}): Artifici
     is_open_weights: false,
     parameters: null,
     size_class: null,
+    context_window_tokens: null,
     coding_index: null,
     agentic_index: null,
     benchmarks: {},
     pricing: null,
     speed: null,
-    input_modality_text: true,
-    input_modality_image: false,
-    input_modality_speech: false,
-    input_modality_video: false,
-    output_modality_text: true,
-    output_modality_image: false,
-    output_modality_speech: false,
-    output_modality_video: false,
+    modalities: { in: ["text"], out: ["text"] },
     omniscience_breakdown: null,
     ...fields,
   };
@@ -52,3 +46,16 @@ export function openSourceRow(fields: Partial<OpenSourceModelEntry> = {}): OpenS
     ...fields,
   };
 }
+
+/**
+ * The two leg factories `fan-out.test.ts` and `join-legs.test.ts` each carried a copy of. They are the whole input
+ * shape of `runLegs`, so the pair belongs with the other fixtures rather than once per caller.
+ */
+export const okLeg = <T>(label: string, value: T) => ({ label, run: async () => value });
+
+export const failingLeg = (label: string, reason: unknown) => ({
+  label,
+  run: async () => {
+    throw reason;
+  },
+});

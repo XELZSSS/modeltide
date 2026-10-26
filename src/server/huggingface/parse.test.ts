@@ -3,6 +3,9 @@ import { keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
 import { LicenseDropTally } from "./license-tally";
 import type { OpenSourceModelEntry } from "@/shared/types";
 
+/** The tag lists the drop tally has to classify: no tag, a foreign tag, an unknown licence tag. */
+const RECORDED_TAG_LISTS: string[][] = [[], ["other"], ["made-up-lab-license"]];
+
 function hfRow(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     _id: "68a1b2c3d4e5f6a7b8c9d0e1",
@@ -18,10 +21,33 @@ function hfRow(overrides: Partial<Record<string, unknown>> = {}): Record<string,
   };
 }
 
+/** One field of the mapped entry: the row override, the reader for that field, and the value it has to end up with. */
+type FieldCase = [
+  title: string,
+  overrides: Partial<Record<string, unknown>>,
+  read: (entry: OpenSourceModelEntry) => unknown,
+  expected: unknown,
+];
+
+const FIELD_CASES: FieldCase[] = [
+  [
+    "prefers the open licence tag over an unknown one",
+    { tags: ["license:unknown", "license:mit"] },
+    (e) => e.license,
+    "mit",
+  ],
+  ["leaves the licence null without a licence tag", { tags: [] }, (e) => e.license, null],
+  ["falls back to the id prefix when the author is missing", { author: null }, (e) => e.author, "acme"],
+  ["falls back to the whole id when there is no prefix", { id: "model-7b", author: null }, (e) => e.author, "model-7b"],
+  ["keeps a malformed date null instead of inventing one", { createdAt: "" }, (e) => e.createdAt, null],
+  ["keeps the sibling date intact", { createdAt: "" }, (e) => e.lastModified, "2026-04-19T08:00:00.000Z"],
+  ["zeroes a negative download count", { downloads: -5, likes: "12" }, (e) => e.downloads, 0],
+  ["reads a non-negative numeric string", { likes: "12" }, (e) => e.likes, 12],
+];
+
 describe("mapListModel", () => {
   it("maps a live HF list row onto the ranking entry shape", () => {
     const entry = mapListModel(hfRow());
-    expect(entry).not.toBeNull();
     expect(entry).toMatchObject({
       id: "acme/model-7b",
       author: "acme",
@@ -30,25 +56,12 @@ describe("mapListModel", () => {
       license: "apache-2.0",
       task: "text-generation",
     });
-    expect((entry as OpenSourceModelEntry).createdAt).toBe("2025-06-01T00:00:00.000Z");
-    expect((entry as OpenSourceModelEntry).tags).toEqual([]);
+    expect(entry?.createdAt).toBe("2025-06-01T00:00:00.000Z");
+    expect(entry?.tags).toBeUndefined();
   });
 
-  it("resolves the licence from the licence-tag list and prefers the open one", () => {
-    expect(mapListModel(hfRow())?.license).toBe("apache-2.0");
-    expect(mapListModel(hfRow({ tags: ["license:unknown", "license:mit"] }))?.license).toBe("mit");
-    expect(mapListModel(hfRow({ tags: [] }))?.license).toBeNull();
-  });
-
-  it("falls back to the id prefix when author is missing", () => {
-    expect(mapListModel(hfRow({ author: null }))?.author).toBe("acme");
-    expect(mapListModel(hfRow({ id: "model-7b", author: null }))?.author).toBe("model-7b");
-  });
-
-  it("keeps malformed dates as null instead of inventing one", () => {
-    const entry = mapListModel(hfRow({ createdAt: "" }));
-    expect(entry?.createdAt).toBeNull();
-    expect(entry?.lastModified).toBe("2026-04-19T08:00:00.000Z");
+  it.each(FIELD_CASES)("%s", (_title, overrides, read, expected) => {
+    expect(read(mapListModel(hfRow(overrides)) as OpenSourceModelEntry)).toBe(expected);
   });
 
   it("rejects non-objects and unusable ids", () => {
@@ -57,15 +70,10 @@ describe("mapListModel", () => {
     expect(mapListModel(hfRow({ id: "n/a" }))).toBeNull();
     expect(mapListModel(hfRow({ id: 7 }))).toBeNull();
   });
-
-  it("counts downloads, likes and non-negative numeric strings only", () => {
-    expect(mapListModel(hfRow({ downloads: -5, likes: "12" }))?.downloads).toBe(0);
-    expect(mapListModel(hfRow({ likes: "12" }))?.likes).toBe(12);
-  });
 });
 
 describe("mapModel", () => {
-  it("is the directory variant: same mapping but tags included", () => {
+  it("keeps tags on the directory variant", () => {
     const entry = mapModel(hfRow({ tags: ["license:mit", "language:zh"] }));
     expect(entry).toMatchObject({ id: "acme/model-7b", license: "mit" });
     expect(entry?.tags).toEqual(["license:mit", "language:zh"]);
@@ -73,11 +81,9 @@ describe("mapModel", () => {
 });
 
 describe("LicenseDropTally + keepOpenSourceRanking", () => {
-  it("separates licenceless rows from declared non-open licences and names unknown tags", () => {
+  it("counts licenceless and non-open drops and names unknown tags", () => {
     const tally = new LicenseDropTally();
-    tally.record([], null);
-    tally.record(["other"], null);
-    tally.record(["made-up-lab-license"], null);
+    for (const tags of RECORDED_TAG_LISTS) tally.record(tags, null);
     expect(tally.drops()).toEqual({
       withoutTag: 1,
       declaredNonOpen: 2,
@@ -86,7 +92,7 @@ describe("LicenseDropTally + keepOpenSourceRanking", () => {
     });
   });
 
-  it("gates ranking by downloads and reports zero-download drops", () => {
+  it("gates ranking by downloads and counts the drops", () => {
     const tally = new LicenseDropTally();
     expect(keepOpenSourceRanking({ downloads: 1 }, tally)).toBe(true);
     expect(keepOpenSourceRanking({ downloads: 0 }, tally)).toBe(false);

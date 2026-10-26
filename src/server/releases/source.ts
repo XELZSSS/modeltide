@@ -8,7 +8,7 @@ import { getChangelogModels } from "@/server/aa/changelog";
 import { getIntelligenceIndex } from "@/server/aa";
 import { fanOut } from "@/server/fan-out";
 import { toClosedReleases, toClosedReleasesFromIndex } from "./parse";
-import { defineSource, requireRows } from "@/server/pipeline";
+import { definePartialSource, requireRows } from "@/server/pipeline";
 
 interface ClosedReleasesRaw {
   entries: ClosedReleaseEntry[];
@@ -26,8 +26,8 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
     { tag: "closed-releases" },
   );
   const [index, changelog] = values;
-  const models = index?.data ?? [];
-  const changelogModels = changelog?.data ?? [];
+  const models = index?.payload.data ?? [];
+  const changelogModels = changelog?.payload.data ?? [];
   // Broader than runLegs' `allFailedMessage`: this fires when neither source produced a usable row, which also covers
   // a leg that fulfilled with an empty array. The fan-out therefore stays without that option.
   if (models.length === 0 && changelogModels.length === 0) {
@@ -44,7 +44,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
     finalEntries = toClosedReleasesFromIndex(models, upstreamConfig.artificialAnalysis);
     ctx.log("warn", `[closed-releases] changelog empty, index fallback rows=${finalEntries.length}`);
   }
-  const partial = index == null || index.partial || indexFallback || changelog?.partial === true;
+  const partial = index == null || index.payload.partial || indexFallback || changelog?.payload.partial === true;
   if (partial) ctx.log("warn", "[closed-releases] serving partial (degraded enrichment)");
   return {
     entries: finalEntries,
@@ -53,21 +53,14 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
   };
 }
 
-/**
- * How long a release payload may stay cached at the origin. `src/server/registry.ts` reads this same constant for the
- * route's HTTP cache headers, so the edge window cannot drift from the origin window.
- */
-export const CLOSED_RELEASES_TTL_MS = STATIC_TTL_MS;
-
-export const getClosedReleases = defineSource<ClosedReleasesRaw, ClosedReleaseEntry[]>({
+export const getClosedReleases = definePartialSource<ClosedReleasesRaw, ClosedReleaseEntry[]>({
   key: cacheKeys.closedReleases,
-  ttl: CLOSED_RELEASES_TTL_MS,
+  ttl: STATIC_TTL_MS,
   label: "Releases",
   served: true,
   fetch: (ctx) => fetchClosedReleases(ctx),
-  parse: (raw) => {
-    requireRows(raw.entries, "Releases", "rows", `changelog=${raw.counts.changelog}, index=${raw.counts.index}`);
-    return raw.entries;
+  pick: (raw) => raw.entries,
+  refine: (entries, raw) => {
+    requireRows(entries, "Releases", "rows", `changelog=${raw.counts.changelog}, index=${raw.counts.index}`);
   },
-  partialWhen: ({ raw }) => ({ partial: raw.partial }),
 });

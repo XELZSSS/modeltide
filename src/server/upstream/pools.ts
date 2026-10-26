@@ -36,13 +36,12 @@ export async function acquireSlot(signal: AbortSignal, pool: SlotPool): Promise<
     return;
   }
   return new Promise<void>((resolve, reject) => {
-    const waiter: SlotWaiter = { resolve, detach: () => {} };
     const onAbort = (): void => {
       const i = pool.waiters.indexOf(waiter);
       if (i !== -1) pool.waiters.splice(i, 1);
       reject(signal.reason);
     };
-    waiter.detach = () => signal.removeEventListener("abort", onAbort);
+    const waiter: SlotWaiter = { resolve, detach: () => signal.removeEventListener("abort", onAbort) };
     signal.addEventListener("abort", onAbort, { once: true });
     pool.waiters.push(waiter);
   });

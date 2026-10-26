@@ -1,4 +1,4 @@
-import { str } from "@/server/formats/scalars";
+import { text } from "@/server/formats/scalars";
 import { isUnsuitableContent } from "@/server/formats/content-guards";
 import { mapRows } from "@/server/formats/parse-rows";
 import { MAX_SCAN_CHARS } from "@/server/formats/limits";
@@ -24,17 +24,20 @@ function isUsableField(value: string): boolean {
 function collectModels(
   modelArrays: readonly unknown[],
   releases: Map<string, ReleaseInfo>,
-): { models: ChangelogModel[]; skipped: number } {
+): { models: ChangelogModel[]; skipped: number; sources: Set<number> } {
   let best: ChangelogModel[] = [];
   let skipped = 0;
+  // Distinct row counts, not one entry per array: the RSC scan reaches the same `models` array through several windows,
+  // and its repeated copies are one candidate, not a competing one.
+  const sources = new Set<number>();
   for (const value of modelArrays) {
     if (!Array.isArray(value)) continue;
     const rows = value as unknown[];
     const { rows: mapped, dropped } = mapRows(rows, (raw) => {
       const entry = raw as ChangelogModelEntry;
-      const slug = str(entry.slug).trim();
-      const name = str(entry.name).trim();
-      const releaseSlug = str(entry.releaseSlug).trim();
+      const slug = text(entry.slug);
+      const name = text(entry.name);
+      const releaseSlug = text(entry.releaseSlug);
       const release = releases.get(releaseSlug);
       if (!release) return null;
       if (!isUsableField(slug) || !isUsableField(name) || !isUsableField(release.name)) return null;
@@ -47,12 +50,16 @@ function collectModels(
         creatorName: release.creatorName,
       };
     });
+    if (mapped.length === 0) continue;
+    // Every array that yields changelog rows is recorded, not just the winner: "the longest one" is a choice between
+    // candidates, and a second candidate appearing is the day that choice can start being wrong.
+    sources.add(mapped.length);
     if (mapped.length > best.length) {
       best = mapped;
       skipped = dropped;
     }
   }
-  return { models: best, skipped };
+  return { models: best, skipped, sources };
 }
 
 export function parseChangelogModels(html: unknown): ParseResult<ChangelogModel[]> {
@@ -61,7 +68,13 @@ export function parseChangelogModels(html: unknown): ParseResult<ChangelogModel[
   if (typeof html !== "string" || !html) return parseFail("AA leaderboard body is not a string");
   if (html.length > MAX_SCAN_CHARS) return parseFail(`AA leaderboard body too large (${html.length} chars)`);
   const { releases, modelArrays } = scanReleaseIndex(html);
-  const { models, skipped } = collectModels(modelArrays, releases);
+  const { models, skipped, sources } = collectModels(modelArrays, releases);
   if (models.length === 0) return parseFail("AA leaderboard body yielded no changelog rows");
-  return parseOk(models, skipped > 0 ? [`Skipped ${skipped} changelog rows without a usable release`] : []);
+  const warnings: string[] = [];
+  if (skipped > 0) warnings.push(`Skipped ${skipped} changelog rows without a usable release`);
+  if (sources.size > 1) {
+    const sizes = [...sources].join(", ");
+    warnings.push(`Changelog rows came from ${sources.size} model arrays (${sizes}), longest wins`);
+  }
+  return parseOk(models, warnings);
 }

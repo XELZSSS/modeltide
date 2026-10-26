@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, h } from "vue";
-import { useSuspenseArtificialRankingsState } from "@/client/api/hooks";
+import { useSuspenseArtificialRankingsState } from "@/client/api/view-models";
 import TabStateShell from "@/client/components/navigation/tab-state-shell.vue";
 import SearchableDataTable from "@/client/components/table/data-table.vue";
 import { col, monoCol, rightCol, type DataTableColumn } from "@/client/components/table/table-columns.ts";
@@ -29,7 +29,7 @@ const columns = computed<DataTableColumn<ProviderStats>[]>(() => [
   rightCol("avgSpeed", t("avgSpeed"), (p) =>
     h(
       "span",
-      { class: "text-sm text-text-primary" },
+      { class: "ui-body" },
       p.avgSpeed != null ? `${formatSpeed(p.avgSpeed, t)} ${t("tokensPerSecond")}` : t("notAvailable"),
     ),
   ),
@@ -44,6 +44,7 @@ const getProviderSearchFields = (p: ProviderStats) => [p.name];
     <SearchableDataTable
       :columns="columns"
       :data="providerStats"
+      :caption-key="'providerCompare'"
       :get-row-id="getProviderRowId"
       :get-search-fields="getProviderSearchFields"
     />

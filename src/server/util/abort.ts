@@ -4,7 +4,8 @@ import { logger } from "@/server/api/logger";
 export function raceAbort<T>(
   work: Promise<T>,
   signal: AbortSignal,
-  makeError: () => Error,
+  /** Rejects with exactly what this returns — an abort reason is often a `DOMException` whose name classifies it. */
+  makeError: () => unknown,
   onAbort?: () => void,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -16,6 +17,13 @@ export function raceAbort<T>(
       }
       reject(makeError());
     };
+    // A listener added to an already-aborted signal never fires, so that case has to be answered here or this promise
+    // would hang. `work` still gets a rejection handler so the abandoned request cannot surface as an unhandled one.
+    if (signal.aborted) {
+      work.then(undefined, () => {});
+      reject(makeError());
+      return;
+    }
     signal.addEventListener("abort", handleAbort, { once: true });
     work.then(
       (value) => {

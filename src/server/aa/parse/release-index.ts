@@ -1,5 +1,5 @@
-import { isRecord, str } from "@/server/formats/scalars";
-import { extractNeedleJsonArrays } from "@/server/formats/rsc-scan";
+import { isRecord, text } from "@/server/formats/scalars";
+import { extractNeedleJsonArrays, type NeedleScanStats } from "@/server/formats/rsc-scan";
 import { MAX_RSC_BYTES } from "@/server/formats/limits";
 import { L1_TTL_CAP_MS } from "@/server/cache/config";
 
@@ -13,7 +13,6 @@ const AA_SCAN_OPTS = {
   smallSuffixChars: 256 * 1024 + CANDIDATE_PREFIX_CHARS,
   // Only has to cover a body the transport already caps at MAX_RSC_BYTES: a wider window cannot see more.
   maxSuffixChars: MAX_RSC_BYTES + CANDIDATE_PREFIX_CHARS,
-  unescape: true,
 };
 
 export interface ReleaseInfo {
@@ -24,11 +23,11 @@ export interface ReleaseInfo {
 
 function releaseInfo(raw: unknown): { slug: string; info: ReleaseInfo } | null {
   if (!isRecord(raw) || raw.deprecated === true) return null;
-  const slug = str(raw.slug).trim();
-  const name = str(raw.name).trim();
-  const releaseDate = str(raw.releaseDate).trim();
+  const slug = text(raw.slug);
+  const name = text(raw.name);
+  const releaseDate = text(raw.releaseDate);
   const creator = isRecord(raw.creator) ? raw.creator : undefined;
-  const creatorName = creator ? str(creator.name).trim() : "";
+  const creatorName = creator ? text(creator.name) : "";
   if (!slug || !name || !releaseDate || !creatorName) return null;
   return {
     slug,
@@ -36,9 +35,9 @@ function releaseInfo(raw: unknown): { slug: string; info: ReleaseInfo } | null {
   };
 }
 
-function collectReleases(html: string): Map<string, ReleaseInfo> {
+function collectReleases(html: string, stats: NeedleScanStats): Map<string, ReleaseInfo> {
   const releases = new Map<string, ReleaseInfo>();
-  for (const value of extractNeedleJsonArrays(html, AA_RELEASES_KEY, AA_SCAN_OPTS)) {
+  for (const value of extractNeedleJsonArrays(html, AA_RELEASES_KEY, AA_SCAN_OPTS, stats)) {
     if (!Array.isArray(value)) continue;
     for (const raw of value as unknown[]) {
       const entry = releaseInfo(raw);
@@ -52,6 +51,11 @@ function collectReleases(html: string): Map<string, ReleaseInfo> {
 interface ReleaseIndexScan {
   releases: Map<string, ReleaseInfo>;
   modelArrays: unknown[];
+  /**
+   * Slices this scan could not parse. A non-zero count is reported by the caller that logs; it is not a parse failure,
+   * because the arrays that did parse are the ones the ranking needs and one bad slice must not fail the whole body.
+   */
+  unparsableSlices: number;
 }
 
 /**
@@ -72,9 +76,11 @@ export function scanReleaseIndex(html: string): ReleaseIndexScan {
   // answered with another body's releases.
   const now = Date.now();
   if (cachedScan !== null && cachedHtml === html && now - cachedScanAt < SCAN_MEMO_IDLE_MS) return cachedScan;
+  const stats: NeedleScanStats = { unparsableSlices: 0 };
   const scan: ReleaseIndexScan = {
-    releases: collectReleases(html),
-    modelArrays: extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS),
+    releases: collectReleases(html, stats),
+    modelArrays: extractNeedleJsonArrays(html, AA_MODELS_KEY, AA_SCAN_OPTS, stats),
+    unparsableSlices: stats.unparsableSlices,
   };
   // One slot, overwritten: the memo never holds more than the body it was last asked about.
   cachedHtml = html;
@@ -88,11 +94,14 @@ export function collectModelReleaseLinksFromArrays(arrays: readonly unknown[]): 
   for (const value of arrays) {
     if (!Array.isArray(value)) continue;
     const rows = value as unknown[];
-    if (rows.length === 0 || !isRecord(rows[0]) || !("releaseSlug" in rows[0])) continue;
+    // Whether this array is the model array is decided by *any* row carrying a `releaseSlug`, not by the first one: a
+    // placeholder or deprecated entry ahead of the rest used to make the whole array look like something else, and the
+    // index then answered every model with no release date — a missing field, not an error.
+    if (!rows.some((row) => isRecord(row) && "releaseSlug" in row)) continue;
     for (const raw of rows) {
       if (!isRecord(raw)) continue;
-      const slug = str(raw.slug).trim();
-      const releaseSlug = str(raw.releaseSlug).trim();
+      const slug = text(raw.slug);
+      const releaseSlug = text(raw.releaseSlug);
       if (!slug || !releaseSlug || links.has(slug)) continue;
       links.set(slug, releaseSlug);
     }

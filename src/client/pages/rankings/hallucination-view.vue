@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { h, type VNodeChild } from "vue";
-import { formatIndex, formatPercent } from "@/shared/utils";
+import { formatRatio, formatScore } from "@/shared/utils";
 import type { ArtificialAnalysisModel, HallucinationRankingEntry } from "@/shared/types";
 import { modelId } from "@/shared/utils/models";
-import { useRankExtras } from "@/client/hooks/use-rank-extras";
+import { useRankedColumns } from "@/client/hooks/use-rank-extras";
 import RankedTableView from "@/client/components/table/ranked-table-view.vue";
 import {
   modelNameCol,
@@ -20,7 +20,7 @@ import type { TFunction } from "@/shared/i18n";
 
 function buildHallColumns(
   t: TFunction,
-  extras?: NameCellExtras<HallucinationRankingEntry>,
+  extras: NameCellExtras<HallucinationRankingEntry>,
 ): DataTableColumn<HallucinationRankingEntry>[] {
   return [
     modelNameCol(
@@ -29,12 +29,12 @@ function buildHallColumns(
       (item) => item.model,
       extras,
     ),
-    monoCol("hallucinationRate", t("hallucinationRate"), (item) => formatPercent(item.hallucinationRate, t), {
+    monoCol("hallucinationRate", t("hallucinationRate"), (item) => formatRatio(item.hallucinationRate, t), {
       emphasis: "strong",
     }),
-    monoCol("accuracy", t("accuracy"), (item) => formatPercent(item.accuracy, t)),
-    monoCol("attemptRate", t("attemptRate"), (item) => formatPercent(item.attemptRate, t)),
-    monoCol("omniscienceIndex", t("omniscienceIndex"), (item) => formatIndex(item.omniscienceIndex, t("notAvailable"))),
+    monoCol("accuracy", t("accuracy"), (item) => formatRatio(item.accuracy, t)),
+    monoCol("attemptRate", t("attemptRate"), (item) => formatRatio(item.attemptRate, t)),
+    monoCol("omniscienceIndex", t("omniscienceIndex"), (item) => formatScore(item.omniscienceIndex, t)),
   ];
 }
 
@@ -50,10 +50,7 @@ const props = defineProps<{ rankings: HallucinationRankingEntry[]; models: Artif
 
 const { t } = useTranslation();
 
-const rankExtras = useRankExtras(() => props.rankings, getHallRowId, "hall");
-
-const buildColumns = (t2: TFunction): DataTableColumn<HallucinationRankingEntry>[] =>
-  buildHallColumns(t2, rankExtras.value);
+const buildColumns = useRankedColumns(() => props.rankings, getHallRowId, "hall", buildHallColumns);
 
 function renderHallDetail(entry: HallucinationRankingEntry): VNodeChild {
   const model = findAaModelForHallEntry(props.models, entry);
@@ -65,6 +62,7 @@ function renderHallDetail(entry: HallucinationRankingEntry): VNodeChild {
 <template>
   <RankedTableView
     :rows="rankings"
+    :caption-key="'hallucinationRankings'"
     :get-row-id="getHallRowId"
     :get-search-fields="SEARCH_FIELDS.hall"
     :build-body-columns="buildColumns"

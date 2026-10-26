@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { ThemeMode } from "@/shared/types";
+import { THEME_MODES, type ThemeMode } from "@/shared/types";
 import type { Lang } from "@/shared/i18n";
 import { SETTINGS_STORAGE_VERSION, STORAGE_KEYS } from "@/shared/config";
 import { loadPersistedState, makeStorageSync } from "./make-persisted-store";
@@ -12,7 +12,7 @@ interface PersistedSettings {
 }
 
 function isThemeMode(value: unknown): value is ThemeMode {
-  return value === "system" || value === "dark" || value === "light";
+  return THEME_MODES.some((mode) => mode === value);
 }
 
 function isLang(value: unknown): value is Lang {

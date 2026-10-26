@@ -24,16 +24,12 @@ const parser = new XMLParser({
   stopNodes: ["*.content:encoded"],
 });
 
-export function parseFeed(
-  xml: unknown,
-  sourceUrl: unknown,
-  opts?: { maxBytes?: number; maxItems?: number },
-): ParseResult<NewsItem[]> {
+export function parseFeed(xml: unknown, sourceUrl: unknown): ParseResult<NewsItem[]> {
   const urlLabel = typeof sourceUrl === "string" ? sourceUrl : "unknown";
   if (typeof xml !== "string") {
     return parseFail(`Feed with non-string body rejected at ${urlLabel}`);
   }
-  const maxBytes = opts?.maxBytes ?? MAX_FEED_BYTES;
+  const maxBytes = MAX_FEED_BYTES;
   // A UTF-16 code unit encodes to at most three UTF-8 bytes, so a body whose length already fits the cap in that worst
   // case skips the full char-by-char measurement; most feeds take that path.
   if (xml.length > maxBytes) {
@@ -45,11 +41,11 @@ export function parseFeed(
   }
   let parsed: unknown;
   try {
-    parsed = parser.parse(capItems(xml, (opts?.maxItems ?? MAX_ITEMS_PER_FEED) * MAX_ITEMS_SCAN_FACTOR));
+    parsed = parser.parse(capItems(xml, MAX_ITEMS_PER_FEED * MAX_ITEMS_SCAN_FACTOR));
   } catch (err) {
     return parseFail(`Unparseable feed at ${urlLabel}: ${errMsg(err)}`);
   }
-  return parseChannel(parsed, urlLabel, opts?.maxItems ?? MAX_ITEMS_PER_FEED);
+  return parseChannel(parsed, urlLabel, MAX_ITEMS_PER_FEED);
 }
 
 /**
@@ -59,34 +55,65 @@ export function parseFeed(
 const MAX_ITEMS_SCAN_FACTOR = 4;
 
 const ITEM_CLOSERS = ["</item>", "</entry>"] as const;
+const COMMENT_OPEN = "<!--";
+const COMMENT_CLOSE = "-->";
+const CDATA_OPEN = "<![CDATA[";
+const CDATA_CLOSE = "]]>";
 /**
- * The tags a feed closes its container with, most complete first: a document needs whichever of these it opened, so
- * the match has to cover the outermost one. The real feeds separate them with whitespace (`</channel>\n</rss>`), which
- * is why they are matched individually rather than as one literal.
+ * The document's own container closing tags: everything the feed wrote after its last item closer, copied verbatim.
+ * A table of literal tails — `</channel></rss>`, `</feed>` and their whitespace variants — missed a feed whose
+ * container was named anything else (a namespaced `<rss>`, an RDF document, a comment before the closer), left the
+ * document alone, and then built a subtree for every item in it: the CPU cost this function exists to avoid, failing
+ * silently. Reusing the bytes the document already carries cannot miss.
+ *
+ * `undefined` when nothing follows the last item: an unclosed document stays untouched rather than getting a guess.
  */
-const FEED_TAILS = ["</channel></rss>", "</channel>\n</rss>", "</channel>\r\n</rss>", "</feed>"] as const;
+function feedTail(xml: string, closer: string): string | undefined {
+  const last = xml.lastIndexOf(closer);
+  if (last < 0) return undefined;
+  const tail = xml.slice(last + closer.length);
+  return tail.trim() === "" ? undefined : tail;
+}
 
 /**
  * Cuts the document after the last item the caller can still reach, so the XML parser does not build a subtree for
  * every item in a long feed. A feed that ships hundreds of items against a 30-item limit costs 19 ms of a 10 ms CPU
  * budget — the largest single cost in the news route.
  *
- * A feed is returned untouched unless it carries more items than `keep`, and only when its own closing tag can be
- * reused, so the document the parser sees stays well-formed. The parsed rows are identical either way.
+ * Only a feed carrying more items than `keep` is touched, and only when its own closing tag can be reused, so the
+ * document the parser sees stays well-formed: the tail is whatever bytes the feed wrote after its last item closer.
+ *
+ * A closer inside a comment or a CDATA section is not an item: `content:encoded` is HTML in a CDATA wrapper, so a code
+ * sample can carry a literal `</item>`, and a commented-out item carries a whole one. Counting either put the cut
+ * inside an item and left the document malformed.
  */
-function capItems(xml: string, keep: number): string {
+export function capItems(xml: string, keep: number): string {
   for (const closer of ITEM_CLOSERS) {
     let cut = -1;
-    let from = 0;
-    for (let i = 0; i < keep; i++) {
-      const at = xml.indexOf(closer, from);
-      if (at < 0) break;
-      from = at + closer.length;
-      cut = from;
+    let seen = 0;
+    let i = 0;
+    while (i < xml.length && seen < keep) {
+      if (xml.startsWith(COMMENT_OPEN, i)) {
+        const end = xml.indexOf(COMMENT_CLOSE, i + COMMENT_OPEN.length);
+        i = end < 0 ? xml.length : end + COMMENT_CLOSE.length;
+        continue;
+      }
+      if (xml.startsWith(CDATA_OPEN, i)) {
+        const end = xml.indexOf(CDATA_CLOSE, i + CDATA_OPEN.length);
+        i = end < 0 ? xml.length : end + CDATA_CLOSE.length;
+        continue;
+      }
+      if (xml.startsWith(closer, i)) {
+        seen += 1;
+        i += closer.length;
+        cut = i;
+        continue;
+      }
+      i += 1;
     }
-    if (cut < 0 || cut >= xml.length) continue;
-    const tail = FEED_TAILS.find((candidate) => xml.includes(candidate));
-    // No recognizable closing tag: leave the document alone rather than append a guess.
+    if (seen < keep || cut < 0 || cut >= xml.length) continue;
+    const tail = feedTail(xml, closer);
+    // Nothing follows the last item: leave the document alone rather than append a guess.
     if (tail === undefined) continue;
     return xml.slice(0, cut) + tail;
   }
@@ -108,6 +135,9 @@ function parseChannel(feed: unknown, sourceUrl: string, maxItems: number): Parse
   let items = (channel.item ?? channel.entry ?? []) as unknown;
   if (!Array.isArray(items)) items = [items];
   const source = channelTitle(channel, sourceUrl);
+  if (source === null) {
+    return parseFail(`Unrecognized feed source at ${sourceUrl}`);
+  }
   const rawItems = items as unknown[];
   const records = rawItems.filter((item): item is Record<string, unknown> => isRecord(item));
   if (records.length === 0 && rawItems.length > 0) {

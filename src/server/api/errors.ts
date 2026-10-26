@@ -32,7 +32,6 @@ export class ClientAbortError extends ApiError {
 }
 
 export function rethrowIfAllAborted(legs: readonly PromiseSettledResult<unknown>[]): void {
-  if (legs.length === 0) return;
   if (!legs.every((leg) => leg.status === "rejected" && leg.reason instanceof ClientAbortError)) return;
   throw (legs[0] as PromiseRejectedResult).reason as Error;
 }
@@ -70,6 +69,9 @@ export function zeroUpstream(label: string, unit: string, detail?: string): Upst
 }
 
 export function wrapUpstream(prefix: string, err: unknown): UpstreamError {
+  // A caller hang-up is not an upstream failure: wrapped here it would become a retryable 502, and the cache would
+  // then cool the source down for a reader that simply navigated away.
+  rethrowIfClientAbort(err);
   const msg = errMsg(err);
   const cause = err instanceof UpstreamError ? err : undefined;
   return new UpstreamError(`${prefix}: ${msg}`, {

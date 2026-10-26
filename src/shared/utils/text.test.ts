@@ -1,23 +1,44 @@
 import { describe, expect, it } from "vitest";
 import { dedupeBy, errMsg, normalizeModelKey, titleCase, toStringOrNull } from "./text";
 
+/** One raw model id, and the key it has to normalize to. */
+type KeyCase = [title: string, raw: string, key: string];
+
+const KEY_CASES: KeyCase[] = [
+  ["drops the provider prefix", "openai/gpt-6-1-sol", "gpt61sol"],
+  ["folds case", "GPT-6.1 Sol", "gpt61sol"],
+  ["drops the provider prefix of a dotted version", "anthropic/claude-opus-5.5", "claudeopus55"],
+  ["drops a parenthesised qualifier before matching", "vendor/model (high effort)", "model"],
+  ["strips tuning qualifiers that only appear after a variant separator", "vendor/model:extended", "vendormodel"],
+  ["keeps a variant tail that carries a real name", "vendor/model:thinking", "thinking"],
+  // `free` named the tier, not the model: every free variant in the catalog normalized to the same key, so a pricing
+  // or metadata lookup could answer with a different model's row. The key has to carry the base model.
+  ["keys openai/gpt-6-1-sol:free by its base model", "openai/gpt-6-1-sol:free", "gpt61sol"],
+  ["keys anthropic/claude-sonnet-5.5:free by its base model", "anthropic/claude-sonnet-5.5:free", "claudesonnet55"],
+];
+
+type TitleCaseCase = [title: string, raw: string, expected: string];
+
+const TITLE_CASE_CASES: TitleCaseCase[] = [
+  ["splits hyphens and capitalises each word", "gpt-6-1-sol", "Gpt 6 1 Sol"],
+  ["splits underscores", "deepseek_v4", "Deepseek V4"],
+  ["collapses repeated separators", "a--b__c", "A B C"],
+];
+
+type ToStringCase = [title: string, value: unknown, expected: string | null];
+
+const TO_STRING_CASES: ToStringCase[] = [
+  ["trims a string", " x ", "x"],
+  ["rejects a blank string", "   ", null],
+  ["rejects an empty string", "", null],
+  ["rejects a number", 42, null],
+  ["rejects null", null, null],
+  ["rejects undefined", undefined, null],
+];
+
 describe("normalizeModelKey", () => {
-  it("folds the provider prefix away so the same model matches across sources", () => {
-    expect(normalizeModelKey("openai/gpt-4o")).toBe("gpt4o");
-    expect(normalizeModelKey("GPT-4o")).toBe("gpt4o");
-    expect(normalizeModelKey("anthropic/claude-3.5-sonnet")).toBe("claude35sonnet");
-  });
-
-  it("drops a parenthesised qualifier before matching", () => {
-    expect(normalizeModelKey("vendor/model (high effort)")).toBe("model");
-  });
-
-  it("strips tuning qualifiers that only appear after a variant separator", () => {
-    expect(normalizeModelKey("vendor/model:extended")).toBe("vendormodel");
-  });
-
-  it("keeps a variant tail that carries a real name", () => {
-    expect(normalizeModelKey("vendor/model:thinking")).toBe("thinking");
+  it.each(KEY_CASES)("%s", (_title, raw, key) => {
+    expect(normalizeModelKey(raw)).toBe(key);
   });
 });
 
@@ -30,12 +51,8 @@ describe("dedupeBy", () => {
     { id: "", n: 5 },
   ];
 
-  it("keeps the first row per key and preserves order", () => {
+  it("keeps the first row per key, treats a blank key as unique and preserves order", () => {
     expect(dedupeBy(rows, (row) => row.id).map((row) => row.n)).toEqual([1, 2, 4, 5]);
-  });
-
-  it("treats a blank key as unique instead of collapsing every such row", () => {
-    expect(dedupeBy(rows, (row) => row.id).filter((row) => row.id === "")).toHaveLength(2);
   });
 
   it("treats a null key as unique too", () => {
@@ -45,27 +62,14 @@ describe("dedupeBy", () => {
 });
 
 describe("titleCase", () => {
-  it("splits separators and capitalises each word", () => {
-    expect(titleCase("gpt-4o-mini")).toBe("Gpt 4o Mini");
-    expect(titleCase("meta_llama")).toBe("Meta Llama");
-  });
-
-  it("collapses repeated separators", () => {
-    expect(titleCase("a--b__c")).toBe("A B C");
+  it.each(TITLE_CASE_CASES)("%s", (_title, raw, expected) => {
+    expect(titleCase(raw)).toBe(expected);
   });
 });
 
 describe("toStringOrNull", () => {
-  it("trims and rejects blank strings", () => {
-    expect(toStringOrNull(" x ")).toBe("x");
-    expect(toStringOrNull("   ")).toBeNull();
-    expect(toStringOrNull("")).toBeNull();
-  });
-
-  it("rejects non-strings", () => {
-    expect(toStringOrNull(42)).toBeNull();
-    expect(toStringOrNull(null)).toBeNull();
-    expect(toStringOrNull(undefined)).toBeNull();
+  it.each(TO_STRING_CASES)("%s", (_title, value, expected) => {
+    expect(toStringOrNull(value)).toBe(expected);
   });
 });
 

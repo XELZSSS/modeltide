@@ -12,7 +12,7 @@ import { useTranslation } from "@/client/i18n";
 import { seriesColor, useChartTheme } from "@/client/charts/theme";
 import { useMonthlyCosts } from "./cost-inputs";
 import CostEstimatorInputs from "./cost-form.vue";
-import { WinnerMark } from "./compare-table.vue";
+import { WinnerMark } from "./winner-marks.ts";
 import { modelKeyOf } from "@/client/utils/compare-logic";
 
 const props = defineProps<{ models: ArtificialAnalysisModel[] }>();
@@ -58,7 +58,7 @@ function isBestCost(model: ArtificialAnalysisModel): boolean {
             class="flex items-center justify-between gap-2"
           >
             <span
-              class="truncate text-sm"
+              class="min-w-0 ui-body break-words md:truncate"
               :style="{ color: seriesColor(theme, index) }"
               v-tooltip="modelDisplayName(model)"
             >

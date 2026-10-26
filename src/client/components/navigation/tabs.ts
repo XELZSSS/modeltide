@@ -16,7 +16,7 @@ function nextIndexForKey(key: string, index: number, length: number): number | n
   return null;
 }
 
-export function nextRovingId(
+function nextRovingId(
   event: KeyboardEvent,
   items: readonly { id: string }[],
   currentId: string | undefined,

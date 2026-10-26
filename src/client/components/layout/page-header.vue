@@ -6,14 +6,14 @@
 import { computed, useSlots } from "vue";
 import { cn } from "@/client/utils/cn";
 
-const props = withDefaults(defineProps<{ title: string; description?: string; compact?: boolean; class?: string }>(), {
+withDefaults(defineProps<{ title: string; description?: string; compact?: boolean }>(), {
   compact: false,
 });
 
 const slots = useSlots();
 
 const classes = computed(() =>
-  cn("flex ui-anim-rise flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4", props.class),
+  cn("flex ui-anim-rise flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4"),
 );
 </script>
 

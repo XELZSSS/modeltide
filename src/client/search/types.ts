@@ -2,7 +2,7 @@ import type { TranslationKey } from "@/shared/i18n";
 
 export type SearchResultSource = Extract<
   TranslationKey,
-  "modelRankings" | "openRouterRankings" | "openSourceRankings" | "hallucinationRankings"
+  "modelRankings" | "openRouterRankings" | "openSourceRankings" | "hallucinationRankings" | "decisionRankings"
 >;
 
 export interface SearchResult {

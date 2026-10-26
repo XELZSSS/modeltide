@@ -103,10 +103,10 @@ function checkFile(file: string, vocabulary: MotionVocabulary): string[] {
   }
 
   for (const match of source.matchAll(FOREIGN_DURATION)) {
-    problems.push(`"${match[0]}" — use one of the duration-motion-* utilities instead`);
+    problems.push(`"${match[0]}" — take the duration from the tokens in src/styles/motion.css`);
   }
   for (const match of source.matchAll(FOREIGN_EASING)) {
-    problems.push(`"${match[0]}" — use one of the ease-motion-* utilities instead`);
+    problems.push(`"${match[0]}" — take the curve from the tokens in src/styles/motion.css`);
   }
   for (const match of source.matchAll(RAW_MILLISECONDS)) {
     problems.push(`raw duration "${match[0]}" — use a motion token instead`);
@@ -115,7 +115,7 @@ function checkFile(file: string, vocabulary: MotionVocabulary): string[] {
     problems.push(`raw duration in "${match[0].trim()}" — use a motion token instead`);
   }
   for (const _match of source.matchAll(RAW_EASING)) {
-    problems.push(`raw cubic-bezier() — use one of the ease-motion-* utilities instead`);
+    problems.push(`raw cubic-bezier() — take the curve from the tokens in src/styles/motion.css`);
   }
   for (const _match of source.matchAll(BLANKET_TRANSITION)) {
     problems.push(`transition-all — use ui-motion, which transitions only paint and transforms`);
