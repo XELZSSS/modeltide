@@ -84,12 +84,7 @@ const getPricingSearchFields = (row: PricingRow) => SEARCH_FIELDS.aa(row.model);
 <template>
   <div class="flex flex-col gap-4">
     <div class="flex min-w-0 flex-wrap items-center gap-2">
-      <SegmentedGroup
-        class="no-scrollbar overflow-x-auto"
-        role="radiogroup"
-        :aria-label="t('viewMode')"
-        @keydown="onViewKeydown"
-      >
+      <SegmentedGroup class="flex-wrap" role="radiogroup" :aria-label="t('viewMode')" @keydown="onViewKeydown">
         <TabButton
           v-for="item in viewItems"
           :key="item.id"

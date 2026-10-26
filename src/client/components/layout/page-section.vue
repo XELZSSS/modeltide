@@ -16,7 +16,7 @@ const headingId = useId();
   </div>
   <section v-else :class="props.class" :aria-labelledby="headingId">
     <div class="mb-3 flex items-baseline justify-between gap-2 sm:mb-5">
-      <h2 :id="headingId" class="ui-section-title">{{ title }}</h2>
+      <h2 :id="headingId" class="min-w-0 ui-section-title break-words">{{ title }}</h2>
     </div>
     <slot />
   </section>

@@ -83,7 +83,9 @@ function resolveMobileColumns(columns: DataTableColumn<T>[]): MobileColumnLayout
                 <span v-if="layout.mainStatCol.header" class="text-right ui-meta leading-tight">
                   {{ layout.mainStatCol.header }}
                 </span>
-                <div class="ui-mono-value font-semibold">
+                <!-- The value wraps instead of being clipped: the column is capped at 45%, and the card clips its own
+                     overflow, so an over-long reading used to lose its tail with no ellipsis and no way to read it. -->
+                <div class="min-w-0 text-right ui-mono-value font-semibold [overflow-wrap:anywhere]">
                   <CellView :render="layout.mainStatCol.cell" :row="item.row" />
                 </div>
               </div>

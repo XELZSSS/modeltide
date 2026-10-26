@@ -42,9 +42,9 @@ const columns = computed<DataTableColumn<ReleaseRow>[]>(() => [
       withDirectives(h("p", { class: "ui-body font-medium break-words md:truncate" }, row.name), [
         [vTooltip, row.name],
       ]),
-      h("div", { class: "flex md:hidden mt-1.5 items-center gap-2" }, [
-        h("span", { class: "ui-caption" }, row.provider),
-        h("span", { class: "ui-meta" }, dateLabels.value.get(row.id)!),
+      h("div", { class: "mt-1.5 flex min-w-0 items-center gap-2 md:hidden" }, [
+        h("span", { class: "min-w-0 truncate ui-caption" }, row.provider),
+        h("span", { class: "shrink-0 ui-meta" }, dateLabels.value.get(row.id)!),
       ]),
     ]),
   ),

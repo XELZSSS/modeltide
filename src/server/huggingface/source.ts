@@ -31,6 +31,16 @@ const HF_PAGE_LIMIT = 1000;
 // INFLIGHT_HANG_GUARD_MS (30 s) and drop the whole refresh instead of degrading it.
 const HF_PAGE_TIMEOUT_MS = 8_000;
 
+/**
+ * Sorts that ask for recency rather than a ranking. The download gate exists so a *ranking* is not padded with
+ * repositories nobody has used yet, but sorting by creation date returns the repositories created hours ago: measured on
+ * the live API, the newest 1000 rows had zero downloads on every sample, so the gate left 0 of 1000 usable rows and
+ * `?sort=createdAt` answered 502 on every call — then held the 45 s failure cooldown, which is what made it look like a
+ * dead upstream. Recency sorts keep the license gate and drop the download one: an unlicensed repository is not
+ * open-source whatever its age, while a new one simply has no usage history yet.
+ */
+const RECENCY_SORTS: ReadonlySet<string> = new Set(["createdAt", "lastModified"]);
+
 function hfListUrl(sort: string, limit: number): string {
   const params = new URLSearchParams({ sort, limit: String(limit) });
   for (const field of HF_LIST_FIELDS) params.append("expand[]", field);
@@ -69,17 +79,25 @@ function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTa
   }
 }
 
-function parseHFItems(items: HFModel[], ctx: AppContext): OpenSourceModelEntry[] {
+function parseHFItems(items: HFModel[], ctx: AppContext, rankByUsage: boolean): OpenSourceModelEntry[] {
   const tally = new LicenseDropTally();
   const kept = items
     .map((m) => mapListModel(m, tally))
-    .filter((m): m is OpenSourceModelEntry => m !== null && m.license != null && keepOpenSourceRanking(m, tally));
+    .filter(
+      (m): m is OpenSourceModelEntry =>
+        m !== null && m.license != null && (!rankByUsage || keepOpenSourceRanking(m, tally)),
+    );
   logLicenseDrops(ctx, items.length, tally);
   const bucket = dedupeBy(kept, (m) => m.id);
   requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
   const dropped = items.length - kept.length;
   if (dropped > 0) {
-    ctx.log("info", `[huggingface] filtered ${dropped}/${items.length} rows (non-open license or zero downloads)`);
+    ctx.log(
+      "info",
+      `[huggingface] filtered ${dropped}/${items.length} rows (${
+        rankByUsage ? "non-open license or zero downloads" : "non-open license"
+      })`,
+    );
   }
   return bucket;
 }
@@ -92,15 +110,21 @@ export const OPEN_SOURCE_MODELS_TTL_MS = SLOW_TTL_MS;
 
 /** The ranking list and the home dashboard ask for the same page at the same depth: one cache entry, one upstream call. */
 
-const listSource = defineParamSource<OpenSourceModelsQuery, HFModel[], OpenSourceModelEntry[]>(
+/** The page together with the sort it was fetched for, because `parse` receives no params and the gates depend on it. */
+interface HFPage {
+  rows: HFModel[];
+  sort: string;
+}
+
+const listSource = defineParamSource<OpenSourceModelsQuery, HFPage, OpenSourceModelEntry[]>(
   (params) => cacheKeys.openSourceModels(params.sort),
   {
     ttl: OPEN_SOURCE_MODELS_TTL_MS,
     label: "HuggingFace",
     // Shared with the home dashboard, but the list route returns this payload, so the entry keeps its body.
     served: true,
-    fetch: (ctx, params) => fetchHFList(ctx, params.sort),
-    parse: (raw, ctx) => parseHFItems(raw, ctx),
+    fetch: async (ctx, params) => ({ rows: await fetchHFList(ctx, params.sort), sort: params.sort }),
+    parse: (page, ctx) => parseHFItems(page.rows, ctx, !RECENCY_SORTS.has(page.sort)),
   },
 );
 

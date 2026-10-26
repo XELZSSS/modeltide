@@ -102,7 +102,7 @@ const newsCategorySource = defineParamSource<{ category: NewsCategory }, NewsRaw
 );
 
 /**
- * One category per request. A tab only ever renders one of them, and fanning out to all four (14 feeds, ~1.5 MB of XML)
+ * One category per request. A tab only ever renders one of them, and fanning out to all four (14 feeds, ~0.8 MB of XML)
  * was the heaviest thing a single invocation did — work the free plan's 10 ms CPU budget cannot pay for. Each category
  * keeps its own cache entry and its own partial flag.
  */

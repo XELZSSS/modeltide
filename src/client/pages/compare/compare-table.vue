@@ -95,14 +95,18 @@ function getWinner(
       </CardContent>
     </Card>
   </div>
-  <Card v-else>
+  <!-- The card carries a real 1px hairline and the table fills it edge to edge (`!p-0` below), so the card has to clip
+       what it holds: without this the table rules and its square corners painted straight into the card's own border.
+       Every card in this app that holds flush content clips for the same reason (`table/mobile.vue`,
+       `news-category-data.vue`, and `data-table.vue` through its own scroll container). -->
+  <Card v-else class="overflow-hidden">
     <CardContent class="!p-0">
       <div v-if="title" class="px-4 pt-4"><CardHeader :title="title" class="mb-3" /></div>
-      <div class="w-full min-w-0 overflow-x-auto">
-        <table class="w-full text-sm">
+      <div class="w-full min-w-0">
+        <table class="w-full table-fixed text-sm">
           <thead>
             <tr class="border-b border-border">
-              <th scope="col" :class="cn(CELL, 'sticky left-0 z-10 bg-bg-card text-left ui-table-header')">
+              <th scope="col" :class="cn(CELL, 'sticky left-0 z-10 w-[42%] bg-bg-card text-left ui-table-header')">
                 {{ t("metric") }}
               </th>
               <th
@@ -113,7 +117,7 @@ function getWinner(
                 :style="{ color: seriesColor(theme, index) }"
                 v-tooltip="modelDisplayName(model)"
               >
-                {{ modelDisplayName(model) }}
+                <span class="block truncate">{{ modelDisplayName(model) }}</span>
               </th>
             </tr>
           </thead>

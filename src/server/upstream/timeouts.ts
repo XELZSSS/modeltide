@@ -7,10 +7,15 @@ export const UPSTREAM_FETCH_OPTS = { timeoutMs: UPSTREAM_TIMEOUT_MS, retries: 1 
 
 /**
  * RSS/Atom feeds. One dropped feed marks its whole news category partial, so a transient failure is worth one retry —
- * with a shorter per-attempt budget than the JSON path so the worst case (2 × 8s + backoff) still fits inside a single
- * news request, whose legs share the 6-connection pool.
+ * with a shorter per-attempt budget than the JSON path so the worst case (2 × 10s + backoff = 22 s) still fits inside a
+ * single news request, whose legs share the 6-connection pool.
+ *
+ * 10 s rather than the 8 s it used to carry: a feed's first, cold CDN miss measured 8.8 s (every warm request afterwards
+ * finished in under 1.2 s), which an 8 s budget cut off on the first attempt and turned into a `partial` category for a
+ * source that was only slow, not down. The value stays under the JSON path's worst case, so `SHARED_REFRESH_TIMEOUT_MS`
+ * and the hang guard derived from it are unchanged.
  */
-export const FEED_TIMEOUT_MS = 8_000;
+export const FEED_TIMEOUT_MS = 10_000;
 export const FEED_FETCH_OPTS = { timeoutMs: FEED_TIMEOUT_MS, retries: 1 } as const;
 
 const FETCH_OPTS = [UPSTREAM_FETCH_OPTS, FEED_FETCH_OPTS] as const;

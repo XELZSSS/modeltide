@@ -17,10 +17,9 @@ const parser = new XMLParser({
   processEntities: false,
   htmlEntities: false,
   /**
-   * Keeps the article body as one opaque string. `toNewsItem` reads title, link and dates only, while the MIT News
-   * feed spends three quarters of its bytes inside `content:encoded` — building a subtree for that text cost 10.1 ms
-   * of a 10 ms CPU budget per refresh (7.4 ms with this). Verified against all fourteen configured feeds: the emitted
-   * NewsItem rows are identical either way.
+   * Keeps the article body as one opaque string. `toNewsItem` reads title, link and dates only, while a full-text feed
+   * spends most of its bytes inside `content:encoded` — building a subtree for that text cost 10.1 ms of a 10 ms CPU
+   * budget per refresh (7.4 ms with this). The emitted NewsItem rows are identical either way.
    */
   stopNodes: ["*.content:encoded"],
 });
@@ -69,12 +68,11 @@ const FEED_TAILS = ["</channel></rss>", "</channel>\n</rss>", "</channel>\r\n</r
 
 /**
  * Cuts the document after the last item the caller can still reach, so the XML parser does not build a subtree for
- * every item in a long feed. The Hugging Face blog ships 890 items for a 30-item limit, and parsing all of them cost
- * 19 ms of a 10 ms CPU budget — the largest single cost in the news route.
+ * every item in a long feed. A feed that ships hundreds of items against a 30-item limit costs 19 ms of a 10 ms CPU
+ * budget — the largest single cost in the news route.
  *
  * A feed is returned untouched unless it carries more items than `keep`, and only when its own closing tag can be
- * reused, so the document the parser sees stays well-formed. Verified against all fourteen configured feeds: the
- * parsed rows are identical either way.
+ * reused, so the document the parser sees stays well-formed. The parsed rows are identical either way.
  */
 function capItems(xml: string, keep: number): string {
   for (const closer of ITEM_CLOSERS) {

@@ -135,8 +135,8 @@ function assertFontFiles(html: string): void {
 }
 
 /**
- * Each news category has to finish its feeds in one leg round: one round costs at most 18 s, inside
- * INFLIGHT_HANG_GUARD_MS (28 s), while a second round would reach 36 s and make the hang guard drop a refresh whose
+ * Each news category has to finish its feeds in one leg round: one round costs at most 22 s (2 × 10 s + backoff), inside
+ * INFLIGHT_HANG_GUARD_MS (28 s), while a second round would reach 44 s and make the hang guard drop a refresh whose
  * upstream work was already paid for. Failing here keeps that a build error instead of a boot-time failure for every
  * route.
  */
@@ -409,18 +409,19 @@ function assertCpuBudgetShape(): void {
   const read = (file: string): string => fs.readFileSync(path.join(rootDir, file), "utf8");
 
   // 1. RSS: parse only the items that can still be reached, and keep article bodies opaque. Without either, one refresh
-  //    of the "research" category (MIT News is 508 KB, 75% of it article text) exceeds the whole budget.
+  //    of a full news category (a 30-row shelf over feeds that ship hundreds of items with full article bodies) exceeds
+  //    the whole CPU budget.
   const feed = read("src/server/formats/rss-feed-parser.ts");
   if (!feed.includes("parser.parse(capItems(")) {
     throw new Error(
-      "src/server/formats/rss-feed-parser.ts: capItems() is gone. Parsing every item of a long feed (the Hugging Face " +
-        "blog ships 890 for a 30-item limit) costs ~19 ms of a 10 ms CPU budget.",
+      "src/server/formats/rss-feed-parser.ts: capItems() is gone. Parsing every item of a long feed (a full-text feed " +
+        "can ship hundreds for a 30-item limit) costs ~19 ms of a 10 ms CPU budget.",
     );
   }
   if (!feed.includes("stopNodes")) {
     throw new Error(
       "src/server/formats/rss-feed-parser.ts: the stopNodes entry for content:encoded is gone. Building a subtree for " +
-        "article bodies the code never reads adds ~3 ms per MIT News refresh.",
+        "article bodies the code never reads adds ~3 ms per news refresh.",
     );
   }
 

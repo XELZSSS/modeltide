@@ -95,9 +95,9 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
           {{ result.score.toFixed(1) }}
         </span>
       </span>
-      <span class="mt-1 flex items-center gap-2">
-        <span class="ui-caption">{{ t(result.source) }}</span>
-        <span v-if="result.provider" class="ui-meta">{{ result.provider }}</span>
+      <span class="mt-1 flex min-w-0 items-center gap-2">
+        <span class="shrink-0 ui-caption">{{ t(result.source) }}</span>
+        <span v-if="result.provider" class="min-w-0 truncate ui-meta">{{ result.provider }}</span>
       </span>
     </div>
   </Combobox>

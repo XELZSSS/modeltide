@@ -66,7 +66,9 @@ const tokenStats = computed<[TranslationKey, string][]>(() => [
       </InfoCard>
     </InfoGrid>
     <div v-if="showVariantBadge || model.isFree" class="flex flex-wrap gap-2">
-      <Badge v-if="showVariantBadge">{{ model.variant }}</Badge>
+      <Badge v-if="showVariantBadge">
+        <span class="min-w-0 truncate" v-tooltip="model.variant">{{ model.variant }}</span>
+      </Badge>
       <Badge v-if="model.isFree" class="text-success">{{ t("free") }}</Badge>
     </div>
   </div>

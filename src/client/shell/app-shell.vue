@@ -98,13 +98,14 @@ onBeforeUnmount(() => {
     <!-- `scrollbar-gutter: stable` reserves the thin bar's 10px on touch widths, where that bar is still painted: the
          scrollport is `auto`, so switching between ranking tabs of different heights used to add and remove the strip
          and shift the centred content sideways. Desktop hides the bar (see utilities.css), so nothing is reserved
-         there. -->
+         there. The x axis is clipped explicitly: `overflow-y: auto` alone computes `overflow-x` to `auto` as well,
+         which turned this column into a sideways-scrollable box whose scrollbar is invisible on desktop. -->
     <main
       ref="mainRef"
       id="main-content"
       tabindex="-1"
       :aria-label="t('mainContent')"
-      class="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto overscroll-contain focus:outline-none md:[scrollbar-gutter:auto]"
+      class="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-x-hidden overflow-y-auto overscroll-contain focus:outline-none md:[scrollbar-gutter:auto]"
     >
       <div :class="[PAGE_WIDTH, PAGE_GUTTER]">
         <ContractSkewNotice />
