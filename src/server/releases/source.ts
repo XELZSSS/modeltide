@@ -8,15 +8,9 @@ import { getChangelogModels } from "@/server/aa/changelog";
 import { getIntelligenceIndex } from "@/server/aa";
 import { fanOut } from "@/server/fan-out";
 import { toClosedReleases, toClosedReleasesFromIndex } from "./parse";
-import { definePartialSource, requireRows } from "@/server/pipeline";
+import { definePartialSource, requireRows, type PartialData } from "@/server/pipeline";
 
-interface ClosedReleasesRaw {
-  entries: ClosedReleaseEntry[];
-  partial: boolean;
-  counts: { changelog: number; index: number };
-}
-
-async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> {
+async function fetchClosedReleases(ctx: AppContext): Promise<PartialData<ClosedReleaseEntry[]>> {
   const { values } = await fanOut(
     ctx,
     [
@@ -44,23 +38,18 @@ async function fetchClosedReleases(ctx: AppContext): Promise<ClosedReleasesRaw> 
     finalEntries = toClosedReleasesFromIndex(models, upstreamConfig.artificialAnalysis);
     ctx.log("warn", `[closed-releases] changelog empty, index fallback rows=${finalEntries.length}`);
   }
+  // The row check lives here rather than in a `refine` of its own: the counts it reports are already in scope, and a
+  // throw out of `fetch` reports failure the way every other source does.
+  requireRows(finalEntries, "Releases", "rows", `changelog=${changelogModels.length}, index=${models.length}`);
   const partial = index == null || index.payload.partial || indexFallback || changelog?.payload.partial === true;
   if (partial) ctx.log("warn", "[closed-releases] serving partial (degraded enrichment)");
-  return {
-    entries: finalEntries,
-    partial,
-    counts: { changelog: changelogModels.length, index: models.length },
-  };
+  return { data: finalEntries, partial };
 }
 
-export const getClosedReleases = definePartialSource<ClosedReleasesRaw, ClosedReleaseEntry[]>({
+export const getClosedReleases = definePartialSource<ClosedReleaseEntry[]>({
   key: cacheKeys.closedReleases,
   ttl: STATIC_TTL_MS,
   label: "Releases",
   served: true,
   fetch: (ctx) => fetchClosedReleases(ctx),
-  pick: (raw) => raw.entries,
-  refine: (entries, raw) => {
-    requireRows(entries, "Releases", "rows", `changelog=${raw.counts.changelog}, index=${raw.counts.index}`);
-  },
 });

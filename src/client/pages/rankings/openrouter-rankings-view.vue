@@ -23,12 +23,7 @@ function buildOpenRouterBodyColumns(
   extras: NameCellExtras<OpenRouterRankEntry>,
 ): DataTableColumn<OpenRouterRankEntry>[] {
   return [
-    modelNameCol(
-      t("model"),
-      (item) => item.name,
-      (item) => item.name,
-      { width: "45%", ...extras },
-    ),
+    modelNameCol(t("model"), (item) => item.name, { width: "45%", ...extras }),
     monoCol("totalTokens", t("totalTokens"), (item) => formatShortNumber(item.totalTokens, t("notAvailable")), {
       mobilePrimary: true,
       emphasis: "strong",

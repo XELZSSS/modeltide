@@ -279,6 +279,17 @@ describe("parseFeed", () => {
     );
     expect(readFeed(xml)[0]?.title).toBe("Real News");
   });
+
+  /**
+   * The declared name wins over the channel title. Four of the twelve live feeds ship a title that is a section name, a
+   * tagline or the bare word `AI`, so the name is declared in `news/feeds.ts` rather than derived; a feed the table does
+   * not list still falls back to its own title.
+   */
+  it("prefers the declared source name and falls back to the channel title", () => {
+    const xml = rssFeed(`<title>Keep</title><link>https://y.example/keep</link>`);
+    expect(unwrap(parseFeedResult(xml, "https://y.example/feed", "Example Wire")).at(0)?.source).toBe("Example Wire");
+    expect(unwrap(parseFeedResult(xml, "https://y.example/feed")).at(0)?.source).toBe("T");
+  });
 });
 
 describe("primitives", () => {

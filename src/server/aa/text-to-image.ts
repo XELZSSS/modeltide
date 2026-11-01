@@ -16,11 +16,13 @@ export const getTextToImageLeaderboard = defineSource<string, TextToImageModel[]
   label: "Text-to-image",
   fetch: (ctx: AppContext) => ctx.http.getRsc(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaTextToImage),
   parse: (body, ctx) => {
+    const parsed = parseTextToImageRows(body);
+    // A zero-row failure reports the body it came from; the rows the parser rejected are already in its own warning.
     const mapped = requireRows(
-      requireParsed(parseTextToImageRows(body), ctx.log, "text-to-image"),
+      requireParsed(parsed, ctx.log, "text-to-image"),
       "Text-to-image",
       "rows",
-      `raw=0, kept=0, body=${body.length}B`,
+      `kept=0, body=${body.length}B`,
     );
     const ranked = dedupeBy(mapped.sort(byNumberDesc((m) => m.elo)), (m) => m.slug);
     return ranked;

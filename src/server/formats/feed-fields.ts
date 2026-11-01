@@ -30,11 +30,19 @@ function cleanTitle(raw: string): string {
 }
 
 /**
- * The name a feed's items are attributed to: its channel title, or the host of the feed URL when the feed gave none.
- * `sourceNameFromUrl` answers `null` for an unparseable feed URL, and a channel with neither a title nor a host is
- * reported rather than labelled with a placeholder — the feed is already suspect at that point.
+ * The name a feed's items are attributed to, or `null` when neither the feed nor its URL names anything.
+ *
+ * `preferred` comes from the feed table (`news/feeds.ts`), which declares the name once per feed. A channel title is
+ * written for its own site rather than for a byline beside a headline, and the live feeds proved it: `blog.google`
+ * ships the title `AI` (which names nothing), TechCrunch ships `AI News & Artificial Intelligence | TechCrunch`, and
+ * Google Research ships the sentence `The latest research from Google`. Those are correct channel titles and wrong
+ * source names, and no structural rule can fix them: a heuristic that cut `|` tags and trailing `Blog` also turned
+ * `Hugging Face - Blog` into `Hugging Face -` and `Simon Willison's Weblog` into `Simon Willison's`, so it broke two
+ * names that were already right. The name is therefore declared, and the channel title is only the fallback for a feed
+ * the table does not list.
  */
-export function channelTitle(channel: Record<string, unknown>, sourceUrl: string): string | null {
+export function channelTitle(channel: Record<string, unknown>, sourceUrl: string, preferred?: string): string | null {
+  if (preferred !== undefined) return preferred;
   const text = textOf(channel.title) ?? "";
   return cleanTitle(text) || channelHost(sourceUrl);
 }

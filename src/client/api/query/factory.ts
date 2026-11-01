@@ -1,4 +1,3 @@
-import type { Query } from "@tanstack/query-core";
 import { useQuery, type QueryClient, type UseQueryReturnType } from "@tanstack/vue-query";
 import type { MaybeRefOrGetter } from "vue";
 import { ONE_DAY, THIRTY_MINUTES, apiPaths } from "@/shared/config";
@@ -8,10 +7,6 @@ import { fetcher } from "../transport/client";
 import { partialPollInterval } from "./partial-poll";
 
 type RawPayload<D extends ApiDomain> = SourcePayload<PayloadOf<D>>;
-
-type PollFn<D extends ApiDomain> = (
-  query: Query<RawPayload<D>, Error, RawPayload<D>, readonly unknown[]>,
-) => number | false;
 
 const QUERY_DEFAULTS = {
   ttlMs: THIRTY_MINUTES,
@@ -55,14 +50,12 @@ export function createApiQuery<D extends ApiDomain>(
     Math.max(ttlMs * QUERY_DEFAULTS.gcTimeMultiplier, QUERY_DEFAULTS.gcTimeMs),
     QUERY_DEFAULTS.maxGcTimeMs,
   );
-  const refetchInterval: PollFn<D> = (q) =>
-    partialPollInterval(q, isPartialData as (data: unknown) => boolean, partialRefetchMs);
   return {
     use: (enabled?: MaybeRefOrGetter<boolean>): UseQueryReturnType<RawPayload<D>, Error> =>
       useQuery<RawPayload<D>, Error>({
         queryKey: key,
         queryFn,
-        refetchInterval,
+        refetchInterval: (q) => partialPollInterval(q, isPartialData as (data: unknown) => boolean, partialRefetchMs),
         staleTime: (query) => staleTimeFor(query.state.data),
         gcTime: residentMs,
         enabled,

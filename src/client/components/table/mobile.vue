@@ -43,22 +43,19 @@ const CARD_CLASS_EXPANDED = cn(
  * and the rest a two-column label/value grid. `hiddenMd` columns are dropped — they exist so a value already shown in
  * the primary column is not repeated on a wide screen.
  *
- * `null` means this table cannot be a card: an empty definition, or one whose columns are all `hiddenMd`. Both are
- * table-definition mistakes, but answering `null` renders nothing instead of picking a column that would print a blank
- * card, so the failure shows up in the view rather than in a non-null assertion.
+ * Every table definition opens with a column that is not `hiddenMd` (`modelCol` and `col()` in table-columns.ts never
+ * set the flag), so the first column is the card's title.
  */
-function resolveMobileColumns(columns: DataTableColumn<T>[]): MobileColumnLayout<T> | null {
-  const primaryCol = columns.find((col) => !col.hiddenMd);
-  if (!primaryCol) return null;
+function resolveMobileColumns(columns: DataTableColumn<T>[]): MobileColumnLayout<T> {
+  const primaryCol = columns.find((col) => !col.hiddenMd)!;
   const others = columns.filter((col) => col !== primaryCol);
   const mainStatCol = others.find((col) => col.mobilePrimary) ?? others.find((col) => !col.hiddenMd);
-  const secondaryCols = others.filter((col) => !col.hiddenMd && col !== mainStatCol);
-  return { primaryCol, mainStatCol, secondaryCols };
+  return { primaryCol, mainStatCol, secondaryCols: others.filter((col) => !col.hiddenMd && col !== mainStatCol) };
 }
 </script>
 
 <template>
-  <div v-if="layout" class="flex flex-col gap-3">
+  <div class="flex flex-col gap-3">
     <template v-for="item in rows" :key="item.id">
       <!--
         The row and its detail panel are one surface, exactly like the desktop table keeps its expanded <tr> inside the

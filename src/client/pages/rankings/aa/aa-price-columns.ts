@@ -1,9 +1,8 @@
 import { h } from "vue";
 import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { formatDollar, orNA } from "@/shared/utils";
+import { formatDollar, formatPricePerMillion, orNA } from "@/shared/utils";
 import {
-  mobilePrimaryCol,
   rightCol,
   RightAlignedText,
   type DataTableColumn,
@@ -41,9 +40,12 @@ export function buildPricingColumns(
     pricingLegCol("cacheHitPrice", t("cacheHitPrice"), PRICE_LEGS.cacheHitPrice),
     pricingLegCol("cacheWritePrice", t("cacheWritePrice"), PRICE_LEGS.cacheWritePrice),
     rightCol("blendedPrice", t("blendedPrice"), (row: PricingRow) =>
-      formatDollar(row.estimate?.blendedPrice ?? null, t),
+      // A $/M figure sitting next to a monthly total: spelling the unit out on this column is what keeps the two from
+      // being read as the same kind of number.
+      formatPricePerMillion(row.estimate?.blendedPrice ?? null, t),
     ),
-    mobilePrimaryCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.estimate?.monthlyCost ?? null, t), {
+    rightCol("monthlyCost", t("monthlyCost"), (row) => formatDollar(row.estimate?.monthlyCost ?? null, t), {
+      mobilePrimary: true,
       hiddenMd: true,
     }),
   ];

@@ -46,17 +46,20 @@ export function mapModels(
         (resolved.cacheHit == null || resolved.cacheHit === 0) &&
         (resolved.cacheWrite == null || resolved.cacheWrite === 0)
       : false;
+    // Each wire count is read once: `numOr` coerces (and `totalTokens` is the sum of the other two).
+    const promptTokens = numOr(row.total_prompt_tokens);
+    const completionTokens = numOr(row.total_completion_tokens);
     out.push({
       id,
       name,
       creator: creatorFromSlug(id),
       category: categoryFrom(id, name),
       variant: dominant.variant || null,
-      totalTokens: numOr(row.total_prompt_tokens) + numOr(row.total_completion_tokens),
-      promptTokens: numOr(row.total_prompt_tokens),
-      completionTokens: numOr(row.total_completion_tokens),
+      totalTokens: promptTokens + completionTokens,
+      promptTokens,
+      completionTokens,
       requestCount: numOr(row.count),
-      change: changeToPercent(latest.change, stats),
+      change: changeToPercent(latest.change),
       pricing: resolved ?? null,
       isFree,
       expiresAt,

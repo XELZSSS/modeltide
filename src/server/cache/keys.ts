@@ -27,6 +27,7 @@ export const cacheKeys = {
   openRouterPricing: cacheKey("openRouterRankings", "pricing-map", "per-million"),
   closedReleases: cacheKey("closedReleases"),
   decisionIndex: cacheKey("decisionIndex"),
+  cursorBench: cacheKey("cursorBench"),
 
   // `artificialIndex` names the Artificial Analysis data family, not one page: the image leaderboard is another page of
   // the same upstream, so it lives under this prefix with its own segment. The index payload itself is the suffixless

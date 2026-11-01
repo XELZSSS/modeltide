@@ -5,16 +5,11 @@ import type { AppContext } from "@/server/api/context";
 import { UpstreamError } from "@/server/api/errors";
 import { isRecord } from "@/server/formats/scalars";
 import { parseDirectoryRows, type DirectoryCacheEntry } from "./parse-directory";
-import { definePartialSource } from "@/server/pipeline";
+import { definePartialSource, type PartialData } from "@/server/pipeline";
 
 const PRICING_GAP_RATIO = 0.3;
 
-interface DirectoryRaw {
-  entry: DirectoryCacheEntry;
-  partial: boolean;
-}
-
-async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryRaw> {
+async function fetchModelDirectory(ctx: AppContext): Promise<PartialData<DirectoryCacheEntry>> {
   const res: unknown = await ctx.http.json(
     upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterDirectory),
   );
@@ -32,13 +27,12 @@ async function fetchModelDirectory(ctx: AppContext): Promise<DirectoryRaw> {
   if (partial) {
     ctx.log("warn", `[openrouter] directory pricing gaps`, { missing, totalRows });
   }
-  return { entry, partial };
+  return { data: entry, partial };
 }
 
-export const getModelDirectory = definePartialSource<DirectoryRaw, DirectoryCacheEntry>({
+export const getModelDirectory = definePartialSource<DirectoryCacheEntry>({
   key: cacheKeys.openRouterPricing,
   ttl: SLOW_TTL_MS,
   label: "OpenRouter directory",
   fetch: (ctx) => fetchModelDirectory(ctx),
-  pick: (raw) => raw.entry,
 });

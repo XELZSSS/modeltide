@@ -24,7 +24,7 @@ const parser = new XMLParser({
   stopNodes: ["*.content:encoded"],
 });
 
-export function parseFeed(xml: unknown, sourceUrl: unknown): ParseResult<NewsItem[]> {
+export function parseFeed(xml: unknown, sourceUrl: unknown, sourceName?: string): ParseResult<NewsItem[]> {
   const urlLabel = typeof sourceUrl === "string" ? sourceUrl : "unknown";
   if (typeof xml !== "string") {
     return parseFail(`Feed with non-string body rejected at ${urlLabel}`);
@@ -45,7 +45,7 @@ export function parseFeed(xml: unknown, sourceUrl: unknown): ParseResult<NewsIte
   } catch (err) {
     return parseFail(`Unparseable feed at ${urlLabel}: ${errMsg(err)}`);
   }
-  return parseChannel(parsed, urlLabel, MAX_ITEMS_PER_FEED);
+  return parseChannel(parsed, urlLabel, MAX_ITEMS_PER_FEED, sourceName);
 }
 
 /**
@@ -127,14 +127,19 @@ function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
   return isRecord(rawChannel) ? rawChannel : undefined;
 }
 
-function parseChannel(feed: unknown, sourceUrl: string, maxItems: number): ParseResult<NewsItem[]> {
+function parseChannel(
+  feed: unknown,
+  sourceUrl: string,
+  maxItems: number,
+  sourceName: string | undefined,
+): ParseResult<NewsItem[]> {
   const channel = resolveChannel(feed);
   if (!channel || (channel.item == null && channel.entry == null && channel.title == null)) {
     return parseFail(`Unrecognized feed format at ${sourceUrl}`);
   }
   let items = (channel.item ?? channel.entry ?? []) as unknown;
   if (!Array.isArray(items)) items = [items];
-  const source = channelTitle(channel, sourceUrl);
+  const source = channelTitle(channel, sourceUrl, sourceName);
   if (source === null) {
     return parseFail(`Unrecognized feed source at ${sourceUrl}`);
   }

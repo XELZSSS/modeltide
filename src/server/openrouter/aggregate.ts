@@ -10,15 +10,11 @@ import type { PricingEntry } from "./parse-directory";
 
 const SUM_KEYS = ["total_prompt_tokens", "total_completion_tokens", "count"] as const;
 
+/** `-1` marks a row whose usage counters are both absent, so it can never win a dominant-row comparison. */
 function usageTotal(row: ModelRow): number {
   const p = numCoerce(row.total_prompt_tokens);
   const c = numCoerce(row.total_completion_tokens);
-  if (p == null && c == null) return -1;
-  return (p ?? 0) + (c ?? 0);
-}
-
-function rankingMetric(row: ModelRow): number | null {
-  return numCoerce(row.rankingMetricValue);
+  return p == null && c == null ? -1 : (p ?? 0) + (c ?? 0);
 }
 
 interface Group {
@@ -32,25 +28,20 @@ interface Group {
 }
 
 /**
- * Converts the upstream `change` figure to percent. The payload has been observed in both forms: a ratio (`-0.9`, i.e.
- * -90%) and an already-percent number (`1`, i.e. 1%). Magnitude tells them apart — every ratio the feed emits is below 1
- * in absolute value — and that is the single heuristic this pipeline relies on. `parse-rankings.test.ts` pins both
- * cases, so a change in upstream meaning fails the suite instead of quietly scaling every trend by 100.
+ * Converts the upstream `change` figure to percent.
  *
- * One figure cannot say which form it is in, so the two counts are recorded on the scan stats: a payload that needed
- * both readings is the signature of an upstream mid-change, and the ranking's own numbers are then scaled by two
- * different factors. `rankings.ts` reports it. A ratio above 1 (+150% over a period) also lands in the percent count,
- * so this is a signal to go look at, not a verdict.
+ * `change` is a **ratio** on every row: OpenRouter's own rankings page prints this column as `change * 100`, and a
+ * live probe of `/api/frontend/v1/rankings/models` reproduced that exactly (change `2.6249` renders as `+262%`,
+ * `77.2504` as `>999%`, `0.9562` as `+96%`). The payload therefore carries no unit ambiguity to resolve: a ratio
+ * above 1 is a genuine growth of over 100% over the seven-day window, not a percent figure.
+ *
+ * The previous implementation read `Math.abs(n) < 1` as a ratio and anything above it as an already-percent number.
+ * On the live payload that misread 65 of 588 rows — every model that grew more than 100%, the very rows a ranking
+ * page exists to surface, printed at a hundredth of their real growth (`2.6249` showed as `2.6%` instead of `262%`).
  */
-function changeToPercent(value: unknown, stats?: RankingScanStats): number | null {
+function changeToPercent(value: unknown): number | null {
   const n = numCoerce(value);
-  if (n == null) return null;
-  if (Math.abs(n) < 1) {
-    if (stats) stats.ratioFormChanges += 1;
-    return n * 100;
-  }
-  if (stats) stats.percentFormChanges += 1;
-  return n;
+  return n == null ? null : n * 100;
 }
 
 export type PricingLookup = Lookup<PricingEntry>;
@@ -67,8 +58,6 @@ export interface RankingScanStats {
   scannedRows: number;
   validRows: number;
   expiredRows: number;
-  ratioFormChanges: number;
-  percentFormChanges: number;
 }
 
 export type MetaLookup = Lookup<ModelMetaEntry>;
@@ -96,7 +85,7 @@ function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> 
     const id = row.model_permaslug.trim();
     const tokens = usageTotal(row);
     const ts = parseTs(row.date);
-    const metric = rankingMetric(row);
+    const metric = numCoerce(row.rankingMetricValue);
     const group = grouped.get(id);
     if (!group) {
       grouped.set(id, {

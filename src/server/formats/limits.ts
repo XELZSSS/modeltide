@@ -8,6 +8,8 @@ export const MAX_DIRECTORY_ROWS = 20_000;
 /** Row ceiling for a usage-rankings payload: one row per (model, variant) before the aggregation groups them. */
 export const MAX_RANKING_ROWS = 20_000;
 export const MAX_LEADERBOARD_ROWS = 5_000;
+/** Row ceiling for the CursorBench leaderboard, which is scraped from one HTML table. */
+export const MAX_CURSORBENCH_ROWS = 500;
 
 export function perMillionOrNull(rate: number | null): number | null {
   return rate == null ? null : rate * PER_MILLION;

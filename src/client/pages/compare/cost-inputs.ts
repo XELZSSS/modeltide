@@ -31,12 +31,12 @@ function useCostEstimator() {
   return { values, setField };
 }
 
-export function useMonthlyCosts(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>) {
+export function useCostEstimates(models: MaybeRefOrGetter<ArtificialAnalysisModel[]>) {
   const estimator = useCostEstimator();
 
-  const { monthlyCosts } = usePricingMaps(models, () => estimator.values.value);
+  const { costEstimates } = usePricingMaps(models, () => estimator.values.value);
 
-  return { ...estimator, monthlyCosts };
+  return { ...estimator, costEstimates };
 }
 
 export { isCostFieldInput } from "@/shared/scenario";

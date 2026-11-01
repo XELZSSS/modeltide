@@ -1,6 +1,6 @@
 import { onUnmounted, ref, watch } from "vue";
 
-export function useDebouncedTerm(initial: string, delayMs = 200) {
+export function useDebouncedTerm(initial: string, delayMs: number) {
   const inputValue = ref(initial);
   const debounced = ref(initial);
   const composing = ref(false);

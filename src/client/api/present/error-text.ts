@@ -27,6 +27,7 @@ const SOURCE_LABEL: Record<ApiDomain, TranslationKey> = {
   closedReleases: "releaseDataSources",
   news: "errorSourceNews",
   homeDashboard: "errorSourceHomeDashboard",
+  cursorBench: "cursorBenchSource",
 };
 
 interface ErrorText {
@@ -43,7 +44,7 @@ interface ErrorText {
  * so a bare `TypeError` here is an ordinary bug in our own code and stays `unknown` rather than telling the reader their
  * connection failed.
  */
-export function classifyError(err: unknown): ClientErrorKind {
+function classifyError(err: unknown): ClientErrorKind {
   if (err instanceof ApiClientError) return err.kind;
   const name = (err as { name?: unknown } | null | undefined)?.name;
   if (name === "TimeoutError") return "timeout";

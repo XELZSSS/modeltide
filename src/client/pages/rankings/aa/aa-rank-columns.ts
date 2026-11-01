@@ -3,7 +3,6 @@ import type { TFunction } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { formatScore, orNA } from "@/shared/utils";
 import {
-  rightAlignedCol,
   rightCol,
   RightAlignedText,
   type DataTableColumn,
@@ -24,7 +23,7 @@ function scoreColumn(
       formatScore(value, t),
     );
   };
-  return rightAlignedCol(id, header, cell, { mobilePrimary: opts?.mobilePrimary, hiddenMd: opts?.hiddenMd });
+  return rightCol(id, header, cell, { mobilePrimary: opts?.mobilePrimary, hiddenMd: opts?.hiddenMd });
 }
 
 export function buildRankingColumns(

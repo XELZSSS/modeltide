@@ -25,16 +25,14 @@ import {
 } from "@/client/charts/theme";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
-import { formatIndex, formatScore } from "@/shared/utils";
+import { formatIndex, formatPercent } from "@/shared/utils";
+import { isFiniteNumber } from "@/shared/utils/number";
 import { shortModelId } from "@/shared/utils/models";
 import { FALLBACK_DASH } from "@/shared/config/ui";
 import { cn } from "@/client/utils/cn";
 import { useDevice } from "@/client/device";
 import type { HomeChartPoint } from "@/shared/types";
 
-/** Coding first: the card is the coding-index ranking, and the intelligence bar is the reference beside it. */
-const SERIES_KEYS = ["coding", "intelligence"] as const;
-const SERIES_LABEL_KEYS = ["coding", "intelligence"] as const;
 /** The bar is ~26px thick on a desktop card, so 3px rounds the ends without turning it into a capsule. */
 const BAR_RADIUS = 3;
 /**
@@ -45,16 +43,6 @@ const BAR_RADIUS = 3;
  */
 const AXIS_LABEL_MAX_CHARS = 15;
 const MOBILE_AXIS_LABEL_MAX_CHARS = 16;
-
-type IndexSeriesKey = (typeof SERIES_KEYS)[number];
-type IndexRow = HomeChartPoint & Record<IndexSeriesKey, number>;
-
-/** The payload arrives sliced to `HOME_CHART_ROWS` and ordered by the coding index: this drops only the rows a bar cannot draw. */
-function buildIndexRows(models: readonly HomeChartPoint[]): IndexRow[] {
-  return models.filter((model): model is IndexRow =>
-    SERIES_KEYS.every((key) => typeof model[key] === "number" && Number.isFinite(model[key])),
-  );
-}
 
 const tickLabel = (value: string | number): string => formatIndex(Number(value));
 
@@ -67,8 +55,9 @@ const props = defineProps<{ models: HomeChartPoint[] }>();
 const { t } = useTranslation();
 const theme = useChartTheme();
 const isMobile = useDevice();
-const rows = computed(() => buildIndexRows(props.models));
-const fullLabels = computed(() => rows.value.map((m) => m.shortName || shortModelId(m.name) || m.id || FALLBACK_DASH));
+/** CursorBench is one pass rate per ranked entry, and a row without it is the only row this card drops. */
+const rows = computed(() => props.models.filter((model) => isFiniteNumber(model.score)));
+const fullLabels = computed(() => rows.value.map((m) => shortModelId(m.name) || m.id || FALLBACK_DASH));
 const labels = computed(() =>
   fullLabels.value.map((label) =>
     axisLabel(label, isMobile.value ? MOBILE_AXIS_LABEL_MAX_CHARS : AXIS_LABEL_MAX_CHARS),
@@ -76,26 +65,26 @@ const labels = computed(() =>
 );
 
 /**
- * The index is a 0..100 scale, so 100 is the floor of the value axis — but it must not also be the ceiling: a model
+ * The pass rate is a 0..100 scale, so 100 is the floor of the value axis — but it must not also be the ceiling: a score
  * above 100 was drawn past the plot and clipped without a trace. `ceilToStep` grows the axis to the next gridline.
  */
-const valueMax = computed(() =>
-  ceilToStep(rows.value.reduce((peak, row) => Math.max(peak, row.intelligence, row.coding), AXIS_MAX)),
-);
+const valueMax = computed(() => ceilToStep(rows.value.reduce((peak, row) => Math.max(peak, row.score), AXIS_MAX)));
 
 const data = computed<ChartData<"bar">>(() => ({
   labels: labels.value,
-  datasets: SERIES_KEYS.map((key, slot) => ({
-    label: t(SERIES_LABEL_KEYS[slot]!),
-    data: rows.value.map((m) => m[key]),
-    backgroundColor: seriesColor(theme.value, slot),
-    borderRadius: BAR_RADIUS,
-    borderSkipped: false,
-    // Seven categories of two bars: the category band is 70% of the slot and each bar 90% of its half, which is what
-    // makes the bars thick enough to read in a card this wide.
-    categoryPercentage: 0.7,
-    barPercentage: 0.9,
-  })),
+  datasets: [
+    {
+      label: t("score"),
+      data: rows.value.map((m) => m.score),
+      backgroundColor: seriesColor(theme.value, 0),
+      borderRadius: BAR_RADIUS,
+      borderSkipped: false,
+      // Seven categories of one bar: the category band is 70% of the slot and the bar 90% of it, which is what makes a
+      // bar thick enough to read in a card this wide.
+      categoryPercentage: 0.7,
+      barPercentage: 0.9,
+    },
+  ],
 }));
 
 const options = computed<ChartOptions<"bar">>(() =>
@@ -125,29 +114,20 @@ const options = computed<ChartOptions<"bar">>(() =>
         label: (ctx) => {
           // The bar's `parsed.y` is `number | null` in chart.js's own types, so the fallback branch is reachable here.
           const value = ctx.parsed.y;
-          return `${ctx.dataset.label}: ${value == null ? FALLBACK_DASH : formatScore(value, t)}`;
+          return `${ctx.dataset.label}: ${value == null ? FALLBACK_DASH : formatPercent(value, t)}`;
         },
       },
     },
   }),
 );
 
-const caption = computed(() =>
-  rows.value
-    .map(
-      (m) =>
-        `${m.shortName || m.name}: ${SERIES_KEYS.map(
-          (key, slot) => `${t(SERIES_LABEL_KEYS[slot]!)} ${formatScore(m[key], t)}`,
-        ).join(", ")}`,
-    )
-    .join("; "),
-);
+const caption = computed(() => rows.value.map((m) => `${m.name}: ${formatPercent(m.score, t)}`).join("; "));
 </script>
 
 <template>
   <Card class="h-full">
     <CardContent class="flex h-full flex-col">
-      <CardHeader :title="t('codeIndex')" :subtitle="t('artificialSource')" />
+      <CardHeader :title="t('codeIndex')" :subtitle="t('cursorBenchSource')" />
       <EmptyState
         v-if="rows.length === 0"
         variant="plain"

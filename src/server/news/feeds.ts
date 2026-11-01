@@ -23,38 +23,45 @@ const APPLE_ML_RESEARCH = "https://machinelearning.apple.com/rss.xml";
 interface NewsFeed {
   id: string;
   url: string;
+  /**
+   * The name its items are attributed to. Declared rather than read from the feed's channel title: see `channelTitle`
+   * in `formats/feed-fields.ts` for why four of these twelve feeds ship a title that is a section name, a sentence or
+   * the bare word `AI`, and why a heuristic cannot repair them without breaking the names that are already right.
+   */
+  sourceName: string;
 }
+
+export const rssFeeds: Record<NewsCategory, readonly NewsFeed[]> = {
+  industry: [
+    { id: "newsTechCrunch", url: TECHCRUNCH_AI, sourceName: "TechCrunch" },
+    { id: "newsArsTechnica", url: ARS_TECHNICA_AI, sourceName: "Ars Technica" },
+    { id: "newsGoogleAi", url: GOOGLE_AI_BLOG, sourceName: "Google AI" },
+  ],
+  opensource: [
+    { id: "newsSimonWillison", url: SIMON_WILLISON, sourceName: "Simon Willison" },
+    { id: "newsHfBlog", url: HF_BLOG, sourceName: "Hugging Face" },
+    { id: "newsInfoQ", url: INFOQ_AI, sourceName: "InfoQ" },
+  ],
+  hardware: [
+    { id: "newsNextPlatform", url: NEXT_PLATFORM, sourceName: "The Next Platform" },
+    { id: "newsServeTheHome", url: SERVE_THE_HOME, sourceName: "ServeTheHome" },
+    { id: "newsNvidia", url: NVIDIA_BLOG, sourceName: "NVIDIA" },
+  ],
+  research: [
+    { id: "newsGoogleResearch", url: GOOGLE_RESEARCH, sourceName: "Google Research" },
+    { id: "newsDeepMind", url: DEEPMIND_BLOG, sourceName: "Google DeepMind" },
+    { id: "newsAppleMl", url: APPLE_ML_RESEARCH, sourceName: "Apple ML Research" },
+  ],
+};
+
 /**
- * Feeds fetched in one leg round per category; the 6-slot connection pool per invocation is the hard ceiling, leaving
- * one slot spare. Three per category keeps a category inside a single round.
+ * Feeds fetched in one leg round per category: the widest category, so no category can ever need a second round.
  *
  * The round count is a timeout budget, not only latency: one round costs at most FEED_TIMEOUT_MS × (retries + 1) +
  * backoff = 22 s, inside the 28 s INFLIGHT_HANG_GUARD_MS, which itself leaves 2 s under the 30 s `waitUntil` cap. A
  * second round would reach 44 s, so the guard would drop the refresh after the upstream work was already paid for.
- * Raising this number needs the budget in src/server/upstream/timeouts.ts re-checked; `assertNewsRoundBudget` in
- * build/consistency-guard.ts fails the build if a category lists more feeds than fit one round.
+ *
+ * Derived rather than declared: a fixed count beside the feed list is a count the list can outgrow, which is what the
+ * build-time rule in `build/guards/structure.ts` used to catch. A fourth feed now widens the round instead.
  */
-export const NEWS_LEG_CONCURRENCY = 5;
-
-export const rssFeeds: Record<NewsCategory, readonly NewsFeed[]> = {
-  industry: [
-    { id: "newsTechCrunch", url: TECHCRUNCH_AI },
-    { id: "newsArsTechnica", url: ARS_TECHNICA_AI },
-    { id: "newsGoogleAi", url: GOOGLE_AI_BLOG },
-  ],
-  opensource: [
-    { id: "newsSimonWillison", url: SIMON_WILLISON },
-    { id: "newsHfBlog", url: HF_BLOG },
-    { id: "newsInfoQ", url: INFOQ_AI },
-  ],
-  hardware: [
-    { id: "newsNextPlatform", url: NEXT_PLATFORM },
-    { id: "newsServeTheHome", url: SERVE_THE_HOME },
-    { id: "newsNvidia", url: NVIDIA_BLOG },
-  ],
-  research: [
-    { id: "newsGoogleResearch", url: GOOGLE_RESEARCH },
-    { id: "newsDeepMind", url: DEEPMIND_BLOG },
-    { id: "newsAppleMl", url: APPLE_ML_RESEARCH },
-  ],
-};
+export const NEWS_LEG_CONCURRENCY = Math.max(...Object.values(rssFeeds).map((feeds) => feeds.length));

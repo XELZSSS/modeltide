@@ -71,11 +71,6 @@ function groupByProvider(models: ArtificialAnalysisModel[], unknownLabel: string
   }
   return Array.from(providers.values());
 }
-
-function avg(values: number[]): number | null {
-  return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
-}
-
 export interface ProviderStats {
   name: string;
   color: string;
@@ -85,23 +80,35 @@ export interface ProviderStats {
   avgIntelligence: number | null;
 }
 
+/**
+ * Per-provider averages, accumulated in a single pass over each group.
+ *
+ * The three averages used to be built as `group.map(...).filter(...)` each — six intermediate arrays per provider, and
+ * an AA refresh hands this a few hundred models across dozens of providers. The sums are added in the same group order
+ * the `reduce` behind `avg` used, so the floating-point result is identical.
+ */
+function averageOf<T>(group: readonly T[], read: (row: T) => number | null | undefined): number | null {
+  let sum = 0;
+  let count = 0;
+  for (const row of group) {
+    const value = read(row);
+    if (!isFiniteNumber(value)) continue;
+    sum += value;
+    count += 1;
+  }
+  return count > 0 ? sum / count : null;
+}
+
 export function computeProviderStats(models: ArtificialAnalysisModel[], unknownLabel: string): ProviderStats[] {
   const usedColors = new Set<string>();
-  return groupByProvider(models, unknownLabel)
-    .map(({ name, color, models: group }) => {
-      const count = group.length;
-      const prices = group.map((m) => m.pricing?.input).filter(isFiniteNumber);
-      const avgInputPrice = avg(prices);
-      const avgSpeed = avg(group.map(getOutputSpeed).filter(isFiniteNumber));
-      const avgIntelligence = avg(group.map((m) => m.intelligence_index).filter(isFiniteNumber));
-      return {
-        name,
-        color: providerDotColor(color, name, usedColors),
-        count,
-        avgInputPrice,
-        avgSpeed,
-        avgIntelligence,
-      };
-    })
-    .sort((a, b) => b.count - a.count);
+  const stats = groupByProvider(models, unknownLabel).map(({ name, color, models: group }) => ({
+    name,
+    color: providerDotColor(color, name, usedColors),
+    count: group.length,
+    avgInputPrice: averageOf(group, (m) => m.pricing?.input),
+    avgSpeed: averageOf(group, getOutputSpeed),
+    avgIntelligence: averageOf(group, (m) => m.intelligence_index),
+  }));
+  stats.sort((a, b) => b.count - a.count);
+  return stats;
 }

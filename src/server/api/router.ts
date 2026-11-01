@@ -178,7 +178,6 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
     // Every route's spec renders a `public` header, so a payload that got here is always cacheable and there is no
     // `no-store` response whose validator would have to be skipped.
     // A payload the cache did not produce (a test handler) carries no stamp; a fresh one costs a 304, never a body.
-    // A payload the cache did not produce (a test handler) carries no stamp; a fresh one costs a 304, never a body.
     const etag = payloadEtag(new Date(answer.producedAt ?? Date.now()).toISOString(), {
       rows: Array.isArray(payload.data) ? payload.data.length : undefined,
       partial: payload.partial,

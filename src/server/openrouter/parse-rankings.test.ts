@@ -50,7 +50,7 @@ const freePricing = new Map<string, PricingEntry>([["a/b", FREE_PRICING]]);
 
 /** The scan counters before `mapModels` has read a row. */
 function emptyStats(): RankingScanStats {
-  return { scannedRows: 0, validRows: 0, expiredRows: 0, ratioFormChanges: 0, percentFormChanges: 0 };
+  return { scannedRows: 0, validRows: 0, expiredRows: 0 };
 }
 
 function metaWith(entries: Record<string, { expiresAt: string }>): MetaLookup {
@@ -124,11 +124,19 @@ describe("mapModels", () => {
     expect(model).toMatchObject(expected);
   });
 
-  it("counts each reading of the ambiguous change unit so a payload that needs both is visible", () => {
-    const stats = emptyStats();
-    mapModels([sameSlugRow("a/ratio", { change: -0.9 }), sameSlugRow("b/percent", { change: 12 })], noPricing, stats);
-    expect(stats.ratioFormChanges).toBe(1);
-    expect(stats.percentFormChanges).toBe(1);
+  /**
+   * `change` is a ratio on every row, whatever its magnitude: the live payload carries `2.6249` for a model that grew
+   * 262%, and OpenRouter's own page prints it as `+262%`. Reading anything at or above 1 as an already-percent figure
+   * printed the fastest-growing models at a hundredth of their real growth.
+   */
+  it.each([
+    ["a sub-1 ratio", -0.9, -90],
+    ["exactly 1", 1, 100],
+    ["a ratio above 1", 2.6249, 262.49],
+    ["a four-digit ratio", 77.2504, 7725.04],
+  ])("scales %s by 100 whatever its magnitude", (_title, change, expected) => {
+    const [model] = mapModels([sameSlugRow("a/model", { change })], noPricing, emptyStats());
+    expect(model!.change).toBeCloseTo(expected, 6);
   });
 
   it("ranks by the upstream metric, not by the summed window total", () => {

@@ -42,7 +42,8 @@ interface SourceSpec<P, TRaw, TData> {
    */
   served?: boolean;
   fetch: (ctx: AppContext, params: P) => Promise<TRaw>;
-  parse: (raw: TRaw, ctx: AppContext) => TData;
+  /** `params` are the ones `fetch` received, so a gate that depends on the query is read where it applies. */
+  parse: (raw: TRaw, ctx: AppContext, params: P) => TData;
   /** Truncates an array payload to this many rows and flags the result partial. */
   cap?: number;
   partialWhen?: (stats: { raw: TRaw }) => PartialVerdict;
@@ -69,7 +70,7 @@ export function defineParamSource<P, TRaw, TData>(
         spec.ttl,
         async () => {
           const raw = await spec.fetch(refreshCtx, params);
-          let data = spec.parse(raw, refreshCtx);
+          let data = spec.parse(raw, refreshCtx, params);
           let truncated = false;
           if (spec.cap != null && Array.isArray(data) && data.length > spec.cap) {
             truncated = true;
@@ -101,41 +102,31 @@ export function defineSource<TRaw, TData>(spec: SourceSpec<void, TRaw, TData> & 
   return (ctx) => run(ctx, undefined);
 }
 
-interface PartialSourceSpec<TRaw extends { partial: boolean }, T> {
+/** A payload together with the flag its own `fetch` computed for it. */
+export interface PartialData<T> {
+  readonly data: T;
+  readonly partial: boolean;
+}
+
+/**
+ * A source whose `fetch` already knows whether its payload is partial: it resolves the payload together with the flag,
+ * so the spec restates neither.
+ *
+ * The four partial sources used to declare a raw shape of their own (`{ entry, partial }`, `{ models, partial }`, …)
+ * plus a `pick` that selected the field holding the payload. Naming that field `data` lets the wrapper read it, and the
+ * flag travels beside the value it was computed for instead of through a `partialWhen` that could disagree with it.
+ */
+export function definePartialSource<T>(spec: {
   key: string;
   ttl: number;
   label: string;
   served?: boolean;
   cap?: number;
-  fetch: (ctx: AppContext) => Promise<TRaw>;
-  pick: (raw: TRaw) => T;
-  /**
-   * Runs on the picked value before it is cached — the row check that would otherwise sit in a `parse` of its own.
-   * It reports failure the way every other source does: by throwing.
-   */
-  refine?: (data: T, raw: TRaw) => void;
-}
-
-/**
- * A source whose `fetch` already knows whether its payload is partial. The wrapper derives `parse` and `partialWhen`
- * from the one shape, so the four sources that used to write `parse: (raw) => raw.data` next to
- * `partialWhen: ({ raw }) => ({ partial: raw.partial })` cannot report a flag their own fetch did not set.
- */
-export function definePartialSource<TRaw extends { partial: boolean }, T>(
-  spec: PartialSourceSpec<TRaw, T>,
-): FixedSource<T> {
-  return defineSource<TRaw, T>({
-    key: spec.key,
-    ttl: spec.ttl,
-    label: spec.label,
-    served: spec.served,
-    cap: spec.cap,
-    fetch: spec.fetch,
-    parse: (raw) => {
-      const data = spec.pick(raw);
-      spec.refine?.(data, raw);
-      return data;
-    },
+  fetch: (ctx: AppContext) => Promise<PartialData<T>>;
+}): FixedSource<T> {
+  return defineSource<PartialData<T>, T>({
+    ...spec,
+    parse: (raw) => raw.data,
     partialWhen: ({ raw }) => ({ partial: raw.partial }),
   });
 }

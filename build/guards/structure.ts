@@ -1,4 +1,10 @@
-import { NEWS_CATEGORIES } from "../../src/shared/types/news.ts";
+import {
+  BACKOFF_MAX_MS,
+  INFLIGHT_HANG_GUARD_MARGIN_MS,
+  INFLIGHT_HANG_GUARD_MS,
+  NETWORK_RETRY_BACKOFF_MS,
+  PLATFORM_WAIT_UNTIL_CAP_MS,
+} from "../../src/server/upstream/timeouts.ts";
 import { listDir, listDirRecursive, type GuardContext, type GuardRule } from "./context.ts";
 
 const COMPONENTS_DIR = "src/client/components";
@@ -35,98 +41,34 @@ function assertComponentLayout(ctx: GuardContext): void {
   }
 }
 
-/** `export const NEWS_LEG_CONCURRENCY = <number>;`, read as text: importing `feeds.ts` would pull a Workers-only tree
- * into the DOM-typed app project (see the note on `readGuardSource` in the old guard file). */
-const NEWS_LEG_CONCURRENCY_DECL = /export const NEWS_LEG_CONCURRENCY = (\d+);/;
-const FEED_CATEGORY_BLOCK = /^  (\w+): \[/gm;
-
-function feedCountPerCategory(feedsSrc: string): Map<string, number> {
-  const counts = new Map<string, number>();
-  const starts = [...feedsSrc.matchAll(FEED_CATEGORY_BLOCK)];
-  for (let i = 0; i < starts.length; i++) {
-    const from = starts[i]!.index;
-    const to = i + 1 < starts.length ? starts[i + 1]!.index : feedsSrc.length;
-    const block = feedsSrc.slice(from, to);
-    counts.set(starts[i]![1]!, (block.match(/url: /g) ?? []).length);
-  }
-  return counts;
-}
-
-/**
- * One leg round per news category, and a round is a timeout budget rather than only latency: `FEED_TIMEOUT_MS ×
- * (retries + 1) + backoff` per round has to stay inside `INFLIGHT_HANG_GUARD_MS`. A category that lists more feeds than
- * the round can carry would need a second round, which reaches 44 s — past the guard, so the refresh would be dropped
- * after the upstream work was already paid for.
- */
-function assertNewsRoundBudget(feedsSrc: string): void {
-  const limit = NEWS_LEG_CONCURRENCY_DECL.exec(feedsSrc)?.[1];
-  if (limit === undefined) {
-    throw new Error("src/server/news/feeds.ts: NEWS_LEG_CONCURRENCY declaration not found");
-  }
-  const concurrency = Number(limit);
-  const counts = feedCountPerCategory(feedsSrc);
-  for (const category of NEWS_CATEGORIES) {
-    const count = counts.get(category);
-    if (count === undefined) {
-      throw new Error(`src/server/news/feeds.ts: rssFeeds has no "${category}" list`);
-    }
-    if (count > concurrency) {
-      throw new Error(
-        `src/server/news/feeds.ts: "${category}" lists ${count} feeds, but NEWS_LEG_CONCURRENCY is ${concurrency}: ` +
-          "a second leg round would exceed INFLIGHT_HANG_GUARD_MS. Raise the limit and re-check the timeout budget " +
-          "in src/server/upstream/timeouts.ts together.",
-      );
-    }
-  }
-}
-
-/** The numbers `assertHangGuardBudget` compares, parsed from `src/server/upstream/timeouts.ts` for the reason above. */
-const TIMEOUT_CONSTANTS = [
-  "UPSTREAM_TIMEOUT_MS",
-  "FEED_TIMEOUT_MS",
-  "BACKOFF_MAX_MS",
-  "NETWORK_RETRY_BACKOFF_MS",
-  "PLATFORM_WAIT_UNTIL_CAP_MS",
-  "INFLIGHT_HANG_GUARD_MARGIN_MS",
-] as const;
-
-function timeoutNumbers(src: string): Record<(typeof TIMEOUT_CONSTANTS)[number], number> {
-  const out = {} as Record<(typeof TIMEOUT_CONSTANTS)[number], number>;
-  for (const name of TIMEOUT_CONSTANTS) {
-    // `UPSTREAM_TIMEOUT_MS` is module-private (no `export`), so the pattern accepts both forms.
-    const digits = new RegExp(`(?:export )?const ${name} = ([\\d_]+);`).exec(src)?.[1];
-    if (digits === undefined) throw new Error(`src/server/upstream/timeouts.ts: ${name} declaration not found`);
-    out[name] = Number(digits.replaceAll("_", ""));
-  }
-  return out;
-}
-
 /**
  * The inflight hang guard releases a wedged refresh, and it only ever runs if it fires inside the platform's
  * post-response window (`ctx.waitUntil`, 30 s). The budget arithmetic lives in src/server/upstream/timeouts.ts; raising a
  * fetch timeout there is what would quietly push the guard past the cap, which no test would see.
  *
+ * The numbers are imported instead of parsed out of the source text: the rule then compares the values the worker
+ * actually runs with, and it stops being a regex that breaks the day one constant is renamed.
+ * `timeouts.ts` imports nothing at all, which is what makes it safe to pull into the DOM-typed app project.
+ *
  * The check is on the *slack* left after the guard fires, not on the guard plus its margin: the old form passed while
  * leaving exactly zero room for the timer, so a fetch-budget change could eat the last second unnoticed.
  */
-function assertHangGuardBudget(src: string): void {
-  const t = timeoutNumbers(src);
-  const worstCaseCall = Math.max(t.UPSTREAM_TIMEOUT_MS * 2, t.FEED_TIMEOUT_MS * 2) + t.BACKOFF_MAX_MS;
+function assertWaitUntilBudget(): void {
   // `WORST_CASE_UPSTREAM_CALL_MS` in timeouts.ts adds exactly one `BACKOFF_MAX_MS` to `timeoutMs × (retries + 1)`, so a
   // retry wait above that backoff cap would push a call past the refresh timeout the guard is derived from.
-  if (t.NETWORK_RETRY_BACKOFF_MS > t.BACKOFF_MAX_MS) {
+  if (NETWORK_RETRY_BACKOFF_MS > BACKOFF_MAX_MS) {
     throw new Error(
-      `src/server/upstream/timeouts.ts: NETWORK_RETRY_BACKOFF_MS (${t.NETWORK_RETRY_BACKOFF_MS}) is above BACKOFF_MAX_MS ` +
-        `(${t.BACKOFF_MAX_MS}), which WORST_CASE_UPSTREAM_CALL_MS is derived from.`,
+      `src/server/upstream/timeouts.ts: NETWORK_RETRY_BACKOFF_MS (${NETWORK_RETRY_BACKOFF_MS}) is above BACKOFF_MAX_MS ` +
+        `(${BACKOFF_MAX_MS}), which WORST_CASE_UPSTREAM_CALL_MS is derived from.`,
     );
   }
-  const guard = worstCaseCall + t.INFLIGHT_HANG_GUARD_MARGIN_MS;
-  const slack = t.PLATFORM_WAIT_UNTIL_CAP_MS - guard;
-  if (slack < t.INFLIGHT_HANG_GUARD_MARGIN_MS) {
+  const slack = PLATFORM_WAIT_UNTIL_CAP_MS - INFLIGHT_HANG_GUARD_MS;
+  if (slack < INFLIGHT_HANG_GUARD_MARGIN_MS) {
     throw new Error(
-      `src/server/upstream/timeouts.ts: the inflight hang guard fires at ${guard} ms, leaving ${slack} ms before the ` +
-        `platform's ${t.PLATFORM_WAIT_UNTIL_CAP_MS} ms waitUntil cap — under the ${t.INFLIGHT_HANG_GUARD_MARGIN_MS} ms ` +
-        "the timer needs to run at all. Lower the fetch timeout budget or the guard stops running.",
+      `src/server/upstream/timeouts.ts: the inflight hang guard fires at ${INFLIGHT_HANG_GUARD_MS} ms, leaving ${slack} ms ` +
+        `before the platform's ${PLATFORM_WAIT_UNTIL_CAP_MS} ms waitUntil cap — under the ` +
+        `${INFLIGHT_HANG_GUARD_MARGIN_MS} ms the timer needs to run at all. Lower the fetch timeout budget or the guard ` +
+        "stops running.",
     );
   }
 }
@@ -232,16 +174,17 @@ function assertUrlOwners(ctx: GuardContext): void {
 }
 
 /**
- * `src/client/components`' six flat groups, plus the three budget rules that only a build can see: the news leg round,
- * the hang guard's slack under `waitUntil`, and the CPU-budget shapes the parsers must keep. All three read server
- * sources as text rather than importing them: a `src/server` import would pull a Workers-only tree into the DOM-typed
- * app project (`tsconfig.app.json` includes `build/**`).
+ * `src/client/components`' six flat groups, the waitUntil budget the hang guard has to land inside, and the CPU-budget
+ * shapes the parsers must keep. The parsers are read as text rather than imported: a `src/server` import would pull a
+ * Workers-only tree into the DOM-typed app project (`tsconfig.app.json` includes `build/**`), and `timeouts.ts` is the one
+ * server module that imports nothing, so it is imported directly above.
+ *
+ * The news leg round used to be checked here too. `NEWS_LEG_CONCURRENCY` is now derived from the widest category in
+ * `src/server/news/feeds.ts`, so a category cannot outgrow its round and there is nothing left to compare.
  */
 export const structureRule: GuardRule = {
   id: "structure",
   watches: [
-    "src/server/news/feeds.ts",
-    "src/server/upstream/timeouts.ts",
     "src/server/formats/rss-feed-parser.ts",
     "src/server/formats/rsc-scan.ts",
     "src/server/aa/parse/model-merge.ts",
@@ -252,8 +195,7 @@ export const structureRule: GuardRule = {
   watchesPrefix: `${COMPONENTS_DIR}/`,
   run(ctx: GuardContext) {
     assertComponentLayout(ctx);
-    assertNewsRoundBudget(ctx.readText("src/server/news/feeds.ts"));
-    assertHangGuardBudget(ctx.readText("src/server/upstream/timeouts.ts"));
+    assertWaitUntilBudget();
     assertCpuBudgetShape(ctx);
     assertUrlOwners(ctx);
   },

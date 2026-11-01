@@ -102,22 +102,16 @@ function parseHFItems(items: HFModel[], ctx: AppContext, rankByUsage: boolean): 
   return bucket;
 }
 
-/** The page together with the sort it was fetched for, because `parse` receives no params and the gates depend on it. */
-interface HFPage {
-  rows: HFModel[];
-  sort: string;
-}
-
 /** The ranking list and the home dashboard ask for the same page at the same depth: one cache entry, one upstream call. */
-export const getHomeOpenSourceModels = defineParamSource<OpenSourceModelsQuery, HFPage, OpenSourceModelEntry[]>(
+export const getHomeOpenSourceModels = defineParamSource<OpenSourceModelsQuery, HFModel[], OpenSourceModelEntry[]>(
   (params) => cacheKeys.openSourceModels(params.sort),
   {
     ttl: SLOW_TTL_MS,
     label: "HuggingFace",
     // Shared with the home dashboard, but the list route returns this payload, so the entry keeps its body.
     served: true,
-    fetch: async (ctx, params) => ({ rows: await fetchHFList(ctx, params.sort), sort: params.sort }),
-    parse: (page, ctx) => parseHFItems(page.rows, ctx, !RECENCY_SORTS.has(page.sort)),
+    fetch: (ctx, params) => fetchHFList(ctx, params.sort),
+    parse: (rows, ctx, params) => parseHFItems(rows, ctx, !RECENCY_SORTS.has(params.sort)),
   },
 );
 
@@ -151,7 +145,9 @@ const modelByIdSource = defineParamSource<string, OpenSourceModelEntry | null, O
   {
     ttl: SLOW_TTL_MS,
     label: "HuggingFace model",
-    served: true,
+    // No `served`: `getOpenSourceModels` composes this row into a fresh list envelope that carries no body, so a stored
+    // response copy would never be served — it only cost resident bytes in L1 (counted at the 4× body factor) and a
+    // larger KV value.
     scope: { staleCapMs: (value) => (value === null ? NEGATIVE_STALE_CAP_MS : undefined) },
     fetch: (ctx, id) => (isValidHFModelId(id) ? fetchHFModelById(ctx, id) : Promise.resolve(null)),
     parse: (raw) => raw,

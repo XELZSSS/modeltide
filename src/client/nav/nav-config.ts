@@ -12,7 +12,7 @@ export const RANKING_TABS = [
   "openSourceRankings",
   "hallucinationRankings",
   "decisionRankings",
-
+  "cursorBenchRankings",
   "providerCompare",
 ] as const;
 
@@ -26,8 +26,16 @@ export const RANKING_TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   openSourceRankings: SOURCES.os.labelKey,
   hallucinationRankings: SOURCES.hall.labelKey,
   decisionRankings: SOURCES.aa.labelKey,
-
+  cursorBenchRankings: "cursorBenchSource",
   providerCompare: SOURCES.aa.labelKey,
+};
+
+/**
+ * The line under the description. Every tab carries the site-wide "for reference only" line; a tab whose source can say
+ * what it actually measures overrides it here instead of the hub growing a branch of its own.
+ */
+export const RANKING_TAB_NOTE: Partial<Record<RankingTabId, TranslationKey>> = {
+  cursorBenchRankings: "cursorBenchAbout",
 };
 
 export const REPO_URL = SITE_URLS.repository;

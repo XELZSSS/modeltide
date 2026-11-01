@@ -7,11 +7,13 @@ import SuspenseQuery from "@/client/router/suspense-query.vue";
 import { loadableView, preloadChunk } from "@/client/router/lazy-view";
 import { usePrefetchIntent } from "@/client/hooks/use-prefetch";
 import { useClientTab } from "@/client/hooks/use-client-tab";
+import { whenIdle } from "@/client/bootstrap";
 import { useTranslation } from "@/client/i18n";
 import {
   DEFAULT_RANKING_TAB,
   isRankingTabId,
   RANKING_TABS,
+  RANKING_TAB_NOTE,
   RANKING_TAB_SOURCE_LABEL,
   TAB_PARAM,
   type RankingTabId,
@@ -29,6 +31,7 @@ const tabs = computed<TabItem[]>(() => RANKING_TABS.map((id) => ({ id, label: t(
 const activeContent = computed(() => TAB_COMPONENTS[activeTabId.value]);
 const title = computed(() => t(activeTabId.value));
 const description = computed(() => t(RANKING_TAB_SOURCE_LABEL[activeTabId.value]));
+const note = computed(() => t(RANKING_TAB_NOTE[activeTabId.value] ?? "dataDisclaimer"));
 
 const tabIntent = usePrefetchIntent<RankingTabId>((id) => ({
   queries: RANKING_TAB_DEFS[id].queries,
@@ -47,8 +50,7 @@ function preloadTabs(): void {
   preloadChunk(RANKING_TAB_DEFS.openRouterRankings.load);
 }
 
-if (typeof requestIdleCallback === "function") requestIdleCallback(preloadTabs, { timeout: 2000 });
-else preloadTabs();
+whenIdle(preloadTabs);
 </script>
 
 <template>
@@ -64,7 +66,7 @@ else preloadTabs();
     @tab-change="handleTabChange"
   >
     <template #actions><SearchInput /></template>
-    <p class="ui-meta">{{ t("dataDisclaimer") }}</p>
+    <p class="ui-meta">{{ note }}</p>
     <SuspenseQuery>
       <component :is="activeContent" />
     </SuspenseQuery>

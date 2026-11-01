@@ -1,7 +1,5 @@
 import { API_PREFIX } from "../constants.ts";
 import { createGuardContext, type GuardRule } from "./context.ts";
-import { apiLayersRule } from "./api-layers.ts";
-import { firstPaintRule } from "./first-paint.ts";
 import { pagesRule, runtimeRule } from "./pages.ts";
 import { structureRule } from "./structure.ts";
 import { tokensRule } from "./tokens.ts";
@@ -10,18 +8,12 @@ import { tokensRule } from "./tokens.ts";
  * Every consistency rule, in the order they run. The order is only a report order — each rule is independent — so a
  * new rule belongs wherever it reads best.
  *
- * The set is split by what a rule is *about* rather than by size: the first paint's contract, the token/palette mirror,
- * the repository's structural and budget rules, and the three files Cloudflare Pages parses at deploy time. A rule
+ * The set is split by what a rule is *about* rather than by size: the token/palette mirror, the repository's structural
+ * and budget rules, the Node floor the build image has to meet, and the three files Cloudflare Pages parses at deploy
+ * time. A rule
  * declares the files whose change invalidates it, so `configureServer` no longer keeps a second hand-maintained list.
  */
-export const GUARD_RULES: readonly GuardRule[] = [
-  firstPaintRule,
-  tokensRule,
-  structureRule,
-  apiLayersRule,
-  pagesRule(API_PREFIX),
-  runtimeRule,
-];
+export const GUARD_RULES: readonly GuardRule[] = [tokensRule, structureRule, pagesRule(API_PREFIX), runtimeRule];
 
 /** Every watched path across all rules, plus the directory prefixes a rule cares about as a whole tree. */
 export const GUARD_WATCHES = {

@@ -56,6 +56,7 @@ npm run dev    # http://localhost:5173
 | ----------------- | ---------------------------- |
 | `npm run dev`     | 开发服务器                   |
 | `npm run build`   | 类型、lint、格式、测试、构建 |
+| `npm run check`   | 类型、lint、格式与一致性规则 |
 | `npm run preview` | 预览已构建的 `dist`          |
 | `npm run test`    | 测试（`test:watch` 可监听）  |
 | `npm run lint`    | 静态检查                     |

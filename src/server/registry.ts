@@ -21,6 +21,7 @@ import { getNews } from "./news/source";
 import { getOpenSourceModels } from "./huggingface/source";
 import { getOpenRouterRankings } from "./openrouter/rankings";
 import { getDecisionIndex } from "./aa/decision";
+import { getCursorBench } from "./cursorbench/source";
 
 interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends ApiRouteDef<D, Q> {
   readonly path: string;
@@ -72,6 +73,10 @@ const ENTRIES = {
   decisionIndex: defineRoute("decisionIndex", {
     cache: cacheDurationsForTtl(ONE_HOUR),
     handler: getDecisionIndex,
+  }),
+  cursorBench: defineRoute("cursorBench", {
+    cache: cacheDurationsForTtl(STATIC_TTL_MS),
+    handler: getCursorBench,
   }),
 } satisfies Record<ApiDomain, unknown>;
 

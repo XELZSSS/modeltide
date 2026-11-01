@@ -18,6 +18,9 @@ export const getDecisionIndex = defineSource<string, DecisionIndexEntry[]>({
   key: cacheKeys.decisionIndex,
   ttl: ONE_HOUR,
   label: "Decision index",
+  // This payload answers the route directly, so the cache keeps its serialized body beside it. Without this the router
+  // re-encoded the whole leaderboard on every request, including every edge hit the cache itself had served.
+  served: true,
   fetch: (ctx) => ctx.http.getRsc(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaDecisionIndex),
   parse: (body, ctx) => {
     const rows = requireRows(

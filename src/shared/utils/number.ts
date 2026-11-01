@@ -55,15 +55,9 @@ interface ScaledText {
   suffix: string;
 }
 
-function formatScaled(
-  abs: number,
-  sign: string,
-  value: number,
-  scales: ScaleEntry[],
-  decimals: number,
-): ScaledText | null {
+function formatScaled(abs: number, sign: string, scales: ScaleEntry[], decimals: number): ScaledText | null {
   for (const s of scales) {
-    if (abs >= s.min) return { num: `${sign}${(value / s.div).toFixed(decimals)}`, suffix: s.suffix };
+    if (abs >= s.min) return { num: `${sign}${(abs / s.div).toFixed(decimals)}`, suffix: s.suffix };
   }
   return null;
 }
@@ -76,7 +70,7 @@ function formatScaled(
 export function formatShortNumber(n: number | null | undefined, fallback = FALLBACK_DASH): string {
   if (!isFiniteNumber(n)) return fallback;
   const { abs, sign } = compactParts(n);
-  const scaled = formatScaled(abs, sign, abs, SHORT_SCALES, 2);
+  const scaled = formatScaled(abs, sign, SHORT_SCALES, 2);
   if (scaled) return `${scaled.num}${scaled.suffix}`;
   if (Number.isInteger(abs)) return `${sign}${abs}`;
   return `${sign}${parseFloat(abs.toFixed(2))}`;
@@ -87,7 +81,7 @@ export function formatTokens(n: number | null | undefined, t?: TFunction): strin
   // The sign travels on its own and the scaled figure is built from `abs`, so nothing has to be recovered from the
   // division — a negative token count reads as negative for the same reason a positive one does.
   const { abs, sign } = compactParts(n);
-  const scaled = formatScaled(abs, sign, abs, TOKEN_SCALES, 1);
+  const scaled = formatScaled(abs, sign, TOKEN_SCALES, 1);
   if (scaled) return `${scaled.num.replace(/\.0$/, "")}${scaled.suffix}`;
   if (Number.isInteger(n)) return String(n);
   return String(parseFloat(n.toFixed(1)));
@@ -145,7 +139,21 @@ export function formatSpeed(v: number | null | undefined, t: TFunction): string 
   return isFiniteNumber(v) ? formatIndex(v) : t("notAvailable");
 }
 
+/**
+ * The trend column is two digits wide: `+96.0%`, `-32.4%`. A seven-day window can produce four-digit growth (the live
+ * payload carries a model at +7725%), which overflowed the column and pushed the neighbouring cells, so anything past
+ * `TREND_MAX_PERCENT` reports its bound the way `formatRatio` reports a sub-printable one: `>99%` / `<-99%`. The bound
+ * is a floor on what the reader can see, not a claim that the figure equals 99.
+ *
+ * The comparison uses the value as it will be *printed* (rounded to one decimal) rather than the raw number: 99.96
+ * passes a naive `> 99` check and then formats as `100.0%`, which is the three-digit case this exists to prevent.
+ */
+const TREND_MAX_PERCENT = 99;
+
 export function formatTrend(change?: number | null, t?: TFunction): string {
   if (!isFiniteNumber(change)) return t ? t("notAvailable") : FALLBACK_NA;
+  const printed = Math.round(change * 10) / 10;
+  if (printed > TREND_MAX_PERCENT) return `>${TREND_MAX_PERCENT}%`;
+  if (printed < -TREND_MAX_PERCENT) return `<-${TREND_MAX_PERCENT}%`;
   return percentText(change, true);
 }

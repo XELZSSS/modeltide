@@ -37,15 +37,11 @@ export function useSearchAllRankings(
   const orQ = useOpenRouterRankings(enabled);
   const decisionQ = useDecisionIndex(enabled);
 
-  const artificialData = computed(() => artificialQ.state.value.items);
-  const openSourceRankings = computed(() => openSourceQ.state.value.items);
-  const openRouter = computed(() => orQ.state.value);
-  const decisionIndex = computed(() => decisionQ.state.value.items);
-  const hallucinationRankings = useHallucinationRankings(artificialData, enabled);
+  const hallucinationRankings = useHallucinationRankings(() => artificialQ.state.value.items, enabled);
 
   const sources = {
     aa: computed<SourceConfig>(() =>
-      defineSource(artificialData.value, SEARCH_FIELDS.aa, (m) => ({
+      defineSource(artificialQ.state.value.items, SEARCH_FIELDS.aa, (m) => ({
         id: m.id,
         name: m.name,
         source: "modelRankings",
@@ -57,7 +53,7 @@ export function useSearchAllRankings(
       })),
     ),
     or: computed<SourceConfig>(() =>
-      defineSource(openRouter.value.items, SEARCH_FIELDS.or, (e) => ({
+      defineSource(orQ.state.value.items, SEARCH_FIELDS.or, (e) => ({
         id: e.id,
         name: e.name,
         source: "openRouterRankings",
@@ -68,7 +64,7 @@ export function useSearchAllRankings(
       })),
     ),
     os: computed<SourceConfig>(() =>
-      defineSource(openSourceRankings.value, SEARCH_FIELDS.os, (e) => ({
+      defineSource(openSourceQ.state.value.items, SEARCH_FIELDS.os, (e) => ({
         id: e.id,
         name: e.id,
         source: "openSourceRankings",
@@ -90,7 +86,7 @@ export function useSearchAllRankings(
       })),
     ),
     decision: computed<SourceConfig>(() =>
-      defineSource(decisionIndex.value, SEARCH_FIELDS.decision, (c) => ({
+      defineSource(decisionQ.state.value.items, SEARCH_FIELDS.decision, (c) => ({
         id: c.id,
         name: c.name,
         source: "decisionRankings",
@@ -120,7 +116,7 @@ export function useSearchAllRankings(
     enabled.value
       ? (artificialQ.state.value.error ??
         openSourceQ.state.value.error ??
-        openRouter.value.error ??
+        orQ.state.value.error ??
         decisionQ.state.value.error)
       : null,
   );
@@ -132,7 +128,7 @@ export function useSearchAllRankings(
         enabled.value &&
         (artificialQ.state.value.pending ||
           openSourceQ.state.value.pending ||
-          openRouter.value.pending ||
+          orQ.state.value.pending ||
           decisionQ.state.value.pending),
     ),
     isError: computed(() => error.value !== null),
@@ -141,7 +137,7 @@ export function useSearchAllRankings(
       () =>
         artificialQ.state.value.partial ||
         openSourceQ.state.value.partial ||
-        openRouter.value.partial ||
+        orQ.state.value.partial ||
         decisionQ.state.value.partial,
     ),
   };

@@ -65,42 +65,24 @@ export function trendClass(change: number | null | undefined): string {
   return change > 0 ? "text-success" : "text-destructive";
 }
 
+/**
+ * A right-aligned column: the one place that shape is built, so a value that is also the phone card's right-hand figure
+ * opts into `mobilePrimary` here instead of reaching for a second builder.
+ * `width` is only read on a wide screen; the mobile card sizes its own primary cell.
+ */
 export function rightCol<T>(
   id: string,
   header: string,
   cell: (row: T) => VNodeChild,
-  opts?: { hiddenMd?: boolean; width?: number | string },
+  opts?: { hiddenMd?: boolean; width?: number | string; mobilePrimary?: boolean },
 ): DataTableColumn<T> {
   return col(id, header, cell, { ...opts, align: "right" });
-}
-
-export function mobilePrimaryCol<T>(
-  id: string,
-  header: string,
-  cell: (row: T) => VNodeChild,
-  opts?: { hiddenMd?: boolean },
-): DataTableColumn<T> {
-  return col(id, header, cell, { ...opts, align: "right", mobilePrimary: true });
 }
 
 const MONO_EMPHASIS_CLASS = {
   strong: "ui-mono-value font-semibold",
   muted: "ui-mono-value font-normal text-text-secondary",
 } as const;
-
-/**
- * A right-aligned column: the shape `rightCol` and `mobilePrimaryCol` both produce, with the choice between them kept in
- * one place. A value that is also the phone card's primary cell opts into `mobilePrimary`. No `width`: the primary cell
- * is sized by the mobile card layout, so width rides on `rightCol` directly.
- */
-export function rightAlignedCol<T>(
-  id: string,
-  header: string,
-  cell: (row: T) => VNodeChild,
-  opts?: { mobilePrimary?: boolean; hiddenMd?: boolean },
-): DataTableColumn<T> {
-  return opts?.mobilePrimary ? mobilePrimaryCol(id, header, cell, opts) : rightCol(id, header, cell, opts);
-}
 
 export function monoCol<T>(
   id: string,
@@ -110,7 +92,7 @@ export function monoCol<T>(
 ): DataTableColumn<T> {
   const className = opts?.emphasis ? MONO_EMPHASIS_CLASS[opts.emphasis] : "ui-mono-value";
   const cell = (row: T): VNodeChild => h("span", { class: className }, [format(row)]);
-  return rightAlignedCol(id, header, cell, { mobilePrimary: opts?.mobilePrimary, hiddenMd: opts?.hiddenMd });
+  return rightCol(id, header, cell, { mobilePrimary: opts?.mobilePrimary, hiddenMd: opts?.hiddenMd });
 }
 
 export const RightAlignedText: FunctionalComponent<{ class?: string }> = (props, { slots }) =>
@@ -118,25 +100,26 @@ export const RightAlignedText: FunctionalComponent<{ class?: string }> = (props,
   // table supplies `justify-end text-right` from `align: "right"`, and here the value wraps instead of truncating.
   h("p", { class: cn("min-w-0 break-words md:truncate", props.class) }, slots.default?.());
 
+/**
+ * The model-name column. `textOf` is the cell text and the tooltip title unless `titleOf` says otherwise: the open-source
+ * table prints the short id and needs the full one on hover, and every other table prints one string.
+ */
 export function modelNameCol<T>(
   header: string,
-  titleOf: (row: T) => string,
   textOf: (row: T) => string,
-  opts?: NameCellExtras<T> & { width?: number | string },
+  opts?: NameCellExtras<T> & { width?: number | string; titleOf?: (row: T) => string },
 ): DataTableColumn<T> {
+  const titleOf = opts?.titleOf ?? textOf;
   return {
     id: "model",
     header,
     width: opts?.width ?? "40%",
-    cell: (row) => {
-      const title = titleOf(row);
-      const text = textOf(row);
-      return h(RankingNameCell, {
-        name: text,
-        title,
+    cell: (row) =>
+      h(RankingNameCell, {
+        name: textOf(row),
+        title: titleOf(row),
         rank: opts?.rankOf?.(row) ?? null,
         href: opts?.hrefOf?.(row),
-      });
-    },
+      }),
   };
 }

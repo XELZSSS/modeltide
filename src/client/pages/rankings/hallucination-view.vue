@@ -23,12 +23,7 @@ function buildHallColumns(
   extras: NameCellExtras<HallucinationRankingEntry>,
 ): DataTableColumn<HallucinationRankingEntry>[] {
   return [
-    modelNameCol(
-      t("model"),
-      (item) => item.model,
-      (item) => item.model,
-      extras,
-    ),
+    modelNameCol(t("model"), (item) => item.model, extras),
     monoCol("hallucinationRate", t("hallucinationRate"), (item) => formatRatio(item.hallucinationRate, t), {
       emphasis: "strong",
     }),

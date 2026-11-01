@@ -34,18 +34,20 @@ const isMobile = useDevice();
 
 const winners = computed(() => computeWinners(props.rows, props.models, modelKeyOf));
 
-function getWinner(
-  row: CompareRow<ArtificialAnalysisModel>,
-  model: ArtificialAnalysisModel,
-  index: number,
-): Winner | null {
-  return winners.value.get(rowKey(row))?.get(modelKeyOf(model, index)) ?? null;
+/**
+ * The key `winners` was built with, per model, computed once instead of per cell: `modelKeyOf` reads the model id (or
+ * builds an `idx-N` fallback) and the matrix asks for it rows × models times — twice per cell, since `:key` wants it too.
+ */
+const modelKeys = computed(() => props.models.map((model, index) => modelKeyOf(model, index)));
+
+function getWinner(row: CompareRow<ArtificialAnalysisModel>, index: number): Winner | null {
+  return winners.value.get(rowKey(row))?.get(modelKeys.value[index]!) ?? null;
 }
 </script>
 
 <template>
   <div v-if="isMobile" class="flex flex-col gap-3">
-    <Card v-for="(model, index) in models" :key="modelKeyOf(model, index)">
+    <Card v-for="(model, index) in models" :key="modelKeys[index]">
       <CardContent compact class="flex flex-col gap-3">
         <CardHeader v-if="title" :title="title" class="mb-0" />
         <p
@@ -62,7 +64,7 @@ function getWinner(
         <div class="flex flex-col gap-2">
           <div v-for="row in rows" :key="rowKey(row)" class="flex items-center justify-between gap-3">
             <span class="ui-caption">{{ row.label }}</span>
-            <RenderView :render="() => renderValue(row, model, getWinner(row, model, index))" />
+            <RenderView :render="() => renderValue(row, model, getWinner(row, index))" />
           </div>
         </div>
       </CardContent>
@@ -85,7 +87,7 @@ function getWinner(
               </th>
               <th
                 v-for="(model, index) in models"
-                :key="modelKeyOf(model, index)"
+                :key="modelKeys[index]"
                 scope="col"
                 :class="cn(CELL, 'text-right ui-table-header')"
                 :style="{ color: seriesColor(theme, index) }"
@@ -100,12 +102,8 @@ function getWinner(
               <th scope="row" :class="cn(CELL, 'sticky left-0 z-10 bg-bg-card text-left ui-table-header')">
                 {{ row.label }}
               </th>
-              <td
-                v-for="(model, index) in models"
-                :key="modelKeyOf(model, index)"
-                :class="cn(CELL, 'ui-body', 'text-right')"
-              >
-                <RenderView :render="() => renderValue(row, model, getWinner(row, model, index))" />
+              <td v-for="(model, index) in models" :key="modelKeys[index]" :class="cn(CELL, 'ui-body', 'text-right')">
+                <RenderView :render="() => renderValue(row, model, getWinner(row, index))" />
               </td>
             </tr>
           </tbody>

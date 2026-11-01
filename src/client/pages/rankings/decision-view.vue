@@ -33,7 +33,7 @@ function buildDecisionColumns(
   extras: NameCellExtras<DecisionIndexEntry>,
 ): DataTableColumn<DecisionIndexEntry>[] {
   return [
-    modelNameCol(tf("model"), rowNameOf, rowNameOf, { width: "45%", ...extras }),
+    modelNameCol(tf("model"), rowNameOf, { width: "45%", ...extras }),
     monoCol("index", tf("decisionIndex"), (row) => formatScore(row.index, tf), {
       mobilePrimary: true,
       emphasis: "strong",

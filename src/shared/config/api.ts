@@ -19,6 +19,7 @@ const API_DOMAINS = {
   closedReleases: "closed-releases",
   homeDashboard: "home-dashboard",
   decisionIndex: "decision-index",
+  cursorBench: "cursorbench",
 } as const;
 
 export const API_PREFIX = "/api";
@@ -41,6 +42,7 @@ export const queryKeys = {
   closedReleases: [...QUERY_KEY_PREFIX, API_DOMAINS.closedReleases],
   homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],
   decisionIndex: [...QUERY_KEY_PREFIX, API_DOMAINS.decisionIndex],
+  cursorBench: [...QUERY_KEY_PREFIX, API_DOMAINS.cursorBench],
 } as const satisfies Record<ApiDomain, unknown>;
 
 export const apiPaths = {
@@ -51,4 +53,5 @@ export const apiPaths = {
   closedReleases: `${API_PREFIX}/${API_DOMAINS.closedReleases}`,
   homeDashboard: `${API_PREFIX}/${API_DOMAINS.homeDashboard}`,
   decisionIndex: `${API_PREFIX}/${API_DOMAINS.decisionIndex}`,
+  cursorBench: `${API_PREFIX}/${API_DOMAINS.cursorBench}`,
 } as const satisfies Record<ApiDomain, string>;

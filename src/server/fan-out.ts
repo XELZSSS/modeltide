@@ -5,7 +5,8 @@ import { runLegs, type Leg, type LegValues } from "./join-legs";
 /**
  * `tag` prefixes the per-leg failure logs and `allFailedMessage` is the one policy worth sharing between the two entry
  * points: sources still decide for themselves what a *partial* result means, because "some legs down" differs per
- * source — the AA index needs its leaderboard leg specifically, the home dashboard needs any one of its four.
+ * source — the AA index needs its leaderboard leg specifically, the home dashboard needs any one of its four. A shared
+ * `partial` flag would restate that policy one level too high, so the caller reads `failures` and decides.
  *
  * `runLegs` caps the width at the shared slot pool's six connections, so this layer queues the legs rather than
  * bounding them.
@@ -24,7 +25,6 @@ interface FanOutFailure {
 interface FanOutResult<L extends readonly Leg<unknown>[]> {
   values: LegValues<L>;
   failures: FanOutFailure[];
-  partial: boolean;
 }
 
 export async function fanOut<L extends readonly Leg<unknown>[]>(
@@ -39,9 +39,5 @@ export async function fanOut<L extends readonly Leg<unknown>[]>(
       ctx.log("warn", `[${opts.tag}] ${failure.label} leg failed: ${errMsg(failure.reason)}`);
     },
   });
-  return {
-    values,
-    failures,
-    partial: failures.length > 0,
-  };
+  return { values, failures };
 }

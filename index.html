@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="%MT_DOC_LANG%">
   <head>
     <!-- Do not add security policy here (CSP / X-Frame-Options / HSTS as meta equivalents): Cloudflare Pages owns the
          edge policy. See AGENTS.md. -->
@@ -25,8 +25,8 @@
       property="og:description"
       content="ModelTide - AI model data dashboard: rankings, benchmarks, pricing and releases"
     />
-    <meta property="og:locale" content="en_US" />
-    <meta property="og:locale:alternate" content="zh_CN" />
+    <meta property="og:locale" content="%MT_DOC_LOCALE%" />
+    <meta property="og:locale:alternate" content="%MT_DOC_LOCALE_ALTERNATE%" />
     <meta property="og:image" content="/icons/icon-512.png" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="ModelTide" />
@@ -46,17 +46,16 @@
     </style>
     <script>
       (function () {
+        var boot = %MT_BOOT%;
         var stored = null,
           lang = null;
         try {
-          var raw = localStorage.getItem("settings");
+          var raw = localStorage.getItem(boot.storageKey);
           if (raw) {
             var p = JSON.parse(raw);
-            var st = p && p.version === 1 ? p.state : null;
-            if (st && (st.themeMode === "dark" || st.themeMode === "light" || st.themeMode === "system")) {
-              stored = st.themeMode;
-            }
-            if (st && (st.lang === "zh" || st.lang === "en")) lang = st.lang;
+            var st = p && p.version === boot.storageVersion ? p.state : null;
+            if (st && boot.themeModes.indexOf(st.themeMode) !== -1) stored = st.themeMode;
+            if (st && boot.languages.indexOf(st.lang) !== -1) lang = st.lang;
           }
         } catch (e) {}
         var dark =
@@ -68,7 +67,7 @@
         for (var i = 0; i < metas.length; i++) metas[i].setAttribute("content", dark ? "#09090b" : "#ffffff");
         var nav = typeof navigator !== "undefined" && navigator.language ? navigator.language : "";
         var resolved = lang || (/^en/i.test(nav) ? "en" : "zh");
-        document.documentElement.lang = resolved === "zh" ? "zh-CN" : "en";
+        document.documentElement.lang = boot.docLang[resolved];
       })();
     </script>
   </head>

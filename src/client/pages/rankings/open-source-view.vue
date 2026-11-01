@@ -21,12 +21,7 @@ function buildOpenSourceColumns(
   extras: NameCellExtras<OpenSourceModelEntry>,
 ): DataTableColumn<OpenSourceModelEntry>[] {
   return [
-    modelNameCol(
-      t("model"),
-      (item) => item.id,
-      (item) => shortModelId(item.id),
-      extras,
-    ),
+    modelNameCol(t("model"), (item) => shortModelId(item.id), { ...extras, titleOf: (item) => item.id }),
     monoCol("downloads", t("downloads"), (item) => formatShortNumber(item.downloads, t("notAvailable")), {
       emphasis: "strong",
     }),

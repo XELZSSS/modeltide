@@ -87,3 +87,9 @@ export const qDecisionIndex = createApiQuery("decisionIndex", queryKeys.decision
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
 });
+
+export const qCursorBench = createApiQuery("cursorBench", queryKeys.cursorBench, {
+  ttl: STATIC_TTL_MS,
+  partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+  isPartialData: isPartialPayload,
+});

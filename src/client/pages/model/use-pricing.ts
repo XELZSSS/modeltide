@@ -14,7 +14,9 @@ export function usePricing(pricing: () => ModelPricing | EffectivePricing | null
   const effective = computed(() => resolveEffectivePricing(pricing()));
   // The same estimator the ranking table uses: the detail card's blended price follows the persisted cost scenario,
   // so it cannot disagree with the monthly figure the reader compares it to.
-  const blended = computed(() => estimateCost(pricing(), parseCostFields(costStore.values))?.blendedPrice ?? null);
+  const blended = computed(
+    () => estimateCost(effective.value, parseCostFields(costStore.values))?.blendedPrice ?? null,
+  );
   const cacheWrite = computed(() => PRICE_LEGS.cacheWritePrice(effective.value));
   return { effective, blended, cacheWrite };
 }

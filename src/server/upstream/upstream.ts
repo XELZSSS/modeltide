@@ -4,6 +4,7 @@ export const upstreamConfig = {
   artificialAnalysis: SITE_URLS.artificialAnalysis,
   huggingface: `${SITE_URLS.huggingface}/api/models`,
   openrouter: SITE_URLS.openRouter,
+  cursor: SITE_URLS.cursor,
 } as const satisfies Record<string, string>;
 
 export const upstreamEndpoints = {
@@ -15,6 +16,7 @@ export const upstreamEndpoints = {
   openRouterRankings: "/api/frontend/v1/rankings/models",
 
   openRouterDirectory: "/api/v1/models",
+  cursorBench: "/cn/cursorbench",
 } as const;
 
 export { MAX_FEED_BYTES, MAX_JSON_BYTES, MAX_RSC_BYTES } from "@/server/formats/limits";

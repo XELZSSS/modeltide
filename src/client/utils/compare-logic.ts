@@ -1,8 +1,9 @@
 import type { TFunction, TranslationKey } from "@/shared/i18n";
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { approxEq } from "@/shared/utils";
+import { isFiniteNumber } from "@/shared/utils/number";
 import { modelId } from "@/shared/utils/models";
-import { resolveEffectivePricing, PRICE_LEG_IDS, PRICE_LEGS, type PriceLegPick } from "@/shared/utils/pricing";
+import { PRICE_LEG_IDS, PRICE_LEGS } from "@/shared/utils/pricing";
 import { ceilToStep } from "@/client/charts/theme";
 export interface CompareRow<T> {
   // Every row both builders produce carries `id`, `label`, `getNumeric` and `bestIs`, so those are required: the optional
@@ -34,14 +35,21 @@ export function computeWinners<T>(
   return winners;
 }
 
+/**
+ * The rows a verdict can be decided from, or `null` when fewer than two models carry a number. Collected in one pass:
+ * the `map` + `filter` pair built an intermediate object for every model — including the ones with no value — on
+ * every metric row of every comparison.
+ */
 function collectNumeric<T>(
   row: CompareRow<T>,
   models: T[],
   getKey: (m: T, index: number) => string,
 ): { key: string; val: number }[] | null {
-  const values = models
-    .map((model, index) => ({ key: getKey(model, index), val: row.getNumeric(model) }))
-    .filter((v): v is { key: string; val: number } => typeof v.val === "number" && Number.isFinite(v.val));
+  const values: { key: string; val: number }[] = [];
+  for (let index = 0; index < models.length; index++) {
+    const val = row.getNumeric(models[index]!);
+    if (typeof val === "number" && Number.isFinite(val)) values.push({ key: getKey(models[index]!, index), val });
+  }
   return values.length >= 2 ? values : null;
 }
 
@@ -73,8 +81,7 @@ function decideRowWinners<T>(
 }
 
 function nonNegative(v: number | null | undefined): number | null {
-  if (typeof v !== "number" || !Number.isFinite(v)) return null;
-  return Math.max(0, v);
+  return isFiniteNumber(v) ? Math.max(0, v) : null;
 }
 
 interface RadarRow {
@@ -103,25 +110,17 @@ const COMPARE_METRICS: readonly {
   { id: "ifbench", get: (m) => percentOf(m.benchmarks?.ifbench) },
 ];
 
-function buildRadarRows(t: TFunction, models: ArtificialAnalysisModel[], keys: readonly string[]): RadarRow[] {
+export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
   return COMPARE_METRICS.map(({ id, get }) => {
     const values: Record<string, number | null> = {};
-    for (let i = 0; i < models.length; i++) {
-      const key = keys[i]!;
+    for (const model of models) {
+      const key = modelId(model);
       if (!key || key in values) continue;
-      const val = get(models[i]!);
+      const val = get(model);
       values[key] = val != null ? Number(val.toFixed(2)) : null;
     }
     return { metric: t(id), values };
   });
-}
-
-export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
-  return buildRadarRows(
-    t,
-    models,
-    models.map((model) => modelId(model)),
-  );
 }
 
 // The single caller (the radar) always wants the 0..100 axis floor, so `fallback` was an untaken knob; it is inlined.
@@ -129,7 +128,7 @@ export function radarMaxFor(rows: RadarRow[]): number {
   let peak = 100;
   for (const row of rows) {
     for (const value of Object.values(row.values)) {
-      if (typeof value !== "number" || !Number.isFinite(value)) continue;
+      if (!isFiniteNumber(value)) continue;
       if (value > peak) peak = value;
     }
   }
@@ -137,11 +136,12 @@ export function radarMaxFor(rows: RadarRow[]): number {
 }
 
 export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
-  const leg = (pick: PriceLegPick) => (m: ArtificialAnalysisModel) => pick(resolveEffectivePricing(m.pricing));
   return PRICE_LEG_IDS.map((id): CompareRow<ArtificialAnalysisModel> => ({
     id,
     label: t(id),
-    getNumeric: leg(PRICE_LEGS[id]),
+    // The one leg this row prints, read straight off the model: resolving all four legs first built an object per model
+    // per row to then read a single field of it.
+    getNumeric: (m) => (m.pricing ? PRICE_LEGS[id](m.pricing) : null),
     bestIs: "min",
     worstIs: "max",
   }));

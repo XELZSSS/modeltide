@@ -87,6 +87,15 @@ describe("formatTrend", () => {
     [2.5, "+2.5%"],
     [-1, "-1.0%"],
     [0, "0.0%"],
+    [96.156, "+96.2%"],
+    [99, "+99.0%"],
+    [-99, "-99.0%"],
+    // 99.96 rounds to 100.0 when printed, so it has to report its bound rather than grow a third digit.
+    [99.96, ">99%"],
+    [-99.96, "<-99%"],
+    // The live payload carries a model at +7725%: four digits, printed as its bound.
+    [7725.04, ">99%"],
+    [111714.24, ">99%"],
   ])("formats the trend %s as %s", (change, expected) => {
     expect(formatTrend(change)).toBe(expected);
   });

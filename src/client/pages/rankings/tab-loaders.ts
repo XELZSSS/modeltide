@@ -1,5 +1,11 @@
 import type { Component } from "vue";
-import { qArtificialList, qDecisionIndex, qOpenRouterList, qOpenSourceModelsList } from "@/client/api/query/catalog";
+import {
+  qArtificialList,
+  qCursorBench,
+  qDecisionIndex,
+  qOpenRouterList,
+  qOpenSourceModelsList,
+} from "@/client/api/query/catalog";
 import type { Prefetchable } from "@/client/router/route-meta";
 import type { RankingTabId } from "@/client/nav/nav-config";
 
@@ -17,4 +23,5 @@ export const RANKING_TAB_DEFS: Record<
   hallucinationRankings: { load: () => import("./hallucination-rankings-tab.vue"), queries: [qArtificialList] },
   decisionRankings: { load: () => import("./decision-rankings-tab.vue"), queries: [qDecisionIndex] },
   providerCompare: { load: () => import("./provider-compare-tab.vue"), queries: [qArtificialList] },
+  cursorBenchRankings: { load: () => import("./cursorbench-rankings-tab.vue"), queries: [qCursorBench] },
 };

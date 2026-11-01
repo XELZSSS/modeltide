@@ -32,15 +32,17 @@ const nonNeg = (v: number): number => Math.max(0, v);
  * are derived here from the same effective rates and the same scenario.
  */
 export function estimateCost(pricing: ModelPricing | null | undefined, scenario: CostScenario): CostEstimate | null {
-  if (!pricing || !isFiniteNumber(pricing.input) || !isFiniteNumber(pricing.output)) return null;
+  // The wire parser produces only finite numbers or `null` (`numCoerceNonNegative`), so a leg is either priced or
+  // absent: re-testing finiteness here could never change the answer.
+  if (pricing == null || pricing.input == null || pricing.output == null) return null;
 
   const hitRate = clamp01(scenario.cacheHitRate);
   const cacheHit = pricing.cacheHit;
   const cacheWrite = pricing.cacheWrite;
-  const hasWriteTier = isFiniteNumber(cacheWrite);
+  const hasWriteTier = cacheWrite != null;
   // A write rate without a separate write price would charge the same input twice; the write tier is dropped instead.
   const writeRate = hasWriteTier ? clamp01(Math.min(scenario.cacheWriteRate, 1 - hitRate)) : 0;
-  const cached = isFiniteNumber(cacheHit) ? cacheHit : pricing.input;
+  const cached = cacheHit ?? pricing.input;
   const inputRate =
     hitRate * cached + (hasWriteTier ? writeRate * cacheWrite : 0) + (1 - hitRate - writeRate) * pricing.input;
 

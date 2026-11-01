@@ -50,23 +50,12 @@ export const getOpenRouterRankings = defineSource<OpenRouterRaw, OpenRouterRankE
       scannedRows: 0,
       validRows: 0,
       expiredRows: 0,
-      ratioFormChanges: 0,
-      percentFormChanges: 0,
     };
     return { rows, totalRows, stats, directory: values[1] };
   },
-  parse: (raw, ctx) => {
+  parse: (raw) => {
     const directory = raw.directory?.payload.data;
     const models = mapModels(raw.rows, directory?.pricing ?? {}, raw.stats, directory?.meta);
-    // Both readings of the ambiguous `change` unit were needed inside one payload: the trends on this page are then
-    // scaled by two different factors. Reported rather than partial — a ratio above 1 is legitimate, so this is the
-    // signal to go check the upstream, not a verdict that the payload is broken.
-    if (raw.stats.ratioFormChanges > 0 && raw.stats.percentFormChanges > 0) {
-      ctx.log("warn", "[openrouter] change figures read in both forms", {
-        ratioForm: raw.stats.ratioFormChanges,
-        percentForm: raw.stats.percentFormChanges,
-      });
-    }
     if (raw.stats.validRows === 0) {
       throw new UpstreamError(`OpenRouter: all ${raw.totalRows} ranking rows had invalid model_permaslug`);
     }

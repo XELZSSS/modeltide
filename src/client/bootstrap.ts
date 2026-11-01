@@ -5,6 +5,9 @@ import { FONT_LOAD_SPECS } from "@/shared/pwa";
 import { preloadChunk } from "./router/lazy-view";
 import { loadMobileMoreSheet, loadSettingsSheet } from "./shell/sheet-loaders";
 
+/** Idle work is warming, not startup: the timeout only bounds how long the browser may defer it. */
+const IDLE_TIMEOUT_MS = 2000;
+
 function loadFonts(): void {
   for (const spec of FONT_LOAD_SPECS) void document.fonts.load(spec);
 }
@@ -25,14 +28,16 @@ function bootWhenLoaded(): void {
   else window.addEventListener("load", boot, { once: true });
 }
 
+/** Runs `work` at idle, or right away where `requestIdleCallback` is missing (the Safari floor the build targets). */
+export function whenIdle(work: () => void): void {
+  if (typeof requestIdleCallback === "function") requestIdleCallback(work, { timeout: IDLE_TIMEOUT_MS });
+  else work();
+}
+
 export function initBootstrap(): void {
   initSettingsStorageSync();
   initCompareStorageSync();
   initCostStorageSync();
 
-  if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(bootWhenLoaded, { timeout: 2000 });
-  } else {
-    bootWhenLoaded();
-  }
+  whenIdle(bootWhenLoaded);
 }

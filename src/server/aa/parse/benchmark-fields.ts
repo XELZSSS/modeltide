@@ -24,13 +24,11 @@ const FIELD_ALIASES: Record<string, readonly string[]> = {
   itbenchSre: ["itbenchSre", "itBenchSre"],
 };
 
-export function fieldAliases(field: string): readonly string[] {
-  return FIELD_ALIASES[field] ?? [field];
-}
-
 /**
- * Called once per benchmark field per row, so it deliberately skips `fieldAliases`: that built a one-element array
- * for every field without an alias, which is all but one of them.
+ * The field as it is spelled in this row, or `undefined` when the row carries none of its spellings. Called once per
+ * benchmark field per row, so it reads `FIELD_ALIASES` directly instead of going through a helper that would build a
+ * one-element array for every field without an alias — all but one of them. This is also what `missingFields` in
+ * `aa/fetch.ts` asks, so the alias table stays the single definition of "this field under any of its spellings".
  */
 export function presentAlias(row: Record<string, unknown>, field: string): string | undefined {
   const aliases = FIELD_ALIASES[field];

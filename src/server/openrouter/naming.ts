@@ -52,7 +52,9 @@ export function creatorFromSlug(slug: unknown): string {
   if (!owner) return "Unknown";
   const lower = owner.toLowerCase();
   if (Object.hasOwn(CREATORS, lower)) return CREATORS[lower]!;
-  return owner.split(/[-_]/).filter(Boolean).map(titleCase).join(" ");
+  // `titleCase` already splits on `[-_]` and drops empty parts, so the owner is handed over whole: the split here
+  // rebuilt the same token list only for `titleCase` to redo it.
+  return titleCase(owner);
 }
 
 const CODING_RE = /\b(?:coder|coding|code|codex)\b/;

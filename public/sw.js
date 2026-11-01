@@ -1,7 +1,8 @@
 const SW_VERSION = "dev-local";
 const CACHE_NAME = `modeltide-${SW_VERSION}`;
 
-// Must match API_PREFIX in src/shared/config/api.ts and build/constants.ts (sw.js cannot import TS; consistencyGuard enforces it).
+// The value `vite dev` serves verbatim; `build/sw-version.ts` overwrites it from src/shared/config/api.ts in the build,
+// so this copy only has to be right for dev (sw.js cannot import TS and public/ is not transformed).
 const API_PREFIX = "/api";
 
 const OTHER_CACHE_MAX = 100;

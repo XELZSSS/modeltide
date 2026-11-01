@@ -14,6 +14,7 @@ export type {
   DecisionIndexEntry,
   DecisionKind,
   DecisionScores,
+  CursorBenchEntry,
 } from "./rankings.ts";
 
 export type { NewsCategory, NewsItem } from "./news.ts";

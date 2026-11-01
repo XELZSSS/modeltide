@@ -6,8 +6,9 @@ import { checkConsistency, GUARD_WATCHES } from "./guards/index.ts";
 
 /**
  * The consistency guard: rules that only a build can enforce, because none of them is visible to types, lint or the
- * suite. They live in `build/guards/`, one module per concern — the first paint's contract, the token/palette mirror,
- * the repository's structural and CPU-budget rules, and the files Cloudflare Pages parses at deploy time. Each rule
+ * suite. They live in `build/guards/`, one module per concern — the token/palette mirror, the repository's structural
+ * and CPU-budget rules, the Node floor the build image has to meet, and the files Cloudflare Pages parses at deploy
+ * time. Each rule
  * declares the paths whose change invalidates it; this file only decides *when* to run them.
  *
  * This module is deliberately thin: it holds the Vite hook wiring and nothing else, so adding a rule never means
@@ -26,7 +27,7 @@ export function consistencyGuard(): Plugin {
       checkConsistency(rootDir);
     },
     /**
-     * Dev re-checks on change. The rules read `theme.css`, `globals.css`, `index.html`, `sw.js` and the component tree,
+     * Dev re-checks on change. The rules read `theme.css`, `globals.css`, `index.html` and the component tree,
      * none of which are modules the client graph imports, so a `buildStart`-only check left a running dev server
      * validating the files it started with. Failures are logged rather than thrown: the dev server has to stay up so the
      * fix can be made in place.

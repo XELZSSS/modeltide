@@ -2,6 +2,7 @@ import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue"
 import type {
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
+  CursorBenchEntry,
   DecisionIndexEntry,
   HallucinationRankingEntry,
   NewsCategory,
@@ -15,6 +16,7 @@ import { malformedPayload } from "./transport/error";
 import {
   qArtificialList,
   qClosedReleasesList,
+  qCursorBench,
   qDecisionIndex,
   qHomeDashboard,
   qNewsByCategory,
@@ -43,19 +45,6 @@ interface ListQueryLike {
   error: { value: Error | null };
 }
 
-function suspendedListState<T>(
-  decoded: { data: T[]; partial: boolean; malformed: boolean },
-  label: string,
-): ListState<T> {
-  return {
-    items: decoded.data,
-    partial: decoded.partial,
-    malformed: decoded.malformed,
-    pending: false,
-    error: decoded.malformed ? malformedPayload(`Malformed ${label} payload`) : null,
-  };
-}
-
 function enabledListState<T>(query: ListQueryLike, label: string, enabled: MaybeRefOrGetter<boolean>): ListState<T> {
   const unwrapped = unwrapListPartial<T>(query.data.value, label);
   const empty = unwrapped.data.length === 0;
@@ -71,17 +60,22 @@ function enabledListState<T>(query: ListQueryLike, label: string, enabled: Maybe
   };
 }
 
-async function suspenseDecode<T>(query: SuspenseQueryLike, decode: (payload: unknown) => T): Promise<ComputedRef<T>> {
-  await query.suspense();
-  return computed(() => decode(query.data.value));
-}
-
 /**
  * The shape every list state hook repeats: decode one query's payload into a `ListState`, using the same label for the
- * payload validator and for the state's error text.
+ * payload validator and for the state's error text, once the route's suspense has resolved.
  */
-function suspenseListState<T>(query: SuspenseQueryLike, label: string): Promise<ComputedRef<ListState<T>>> {
-  return suspenseDecode(query, (payload) => suspendedListState<T>(unwrapListPartial<T>(payload, label), label));
+async function suspenseListState<T>(query: SuspenseQueryLike, label: string): Promise<ComputedRef<ListState<T>>> {
+  await query.suspense();
+  return computed(() => {
+    const decoded = unwrapListPartial<T>(query.data.value, label);
+    return {
+      items: decoded.data,
+      partial: decoded.partial,
+      malformed: decoded.malformed,
+      pending: false,
+      error: decoded.malformed ? malformedPayload(`Malformed ${label} payload`) : null,
+    };
+  });
 }
 
 export function useArtificialRankings(enabled: MaybeRefOrGetter<boolean> = true) {
@@ -93,8 +87,11 @@ export function useArtificialRankings(enabled: MaybeRefOrGetter<boolean> = true)
 export const useSuspenseArtificialRankingsState = () =>
   suspenseListState<ArtificialAnalysisModel>(qArtificialList.use(), "artificialIndex");
 
-export const useSuspenseHomeDashboard = (): Promise<ComputedRef<NormalizedHomeDashboard>> =>
-  suspenseDecode(qHomeDashboard.use(), normalizeHomeDashboard);
+export const useSuspenseHomeDashboard = async (): Promise<ComputedRef<NormalizedHomeDashboard>> => {
+  const query = qHomeDashboard.use();
+  await query.suspense();
+  return computed(() => normalizeHomeDashboard(query.data.value));
+};
 
 const OPEN_ROUTER_LABEL = "openRouterRankings";
 
@@ -143,17 +140,13 @@ export const useSuspenseClosedReleasesState = () =>
 export const useSuspenseNewsState = (category: NewsCategory) =>
   suspenseListState<NewsItem>(qNewsByCategory(category).use(), `news:${category}`);
 
-export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true): {
-  query: ReturnType<typeof qOpenSourceModelsList.use>;
-  state: ComputedRef<ListState<OpenSourceModelEntry>>;
-} {
+/**
+ * Every open-source row is one of at most a thousand and arrives already filtered by the parser (an id the loader
+ * could not key never reaches the payload), so this hook is the same five lines as the three above it.
+ */
+export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true) {
   const query = qOpenSourceModelsList.use(enabled);
-  const state = computed<ListState<OpenSourceModelEntry>>(() => {
-    const current = enabledListState<OpenSourceModelEntry>(query, "openSourceModels", enabled);
-    // Server-side parsing already dedupes by id and tables dedupe again through `usePagedData`, so all that is
-    // left here is dropping rows that cannot be keyed.
-    return { ...current, items: current.items.filter((model) => model.id) };
-  });
+  const state = computed(() => enabledListState<OpenSourceModelEntry>(query, "openSourceModels", enabled));
   return { query, state };
 }
 
@@ -168,3 +161,5 @@ export function useHallucinationRankings(
       : ([] as HallucinationRankingEntry[]);
   });
 }
+
+export const useSuspenseCursorBenchState = () => suspenseListState<CursorBenchEntry>(qCursorBench.use(), "cursorBench");

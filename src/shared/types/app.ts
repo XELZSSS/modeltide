@@ -14,13 +14,15 @@ export type ModelSource = "aa" | "or" | "os" | "hall" | "decision";
 
 export type HomeOpenSourceEntry = Pick<OpenSourceModelEntry, "id" | "downloads" | "task">;
 
-/** Top-N slice of the Artificial Analysis index, pre-aggregated for the home page. */
+/**
+ * Top-N slice of the CursorBench ranking, pre-aggregated for the home page's coding card. One score per row: CursorBench
+ * ranks on a single pass rate, so the card draws one bar per model instead of a pair of AA indices.
+ */
 export interface HomeChartPoint {
   id: string;
   name: string;
-  shortName: string | null;
-  intelligence: number;
-  coding: number;
+  /** CursorBench pass rate, 0-100. */
+  score: number;
 }
 
 export interface HomeProviderSpeed {

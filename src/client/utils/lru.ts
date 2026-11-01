@@ -22,11 +22,8 @@ export class LruCache<K, V> {
   set(key: K, value: V): V {
     this.map.delete(key);
     this.map.set(key, value);
-    while (this.map.size > this.max) {
-      const oldest = this.map.keys().next();
-      if (oldest.done) break;
-      this.map.delete(oldest.value);
-    }
+    // `delete` then `set` raises the size by at most one, so one eviction of the oldest key restores the cap.
+    if (this.map.size > this.max) this.map.delete(this.map.keys().next().value!);
     return value;
   }
 

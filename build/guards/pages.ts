@@ -176,27 +176,16 @@ function assertBuildNodeVersion(ctx: GuardContext): void {
 }
 
 /**
- * The Node floor the build image has to meet, and the service worker's copy of the API prefix. Both live in files no
- * compiler reads: `.nvmrc` / `.node-version` are read by Pages, and `sw.js` is plain JavaScript copied verbatim.
+ * The Node floor the build image has to meet. `.nvmrc` and `.node-version` are read by Pages and `engines.node` by
+ * npm, so nothing in the compiler sees the three values disagreeing.
+ *
+ * The service worker's API prefix used to be checked here too. `build/sw-version.ts` now overwrites it from
+ * `src/shared/config/api.ts` while writing `dist/sw.js`, so there is no second copy left to drift.
  */
 export const runtimeRule: GuardRule = {
   id: "runtime",
-  watches: [".nvmrc", ".node-version", "package.json", "public/sw.js"],
+  watches: [".nvmrc", ".node-version", "package.json"],
   run(ctx: GuardContext) {
     assertBuildNodeVersion(ctx);
-    const prefix = apiPrefixOf(ctx);
-    if (!ctx.readText("public/sw.js").includes(`const API_PREFIX = "${prefix}"`)) {
-      throw new Error(`public/sw.js: API_PREFIX drifted from src/shared/config/api.ts ("${prefix}")`);
-    }
   },
 };
-
-/**
- * The service worker cannot import TypeScript, so it restates the prefix. Reading it from the source that owns it
- * keeps the two in one place: `build/constants.ts` re-exports `API_PREFIX` from `src/shared/config/api.ts`.
- */
-function apiPrefixOf(ctx: GuardContext): string {
-  const decl = /export const API_PREFIX = "([^"]+)";/.exec(ctx.readText("src/shared/config/api.ts"))?.[1];
-  if (decl === undefined) throw new Error("src/shared/config/api.ts: API_PREFIX declaration not found");
-  return decl;
-}

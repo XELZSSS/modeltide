@@ -9,7 +9,7 @@ import { assembleModels } from "./parse/assemble";
 import { defineEnrichSource, fetchAaRsc } from "./fetch";
 import { upstreamEndpoints } from "@/server/upstream/upstream";
 import { UpstreamError } from "@/server/api/errors";
-import { definePartialSource, defineSource, requireParsed, requireRows } from "@/server/pipeline";
+import { definePartialSource, defineSource, requireParsed, requireRows, type PartialData } from "@/server/pipeline";
 import { fanOut } from "@/server/fan-out";
 import { MAX_LEADERBOARD_ROWS } from "@/server/formats/limits";
 
@@ -35,9 +35,7 @@ const omniscienceEnrichSource = defineEnrichSource({
   fields: OMNISCIENCE_PATH_FIELDS,
 });
 
-async function fetchIntelligenceIndex(
-  ctx: AppContext,
-): Promise<{ models: ArtificialAnalysisModel[]; partial: boolean }> {
+async function fetchIntelligenceIndex(ctx: AppContext): Promise<PartialData<ArtificialAnalysisModel[]>> {
   const { values } = await fanOut(
     ctx,
     [
@@ -76,13 +74,10 @@ async function fetchIntelligenceIndex(
     "models",
     `raw=${indexModels.length}, kept=0, enrichFailures=${enrichFailures}`,
   );
-  return { models, partial: enrichFailures > 0 || indexBody.payload.partial || directoryPartial };
+  return { data: models, partial: enrichFailures > 0 || indexBody.payload.partial || directoryPartial };
 }
 
-export const getIntelligenceIndex = definePartialSource<
-  { models: ArtificialAnalysisModel[]; partial: boolean },
-  ArtificialAnalysisModel[]
->({
+export const getIntelligenceIndex = definePartialSource<ArtificialAnalysisModel[]>({
   key: cacheKeys.intelligenceIndex,
   ttl: ONE_HOUR,
   label: "Artificial Analysis parsing",
@@ -91,5 +86,4 @@ export const getIntelligenceIndex = definePartialSource<
   // parsed into a payload the client cannot page through anyway.
   cap: MAX_LEADERBOARD_ROWS,
   fetch: (ctx) => fetchIntelligenceIndex(ctx),
-  pick: (raw) => raw.models,
 });

@@ -25,7 +25,7 @@ function scoresOf(raw: Record<string, unknown> | undefined): DecisionScores {
   };
 }
 
-export function mapContestant(raw: Record<string, unknown>): DecisionIndexEntry | null {
+function mapContestant(raw: Record<string, unknown>): DecisionIndexEntry | null {
   const id = text(raw.slug);
   const name = text(raw.name);
   const kind = kindOf(text(raw.kind));

@@ -42,7 +42,12 @@ const { t } = useTranslation();
 const { term } = useRouteSearchTerm();
 
 const filtered = computed(() => filterByTerm(props.data, term.value, props.getSearchFields));
-const emptyMessage = computed(() => (foldSearchStr(term.value) === "" ? t("noData") : t("noResults")));
+/**
+ * Folded once for both readers below. It used to be folded twice — here and again inside `filterByTerm` — so every
+ * keystroke folded the term one time more than the table needed.
+ */
+const foldedTerm = computed(() => foldSearchStr(term.value));
+const emptyMessage = computed(() => (foldedTerm.value === "" ? t("noData") : t("noResults")));
 const expandedId = ref<string | null>(null);
 const isExpandable = computed(() => props.renderExpandedRow != null || slots.expandedRow != null);
 const renderExpanded = computed<(row: T) => VNodeChild>(
@@ -52,7 +57,7 @@ const { dedupedData, page, totalPages, pagedData, goToPage } = usePagedData(
   () => filtered.value,
   (row: T) => props.getRowId(row),
   () => (isMobile.value ? MOBILE_PAGE_SIZE : DEFAULT_PAGE_SIZE),
-  () => term.value,
+  () => foldedTerm.value,
 );
 
 const expandedRowGone = computed(
@@ -80,10 +85,6 @@ const bodyBindings = computed(() => ({
   renderExpandedRow: renderExpanded.value,
 }));
 
-function setExpandedId(rowId: string | null): void {
-  expandedId.value = rowId;
-}
-
 // Focus stays on the pager. The page number is already announced by the control's own `aria-live`, while moving focus
 // into the table body meant Enter on the pager did nothing afterwards and a keyboard user had to Tab through the
 // whole new page to reach it again.
@@ -97,7 +98,7 @@ function handlePageChange(next: number): void {
   <div class="flex min-w-0 flex-col gap-4">
     <EmptyState v-if="dedupedData.length === 0" :message="emptyMessage" />
     <template v-else>
-      <MobileTableBody v-if="isMobile" v-bind="bodyBindings" @toggle-expand="setExpandedId" />
+      <MobileTableBody v-if="isMobile" v-bind="bodyBindings" @toggle-expand="expandedId = $event" />
       <div v-else class="ui-card overflow-x-auto">
         <table class="w-full table-fixed text-sm">
           <caption class="sr-only">
@@ -106,7 +107,7 @@ function handlePageChange(next: number): void {
             }}
           </caption>
           <TableHeader :columns="columns" :is-expandable="isExpandable" />
-          <TableBody v-bind="bodyBindings" @toggle-expand="setExpandedId" />
+          <TableBody v-bind="bodyBindings" @toggle-expand="expandedId = $event" />
         </table>
       </div>
       <Pagination :page="page" :total-pages="totalPages" @change="handlePageChange" />

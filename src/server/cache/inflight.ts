@@ -5,7 +5,7 @@ import { noteCacheStat } from "./stats";
  * path registers externally-owned work through get/insert/release (hang guard, displaced-owner check); readers
  * coalesce concurrent loads through runShared with auto-release on settle.
  */
-export class SingleFlight {
+class SingleFlight {
   private map = new Map<string, Promise<unknown>>();
 
   constructor(private onCoalesce?: () => void) {}

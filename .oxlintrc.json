@@ -77,6 +77,86 @@
           }
         ]
       }
+    },
+    {
+      "files": ["src/client/api/transport/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
+                "message": "Client code must not import server or functions code. Move the shared piece into src/shared."
+              },
+              {
+                "group": ["**/query/**", "**/decode/**", "**/present/**", "**/view-models"],
+                "message": "transport is the bottom layer of src/client/api and may only import itself. Move the shared piece into transport instead of reaching up a layer."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/client/api/query/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
+                "message": "Client code must not import server or functions code. Move the shared piece into src/shared."
+              },
+              {
+                "group": ["**/present/**", "**/view-models"],
+                "message": "query sits below present and the view models. A cache key that depends on a view model's shape is exactly what this layering prevents."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/client/api/decode/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
+                "message": "Client code must not import server or functions code. Move the shared piece into src/shared."
+              },
+              {
+                "group": ["**/query/**", "**/present/**", "**/view-models"],
+                "message": "decode may only import transport and itself. Decoding a payload must not depend on a query or a view model."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/client/api/present/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/server", "@/server/*", "**/server/**", "@/functions", "@/functions/*", "**/functions/**"],
+                "message": "Client code must not import server or functions code. Move the shared piece into src/shared."
+              },
+              {
+                "group": ["**/query/**", "**/decode/**", "**/view-models"],
+                "message": "present may only import transport and itself. Presentation must not decode a payload or reach into a query."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

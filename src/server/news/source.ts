@@ -49,7 +49,6 @@ function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsIt
 }
 
 interface NewsRaw {
-  category: NewsCategory;
   items: NewsItem[];
   failCount: number;
   total: number;
@@ -61,7 +60,7 @@ async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<Ne
     label: feed.id,
     run: async () => {
       const xml = await ctx.http.getFeed(feed.url, FEED_ACCEPT, MAX_FEED_BYTES);
-      return requireParsed(parseFeed(xml, feed.url), ctx.log, feed.id);
+      return requireParsed(parseFeed(xml, feed.url, feed.sourceName), ctx.log, feed.id);
     },
   }));
   const { values, failures } = await runLegs(legs, {
@@ -77,7 +76,7 @@ async function fetchNewsRaw(ctx: AppContext, category: NewsCategory): Promise<Ne
         .join("; ")}`,
     );
   }
-  return { category, items: allItems, failCount: failures.length, total: values.length };
+  return { items: allItems, failCount: failures.length, total: values.length };
 }
 
 export const getNews = defineParamSource<{ category: NewsCategory }, NewsRaw, NewsItem[]>(
@@ -87,12 +86,12 @@ export const getNews = defineParamSource<{ category: NewsCategory }, NewsRaw, Ne
     label: "news",
     served: true,
     fetch: (ctx, { category }) => fetchNewsRaw(ctx, category),
-    parse: (raw, ctx) =>
+    parse: (raw, ctx, { category }) =>
       requireRows(
-        pickNewsItems(ctx, raw.category, raw.items),
-        `news "${raw.category}"`,
+        pickNewsItems(ctx, category, raw.items),
+        `news "${category}"`,
         "usable items",
-        "all filtered?",
+        `raw=${raw.items.length}, feedsFailed=${raw.failCount}/${raw.total}`,
       ),
     // A category that lost even one of its feeds is cached for the degraded TTL, so the next visit retries the gap
     // instead of serving it for the full news TTL. Losing every feed in a category is "all legs failed" (`runLegs`

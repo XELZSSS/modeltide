@@ -12,4 +12,5 @@ export const SITE_URLS = {
   huggingface: "https://huggingface.co",
   openRouter: "https://openrouter.ai",
   repository: "https://github.com/XELZSSS/modeltide",
+  cursor: "https://cursor.com",
 } as const;

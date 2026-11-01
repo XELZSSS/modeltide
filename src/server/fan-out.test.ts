@@ -11,18 +11,18 @@ const stub = () => {
 const opts = { tag: "demo" };
 
 describe("fanOut", () => {
-  it("keeps the surviving legs and reports the payload as partial", async () => {
+  it("keeps the surviving legs and reports the failed one", async () => {
     const { ctx } = stub();
-    const { values, failures, partial } = await fanOut(ctx, [ok("a", 1), failing("b", new Error("boom"))], opts);
+    const { values, failures } = await fanOut(ctx, [ok("a", 1), failing("b", new Error("boom"))], opts);
     expect(values).toEqual([1, undefined]);
     expect(failures.map((failure) => failure.label)).toEqual(["b"]);
-    expect(partial).toBe(true);
   });
 
-  it("is not partial when every leg succeeded", async () => {
+  it("reports no failure when every leg succeeded", async () => {
     const { ctx } = stub();
-    const { partial } = await fanOut(ctx, [ok("a", 1), ok("b", 2)], opts);
-    expect(partial).toBe(false);
+    const { values, failures } = await fanOut(ctx, [ok("a", 1), ok("b", 2)], opts);
+    expect(values).toEqual([1, 2]);
+    expect(failures).toEqual([]);
   });
 
   it("logs every failed leg once under the source tag", async () => {

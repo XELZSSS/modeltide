@@ -96,3 +96,25 @@ export interface DecisionIndexEntry {
   timePerTaskMs: number | null;
   scores: DecisionScores;
 }
+
+/**
+ * One row of Cursor's own agentic coding benchmark. The label Cursor prints *is* the identity: `Opus 5.5 Max` is a
+ * model at a named reasoning effort, and the page ranks each effort variant separately, so the row key is a slug of the
+ * whole label rather than a model name.
+ */
+export interface CursorBenchEntry {
+  /** Slug of `model`; the row key, because the label already carries the effort variant. */
+  id: string;
+  model: string;
+  /** The page's own 1-based rank, kept as printed instead of re-derived from the array order. */
+  rank: number;
+  /** Pass rate, 0-100 — the page prints it with a `%`, and nothing is rescaled on the way in. */
+  score: number;
+  /**
+   * USD per task, from Cursor's published per-token prices (input, cache read, cache write, output) applied to the
+   * tokens each task used. `null` when the page prints no figure.
+   */
+  costPerTask: number | null;
+  tokensPerTask: number | null;
+  stepsPerTask: number | null;
+}

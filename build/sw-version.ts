@@ -2,13 +2,19 @@ import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
 import type { Plugin } from "vite";
-import { CLIENT_OUT_DIR_NAME, VERSION_DIRS, VERSION_FILES } from "./constants.ts";
+import { API_PREFIX, CLIENT_OUT_DIR_NAME, VERSION_DIRS, VERSION_FILES } from "./constants.ts";
 import { rootDir } from "../vite.shared.ts";
 import { PRECACHE_URLS } from "../src/shared/pwa.ts";
 
 const clientOutDir = path.join(rootDir, CLIENT_OUT_DIR_NAME);
 const SW_VERSION_DECL = /const SW_VERSION = "[^"]*";/;
 const SW_SHELL_DECL = /const PRECACHE_SHELL = \[[\s\S]*?\];/;
+/**
+ * The service worker cannot import TypeScript, so `public/sw.js` restates the API prefix that dev serves as written.
+ * The build overwrites it from `src/shared/config/api.ts`, which is why no rule has to compare the two: the shipped
+ * worker carries the constant, not a copy of it.
+ */
+const SW_PREFIX_DECL = /const API_PREFIX = "[^"]*";/;
 const SHELL_ASSET = /<(?:script|link)\b[^>]*\s(?:src|href)="(\/assets\/[^"]+)"/g;
 
 const PRECACHE_MARKER = "// @generated-from src/shared/pwa.ts by build/sw-version.ts — do not edit by hand";
@@ -71,6 +77,9 @@ export function serviceWorkerVersion(): Plugin {
       if (!SW_SHELL_DECL.test(source)) {
         throw new Error(`${file}: no PRECACHE_SHELL declaration to inject`);
       }
+      if (!SW_PREFIX_DECL.test(source)) {
+        throw new Error(`${file}: no API_PREFIX declaration to inject`);
+      }
       const version = clientBundleVersion();
       const shell = `[\n  ${shellAssets()
         .map((url) => `"${url}"`)
@@ -81,7 +90,8 @@ export function serviceWorkerVersion(): Plugin {
           file,
           source
             .replace(SW_VERSION_DECL, `const SW_VERSION = "${version}";`)
-            .replace(SW_SHELL_DECL, `const PRECACHE_SHELL = ${shell};`),
+            .replace(SW_SHELL_DECL, `const PRECACHE_SHELL = ${shell};`)
+            .replace(SW_PREFIX_DECL, `const API_PREFIX = "${API_PREFIX}";`),
         ),
       );
     },

@@ -2,6 +2,7 @@ import type { ApiDomain } from "./config/api";
 import type {
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
+  CursorBenchEntry,
   DecisionIndexEntry,
   HomeDashboardData,
   NewsItem,
@@ -27,6 +28,7 @@ interface ApiContract {
   closedReleases: ClosedReleaseEntry[];
   openRouterRankings: OpenRouterRankEntry[];
   decisionIndex: DecisionIndexEntry[];
+  cursorBench: CursorBenchEntry[];
 }
 
 /**

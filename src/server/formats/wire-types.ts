@@ -22,8 +22,9 @@ export interface ModelRow {
   total_prompt_tokens: number;
   count: number;
   /**
-   * Period-over-period change, in *either* the upstream ratio form or an already-percent number; `changeToPercent` in
-   * aggregate.ts normalises it and documents how the two are told apart. Never read this field directly.
+   * Period-over-period change as a **ratio**: `0.9562` is +95.62%, `2.6249` is +262.49%. OpenRouter's own rankings page
+   * prints this column as `change * 100`, and a live probe of the endpoint confirmed it row by row, so there is no
+   * second unit to disambiguate. `changeToPercent` in aggregate.ts is the only place that scales it.
    */
   change: number | null;
   rankingMetricValue?: number;

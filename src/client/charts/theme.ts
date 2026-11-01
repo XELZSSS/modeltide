@@ -85,9 +85,6 @@ const TOOLTIP_FADE_MS = 150;
  * inside it slides. Under `prefers-reduced-motion` the fade is dropped too — motion.css zeroes every CSS duration for
  * that preference, and Chart.js animations are not CSS.
  */
-function tooltipAnimations(): { numbers: { duration: number }; opacity: { duration: number } } {
-  return { numbers: { duration: 0 }, opacity: { duration: prefersReducedMotion() ? 0 : TOOLTIP_FADE_MS } };
-}
 
 export function applyChartDefaults(chart: typeof ChartJS): void {
   chart.defaults.font.family = chartFontFamily();
@@ -102,9 +99,8 @@ export function applyChartDefaults(chart: typeof ChartJS): void {
   // marker rounded without each chart having to redeclare the callback.
   if (tooltip?.callbacks) tooltip.callbacks.labelColor = tooltipLabelColor;
   if (!tooltip?.animations?.numbers || !tooltip.animations.opacity) return;
-  const animations = tooltipAnimations();
-  tooltip.animations.numbers.duration = animations.numbers.duration;
-  tooltip.animations.opacity.duration = animations.opacity.duration;
+  tooltip.animations.numbers.duration = 0;
+  tooltip.animations.opacity.duration = prefersReducedMotion() ? 0 : TOOLTIP_FADE_MS;
 }
 
 /**
@@ -120,10 +116,8 @@ export const chartBase = {
 
 export const axisTickStyle = (theme: ChartTheme) => ({ color: theme.tickSecondary, font: { size: 12 } });
 
-const axisGridStyle = (theme: ChartTheme) => ({ color: theme.grid });
-
-/** The axis line itself. Solid like the grid: a dashed frame reads as an unfinished plot rather than a chart edge. */
-const axisBorderStyle = (theme: ChartTheme) => ({ color: theme.grid });
+/** The axis line and its grid share one colour: a lighter or dashed frame reads as an unfinished plot. */
+const axisStyle = (theme: ChartTheme) => ({ color: theme.grid });
 
 const TOOLTIP_MARKER_RADIUS = 3;
 
@@ -278,8 +272,8 @@ export function cartesianChartOptions<Type extends "line" | "bar", X extends "ca
     ...(interaction ? { interaction } : {}),
     // The caller's own keys win: the category axis of a bar chart hides its gridlines, and that override arrives here.
     scales: {
-      x: { grid: axisGridStyle(theme), border: axisBorderStyle(theme), ...x },
-      y: { grid: axisGridStyle(theme), border: axisBorderStyle(theme), ...y },
+      x: { grid: axisStyle(theme), border: axisStyle(theme), ...x },
+      y: { grid: axisStyle(theme), border: axisStyle(theme), ...y },
     },
     plugins: {
       legend: legend ?? legendStyle(theme),
