@@ -7,6 +7,15 @@ import { findNextData } from "@/server/formats/rsc-data";
 import { parseRscPayload } from "@/server/formats/rsc-parser";
 import type { BenchmarkKey } from "@/shared/config";
 import { AA_FLIGHT_MARKERS } from "../markers";
+import {
+  AA_SCORE_FIELDS,
+  isLeaderboardRow,
+  leaderboardScores,
+  setField,
+  type AaLeaderboardRow,
+  type AaRow,
+  type LeaderboardScores,
+} from "../wire";
 
 function hallucinationRate(nonHallucination: unknown): number | null {
   const value = numCoerce(nonHallucination);
@@ -15,38 +24,42 @@ function hallucinationRate(nonHallucination: unknown): number | null {
 
 /**
  * One benchmark value for a leaderboard row. Most live in `scores` under the upstream's kebab-case evaluation name;
- * the signed omniscience index is the one field that stays at the top level.
+ * the signed omniscience index is the one field that stays at the top level, so it is the one key
+ * `LEADERBOARD_SCORE_KEYS` has no entry for.
  */
-function benchmarkValue(row: Record<string, unknown>, key: BenchmarkKey): unknown {
+function benchmarkValue(row: AaLeaderboardRow, scores: LeaderboardScores | undefined, key: BenchmarkKey): unknown {
   const scoreKey = LEADERBOARD_SCORE_KEYS[key];
-  if (scoreKey === undefined) return row[key];
-  const scores = row.scores;
-  return isRecord(scores) ? scores[scoreKey] : undefined;
+  return scoreKey === undefined ? row.omniscience : scores?.[scoreKey];
 }
 
+/**
+ * Maps one leaderboard row onto `AaRow`: the field names this stack reads downstream are the ones `/models` spells, so
+ * the leaderboard's own spellings (`modelCreatorName`, `medianOutputTokensPerSecond`, `scores[…kebab…]`) are translated
+ * here and nowhere else.
+ */
 function normalizeRow(
-  row: Record<string, unknown>,
+  row: AaLeaderboardRow,
   releases: Map<string, ReleaseInfo>,
   links: Map<string, string>,
-): Record<string, unknown> | null {
+): AaRow | null {
   const slug = text(row.slug);
   const name = text(row.name);
   if (!slug || !name || row.deprecated === true) return null;
   const releaseSlug = links.get(slug);
   const release = releaseSlug ? releases.get(releaseSlug) : undefined;
-  const scores = isRecord(row.scores) ? row.scores : {};
-  const normalized: Record<string, unknown> = {
+  const scores = leaderboardScores(row);
+  const normalized: AaRow = {
     slug,
     name,
     isReasoning: row.isReasoning,
     isOpenWeights: row.isOpenWeights,
     creator: { name: str(row.modelCreatorName), color: str(row.modelCreatorColor) },
     intelligenceIndex: row.intelligenceIndex,
-    analystAgent: scores["aa-analyst-agent"],
+    analystAgent: scores?.[AA_SCORE_FIELDS.analystAgent],
     omniscience: row.omniscience,
     omniscienceBreakdown: {
-      accuracy: scores["omniscience-accuracy"],
-      hallucinationRate: hallucinationRate(scores["omniscience-non-hallucination"]),
+      accuracy: scores?.[AA_SCORE_FIELDS.omniscienceAccuracy],
+      hallucinationRate: hallucinationRate(scores?.[AA_SCORE_FIELDS.omniscienceNonHallucination]),
     },
     price1mInputTokens: row.price1mInputTokens,
     price1mOutputTokens: row.price1mOutputTokens,
@@ -61,13 +74,13 @@ function normalizeRow(
   if (sizeClass) normalized.sizeClass = sizeClass;
   if (release) normalized.releaseDate = release.releaseDate;
   for (const key of LEADERBOARD_BENCHMARK_KEYS) {
-    const value = benchmarkValue(row, key);
-    if (value !== undefined) normalized[benchmarkWireName(key)] = value;
+    const value = benchmarkValue(row, scores, key);
+    if (value !== undefined) setField(normalized, benchmarkWireName(key), value);
   }
   return normalized;
 }
 
-export function parseLeaderboardModels(html: unknown): ParseResult<Record<string, unknown>[]> {
+export function parseLeaderboardModels(html: unknown): ParseResult<AaRow[]> {
   if (typeof html !== "string" || !html) return parseFail("AA leaderboard page is not a string");
   const { releases, modelArrays, unparsableSlices } = scanReleaseIndex(html);
   const links = collectModelReleaseLinksFromArrays(modelArrays);
@@ -78,13 +91,14 @@ export function parseLeaderboardModels(html: unknown): ParseResult<Record<string
   // failure and belongs in the error, not in a payload that then reported "no usable model rows" for either cause.
   if (!prop.ok) return parseFail(prop.error);
   const rows = prop.data;
-  if (!rows.some((raw) => isRecord(raw) && "intelligenceIndex" in raw)) {
+  if (!rows.some((raw) => isRecord(raw) && isLeaderboardRow(raw))) {
     return parseFail("AA leaderboard page yielded no usable model rows");
   }
   const seenKeys = new Set<BenchmarkKey>();
   const { rows: kept, dropped } = mapRows(rows, (raw) => {
+    const scores = leaderboardScores(raw);
     for (const key of LEADERBOARD_BENCHMARK_KEYS) {
-      if (benchmarkValue(raw, key) !== undefined) seenKeys.add(key);
+      if (benchmarkValue(raw, scores, key) !== undefined) seenKeys.add(key);
     }
     return normalizeRow(raw, releases, links);
   });

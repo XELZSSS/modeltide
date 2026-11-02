@@ -2,6 +2,7 @@ import { isRecord, text } from "@/server/formats/scalars";
 import { extractNeedleJsonArrays, type NeedleScanStats } from "@/server/formats/rsc-scan";
 import { MAX_RSC_BYTES } from "@/server/formats/limits";
 import { L1_TTL_CAP_MS } from "@/server/cache/config";
+import type { AaChangelogRow, AaReleaseRow } from "../wire";
 
 const CANDIDATE_PREFIX_CHARS = 256;
 
@@ -22,11 +23,13 @@ export interface ReleaseInfo {
 }
 
 function releaseInfo(raw: unknown): { slug: string; info: ReleaseInfo } | null {
-  if (!isRecord(raw) || raw.deprecated === true) return null;
-  const slug = text(raw.slug);
-  const name = text(raw.name);
-  const releaseDate = text(raw.releaseDate);
-  const creator = isRecord(raw.creator) ? raw.creator : undefined;
+  if (!isRecord(raw)) return null;
+  const row: AaReleaseRow = raw;
+  if (row.deprecated === true) return null;
+  const slug = text(row.slug);
+  const name = text(row.name);
+  const releaseDate = text(row.releaseDate);
+  const creator = isRecord(row.creator) ? row.creator : undefined;
   const creatorName = creator ? text(creator.name) : "";
   if (!slug || !name || !releaseDate || !creatorName) return null;
   return {
@@ -100,8 +103,9 @@ export function collectModelReleaseLinksFromArrays(arrays: readonly unknown[]): 
     if (!rows.some((row) => isRecord(row) && "releaseSlug" in row)) continue;
     for (const raw of rows) {
       if (!isRecord(raw)) continue;
-      const slug = text(raw.slug);
-      const releaseSlug = text(raw.releaseSlug);
+      const row: AaChangelogRow = raw;
+      const slug = text(row.slug);
+      const releaseSlug = text(row.releaseSlug);
       if (!slug || !releaseSlug || links.has(slug)) continue;
       links.set(slug, releaseSlug);
     }

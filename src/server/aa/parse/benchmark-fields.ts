@@ -1,43 +1,51 @@
 import { BENCHMARK_KEYS, type BenchmarkKey } from "@/shared/config";
 
-const BENCHMARK_FIELD_OVERRIDES: Partial<Record<BenchmarkKey, string>> = {
-  apex_agents: "apexAgents",
-  automation_bench: "automationBenchPartialScore",
-  briefcase_elo: "briefcaseElo",
+/**
+ * The benchmark wire names, in one table.
+ *
+ * The value is the field name the upstream uses for that evaluation, decided per key: the three projections below
+ * (`LEADERBOARD_BENCHMARK_KEYS`, `MODELS_BENCHMARK_WIRE_NAMES`, `OMNISCIENCE_BENCHMARK_WIRE_NAMES`) and every reader of
+ * a projected row derive from it, so the tables cannot disagree about what a benchmark is called.
+ *
+ * `satisfies Record<BenchmarkKey, string>` is the part that prevents drift: adding a key to `BENCHMARK_KEYS` was
+ * previously a silent no-op (the old `overrides[key] ?? key` fallback filed it under its camelCase key, which no page
+ * sends), and it is now a compile error until its wire spelling is stated here. Listing the identity names explicitly
+ * is the price of that guarantee, and it is what makes this table the single definition instead of a patch list.
+ */
+const BENCHMARK_WIRE_NAMES = {
+  gpqa: "gpqa",
+  hle: "hle",
+  hle_diamond: "hleDiamond",
+  gdpval: "gdpval",
+  gdp_pdf: "gdpPdfAllPass",
+  scicode: "scicode",
+  ifbench: "ifbench",
+  lcr: "lcr",
+  tau2: "tau2",
+  tau_banking: "tauBanking",
+  terminalbench_v2_1: "terminalBench21",
+  terminalbench_hard: "terminalbenchHard",
+  terminalbench_v4_0: "terminalBench40",
+  terminalbench_science: "terminalBenchScience",
+  critpt: "critpt",
   critpt_v2_hard: "critptAgenticHard",
+  frontiercode_2_0: "frontierCode20",
+  apex_agents: "apexAgents",
+  briefcase_elo: "briefcaseElo",
+  itbench_sre: "itbenchSre",
   cwe_bench: "cweBench",
   cyber_index: "cyberIndex",
   deepsec_bench: "deepsecBench",
-  frontiercode_2_0: "frontierCode20",
-  gdp_pdf: "gdpPdfAllPass",
-  hle_diamond: "hleDiamond",
-  itbench_sre: "itbenchSre",
   mmmu_pro: "mmmuPro",
-  tau_banking: "tauBanking",
-  terminalbench_hard: "terminalbenchHard",
-  terminalbench_science: "terminalBenchScience",
-  terminalbench_v2_1: "terminalBench21",
-  terminalbench_v4_0: "terminalBench40",
-};
+  automation_bench: "automationBenchPartialScore",
+  omniscience: "omniscience",
+} as const satisfies Record<BenchmarkKey, string>;
 
-const FIELD_ALIASES: Record<string, readonly string[]> = {
-  itbenchSre: ["itbenchSre", "itBenchSre"],
-};
+/** Every spelling a projected AA row may carry a benchmark under — the keys `AaRow` accepts. */
+export type BenchmarkWireName = (typeof BENCHMARK_WIRE_NAMES)[BenchmarkKey];
 
-/**
- * The field as it is spelled in this row, or `undefined` when the row carries none of its spellings. Called once per
- * benchmark field per row, so it reads `FIELD_ALIASES` directly instead of going through a helper that would build a
- * one-element array for every field without an alias — all but one of them. This is also what `missingFields` in
- * `aa/fetch.ts` asks, so the alias table stays the single definition of "this field under any of its spellings".
- */
-export function presentAlias(row: Record<string, unknown>, field: string): string | undefined {
-  const aliases = FIELD_ALIASES[field];
-  if (aliases === undefined) return field in row ? field : undefined;
-  return aliases.find((alias) => alias in row);
-}
-
-export function benchmarkWireName(key: BenchmarkKey): string {
-  return BENCHMARK_FIELD_OVERRIDES[key] ?? key;
+export function benchmarkWireName(key: BenchmarkKey): BenchmarkWireName {
+  return BENCHMARK_WIRE_NAMES[key];
 }
 
 /**
@@ -61,9 +69,9 @@ export const LEADERBOARD_BENCHMARK_KEYS: readonly BenchmarkKey[] = BENCHMARK_KEY
  * reading the camelCase names off the row found nothing, silently dropping every benchmark for the ~245 models the
  * enrichment pages do not cover. This table is the only place that translation lives.
  *
- * `omniscience` has no entry: the signed index stays a top-level field, and `benchmarkValue` falls back to the row.
+ * `omniscience` has no entry: the signed index stays a top-level field on the row, so `benchmarkValue` reads it there.
  */
-export const LEADERBOARD_SCORE_KEYS: Partial<Record<BenchmarkKey, string>> = {
+const SCORE_KEY_TABLE = {
   gpqa: "gpqa-diamond",
   hle: "humanitys-last-exam",
   hle_diamond: "hle-diamond",
@@ -86,14 +94,23 @@ export const LEADERBOARD_SCORE_KEYS: Partial<Record<BenchmarkKey, string>> = {
   itbench_sre: "itbench-aa",
   mmmu_pro: "mmmu-pro",
   automation_bench: "automationbench-aa",
-};
+} as const satisfies Partial<Record<BenchmarkKey, string>>;
+
+/** A spelling that only exists inside the leaderboard's `scores` object, never on a projected row. */
+export type LeaderboardScoreKey = (typeof SCORE_KEY_TABLE)[keyof typeof SCORE_KEY_TABLE];
+
+/**
+ * The same table, typed as a lookup keyed by `BenchmarkKey`: `omniscience` is deliberately absent, so an indexed read
+ * answers `undefined` for it instead of forcing every caller to narrow the const's key set by hand.
+ */
+export const LEADERBOARD_SCORE_KEYS: Partial<Record<BenchmarkKey, LeaderboardScoreKey>> = SCORE_KEY_TABLE;
 
 // `gdpval` is included: the upstream retired `gdpvalNormalized` and now ships the Elo itself (e.g. 1586.76) with a
 // `gdpvalInterval`. It is declared absolute in `ABSOLUTE_SCORE_BENCHMARKS`, so `compact` keeps the Elo instead of
 // running it through `ratioScore`.
 const MODELS_BENCHMARKS: readonly BenchmarkKey[] = BENCHMARK_KEYS.filter((key) => !MODELS_EXCLUDED.has(key));
 
-export const modelsBenchmarkWireNames = MODELS_BENCHMARKS.map(benchmarkWireName);
+export const modelsBenchmarkWireNames: readonly BenchmarkWireName[] = MODELS_BENCHMARKS.map(benchmarkWireName);
 // `BENCHMARK_KEYS` is the omniscience page's field list: it scores every benchmark, including the three security
 // evaluations the leaderboard's `scores` object omits.
-export const omniscienceBenchmarkWireNames = BENCHMARK_KEYS.map(benchmarkWireName);
+export const omniscienceBenchmarkWireNames: readonly BenchmarkWireName[] = BENCHMARK_KEYS.map(benchmarkWireName);

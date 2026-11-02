@@ -4,6 +4,7 @@ import { isSuitableNewsItem, MAX_NEWS_TITLE_CHARS } from "./content-guards";
 import { sourceNameFromUrl as channelHost } from "./url";
 import { decodeEntities } from "./html-entities";
 import { stripHtml } from "./html-to-text";
+import { FEED_ALTERNATE_REL, FEED_DATE_KEYS, FEED_ELEMENTS } from "@/server/news/wire";
 
 // oxlint-disable-next-line no-control-regex
 const UNSAFE_LINK_CHARS_RE = /["<>\u0000-\u001f\u007f]/;
@@ -43,20 +44,24 @@ function cleanTitle(raw: string): string {
  */
 export function channelTitle(channel: Record<string, unknown>, sourceUrl: string, preferred?: string): string | null {
   if (preferred !== undefined) return preferred;
-  const text = textOf(channel.title) ?? "";
+  const text = textOf(channel[FEED_ELEMENTS.title]) ?? "";
   return cleanTitle(text) || channelHost(sourceUrl);
 }
 
 function linkHref(link: unknown): string | null {
   const raw =
-    typeof link === "string" ? link : isRecord(link) ? (link["@_href"] ?? link.href ?? link["#text"]) : undefined;
+    typeof link === "string"
+      ? link
+      : isRecord(link)
+        ? (link[FEED_ELEMENTS.href] ?? link[FEED_ELEMENTS.hrefText] ?? link[FEED_ELEMENTS.text])
+        : undefined;
   return typeof raw === "string" ? decodeEntities(raw.trim()) || null : null;
 }
 
 function itemLink(item: Record<string, unknown>): string | null {
-  const rawLink = item.link;
+  const rawLink = item[FEED_ELEMENTS.link];
   if (!Array.isArray(rawLink)) return linkHref(rawLink);
-  const alternate = rawLink.find((l) => isRecord(l) && l["@_rel"] === "alternate");
+  const alternate = rawLink.find((l) => isRecord(l) && l[FEED_ELEMENTS.rel] === FEED_ALTERNATE_REL);
   const alternateHref = alternate === undefined ? null : linkHref(alternate);
   if (alternateHref) return alternateHref;
   for (const l of rawLink) {
@@ -76,7 +81,7 @@ function itemLink(item: Record<string, unknown>): string | null {
  * the caller drops it, rather than shipping a date nothing downstream can read.
  */
 function feedDate(item: Record<string, unknown>): string {
-  for (const key of ["pubDate", "published", "updated"] as const) {
+  for (const key of FEED_DATE_KEYS) {
     const value = textOf(item[key])?.trim();
     if (!value) continue;
     const ts = Date.parse(value);
@@ -90,7 +95,7 @@ export function toNewsItem(item: Record<string, unknown>, source: string): NewsI
   if (!rawLink) return null;
   const link = rawLink.trim().slice(0, MAX_LINK_CHARS).replace(SPACE_RE, "%20");
   if (UNSAFE_LINK_CHARS_RE.test(link)) return null;
-  const rawTitle = textOf(item.title) ?? "";
+  const rawTitle = textOf(item[FEED_ELEMENTS.title]) ?? "";
   const title = cleanTitle(rawTitle);
   if (!isSuitableNewsItem(title, link)) return null;
   return {

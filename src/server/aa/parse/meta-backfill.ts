@@ -1,17 +1,17 @@
 import type { ArtificialAnalysisModel } from "@/shared/types";
 import { normalizeModelKey } from "@/shared/utils";
-import type { ModelMetaEntry } from "@/server/formats/wire-types";
+import type { OrMetaEntry } from "@/server/openrouter/wire";
 import { INDEX_FIELDS } from "@/server/formats/meta-fields";
 
 const TRAILING_VERSION_DIGITS_RE = /\d{4,8}$/;
 
-function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEntry>): ModelMetaEntry | undefined {
+function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, OrMetaEntry>): OrMetaEntry | undefined {
   const keys: string[] = [m.slug, m.name, m.short_name]
     .filter((v): v is string => v != null)
     .map(normalizeModelKey)
     .filter((key) => key !== "");
-  const valued = (e: ModelMetaEntry): boolean => INDEX_FIELDS.some((field) => e[field.meta] != null);
-  let looseHit: ModelMetaEntry | undefined;
+  const valued = (e: OrMetaEntry): boolean => INDEX_FIELDS.some((field) => e[field.meta] != null);
+  let looseHit: OrMetaEntry | undefined;
   for (const key of keys) {
     const e = meta[key];
     if (!e) continue;
@@ -29,7 +29,7 @@ function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, ModelMetaEnt
 }
 
 /** Fills index fields that the leaderboard left empty from OpenRouter directory metadata. */
-export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record<string, ModelMetaEntry>): number {
+export function backfillFromMeta(models: ArtificialAnalysisModel[], meta: Record<string, OrMetaEntry>): number {
   let filled = 0;
   for (const m of models) {
     const entry = matchMeta(m, meta);

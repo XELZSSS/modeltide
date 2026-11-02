@@ -36,16 +36,17 @@ export interface OpenSourceModelEntry {
 
 export interface ClosedReleaseEntry {
   /**
-   * The Artificial Analysis slug this release is identified by. Its *space* depends on which source produced the entry:
-   * the changelog path carries AA's **release** slug (`releaseSlug`), while the index fallback has no release slug and
-   * uses the **model** slug instead. Only one path ever runs for a given payload, and the two must not be assumed
-   * interchangeable — an id from one list will not look up in the other.
+   * The Artificial Analysis **model** slug this row is. One release can carry several variants — `DeepSeek V4.1 Flash 1017`
+   * ships a `(Max)` and a `(Non-reasoning)` entry — and each is its own row, because a reader distinguishes them even
+   * though AA files them under one release. Both paths that build a row (`toClosedReleases` from the changelog and
+   * `toClosedReleasesFromIndex` when the changelog is empty) name it this way, so the two id spaces are the same one.
    */
   id: string;
+  /** The variant's own display name, e.g. `DeepSeek V4.1 Flash 1017 (Non-reasoning)`. */
   model: string;
   provider: string;
   releaseDate: string;
-  /** The model page this release belongs to, or `null` when the source offered no usable model slug. */
+  /** The model page this row belongs to, or `null` when the source offered no usable model slug. */
   link: string | null;
 }
 

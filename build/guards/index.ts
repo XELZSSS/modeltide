@@ -13,7 +13,7 @@ import { tokensRule } from "./tokens.ts";
  * time. A rule
  * declares the files whose change invalidates it, so `configureServer` no longer keeps a second hand-maintained list.
  */
-export const GUARD_RULES: readonly GuardRule[] = [tokensRule, structureRule, pagesRule(API_PREFIX), runtimeRule];
+const GUARD_RULES: readonly GuardRule[] = [tokensRule, structureRule, pagesRule(API_PREFIX), runtimeRule];
 
 /** Every watched path across all rules, plus the directory prefixes a rule cares about as a whole tree. */
 export const GUARD_WATCHES = {

@@ -4,6 +4,7 @@ import { isRecord } from "./scalars";
 import { MAX_FEED_BYTES, SOURCE_LIMITS } from "./limits";
 import { utf8ByteLength } from "@/server/util/hash";
 import { zeroUpstreamMessage, errMsg } from "@/server/api/errors";
+import { FEED_CONTAINERS, FEED_ELEMENTS, FEED_ITEM_KEYS, FEED_OPAQUE_BODY_NODE } from "@/server/news/wire";
 import { channelTitle, toNewsItem } from "./feed-fields";
 import { parseFail, parseOk, type ParseResult } from "./parse-result";
 
@@ -21,7 +22,7 @@ const parser = new XMLParser({
    * spends most of its bytes inside `content:encoded` — building a subtree for that text cost 10.1 ms of a 10 ms CPU
    * budget per refresh (7.4 ms with this). The emitted NewsItem rows are identical either way.
    */
-  stopNodes: ["*.content:encoded"],
+  stopNodes: [FEED_OPAQUE_BODY_NODE],
 });
 
 export function parseFeed(xml: unknown, sourceUrl: unknown, sourceName?: string): ParseResult<NewsItem[]> {
@@ -54,11 +55,25 @@ export function parseFeed(xml: unknown, sourceUrl: unknown, sourceName?: string)
  */
 const MAX_ITEMS_SCAN_FACTOR = 4;
 
-const ITEM_CLOSERS = ["</item>", "</entry>"] as const;
+const ITEM_CLOSERS = FEED_ITEM_KEYS.map((key) => `</${key}>`);
 const COMMENT_OPEN = "<!--";
 const COMMENT_CLOSE = "-->";
 const CDATA_OPEN = "<![CDATA[";
 const CDATA_CLOSE = "]]>";
+/** Advances `i` past a comment or CDATA section when one opens there; otherwise returns `i` unchanged. Both walks that
+ * scan the document must skip the same regions: a closer inside a comment or a CDATA body is content, not an item. */
+function skipOpaque(xml: string, i: number): number {
+  if (xml.startsWith(COMMENT_OPEN, i)) {
+    const end = xml.indexOf(COMMENT_CLOSE, i + COMMENT_OPEN.length);
+    return end < 0 ? xml.length : end + COMMENT_CLOSE.length;
+  }
+  if (xml.startsWith(CDATA_OPEN, i)) {
+    const end = xml.indexOf(CDATA_CLOSE, i + CDATA_OPEN.length);
+    return end < 0 ? xml.length : end + CDATA_CLOSE.length;
+  }
+  return i;
+}
+
 /**
  * The document's own container closing tags: everything the feed wrote after its last item closer, copied verbatim.
  * A table of literal tails — `</channel></rss>`, `</feed>` and their whitespace variants — missed a feed whose
@@ -69,9 +84,25 @@ const CDATA_CLOSE = "]]>";
  * `undefined` when nothing follows the last item: an unclosed document stays untouched rather than getting a guess.
  */
 function feedTail(xml: string, closer: string): string | undefined {
-  const last = xml.lastIndexOf(closer);
+  // The last real item closer, skipping the comment/CDATA regions the cut scan skips: `lastIndexOf` would land on a
+  // closer a trailing commented-out item carries, splicing an unmatched `-->` into the document.
+  let last = -1;
+  let i = 0;
+  while (i < xml.length) {
+    const after = skipOpaque(xml, i);
+    if (after !== i) {
+      i = after;
+      continue;
+    }
+    if (xml.startsWith(closer, i)) {
+      last = i + closer.length;
+      i += closer.length;
+      continue;
+    }
+    i += 1;
+  }
   if (last < 0) return undefined;
-  const tail = xml.slice(last + closer.length);
+  const tail = xml.slice(last);
   return tail.trim() === "" ? undefined : tail;
 }
 
@@ -93,14 +124,9 @@ export function capItems(xml: string, keep: number): string {
     let seen = 0;
     let i = 0;
     while (i < xml.length && seen < keep) {
-      if (xml.startsWith(COMMENT_OPEN, i)) {
-        const end = xml.indexOf(COMMENT_CLOSE, i + COMMENT_OPEN.length);
-        i = end < 0 ? xml.length : end + COMMENT_CLOSE.length;
-        continue;
-      }
-      if (xml.startsWith(CDATA_OPEN, i)) {
-        const end = xml.indexOf(CDATA_CLOSE, i + CDATA_OPEN.length);
-        i = end < 0 ? xml.length : end + CDATA_CLOSE.length;
+      const after = skipOpaque(xml, i);
+      if (after !== i) {
+        i = after;
         continue;
       }
       if (xml.startsWith(closer, i)) {
@@ -122,8 +148,8 @@ export function capItems(xml: string, keep: number): string {
 
 function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
   if (!isRecord(feed)) return undefined;
-  const rss = isRecord(feed.rss) ? (feed.rss as Record<string, unknown>) : undefined;
-  const rawChannel: unknown = rss?.channel ?? feed.channel ?? feed.feed ?? feed;
+  const rss = isRecord(feed[FEED_CONTAINERS[0]]) ? (feed[FEED_CONTAINERS[0]] as Record<string, unknown>) : undefined;
+  const rawChannel: unknown = rss?.[FEED_CONTAINERS[1]] ?? feed[FEED_CONTAINERS[1]] ?? feed[FEED_CONTAINERS[2]] ?? feed;
   return isRecord(rawChannel) ? rawChannel : undefined;
 }
 
@@ -134,10 +160,13 @@ function parseChannel(
   sourceName: string | undefined,
 ): ParseResult<NewsItem[]> {
   const channel = resolveChannel(feed);
-  if (!channel || (channel.item == null && channel.entry == null && channel.title == null)) {
+  if (
+    !channel ||
+    (channel[FEED_ITEM_KEYS[0]] == null && channel[FEED_ITEM_KEYS[1]] == null && channel[FEED_ELEMENTS.title] == null)
+  ) {
     return parseFail(`Unrecognized feed format at ${sourceUrl}`);
   }
-  let items = (channel.item ?? channel.entry ?? []) as unknown;
+  let items = (channel[FEED_ITEM_KEYS[0]] ?? channel[FEED_ITEM_KEYS[1]] ?? []) as unknown;
   if (!Array.isArray(items)) items = [items];
   const source = channelTitle(channel, sourceUrl, sourceName);
   if (source === null) {

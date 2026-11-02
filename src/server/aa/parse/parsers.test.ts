@@ -4,9 +4,9 @@ import { backfillFromMeta } from "./meta-backfill";
 import { mergeBySlug } from "./model-merge";
 import { compact } from "./model-compact";
 import { parseLeaderboardModels } from "./leaderboard";
-import { parseChangelogModels, type ChangelogModel } from "./changelog";
+import { parseChangelogModels } from "./changelog";
 import { mapEntry } from "./text-to-image";
-import type { RawEntry } from "@/server/formats/wire-types";
+import type { AaImageRow, ChangelogModel } from "../wire";
 
 import { toClosedReleases } from "@/server/releases/parse";
 import { normalizeModelKey } from "@/shared/utils";
@@ -112,11 +112,11 @@ describe("mergeBySlug", () => {
 
   it("overlays enrichment fields, skipping ghosts and slugless/nameless rows", () => {
     const merged = mergeBySlug(catalog, [
-      { slug: "a", medianOutputSpeed: 5 },
+      { slug: "a", shortName: "A2" },
       { slug: "ghost", name: "Ghost" },
     ]);
     expect(merged.map((m) => m.slug)).toEqual(["a", "b"]);
-    expect(merged[0]!.medianOutputSpeed).toBe(5);
+    expect(merged[0]!.shortName).toBe("A2");
     expect(merged[0]!.intelligenceIndex).toBe(1);
   });
 });
@@ -150,7 +150,7 @@ describe("backfillFromMeta", () => {
 });
 
 describe("mapEntry (text-to-image)", () => {
-  const base: RawEntry = {
+  const base: AaImageRow = {
     id: "9570e1d0-a390-48c1-a270-1317570fe3d5",
     slug: "gpt-image-2-5",
     name: "GPT Image 2.5 (high)",
@@ -342,18 +342,22 @@ describe("parseLeaderboardModels", () => {
 });
 
 describe("toClosedReleases", () => {
-  it("dedupes variants by release family, newest first, keeping open-weight families", () => {
+  it("keeps one row per variant, newest release first", () => {
+    const deepseekRelease = {
+      releaseSlug: "deepseek-v4-1-flash-1017",
+      releaseName: "DeepSeek V4.1 Flash 1017",
+      releaseDate: "2026-10-17",
+      creatorName: "DeepSeek",
+    };
     const entries = toClosedReleases(
       [
         clModel(),
         clModel({ slug: "claude-opus-5-5", name: "Claude Opus 5.5 (Max, Default Fallback)" }),
+        clModel({ slug: "deepseek-v4-1-flash-1017", name: "DeepSeek V4.1 Flash 1017 (Max)", ...deepseekRelease }),
         clModel({
-          slug: "deepseek-v4-1-flash-1017",
-          name: "DeepSeek V4.1 Flash 1017",
-          releaseSlug: "deepseek-v4-1-flash",
-          releaseName: "DeepSeek V4.1 Flash",
-          releaseDate: "2026-10-17",
-          creatorName: "DeepSeek",
+          slug: "deepseek-v4-1-flash-1017-non-reasoning",
+          name: "DeepSeek V4.1 Flash 1017 (Non-reasoning)",
+          ...deepseekRelease,
         }),
         clModel({
           slug: "mystery-1",
@@ -366,12 +370,24 @@ describe("toClosedReleases", () => {
       ],
       "https://artificialanalysis.ai",
     );
-    expect(entries.map((e) => e.id)).toEqual(["deepseek-v4-1-flash", "claude-opus-5-5", "mystery-1"]);
-    // The row is identified by its release slug but links to the model page: AA serves the model at
-    // `claude-opus-5-5-high`, and a release slug only coincides with a page for some releases.
-    const claude = entries.find((e) => e.id === "claude-opus-5-5")!;
+    expect(entries.map((e) => e.id)).toEqual([
+      "deepseek-v4-1-flash-1017",
+      "deepseek-v4-1-flash-1017-non-reasoning",
+      "claude-opus-5-5-high",
+      "claude-opus-5-5",
+      "mystery-1",
+    ]);
+    // Two variants of one release are two rows, each labelled with its own name: AA files both under one release, and the
+    // feed used to print only the family name for that pair.
+    expect(entries.filter((e) => e.releaseDate === "2026-10-17").map((e) => e.model)).toEqual([
+      "DeepSeek V4.1 Flash 1017 (Max)",
+      "DeepSeek V4.1 Flash 1017 (Non-reasoning)",
+    ]);
+    // The row is its model page: AA serves `claude-opus-5-5-high`, and a release slug only coincides with a page for some
+    // releases.
+    const claude = entries.find((e) => e.id === "claude-opus-5-5-high")!;
     expect(claude).toMatchObject({
-      model: "Claude Opus 5.5",
+      model: "Claude Opus 5.5 (High)",
       provider: "Anthropic",
       releaseDate: "2026-09-21",
       link: "https://artificialanalysis.ai/models/claude-opus-5-5-high",

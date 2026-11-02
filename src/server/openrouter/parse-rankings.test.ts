@@ -3,12 +3,12 @@ import { resetModuleCachesForTests } from "@/server/cache/service";
 import { categoryFrom, creatorFromSlug } from "./naming";
 import { mapModels } from "./parse-rankings";
 import type { PricingEntry } from "./parse-directory";
-import type { ModelRow } from "@/server/formats/wire-types";
+import type { OrRankingRow } from "./wire";
 import type { MetaLookup, RankingScanStats } from "./aggregate";
 
 beforeEach(() => resetModuleCachesForTests());
 
-type TestRow = ModelRow & { rankingMetricValue?: number };
+type TestRow = OrRankingRow & { rankingMetricValue?: number };
 
 function row(over: Partial<TestRow> = {}): TestRow {
   return {

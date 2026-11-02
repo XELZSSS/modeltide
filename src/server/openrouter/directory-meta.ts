@@ -1,11 +1,11 @@
-import { numCoerce, obj } from "@/server/formats/scalars";
+import { numCoerce } from "@/server/formats/scalars";
 import { isoDatePrefix } from "@/server/formats/dates";
 import { fillModelKeys } from "./lookup";
-import type { ModelMetaEntry } from "@/server/formats/wire-types";
+import { aaBenchmarksOf, type OrDirectoryRow, type OrMetaEntry } from "./wire";
 import { INDEX_FIELDS } from "@/server/formats/meta-fields";
 
-function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMetaEntry {
-  const merged: ModelMetaEntry = {};
+function mergeMetaRecord(target: OrMetaEntry, patch: OrMetaEntry): OrMetaEntry {
+  const merged: OrMetaEntry = {};
   for (const field of INDEX_FIELDS) merged[field.meta] = target[field.meta] ?? patch[field.meta];
   merged.expiresAt = target.expiresAt ?? patch.expiresAt;
   return merged;
@@ -15,15 +15,13 @@ function mergeMetaRecord(target: ModelMetaEntry, patch: ModelMetaEntry): ModelMe
  * Reads the AA benchmark block and expiry date off one directory row and files it under every model key. `keys` is
  * reused across rows by the caller, exactly as `recordPricing`'s `seen`: a fresh Set per row cost an allocation per
  * directory entry, and the directory allows 20k rows.
+ *
+ * The row is `OrDirectoryRow`, whose members are `unknown`: this runs before the pricing gate, so it must accept the
+ * rows that gate rejects — a row without a usable price still carries the index values and the delisted-date signal.
  */
-export function recordMeta(
-  meta: Record<string, ModelMetaEntry>,
-  raw: Record<string, unknown>,
-  keys: Set<string>,
-): void {
-  const benchmarks = obj(raw.benchmarks);
-  const aaBenchmarks = obj(benchmarks?.artificial_analysis);
-  const metaEntry: ModelMetaEntry = {};
+export function recordMeta(meta: Record<string, OrMetaEntry>, raw: OrDirectoryRow, keys: Set<string>): void {
+  const aaBenchmarks = aaBenchmarksOf(raw);
+  const metaEntry: OrMetaEntry = {};
   for (const field of INDEX_FIELDS) {
     const value = numCoerce(aaBenchmarks?.[field.model]);
     if (value != null) metaEntry[field.meta] = value;

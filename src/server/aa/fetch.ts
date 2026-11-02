@@ -4,7 +4,7 @@ import { UpstreamError } from "@/server/api/errors";
 import { parseRscPayload } from "@/server/formats/rsc-parser";
 import { defineSource, type FixedSource } from "@/server/pipeline";
 import { SLOW_TTL_MS } from "@/shared/config";
-import { presentAlias } from "./parse/benchmark-fields";
+import { presentField, type AaRow } from "./wire";
 import { projectFields } from "./parse/enrich-fields";
 import { findLongestData } from "@/server/formats/rsc-data";
 import { AA_FLIGHT_MARKERS } from "./markers";
@@ -13,7 +13,7 @@ export function fetchAaRsc(ctx: AppContext, path: string): Promise<string> {
   return ctx.http.getRsc(upstreamConfig.artificialAnalysis, path);
 }
 
-type EnrichRow = Record<string, unknown>;
+type EnrichRow = AaRow;
 
 interface EnrichSpec {
   key: string;
@@ -24,7 +24,7 @@ interface EnrichSpec {
    * down to — as one value, because two lists that had to agree could only drift into a warning about a field the row
    * keeps, or a row keeping a field nobody checks.
    */
-  fields: readonly string[];
+  fields: readonly (keyof AaRow)[];
 }
 /**
  * Both AA pages carry their rows under the same Flight marker, which `AA_FLIGHT_MARKERS` names once for this parser and
@@ -50,16 +50,16 @@ function parseEnrich(spec: EnrichSpec, body: string): EnrichRow[] {
 }
 
 /**
- * Which expected fields no row carries, checked through `presentAlias` so the alias table stays the one definition of
+ * Which expected fields no row carries, checked through `presentField` so the alias table stays the one definition of
  * "this field under any of its upstream spellings". The loop used to call `fieldAliases`, which allocates a one-element
  * array for every field without an alias — all but one of them, per field per row.
  */
-function missingFields(rows: readonly EnrichRow[], fields: readonly string[]): readonly string[] {
+function missingFields(rows: readonly EnrichRow[], fields: readonly (keyof AaRow)[]): readonly string[] {
   const seen = new Set<string>();
   for (const row of rows) {
     for (const field of fields) {
       if (seen.has(field)) continue;
-      if (presentAlias(row, field) !== undefined) seen.add(field);
+      if (presentField(row, field) !== undefined) seen.add(field);
     }
     // Every expected field was seen at least once: no later row can change the answer.
     if (seen.size === fields.length) return [];

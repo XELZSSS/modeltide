@@ -4,6 +4,7 @@ import { stripHtml } from "@/server/formats/html-to-text";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
 import { numCoerce } from "@/server/formats/scalars";
 import type { CursorBenchEntry } from "@/shared/types";
+import { CURSORBENCH_CELL_COUNT, type CursorBenchCells } from "./wire";
 
 /**
  * CursorBench is an HTML page with no JSON behind it: the leaderboard is server-rendered as one `<table>`, six cells a
@@ -21,8 +22,7 @@ const ROW_CLOSE = "</tr>";
 const CELL_OPEN = "<td";
 const CELL_CLOSE = "</td>";
 
-/** Rank, model, score, cost per task, tokens per task, steps per task. */
-const CELL_COUNT = 6;
+/** A row must carry every column the page prints; the count comes from the table in `./wire`, never from a literal. */
 
 const PERCENT_RE = /^\d+(?:\.\d+)?%$/;
 const DIGITS_RE = /^\d+$/;
@@ -63,7 +63,7 @@ function tableBodyOf(html: string): string {
   return end === -1 || body === -1 || body > end ? "" : html.slice(body, end);
 }
 
-function cellsOf(row: string): string[] {
+function cellsOf(row: string): CursorBenchCells {
   const cells: string[] = [];
   let pos = 0;
   for (;;) {
@@ -81,8 +81,8 @@ function cellsOf(row: string): string[] {
  * One row, or `null` when the cells are not the six the ranking prints. The label is the identity — `Opus 5.5 Max` and
  * `Opus 5.5 High` are two ranked entries — so its slug is the row key.
  */
-function entryOf(cells: readonly string[]): CursorBenchEntry | null {
-  if (cells.length < CELL_COUNT) return null;
+function entryOf(cells: CursorBenchCells): CursorBenchEntry | null {
+  if (cells.length < CURSORBENCH_CELL_COUNT) return null;
   const [rankText, modelText, scoreText, costText, tokensText, stepsText] = cells;
   const rank = countOf(rankText ?? "");
   const score = percentOf(scoreText ?? "");

@@ -1,8 +1,9 @@
-import { numCoerce, obj, text } from "@/server/formats/scalars";
+import { numCoerce, text } from "@/server/formats/scalars";
 import { findLongestData } from "@/server/formats/rsc-data";
 import { parseRscRows } from "@/server/formats/rsc-rows";
 import type { ParseResult } from "@/server/formats/parse-result";
 import type { DecisionIndexEntry, DecisionKind, DecisionScores } from "@/shared/types";
+import { decisionScoresOf, type AaContestantRow, type AaDecisionScores } from "../wire";
 
 /**
  * The evaluation page splits its rows into language models and decision models, and the ranking shows both. A kind this
@@ -14,18 +15,18 @@ function kindOf(raw: string): DecisionKind | null {
   return DECISION_KINDS.find((kind) => kind === raw) ?? null;
 }
 
-function scoresOf(raw: Record<string, unknown> | undefined): DecisionScores {
-  const score = (key: string): number | null => (raw === undefined ? null : numCoerce(raw[key]));
+/** The five columns, read as the members `AaDecisionScores` declares — never by a hand-spelled key. */
+function scoresOf(raw: AaDecisionScores | undefined): DecisionScores {
   return {
-    omniscienceAccuracy: score("omniscienceAccuracy"),
-    omniscienceNonHallucinationRate: score("omniscienceNonHallucinationRate"),
-    hleTextMcqAccuracy: score("hleTextMcqAccuracy"),
-    when2callAccuracy: score("when2callAccuracy"),
-    wildguardtestAverageF1: score("wildguardtestAverageF1"),
+    omniscienceAccuracy: numCoerce(raw?.omniscienceAccuracy),
+    omniscienceNonHallucinationRate: numCoerce(raw?.omniscienceNonHallucinationRate),
+    hleTextMcqAccuracy: numCoerce(raw?.hleTextMcqAccuracy),
+    when2callAccuracy: numCoerce(raw?.when2callAccuracy),
+    wildguardtestAverageF1: numCoerce(raw?.wildguardtestAverageF1),
   };
 }
 
-function mapContestant(raw: Record<string, unknown>): DecisionIndexEntry | null {
+function mapContestant(raw: AaContestantRow): DecisionIndexEntry | null {
   const id = text(raw.slug);
   const name = text(raw.name);
   const kind = kindOf(text(raw.kind));
@@ -39,7 +40,7 @@ function mapContestant(raw: Record<string, unknown>): DecisionIndexEntry | null 
     index,
     costPerTaskUsd: numCoerce(raw.costPerTaskUsd),
     timePerTaskMs: numCoerce(raw.timePerTaskMs),
-    scores: scoresOf(obj(raw.scores)),
+    scores: scoresOf(decisionScoresOf(raw)),
   };
 }
 
@@ -53,7 +54,7 @@ export function parseDecisionRows(body: unknown): ParseResult<DecisionIndexEntry
     label: "Decision index",
     marker: "contestants",
     find: findLongestData,
-    map: mapContestant,
+    map: (row) => mapContestant(row),
     dropped: (count) => `Dropped ${count} decision rows without a usable identity, kind or index`,
   });
 }

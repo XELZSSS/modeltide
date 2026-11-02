@@ -1,18 +1,19 @@
 import { byNumberDesc } from "@/server/formats/ordering";
 import { isValidModelIdentity } from "@/server/formats/content-guards";
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import type { ModelMetaEntry } from "@/server/formats/wire-types";
+import type { OrMetaEntry } from "@/server/openrouter/wire";
 import { compact } from "./model-compact";
 import { mergeBySlug } from "./model-merge";
 import { backfillFromMeta } from "./meta-backfill";
+import type { AaRow } from "../wire";
 
 const MAX_RATIO_WARNINGS = 8;
 
 interface AssembleInput {
-  indexModels: Record<string, unknown>[];
-  modelsEnrich: Record<string, unknown>[];
-  omniscienceEnrich: Record<string, unknown>[];
-  meta: Record<string, ModelMetaEntry> | null;
+  indexModels: readonly AaRow[];
+  modelsEnrich: readonly AaRow[];
+  omniscienceEnrich: readonly AaRow[];
+  meta: Record<string, OrMetaEntry> | null;
 }
 
 interface AssembledModels {
@@ -24,6 +25,9 @@ interface AssembledModels {
 /**
  * Merges the leaderboard catalog with both enrichment pages, compacts the result onto the public
  * model shape, and backfills missing index fields from OpenRouter directory metadata.
+ *
+ * Every input is an `AaRow`: the three legs speak one declared shape, and the public model is the only type that leaves
+ * this function.
  */
 export function assembleModels({ indexModels, modelsEnrich, omniscienceEnrich, meta }: AssembleInput): AssembledModels {
   // Declared-ratio fields that arrive on another scale are dropped by `compact`; surface them instead of losing data

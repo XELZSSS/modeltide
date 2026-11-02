@@ -3,10 +3,10 @@ import { isoDate } from "@/server/formats/dates";
 import { isValidRowId } from "@/server/formats/content-guards";
 import type { OpenSourceModelEntry } from "@/shared/types";
 import { getOpenLicenseId, licenseTagId } from "@/server/formats/licenses";
-import type { HFModel } from "@/server/formats/wire-types";
+import type { HfModel } from "./wire";
 import type { LicenseDropTally } from "./license-tally";
 
-function resolveAuthor(m: HFModel, id: string): string | null {
+function resolveAuthor(m: HfModel, id: string): string | null {
   const explicit = textOrNull(m.author);
   if (explicit) return explicit;
   const slash = id.indexOf("/");
@@ -30,7 +30,7 @@ export function keepOpenSourceRanking(m: { downloads: number }, tally?: LicenseD
 
 function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): OpenSourceModelEntry | null {
   if (!isRecord(m)) return null;
-  const model = m as HFModel;
+  const model: HfModel = m;
   if (!isValidRowId(model.id)) return null;
   const id = text(model.id);
   const downloads = numIntCoerceNonNegative(model.downloads) ?? 0;

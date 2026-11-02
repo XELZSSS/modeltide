@@ -1,7 +1,15 @@
-import { modelsBenchmarkWireNames, omniscienceBenchmarkWireNames, presentAlias } from "./benchmark-fields";
-import { modalityWireNames, omniscienceModalityWireNames } from "./model-compact";
+import { modelsBenchmarkWireNames, omniscienceBenchmarkWireNames } from "./benchmark-fields";
+import { copyField, MODALITY_WIRE_NAMES, OMNISCIENCE_MODALITY_WIRE_NAMES, type AaRow } from "../wire";
 
-const ENRICH_BASE_FIELDS = [
+/**
+ * The scalar fields both enrichment pages serve, in the spelling `/models` uses — which is `AaRow`'s spelling, because
+ * that page is where the normalized row's names come from.
+ *
+ * The list is typed `readonly (keyof AaRow)[]`: a field renamed in the wire contract, or a key the normalized row does
+ * not have, no longer compiles here. That is the check the old `readonly string[]` could not make — it accepted any
+ * literal, and a projection list asking for a name nothing sends produced rows that parsed and carried `null`s.
+ */
+const ENRICH_BASE_FIELDS: readonly (keyof AaRow)[] = [
   "id",
   "slug",
   "name",
@@ -20,29 +28,26 @@ const ENRICH_BASE_FIELDS = [
   "creator",
 ];
 
-export const MODELS_PATH_FIELDS = [
+export const MODELS_PATH_FIELDS: readonly (keyof AaRow)[] = [
   ...ENRICH_BASE_FIELDS,
   "omniscienceHallucinationRate",
   ...modelsBenchmarkWireNames,
-  ...modalityWireNames,
+  ...MODALITY_WIRE_NAMES,
 ];
 
-export const OMNISCIENCE_PATH_FIELDS = [
+export const OMNISCIENCE_PATH_FIELDS: readonly (keyof AaRow)[] = [
   ...ENRICH_BASE_FIELDS,
   "medianCanonicalAnswerOutputSpeed",
   "omniscienceBreakdown",
   ...omniscienceBenchmarkWireNames,
-  ...omniscienceModalityWireNames,
+  ...OMNISCIENCE_MODALITY_WIRE_NAMES,
 ];
 
 /** Keeps only the fields one enrichment page serves, preserving upstream spelling for aliased fields. */
-export function projectFields(fields: readonly string[]): (m: Record<string, unknown>) => Record<string, unknown> {
+export function projectFields(fields: readonly (keyof AaRow)[]): (m: AaRow) => AaRow {
   return (m) => {
-    const row: Record<string, unknown> = {};
-    for (const field of fields) {
-      const alias = presentAlias(m, field);
-      if (alias !== undefined) row[field] = m[alias];
-    }
+    const row: AaRow = {};
+    for (const field of fields) copyField(m, row, field);
     return row;
   };
 }

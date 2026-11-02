@@ -9,7 +9,7 @@ import { dedupeBy } from "@/shared/utils";
 import { encodeModelIdPath } from "@/shared/utils/models";
 import { keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
 import { LicenseDropTally } from "./license-tally";
-import type { HFModel } from "@/server/formats/wire-types";
+import { HF_LIST_FIELDS, type HfModel } from "./wire";
 
 import type { OpenSourceModelsQuery } from "@/shared/query-schemas";
 import { defineParamSource, requireArrayBody, requireRows } from "@/server/pipeline";
@@ -17,11 +17,9 @@ import { served, type ServedPayload } from "@/server/served-payload";
 
 const HF_API = upstreamConfig.huggingface;
 const HF_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,96}(?:\/[A-Za-z0-9][A-Za-z0-9._-]{0,96})?$/;
-function isValidHFModelId(value: string): boolean {
+function isValidHfModelId(value: string): boolean {
   return value.length <= MAX_MODEL_ID_CHARS && isValidRowId(value) && HF_MODEL_ID_RE.test(value);
 }
-
-const HF_LIST_FIELDS = ["author", "downloads", "likes", "tags", "pipeline_tag", "createdAt", "lastModified"];
 
 // HF serves up to 1000 rows per response, so one page replaces the ten a limit of 100 needed: one subrequest and one
 // round trip against the invocation's 50-subrequest and connection budget. 1000 rows weigh ~0.5 MB, inside MAX_JSON_BYTES.
@@ -52,10 +50,10 @@ function hfListUrl(sort: string, limit: number): string {
  * ranking: hitting the ceiling is by design and always yields the same top-N, so it is logged but never reported as
  * partial. A failed page throws and degrades through the cache's stale fallback like every other source.
  */
-async function fetchHFList(ctx: AppContext, sort: string): Promise<HFModel[]> {
+async function fetchHFList(ctx: AppContext, sort: string): Promise<HfModel[]> {
   const url = hfListUrl(sort, HF_PAGE_LIMIT);
   const body = await ctx.http.json<unknown>(url, { timeoutMs: HF_PAGE_TIMEOUT_MS, retries: 1 });
-  const items = requireArrayBody<HFModel>(url, body, "HuggingFace");
+  const items = requireArrayBody<HfModel>(url, body, "HuggingFace");
   if (items.length >= HF_PAGE_LIMIT) {
     ctx.log("info", "[huggingface] row ceiling reached, using the top page", {
       raw: items.length,
@@ -79,7 +77,7 @@ function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTa
   }
 }
 
-function parseHFItems(items: HFModel[], ctx: AppContext, rankByUsage: boolean): OpenSourceModelEntry[] {
+function parseHFItems(items: HfModel[], ctx: AppContext, rankByUsage: boolean): OpenSourceModelEntry[] {
   const tally = new LicenseDropTally();
   const kept = items
     .map((m) => mapListModel(m, tally))
@@ -103,7 +101,7 @@ function parseHFItems(items: HFModel[], ctx: AppContext, rankByUsage: boolean): 
 }
 
 /** The ranking list and the home dashboard ask for the same page at the same depth: one cache entry, one upstream call. */
-export const getHomeOpenSourceModels = defineParamSource<OpenSourceModelsQuery, HFModel[], OpenSourceModelEntry[]>(
+export const getHomeOpenSourceModels = defineParamSource<OpenSourceModelsQuery, HfModel[], OpenSourceModelEntry[]>(
   (params) => cacheKeys.openSourceModels(params.sort),
   {
     ttl: SLOW_TTL_MS,
@@ -115,11 +113,11 @@ export const getHomeOpenSourceModels = defineParamSource<OpenSourceModelsQuery, 
   },
 );
 
-async function fetchHFModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
+async function fetchHfModelById(ctx: AppContext, id: string): Promise<OpenSourceModelEntry | null> {
   const encoded = encodeModelIdPath(id);
-  let raw: HFModel;
+  let raw: HfModel;
   try {
-    raw = await ctx.http.json<HFModel>(`${HF_API}/${encoded}`);
+    raw = await ctx.http.json<HfModel>(`${HF_API}/${encoded}`);
   } catch (err) {
     // A missing repo answers 404, a private or gated one 401/403: from the public API both mean "this id is not
     // readable". A 4xx never retries, so treating only 404 as a miss pinned the detail page on the error boundary
@@ -149,7 +147,7 @@ const modelByIdSource = defineParamSource<string, OpenSourceModelEntry | null, O
     // response copy would never be served — it only cost resident bytes in L1 (counted at the 4× body factor) and a
     // larger KV value.
     scope: { staleCapMs: (value) => (value === null ? NEGATIVE_STALE_CAP_MS : undefined) },
-    fetch: (ctx, id) => (isValidHFModelId(id) ? fetchHFModelById(ctx, id) : Promise.resolve(null)),
+    fetch: (ctx, id) => (isValidHfModelId(id) ? fetchHfModelById(ctx, id) : Promise.resolve(null)),
     parse: (raw) => raw,
     partialWhen: ({ raw }) => (raw == null ? { partial: false, ttl: ONE_MINUTE } : { partial: false }),
   },

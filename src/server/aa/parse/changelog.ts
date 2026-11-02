@@ -2,18 +2,9 @@ import { text } from "@/server/formats/scalars";
 import { isUnsuitableContent } from "@/server/formats/content-guards";
 import { mapRows } from "@/server/formats/parse-rows";
 import { MAX_SCAN_CHARS } from "@/server/formats/limits";
-import type { ChangelogModelEntry } from "@/server/formats/wire-types";
+import type { AaChangelogRow, ChangelogModel } from "../wire";
 import { scanReleaseIndex, type ReleaseInfo } from "./release-index";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
-
-export interface ChangelogModel {
-  slug: string;
-  name: string;
-  releaseSlug: string;
-  releaseName: string;
-  releaseDate: string;
-  creatorName: string;
-}
 
 const CHANGELOG_FIELD_MAX = 500;
 
@@ -34,7 +25,7 @@ function collectModels(
     if (!Array.isArray(value)) continue;
     const rows = value as unknown[];
     const { rows: mapped, dropped } = mapRows(rows, (raw) => {
-      const entry = raw as ChangelogModelEntry;
+      const entry: AaChangelogRow = raw;
       const slug = text(entry.slug);
       const name = text(entry.name);
       const releaseSlug = text(entry.releaseSlug);

@@ -1,6 +1,7 @@
 import type { AppContext } from "@/server/api/context";
 import { served, type ServedPayload } from "@/server/served-payload";
-import { parseChangelogModels, type ChangelogModel } from "./parse/changelog";
+import { parseChangelogModels } from "./parse/changelog";
+import type { ChangelogModel } from "./wire";
 import { getAaLeaderboardBody } from "./index";
 import { requireParsed } from "@/server/pipeline";
 

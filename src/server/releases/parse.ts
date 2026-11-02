@@ -2,7 +2,7 @@ import { isoDatePrefix, sortByDateDesc } from "@/server/formats/dates";
 import { MAX_ID_CHARS, MAX_NAME_CHARS } from "@/shared/config";
 import type { ArtificialAnalysisModel, ClosedReleaseEntry } from "@/shared/types";
 
-import type { ChangelogModel } from "@/server/aa/parse/changelog";
+import type { ChangelogModel } from "@/server/aa/wire";
 import { dedupeBy } from "@/shared/utils";
 import { aaModelPageUrl } from "@/shared/utils/models";
 
@@ -29,15 +29,20 @@ function toClosedEntry(
     provider: cleanProvider,
     releaseDate: date,
     // AA serves a model page at its **model** slug, and a release slug only equals that for some releases: where it does
-    // not (`ling-3-1-flash-rc5` announces the model page `ling-3-1-flash-1019`) the link answered 404. The row keeps its
-    // release id as identity and points at the model page; a release whose model slug the source does not give us stays
-    // in the list without a link rather than with a dead one.
+    // not (`ling-3-1-flash-rc5` announces the model page `ling-3-1-flash-1019`) the link answered 404. The row is the
+    // model — its id is that same slug — and points at that page; a row whose model slug the source does not give us
+    // stays in the list without a link rather than with a dead one.
     link: cleanSlug ? aaModelPageUrl(modelsBaseUrl, cleanSlug) : null,
   };
 }
 
+/**
+ * One row per **variant**. `ChangelogModel` carries both identities — the release family (`releaseSlug`) and the model
+ * this row is (`slug`) — and the feed keys on the model, because `DeepSeek V4.1 Flash 1017 (Max)` and
+ * `(Non-reasoning)` are two entries a reader distinguishes even though AA files them under one release.
+ */
 function toClosedRelease(e: ChangelogModel, modelsBaseUrl: string): ClosedReleaseEntry | null {
-  return toClosedEntry(e.releaseSlug, e.slug, e.releaseName, e.creatorName, e.releaseDate, modelsBaseUrl);
+  return toClosedEntry(e.slug, e.slug, e.name, e.creatorName, e.releaseDate, modelsBaseUrl);
 }
 
 /**
@@ -62,6 +67,17 @@ export function toClosedReleasesFromIndex(
   return deduped;
 }
 
+/**
+ * One row per model variant, newest release first.
+ *
+ * Variants of one release share a `releaseDate` and an entry in AA's `releases` array, so the feed used to collapse them
+ * onto the release and print the family name — `DeepSeek V4.1 Flash 1017` hid both `(Max)` and `(Non-reasoning)`. A
+ * release event is per model here, which is also the identity the index fallback (`toClosedReleasesFromIndex`) already
+ * used, so the two paths now name a row the same way instead of carrying disjoint id spaces.
+ *
+ * Order within one date is the changelog's own: `sortByDateDesc` is stable and keeps AA's row order for a family, which
+ * is its own ranking order.
+ */
 export function toClosedReleases(changelog: ChangelogModel[], modelsBaseUrl: string): ClosedReleaseEntry[] {
   // Sorted in place: this function owns the output order, and the array is the changelog parse's own with no other
   // reader.
@@ -69,5 +85,6 @@ export function toClosedReleases(changelog: ChangelogModel[], modelsBaseUrl: str
   const entries = changelog
     .map((record) => toClosedRelease(record, modelsBaseUrl))
     .filter((entry): entry is ClosedReleaseEntry => entry !== null);
+  // Keyed on the model slug, so two variants of one release are two rows rather than one.
   return dedupeBy(entries, (e) => e.id);
 }

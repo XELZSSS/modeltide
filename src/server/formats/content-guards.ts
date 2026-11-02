@@ -70,12 +70,6 @@ export function isValidRowId(id: unknown): boolean {
   return t.length > 0 && t.length <= MAX_ID_CHARS && !isJunkText(t) && !ID_BAD_RE.test(t);
 }
 
-export function hasCatalogIdentity(m: unknown): boolean {
-  if (!isRecord(m)) return false;
-  const { slug, name } = m;
-  return isNonEmptyString(slug) && isNonEmptyString(name);
-}
-
 export function isValidModelIdentity(id: unknown, slug: unknown, name: unknown): boolean {
   return isNonEmptyString(id) && isNonEmptyString(slug) && isNonEmptyString(name);
 }

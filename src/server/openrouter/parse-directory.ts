@@ -1,15 +1,14 @@
 import { MAX_DIRECTORY_ROWS } from "@/server/formats/limits";
 import { isRecord } from "@/server/formats/scalars";
-import { isPricingRow } from "@/server/formats/wire-guards";
+import { isOrDirectoryRow, type OrMetaEntry } from "./wire";
 import { hasDynamicPricing, pricingOfValidRow, recordPricing, type PricingRecord } from "./directory-pricing";
 import { recordMeta } from "./directory-meta";
-import type { ModelMetaEntry } from "@/server/formats/wire-types";
 
 export type { PricingEntry } from "./directory-pricing";
 
 export interface DirectoryCacheEntry {
   pricing: PricingRecord;
-  meta: Record<string, ModelMetaEntry>;
+  meta: Record<string, OrMetaEntry>;
 }
 
 interface DirectoryParseResult {
@@ -20,7 +19,7 @@ interface DirectoryParseResult {
 
 export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
   const pricingRecord: PricingRecord = Object.create(null);
-  const metaRecord: Record<string, ModelMetaEntry> = Object.create(null);
+  const metaRecord: Record<string, OrMetaEntry> = Object.create(null);
   if (!Array.isArray(rows)) {
     return { entry: { pricing: pricingRecord, meta: metaRecord }, totalRows: 0, missingPricing: 0 };
   }
@@ -41,7 +40,7 @@ export function parseDirectoryRows(rows: unknown): DirectoryParseResult {
     // Metadata is filed before the pricing gate: a row without a usable price still carries the AA index fields and
     // the expiry date, and dropping it there lost both the backfill and the delisted-model signal.
     recordMeta(metaRecord, raw, seen);
-    if (!isPricingRow(raw)) {
+    if (!isOrDirectoryRow(raw)) {
       missingPricing++;
       continue;
     }

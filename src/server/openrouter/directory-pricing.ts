@@ -1,8 +1,12 @@
 import { numCoerce, numCoerceNonNegative, textOrNull } from "@/server/formats/scalars";
 import { PER_MILLION, perMillionOrNull } from "@/server/formats/limits";
 import { fillModelKeys } from "./lookup";
-import type { PricingRow } from "@/server/formats/wire-types";
+import { OR_DYNAMIC_PRICING, type OrPricedRow, type OrPricingBlock } from "./wire";
 
+/**
+ * The prices one model is filed under, in USD per million tokens: the wire states USD per token, so the conversion
+ * happens once, here, and the lookup every consumer reads is already in the unit the UI prints.
+ */
 export interface PricingEntry {
   input: number;
   output: number;
@@ -27,8 +31,16 @@ function buildPricingEntry(
   };
 }
 
-export function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
-  const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
+/**
+ * The price block of a row `isOrDirectoryRow` accepted, read as a declared member: the guard is what establishes that
+ * `pricing` is an object, so this needs no cast of its own.
+ */
+function pricingBlock(raw: OrPricedRow): OrPricingBlock {
+  return raw.pricing;
+}
+
+export function pricingOfValidRow(raw: OrPricedRow): PricingEntry | null {
+  const pricing = pricingBlock(raw);
   // `-1` is the upstream's "not applicable" sentinel and `numCoerceNonNegative` is what drops it, so the fallback has
   // to run after coercion: `??` alone kept `"-1"` and masked the hourly cache-write price behind a null.
   const cacheWrite =
@@ -41,18 +53,16 @@ export function pricingOfValidRow(raw: PricingRow): PricingEntry | null {
   );
 }
 
-const DYNAMIC_PRICING = -1;
-
-export function hasDynamicPricing(raw: PricingRow): boolean {
-  const pricing = raw.pricing as NonNullable<PricingRow["pricing"]>;
-  return numCoerce(pricing.prompt) === DYNAMIC_PRICING && numCoerce(pricing.completion) === DYNAMIC_PRICING;
+export function hasDynamicPricing(raw: OrPricedRow): boolean {
+  const pricing = pricingBlock(raw);
+  return numCoerce(pricing.prompt) === OR_DYNAMIC_PRICING && numCoerce(pricing.completion) === OR_DYNAMIC_PRICING;
 }
 
 /**
  * Indexes one row's price under the raw id, its canonical slug and the canonical slug plus the
  * variant suffix, each in lowercase and normalized form. `seen` is reused across rows by the caller.
  */
-export function recordPricing(record: PricingRecord, raw: PricingRow, entry: PricingEntry, seen: Set<string>): void {
+export function recordPricing(record: PricingRecord, raw: OrPricedRow, entry: PricingEntry, seen: Set<string>): void {
   const id = textOrNull(raw.id);
   const slug = textOrNull(raw.canonical_slug);
   const variantAt = id === null ? -1 : id.lastIndexOf(":");

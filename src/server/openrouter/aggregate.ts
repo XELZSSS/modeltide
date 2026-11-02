@@ -1,27 +1,27 @@
 import { isRecord, numCoerce } from "@/server/formats/scalars";
 import { parseTs } from "@/server/formats/dates";
 import { isValidRowId } from "@/server/formats/content-guards";
-import { isModelRow } from "@/server/formats/wire-guards";
+import { isOrRankingRow } from "./wire";
 import { MAX_RANKING_ROWS } from "@/server/formats/limits";
 import { lookupHit, modelKeyCandidates, type Lookup } from "./lookup";
 
-import type { ModelMetaEntry, ModelRow } from "@/server/formats/wire-types";
+import type { OrMetaEntry, OrRankingRow } from "./wire";
 import type { PricingEntry } from "./parse-directory";
 
 const SUM_KEYS = ["total_prompt_tokens", "total_completion_tokens", "count"] as const;
 
 /** `-1` marks a row whose usage counters are both absent, so it can never win a dominant-row comparison. */
-function usageTotal(row: ModelRow): number {
+function usageTotal(row: OrRankingRow): number {
   const p = numCoerce(row.total_prompt_tokens);
   const c = numCoerce(row.total_completion_tokens);
   return p == null && c == null ? -1 : (p ?? 0) + (c ?? 0);
 }
 
 interface Group {
-  agg: ModelRow;
-  dominant: ModelRow;
+  agg: OrRankingRow;
+  dominant: OrRankingRow;
   dominantTokens: number;
-  latest: ModelRow;
+  latest: OrRankingRow;
   latestTs: number;
   latestTokens: number;
   metric: number | null;
@@ -60,7 +60,7 @@ export interface RankingScanStats {
   expiredRows: number;
 }
 
-export type MetaLookup = Lookup<ModelMetaEntry>;
+export type MetaLookup = Lookup<OrMetaEntry>;
 
 export function resolveExpiry(meta: MetaLookup | undefined, id: string, variantKey: string | undefined): string | null {
   if (!meta) return null;
@@ -79,7 +79,7 @@ function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> 
   for (let i = 0; i < count; i++) {
     const raw: unknown = rows[i];
     if (!isRecord(raw)) continue;
-    if (!isModelRow(raw) || !isValidRowId(raw.model_permaslug)) continue;
+    if (!isOrRankingRow(raw) || !isValidRowId(raw.model_permaslug)) continue;
     valid += 1;
     const row = raw;
     const id = row.model_permaslug.trim();

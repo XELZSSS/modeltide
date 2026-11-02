@@ -48,3 +48,23 @@ Still required: validate at the real trust boundary (upstream wire payloads, que
 contract types as genuinely optional, such as an upstream `404`. Failures must reach the existing error types and
 mapping (`src/server/api/errors.ts`, `mapApiError` in `src/server/api/router.ts`) or an existing degradation path (the
 `partial` flag, `fanOut` / `runLegs` leg failures, the cache's stale fallback).
+
+## 5. One wire shape per source, one shape per layer
+
+Every upstream source declares its payload shapes in `src/server/<source>/wire.ts`, and nothing else may:
+
+- the **page/endpoint rows** (`AaLeaderboardRow`, `HfModel`, `OrRankingRow`, `CursorBenchCells`, the `FEED_*` name
+  tables) spell the names the upstream sends, with every member `unknown` — a body is a trust boundary, so nothing
+  there claims a type the upstream has not proven;
+- the **normalized row** a composite source merges onto (`AaRow`) spells each concept once, and every reader downstream
+  of that merge reads that shape only;
+- the **domain types** in `src/shared/types/` are the contract with the client, and no server parser may return one it
+  did not map onto explicitly.
+
+Forbidden: a type file shared between sources (the removed `src/server/formats/wire-types.ts` was one), a parser
+returning `Record<string, unknown>`, field-name literals outside the source's `wire.ts` (including inside a field list
+or a `scores`/`pricing` sub-object), and any table keyed by a domain key that is not `satisfies`-checked against it.
+
+Allowed: `Record<string, unknown>` at the boundary itself (`isRecord`, the RSC/XML tree walkers, `parse-rows`) and in
+the one module that documents why it reads a dynamic name (`fieldValue` / `setField` / `copyField` in
+`src/server/aa/wire.ts`).

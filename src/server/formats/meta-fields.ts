@@ -1,5 +1,18 @@
-type IndexMetaKey = "intelligenceIndex" | "agenticIndex" | "codingIndex";
-type IndexModelKey = "intelligence_index" | "agentic_index" | "coding_index";
+import type { OrMetaEntry } from "@/server/openrouter/wire";
+import type { ArtificialAnalysisModel } from "@/shared/types";
+
+/**
+ * The directory's index key, without the expiry date that shares the record: only the three indices are backfilled.
+ * `Exclude` over `keyof OrMetaEntry` is what keeps this list honest — a renamed field in the wire contract drops out of
+ * the union, and the table below then fails to compile.
+ */
+type IndexMetaKey = Exclude<keyof OrMetaEntry, "expiresAt">;
+
+/**
+ * The model field it backfills, written as a union of literal names on purpose: indexing `ArtificialAnalysisModel` with
+ * a name it does not have is a type error, so `Extract` turning this list into `never` on a rename fails the table too.
+ */
+type IndexModelKey = Extract<"intelligence_index" | "agentic_index" | "coding_index", keyof ArtificialAnalysisModel>;
 
 /**
  * The AA index fields the OpenRouter directory carries, as the metadata key and the leaderboard field it backfills.

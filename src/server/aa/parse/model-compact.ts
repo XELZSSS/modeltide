@@ -1,15 +1,17 @@
-import { bool, numCoerce, numCoerceNonNegative, numericLabel, obj, str, strOr, text } from "@/server/formats/scalars";
+import { bool, numCoerce, numCoerceNonNegative, numericLabel, str, strOr } from "@/server/formats/scalars";
 import { isoDate } from "@/server/formats/dates";
-import {
-  BENCHMARK_KEYS,
-  MODALITY_KEYS,
-  ABSOLUTE_SCORE_BENCHMARKS,
-  type BenchmarkKey,
-  type ModalityKey,
-} from "@/shared/config";
+import { BENCHMARK_KEYS, ABSOLUTE_SCORE_BENCHMARKS, type BenchmarkKey, type ModalityKey } from "@/shared/config";
 import type { ArtificialAnalysisModel, ModelModalities, ModelOmniscienceBreakdown, ModelPricing } from "@/shared/types";
 import { ratioToPercent } from "@/shared/utils";
-import { benchmarkWireName, presentAlias } from "./benchmark-fields";
+import { benchmarkWireName } from "./benchmark-fields";
+import {
+  creatorOf,
+  fieldValue,
+  MODALITY_WIRES,
+  omniscienceBreakdownOf,
+  type AaOmniscienceBreakdown,
+  type AaRow,
+} from "../wire";
 
 /** Reports a field that is declared as a 0-1 ratio but arrived on another scale, so a drop is never silent. */
 type RatioWarn = (field: string, value: number) => void;
@@ -35,12 +37,11 @@ function ratioAsIs(field: string, raw: number | null, warn?: RatioWarn): number 
   return raw;
 }
 
-function compactBenchmarks(m: Record<string, unknown>, warn?: RatioWarn): Partial<Record<BenchmarkKey, number | null>> {
+function compactBenchmarks(m: AaRow, warn?: RatioWarn): Partial<Record<BenchmarkKey, number | null>> {
   const benchmarks: Partial<Record<BenchmarkKey, number | null>> = {};
   for (const key of BENCHMARK_KEYS) {
     const wire = benchmarkWireName(key);
-    const alias = presentAlias(m, wire);
-    const raw = alias === undefined ? null : numCoerce(m[alias]);
+    const raw = numCoerce(fieldValue(m, wire));
     // The index benchmarks are already on their own scale; a ratio one is kept exactly as the upstream sent it.
     const value = ABSOLUTE_SCORE_BENCHMARKS.has(key) ? raw : ratioAsIs(wire, raw, warn);
     if (value != null) benchmarks[key] = value;
@@ -48,7 +49,7 @@ function compactBenchmarks(m: Record<string, unknown>, warn?: RatioWarn): Partia
   return benchmarks;
 }
 
-function compactCodingIndex(m: Record<string, unknown>, warn?: RatioWarn): number | null {
+function compactCodingIndex(m: AaRow, warn?: RatioWarn): number | null {
   const tb = ratioScore("terminalBench21", numCoerce(m.terminalBench21), warn);
   const sc = ratioScore("scicode", numCoerce(m.scicode), warn);
   if (tb == null) return sc;
@@ -56,7 +57,7 @@ function compactCodingIndex(m: Record<string, unknown>, warn?: RatioWarn): numbe
   return (tb + sc) / 2;
 }
 
-function compactPricing(m: Record<string, unknown>): ModelPricing | null {
+function compactPricing(m: AaRow): ModelPricing | null {
   const input = numCoerceNonNegative(m.price1mInputTokens);
   const output = numCoerceNonNegative(m.price1mOutputTokens);
   const cacheHit = numCoerceNonNegative(m.cacheHitPrice);
@@ -66,7 +67,7 @@ function compactPricing(m: Record<string, unknown>): ModelPricing | null {
 }
 
 function compactOmniscience(
-  omniscienceBreakdown: Record<string, unknown> | undefined,
+  omniscienceBreakdown: AaOmniscienceBreakdown | undefined,
   omniscience: number | null,
   hallucinationRate: number | null,
   warn?: RatioWarn,
@@ -88,63 +89,51 @@ function compactOmniscience(
 }
 
 /**
- * Wire names are fixed per modality, so they are built once: `assignModalities` used to rebuild eight template
- * strings for every row, and a refresh hands it a few hundred rows.
- */
-const MODALITY_WIRES = MODALITY_KEYS.map((mo) => {
-  const suffix = mo.charAt(0).toUpperCase() + mo.slice(1).toLowerCase();
-  return { key: mo, input: `inputModality${suffix}`, output: `outputModality${suffix}` };
-});
-
-export const modalityWireNames = MODALITY_WIRES.flatMap((wire) => [wire.input, wire.output]);
-
-export const omniscienceModalityWireNames = ["inputModalityImage", "inputModalitySpeech", "inputModalityVideo"];
-
-/**
  * One array per direction, in `MODALITY_KEYS` order. A modality the upstream omits keeps the historical default —
  * text only — and one it declares wins, which is what the eight per-row booleans said at ten times the size.
  */
-function pickModalities(m: Record<string, unknown>, prefix: "input" | "output"): ModalityKey[] {
+function pickModalities(m: AaRow, prefix: "input" | "output"): ModalityKey[] {
   return MODALITY_WIRES.filter((wire) => {
     const declared = bool(m[wire[prefix]]);
     return declared === undefined ? wire.key === "text" : declared;
   }).map((wire) => wire.key);
 }
 
-function compactModalities(m: Record<string, unknown>): ModelModalities {
+function compactModalities(m: AaRow): ModelModalities {
   return { in: pickModalities(m, "input"), out: pickModalities(m, "output") };
 }
 
-export function compact(m: Record<string, unknown>, warn?: RatioWarn): ArtificialAnalysisModel {
-  const rec = m;
-  const creator = obj(rec.creator);
-  const creatorName = creator ? text(creator.name) : "";
-  const creatorColor = creator ? text(creator.color) : "";
-  const parameters = numCoerce(rec.parameters);
-  const speed = numCoerce(rec.medianCanonicalAnswerOutputSpeed);
+/**
+ * Projects one normalized AA row onto the public model shape. `m` is `AaRow`, not a record: every field this reads is a
+ * declared member, so a rename in the wire contract is a compile error here rather than a `null` in the payload.
+ */
+export function compact(m: AaRow, warn?: RatioWarn): ArtificialAnalysisModel {
+  const creator = creatorOf(m);
+  const parameters = numCoerce(m.parameters);
+  const speed = numCoerce(m.medianCanonicalAnswerOutputSpeed);
   const model: ArtificialAnalysisModel = {
-    id: str(rec.id) || str(rec.slug),
-    slug: str(rec.slug),
-    name: str(rec.name),
-    short_name: strOr(rec.shortName) ?? null,
-    model_creators: creatorName ? { name: creatorName, color: creatorColor || null } : null,
-    intelligence_index: numCoerce(rec.intelligenceIndex),
-    is_reasoning: bool(rec.isReasoning) ?? false,
-    release_date: isoDate(strOr(rec.releaseDate)),
-    is_open_weights: bool(rec.isOpenWeights) ?? false,
+    id: str(m.id) || str(m.slug),
+    slug: str(m.slug),
+    name: str(m.name),
+    short_name: strOr(m.shortName) ?? null,
+    model_creators: creator.name ? { name: creator.name, color: creator.color || null } : null,
+    intelligence_index: numCoerce(m.intelligenceIndex),
+    is_reasoning: bool(m.isReasoning) ?? false,
+    release_date: isoDate(strOr(m.releaseDate)),
+    is_open_weights: bool(m.isOpenWeights) ?? false,
     parameters: parameters != null && parameters > 0 ? parameters : null,
-    size_class: strOr(rec.sizeClass) ?? numericLabel(rec.sizeClass),
-    context_window_tokens: numCoerceNonNegative(rec.contextWindowTokens),
-    coding_index: compactCodingIndex(rec, warn),
-    agentic_index: ratioScore("analystAgent", numCoerce(rec.analystAgent), warn),
-    benchmarks: compactBenchmarks(rec, warn),
-    pricing: compactPricing(rec),
+    size_class: strOr(m.sizeClass) ?? numericLabel(m.sizeClass),
+    context_window_tokens: numCoerceNonNegative(m.contextWindowTokens),
+    coding_index: compactCodingIndex(m, warn),
+    agentic_index: ratioScore("analystAgent", numCoerce(m.analystAgent), warn),
+    benchmarks: compactBenchmarks(m, warn),
+    pricing: compactPricing(m),
     speed: speed == null ? null : { median_output_speed: speed },
-    modalities: compactModalities(rec),
+    modalities: compactModalities(m),
     omniscience_breakdown: compactOmniscience(
-      obj(rec.omniscienceBreakdown),
-      numCoerce(rec.omniscience),
-      numCoerce(rec.omniscienceHallucinationRate),
+      omniscienceBreakdownOf(m),
+      numCoerce(m.omniscience),
+      numCoerce(m.omniscienceHallucinationRate),
       warn,
     ),
   };

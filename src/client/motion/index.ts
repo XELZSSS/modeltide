@@ -1,4 +1,7 @@
-export { staggerStyle } from "./stagger";
+/** The per-item index `ui-anim-rise` reads its delay from; the timing itself stays in `src/styles/motion.css`. */
+export function staggerStyle(index: number): Record<string, string> {
+  return { "--motion-stagger-index": String(index) };
+}
 
 /**
  * One `fast` beat of the motion scale, for the one hold that is timed in JS rather than in CSS: how long the Suspense
