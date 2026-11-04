@@ -5,8 +5,8 @@ import { mergeBySlug } from "./model-merge";
 import { compact } from "./model-compact";
 import { parseLeaderboardModels } from "./leaderboard";
 import { parseChangelogModels } from "./changelog";
-import { mapEntry } from "./text-to-image";
-import type { AaImageRow, ChangelogModel } from "../wire";
+import { mapEntry, parseCodingAgentsRows } from "./coding-agents";
+import type { AaCodingAgentRow, ChangelogModel } from "../wire";
 
 import { toClosedReleases } from "@/server/releases/parse";
 import { normalizeModelKey } from "@/shared/utils";
@@ -149,29 +149,60 @@ describe("backfillFromMeta", () => {
   });
 });
 
-describe("mapEntry (text-to-image)", () => {
-  const base: AaImageRow = {
-    id: "9570e1d0-a390-48c1-a270-1317570fe3d5",
-    slug: "gpt-image-2-5",
-    name: "GPT Image 2.5 (high)",
-    elo: 1178.11,
-    lower95ci: 1168.11,
-    upper95ci: 1188.11,
-    creator: { name: "OpenAI" },
-    price: 211,
+describe("mapEntry (coding agents)", () => {
+  const base: AaCodingAgentRow = {
+    id: "9983e10d68576074ad63407d0ca81e4b",
+    agentName: "Claude Code",
+    model: { shortName: "Claude Sonnet 5.5 (max with fallback)" },
+    agentCreator: { name: "Anthropic" },
+    indexScore: 0.593,
   };
 
-  it("maps direct elo, the CI pair and price", () => {
-    expect(mapEntry(base)).toMatchObject({
-      id: "9570e1d0-a390-48c1-a270-1317570fe3d5",
-      slug: "gpt-image-2-5",
-      name: "GPT Image 2.5 (high)",
-      elo: 1178.11,
-      eloLower: 1168.11,
-      eloUpper: 1188.11,
-      creatorName: "OpenAI",
-      pricePer1kImages: 211,
+  it("maps the agent, its creator, the model it drove and the index on AA's 0-100 scale", () => {
+    const entry = mapEntry(base);
+    expect(entry).toMatchObject({
+      id: "9983e10d68576074ad63407d0ca81e4b",
+      agent: "Claude Code",
+      creator: "Anthropic",
+      model: "Claude Sonnet 5.5 (max with fallback)",
     });
+    expect(entry?.score).toBeCloseTo(59.3, 10);
+  });
+
+  it.each<[string, Partial<AaCodingAgentRow>]>([
+    ["a row without an index score", { indexScore: null }],
+    ["a row whose score left the 0-1 range", { indexScore: 59.3 }],
+    ["a row without an agent name", { agentName: null }],
+  ])("drops %s", (_label, over) => {
+    expect(mapEntry({ ...base, ...over })).toBeNull();
+  });
+
+  it("takes the model from display.model when a router pairing carries no model object", () => {
+    const entry = mapEntry({
+      id: "router",
+      agentName: "GitHub Copilot",
+      model: null,
+      display: { agent: "GitHub Copilot", model: "Copilot Fusion (max)" },
+      indexScore: 0.599,
+    });
+    expect(entry?.model).toBe("Copilot Fusion (max)");
+  });
+  it("merges the table prop with the highlighted array its references point at", () => {
+    const tableRow = { id: "a", agentName: "Devin Fusion CLI", indexScore: 0.615 };
+    const highlighted = {
+      id: "b",
+      agentName: "Claude Code",
+      indexScore: 0.617,
+      model: { shortName: "Claude Opus 5.5" },
+    };
+    const body = [
+      `2:${JSON.stringify({ benchmarkRows: [tableRow, "$32:props:children:props:rows:0"] })}`,
+      `3:${JSON.stringify({ rows: [highlighted] })}`,
+    ].join("\n");
+    const entries = unwrap(parseCodingAgentsRows(body));
+    // The reference string carries no fields: the row it points at arrives through the `rows` marker itself.
+    expect(entries.map((entry) => entry.agent)).toEqual(["Devin Fusion CLI", "Claude Code"]);
+    expect(entries[1]!.score).toBeCloseTo(61.7, 10);
   });
 });
 

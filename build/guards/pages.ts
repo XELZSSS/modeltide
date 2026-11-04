@@ -152,23 +152,22 @@ function paddedVersion(version: string): string {
 }
 
 /**
- * The Pages v3 build image ships Node 22.16.0 and cannot read `engines.node` - a documented v3 limitation - so the
- * version this project needs only reaches the build through `.nvmrc` / `.node-version`. `.npmrc` sets `engine-strict`,
- * which turns a mismatch into a failed install with an obscure message; asserting the floor here names both files.
+ * The two Node numbers that have to agree.
+ *
+ * Cloudflare Pages' v3 build image cannot read `engines.node` — a documented limitation — so the version the build runs
+ * with reaches it through `.nvmrc`, while npm reads `engines.node` and `.npmrc` sets `engine-strict`. `engines.node` is
+ * the floor the scripts need (unflagged TypeScript entry points, `module.registerHooks`); `.nvmrc` is the version the
+ * project is developed and deployed on, so it must not fall below that floor.
  */
 function assertBuildNodeVersion(ctx: GuardContext): void {
   const nvmrc = ctx.readText(".nvmrc").trim();
-  const nodeVersion = ctx.readText(".node-version").trim();
-  if (nvmrc !== nodeVersion) {
-    throw new Error(`.nvmrc (${nvmrc}) and .node-version (${nodeVersion}) disagree, and Pages reads both`);
+  if (!/^\d+\.\d+\.\d+$/.test(nvmrc)) {
+    throw new Error(`.nvmrc: "${nvmrc}" is not of the form X.Y.Z, which the Pages build image needs`);
   }
   const engines = (JSON.parse(ctx.readText("package.json")) as { engines?: { node?: string } }).engines?.node;
   const floor = /^>=\s*(\d+\.\d+\.\d+)$/.exec(engines ?? "")?.[1];
   if (floor === undefined) {
     throw new Error(`package.json: engines.node "${engines ?? "none"}" is not of the form ">=X.Y.Z"`);
-  }
-  if (!/^\d+\.\d+\.\d+$/.test(nvmrc)) {
-    throw new Error(`.nvmrc: "${nvmrc}" is not of the form X.Y.Z, which the Pages build image needs`);
   }
   if (paddedVersion(nvmrc) < paddedVersion(floor)) {
     throw new Error(`.nvmrc pins Node ${nvmrc}, below the ${engines ?? ""} floor in package.json`);
@@ -176,15 +175,15 @@ function assertBuildNodeVersion(ctx: GuardContext): void {
 }
 
 /**
- * The Node floor the build image has to meet. `.nvmrc` and `.node-version` are read by Pages and `engines.node` by
- * npm, so nothing in the compiler sees the three values disagreeing.
+ * The Node version pair: `.nvmrc` is what the Pages build image reads, `engines.node` what npm enforces, so nothing in
+ * the toolchain sees the two disagreeing.
  *
  * The service worker's API prefix used to be checked here too. `build/sw-version.ts` now overwrites it from
  * `src/shared/config/api.ts` while writing `dist/sw.js`, so there is no second copy left to drift.
  */
 export const runtimeRule: GuardRule = {
   id: "runtime",
-  watches: [".nvmrc", ".node-version", "package.json"],
+  watches: [".nvmrc", "package.json"],
   run(ctx: GuardContext) {
     assertBuildNodeVersion(ctx);
   },

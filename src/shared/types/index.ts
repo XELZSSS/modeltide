@@ -1,10 +1,4 @@
-export type {
-  ModelPricing,
-  ModelModalities,
-  ModelOmniscienceBreakdown,
-  ArtificialAnalysisModel,
-  TextToImageModel,
-} from "./catalog.ts";
+export type { ModelPricing, ModelModalities, ModelOmniscienceBreakdown, ArtificialAnalysisModel } from "./catalog.ts";
 
 export type {
   OpenRouterRankEntry,
@@ -15,6 +9,7 @@ export type {
   DecisionKind,
   DecisionScores,
   CursorBenchEntry,
+  CodingAgentEntry,
 } from "./rankings.ts";
 
 export type { NewsCategory, NewsItem } from "./news.ts";

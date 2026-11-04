@@ -9,7 +9,7 @@ import { staggerStyle } from "@/client/motion";
 import { useHomeStats } from "./use-home-stats";
 import ProviderSpeedCard from "./provider-speed-card.vue";
 import HallucinationCard from "./hallucination-card.vue";
-import TextToImageSection from "./text-to-image-section.vue";
+import CodingAgentsSection from "./coding-agents-section.vue";
 
 const IndexRankingChart = loadableView(() => import("./home-charts.vue"));
 const OpenSourceCard = loadableView(() => import("./open-source-card.vue"));
@@ -20,7 +20,7 @@ const dashboardData = await useSuspenseHomeDashboard();
 
 useMalformedGuard(() => dashboardData.value.malformed, "homeDashboard");
 
-const { trendingStats, hallucinationStats, providerStats, t2iModels } = useHomeStats(dashboardData, t);
+const { trendingStats, hallucinationStats, providerStats, codingAgents } = useHomeStats(dashboardData, t);
 
 const partial = computed(() => dashboardData.value.partial);
 </script>
@@ -43,7 +43,7 @@ const partial = computed(() => dashboardData.value.partial);
       <HallucinationCard :rows="hallucinationStats" />
     </div>
     <div class="ui-anim-rise md:col-span-2 lg:col-span-4" :style="staggerStyle(4)">
-      <TextToImageSection :models="t2iModels" />
+      <CodingAgentsSection :agents="codingAgents" />
     </div>
   </div>
 </template>

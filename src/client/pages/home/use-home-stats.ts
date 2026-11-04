@@ -1,6 +1,6 @@
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue";
 import type { TFunction } from "@/shared/i18n";
-import type { TextToImageModel } from "@/shared/types";
+import type { CodingAgentEntry } from "@/shared/types";
 import type { NormalizedHomeDashboard } from "@/client/api/decode/payload";
 import { shortModelId } from "@/shared/utils/models";
 import { formatRatio, formatShortNumber } from "@/shared/utils";
@@ -20,7 +20,7 @@ interface HomeStats {
   trendingStats: ComputedRef<HomeBarStat[]>;
   hallucinationStats: ComputedRef<HomeBarStat[]>;
   providerStats: ComputedRef<HomeProviderStat[]>;
-  t2iModels: ComputedRef<TextToImageModel[]>;
+  codingAgents: ComputedRef<CodingAgentEntry[]>;
 }
 
 /**
@@ -28,7 +28,7 @@ interface HomeStats {
  * hook only formats them. Keeping the aggregation and the slice server-side is what lets `/` skip the full AA index.
  */
 export function useHomeStats(dashboardData: MaybeRefOrGetter<NormalizedHomeDashboard>, t: TFunction): HomeStats {
-  const t2iModels = computed(() => toValue(dashboardData).textToImage);
+  const codingAgents = computed(() => toValue(dashboardData).codingAgents);
 
   const trendingStats = computed<HomeBarStat[]>(() =>
     toValue(dashboardData).opensource.map((model) => ({
@@ -53,5 +53,5 @@ export function useHomeStats(dashboardData: MaybeRefOrGetter<NormalizedHomeDashb
     })),
   );
 
-  return { trendingStats, hallucinationStats, providerStats, t2iModels };
+  return { trendingStats, hallucinationStats, providerStats, codingAgents };
 }

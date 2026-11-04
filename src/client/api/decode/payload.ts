@@ -19,7 +19,7 @@ function unwrapObject<T>(payload: unknown, label: string): T {
 }
 
 export interface NormalizedHomeDashboard {
-  textToImage: HomeDashboardData["textToImage"];
+  codingAgents: HomeDashboardData["codingAgents"];
   opensource: HomeOpenSourceEntry[];
   openSourceTasks: HomeDashboardData["openSourceTasks"];
   chart: HomeDashboardData["chart"];
@@ -30,7 +30,7 @@ export interface NormalizedHomeDashboard {
 }
 
 const LIST_FIELDS = [
-  "textToImage",
+  "codingAgents",
   "opensource",
   "openSourceTasks",
   "chart",

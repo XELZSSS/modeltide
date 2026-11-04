@@ -1,5 +1,4 @@
-import type { TextToImageModel } from "./catalog.ts";
-import type { OpenSourceModelEntry } from "./rankings.ts";
+import type { CodingAgentEntry, OpenSourceModelEntry } from "./rankings.ts";
 
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -53,7 +52,7 @@ export interface HomeDashboardData {
   opensource: HomeOpenSourceEntry[];
   /** The full HF page's task histogram, so the client never needs the thousand rows behind it. */
   openSourceTasks: TaskSlice[];
-  textToImage: TextToImageModel[];
+  codingAgents: CodingAgentEntry[];
   chart: HomeChartPoint[];
   providers: HomeProviderSpeed[];
   hallucinations: HomeHallucinationPoint[];

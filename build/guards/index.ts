@@ -9,9 +9,9 @@ import { tokensRule } from "./tokens.ts";
  * new rule belongs wherever it reads best.
  *
  * The set is split by what a rule is *about* rather than by size: the token/palette mirror, the repository's structural
- * and budget rules, the Node floor the build image has to meet, and the three files Cloudflare Pages parses at deploy
- * time. A rule
- * declares the files whose change invalidates it, so `configureServer` no longer keeps a second hand-maintained list.
+ * and budget rules, the Node version the build image has to meet, and the three files Cloudflare Pages parses at deploy
+ * time. A rule declares the files whose change invalidates it, so `configureServer` no longer keeps a second
+ * hand-maintained list.
  */
 const GUARD_RULES: readonly GuardRule[] = [tokensRule, structureRule, pagesRule(API_PREFIX), runtimeRule];
 

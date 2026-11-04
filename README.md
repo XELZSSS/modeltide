@@ -43,7 +43,7 @@ build/        Build scripts
 
 ## Quick Start
 
-Requires Node.js 24 or newer
+Requires Node.js 22.18 or newer
 
 ```bash
 npm install

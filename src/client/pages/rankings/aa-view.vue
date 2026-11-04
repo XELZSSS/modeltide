@@ -58,9 +58,17 @@ const viewItems = computed(() => [
   { id: "pricing" as const, label: t("pricing") },
 ]);
 
-// The tab's default order is the ranking, so a row's position in it is its rank; the name links to the AA detail page —
-// the same one the model search and the expanded row lead to.
-const rowExtras = useRankExtras(() => props.rankings, modelId, "aa");
+/**
+ * A row's position in the delivered order is its rank, and the name links to the AA detail page — the same one the model
+ * search and the expanded row lead to.
+ *
+ * Only a row the upstream has scored on the current index holds a rank: the leaderboard prop also carries the models AA
+ * has not evaluated on it yet, and numbering those by position would print places (92..279) the upstream does not give
+ * them. They stay in the list — the detail page, the search and the compare bar all reach them — and simply carry no rank
+ * badge, beside an index cell that already reads as unavailable.
+ */
+const rankedRows = computed(() => props.rankings.filter((model) => model.intelligence_index != null));
+const rowExtras = useRankExtras(rankedRows, modelId, "aa");
 
 const rankingColumns = computed(() => buildRankingColumns(t, rowExtras.value));
 const pricingColumns = computed(() => buildPricingColumns(t, effectivePricingMap.value, rowExtras.value));

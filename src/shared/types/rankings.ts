@@ -119,3 +119,28 @@ export interface CursorBenchEntry {
   tokensPerTask: number | null;
   stepsPerTask: number | null;
 }
+
+/**
+ * One row of Artificial Analysis' Coding Agent Index: an agent (`Claude Code`, `Codex`, …) with the model it scored
+ * highest on. The index is the equally weighted mean of three evaluations — FrontierCode v1.1, SWE-Atlas-QnA and
+ * Terminal-Bench v4 — and AA publishes one row per agent × model pairing, so the pairing kept here is the agent's best.
+ */
+export interface CodingAgentEntry {
+  /** The upstream id of the pairing this row was taken from: the agent's highest-scoring one. */
+  id: string;
+  /** The agent's own name — the thing this ranking ranks, not the model it drove. */
+  agent: string;
+  /** The agent's publisher (`Anthropic`), or `null` when the upstream names none. */
+  creator: string | null;
+  /**
+   * The model the agent scored highest on, e.g. `Claude Sonnet 5.5 (max with fallback)`. A router agent (GitHub Copilot,
+   * Devin Fusion) reports the models it routes between instead, joined by the upstream
+   * (`GPT-6 Astra XHigh + SWE-2 Medium`); `null` only when the row names none at all.
+   */
+  model: string | null;
+  /**
+   * The composite index on AA's own 0-100 scale. The upstream sends the fraction (`0.593`); it is scaled here the way
+   * `coding_index` and `agentic_index` are, because this is an index and not a 0-1 benchmark score.
+   */
+  score: number;
+}

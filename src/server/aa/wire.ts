@@ -8,7 +8,7 @@ import type { BenchmarkWireName, LeaderboardScoreKey } from "./parse/benchmark-f
  * Three shapes are kept apart on purpose, because they used to be one `Record<string, unknown>` that every layer wrote
  * with a hand-spelled string key:
  *
- * 1. **The page rows** (`AaLeaderboardRow`, `AaContestantRow`, `AaImageRow`, `AaChangelogRow`) spell the field names
+ * 1. **The page rows** (`AaLeaderboardRow`, `AaContestantRow`, `AaCodingAgentRow`, `AaChangelogRow`) spell the field names
  *    *as AA sends them* — `modelCreatorName`, `price1mInputTokens`, `scores["aa-analyst-agent"]`. They are only read by
  *    the parser that maps them, and every member is `unknown`: a Flight body is a trust boundary, so nothing here
  *    claims a type the upstream has not proven.
@@ -69,16 +69,22 @@ export interface AaContestantRow {
   scores?: unknown;
 }
 
-/** One row of the image leaderboard's `textToImage` prop. */
-export interface AaImageRow {
+/**
+ * One row of the coding-agent leaderboard, as both `benchmarkRows` and the `rows` array it references spell it.
+ *
+ * One row per agent × model pairing. The flags a row also carries (`isDefault`, `isHighlighted`, `isUnavailable`) and the
+ * per-evaluation blocks (`evals`, `safety`, `rewardHacking`, `percentiles`) are not read: this app mirrors the table the
+ * page prints instead of re-deciding which pairings it ranks. Everything read travels in nested objects
+ * (`model.shortName`, `agentCreator.name`).
+ */
+export interface AaCodingAgentRow {
   id?: unknown;
-  slug?: unknown;
-  name?: unknown;
-  elo?: unknown;
-  lower95ci?: unknown;
-  upper95ci?: unknown;
-  price?: unknown;
-  creator?: unknown;
+  agentName?: unknown;
+  model?: unknown;
+  agentCreator?: unknown;
+  /** The row's own labels: `display.model` spells the model(s) a router pairing runs (`A + B`). */
+  display?: unknown;
+  indexScore?: unknown;
 }
 
 /** One entry of the leaderboard body's `models` array, which is where the changelog's release links come from. */

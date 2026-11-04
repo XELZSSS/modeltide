@@ -4,15 +4,18 @@ import type { BenchmarkKey } from "@/shared/types/benchmark";
 /**
  * Benchmarks whose upstream value is already on its own scale and is kept exactly as sent: Briefcase Elo (832-1817), the
  * Cyber index (12-56, a 0-100 style score), GDPval, which the upstream now ships as an Elo (~1000-1900, negative for the
- * weakest rows) after retiring the 0-1 `gdpvalNormalized` field, and omniscience, a *signed* index (down to about -89
- * for models that hallucinate more than they know). Verified against the live leaderboard, /models and
- * /evaluations/omniscience payloads: every other benchmark arrives as a 0-1 ratio.
+ * weakest rows) after retiring the 0-1 `gdpvalNormalized` field, omniscience, a *signed* index (down to about -89 for
+ * models that hallucinate more than they know), and the two generation ladders, Code2Video (303-1536) and AA-3D
+ * (573-1199). Verified against the live leaderboard, /models and /evaluations/omniscience payloads: every other benchmark
+ * arrives as a 0-1 ratio.
  */
 export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>([
   "briefcase_elo",
   "cyber_index",
   "gdpval",
   "omniscience",
+  "code2video_elo",
+  "aa_3d",
 ]);
 
 /**
@@ -32,11 +35,14 @@ export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
   gpqa: "benchmarkGpqa",
   hle: "benchmarkHle",
   hle_diamond: "benchmarkHleDiamond",
+  aime_2025: "benchmarkAime2025",
   gdpval: "benchmarkGdpval",
   gdp_pdf: "benchmarkGdpPdf",
   scicode: "benchmarkScicode",
+  livecodebench: "benchmarkLivecodebench",
   ifbench: "benchmarkIfbench",
   lcr: "benchmarkLcr",
+  mlcr: "benchmarkMlcr",
   tau2: "benchmarkTau2",
   tau_banking: "benchmarkTauBanking",
   terminalbench_v2_1: "benchmarkTerminalbenchV2_1",
@@ -46,6 +52,7 @@ export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
   critpt: "benchmarkCritpt",
   critpt_v2_hard: "benchmarkCritptV2Hard",
   frontiercode_2_0: "benchmarkFrontiercode2_0",
+  frontiercode: "benchmarkFrontiercode",
   apex_agents: "benchmarkApexAgents",
   briefcase_elo: "benchmarkBriefcaseElo",
   itbench_sre: "benchmarkItbenchSre",
@@ -54,20 +61,27 @@ export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
   deepsec_bench: "benchmarkDeepsecBench",
   mmmu_pro: "benchmarkMmmuPro",
   automation_bench: "benchmarkAutomationBench",
+  enterprise_ops_gym: "benchmarkEnterpriseOpsGym",
+  healthbench: "benchmarkHealthbench",
+  healthbench_professional: "benchmarkHealthbenchProfessional",
+  harvey_lab: "benchmarkHarveyLab",
   omniscience: "benchmarkOmniscience",
+  code2video_elo: "benchmarkCode2videoElo",
+  aa_3d: "benchmarkAa3dElo",
 };
 
 /**
  * The headings the benchmark grid sorts its columns under, in display order. A heading says what the evaluations in it
  * measure, so a reader can tell a code-agent score from a safety one without knowing each acronym.
  */
-export type BenchmarkGroupId = "knowledge" | "coding" | "terminal" | "safety";
+export type BenchmarkGroupId = "knowledge" | "coding" | "terminal" | "safety" | "generation";
 
 export const BENCHMARK_GROUPS: readonly { readonly id: BenchmarkGroupId; readonly labelKey: TranslationKey }[] = [
   { id: "knowledge", labelKey: "benchmarkGroupKnowledge" },
   { id: "coding", labelKey: "benchmarkGroupCoding" },
   { id: "terminal", labelKey: "benchmarkGroupTerminal" },
   { id: "safety", labelKey: "benchmarkGroupSafety" },
+  { id: "generation", labelKey: "benchmarkGroupGeneration" },
 ];
 
 /**
@@ -85,6 +99,11 @@ export const BENCHMARK_GROUP_OF: Record<BenchmarkKey, BenchmarkGroupId> = {
   lcr: "knowledge",
   ifbench: "knowledge",
   briefcase_elo: "knowledge",
+  aime_2025: "knowledge",
+  healthbench: "knowledge",
+  healthbench_professional: "knowledge",
+  harvey_lab: "knowledge",
+  mlcr: "knowledge",
   scicode: "coding",
   critpt: "coding",
   critpt_v2_hard: "coding",
@@ -94,6 +113,9 @@ export const BENCHMARK_GROUP_OF: Record<BenchmarkKey, BenchmarkGroupId> = {
   automation_bench: "coding",
   tau2: "coding",
   tau_banking: "coding",
+  livecodebench: "coding",
+  enterprise_ops_gym: "coding",
+  frontiercode: "coding",
   terminalbench_v2_1: "terminal",
   terminalbench_hard: "terminal",
   terminalbench_v4_0: "terminal",
@@ -101,4 +123,6 @@ export const BENCHMARK_GROUP_OF: Record<BenchmarkKey, BenchmarkGroupId> = {
   cwe_bench: "safety",
   cyber_index: "safety",
   deepsec_bench: "safety",
+  code2video_elo: "generation",
+  aa_3d: "generation",
 };

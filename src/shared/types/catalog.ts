@@ -67,19 +67,3 @@ export interface ArtificialAnalysisModel {
   modalities: ModelModalities;
   omniscience_breakdown: ModelOmniscienceBreakdown | null;
 }
-
-export interface TextToImageModel {
-  id: string;
-  slug: string;
-  name: string;
-  elo: number | null;
-  eloLower: number | null;
-  eloUpper: number | null;
-  /**
-   * USD per 1000 images, taken straight from the upstream `price` field: AA already prices image models per 1k images,
-   * so no conversion happens on the way in and the unit is asserted here rather than derived. Render it with a unit
-   * (`/1k images`), never as a per-token or per-million figure.
-   */
-  pricePer1kImages: number | null;
-  creatorName: string | null;
-}

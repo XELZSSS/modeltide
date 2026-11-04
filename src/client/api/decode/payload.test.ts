@@ -7,7 +7,7 @@ const DOMAIN = "domain";
 const INDEX_LABEL = "artificialIndex";
 
 const EMPTY_LISTS = {
-  textToImage: [],
+  codingAgents: [],
   opensource: [],
   openSourceTasks: [],
   chart: [],
@@ -63,7 +63,7 @@ describe("normalizeHomeDashboard", () => {
   it("passes through every well-formed list", () => {
     const normalized = normalizeHomeDashboard(
       payloadOf({
-        textToImage: [{ slug: "x" }],
+        codingAgents: [{ slug: "x" }],
         opensource: [{ id: "m", downloads: 1 }],
         openSourceTasks: [{ key: "text-generation", total: 1 }],
         chart: [{ id: "c" }],
@@ -73,7 +73,7 @@ describe("normalizeHomeDashboard", () => {
     );
     expect(normalized.malformed).toBe(false);
     expect(normalized.partial).toBe(false);
-    expect(normalized.textToImage).toHaveLength(1);
+    expect(normalized.codingAgents).toHaveLength(1);
     expect(normalized.opensource).toHaveLength(1);
     expect(normalized.openSourceTasks).toHaveLength(1);
     expect(normalized.chart).toHaveLength(1);
@@ -97,16 +97,16 @@ describe("normalizeHomeDashboard", () => {
   });
 
   it("reports a missing list as malformed while keeping the lists that are present", () => {
-    const normalized = normalizeHomeDashboard(payloadOf({ textToImage: [{ slug: "x" }] }));
+    const normalized = normalizeHomeDashboard(payloadOf({ codingAgents: [{ slug: "x" }] }));
     expect(normalized.malformed).toBe(true);
-    expect(normalized.textToImage).toHaveLength(1);
+    expect(normalized.codingAgents).toHaveLength(1);
     expect(normalized.opensource).toEqual([]);
   });
 
   it("reports a list of the wrong type as malformed", () => {
-    const normalized = normalizeHomeDashboard(payloadOf({ textToImage: "nope", opensource: [] }));
+    const normalized = normalizeHomeDashboard(payloadOf({ codingAgents: "nope", opensource: [] }));
     expect(normalized.malformed).toBe(true);
-    expect(normalized.textToImage).toEqual([]);
+    expect(normalized.codingAgents).toEqual([]);
   });
 });
 

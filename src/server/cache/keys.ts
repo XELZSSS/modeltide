@@ -29,8 +29,8 @@ export const cacheKeys = {
   decisionIndex: cacheKey("decisionIndex"),
   cursorBench: cacheKey("cursorBench"),
 
-  // `artificialIndex` names the Artificial Analysis data family, not one page: the image leaderboard is another page of
-  // the same upstream, so it lives under this prefix with its own segment. The index payload itself is the suffixless
-  // key above, so the two can never collide.
-  textToImage: cacheKey("artificialIndex", "text-to-image"),
+  // `artificialIndex` names the Artificial Analysis data family, not one page: the coding-agent leaderboard is another
+  // page of the same upstream, so it lives under this prefix with its own segment. The index payload itself is the
+  // suffixless key above, so the two can never collide.
+  codingAgents: cacheKey("artificialIndex", "coding-agents"),
 } as const;

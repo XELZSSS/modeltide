@@ -56,13 +56,13 @@ export const MOBILE_MAX_WIDTH_PX = 767;
  * Row counts for the home dashboard's cards. The server slices each `HomeDashboardData` list to the count below and the
  * client renders the rows it receives, so no card re-derives a cap the payload already applied: one definition, one
  * slice. They live in `src/shared` because both sides read them — a comment pinning two literals together cannot fail a
- * build, which is how the text-to-image card came to draw five rows of a payload that carried eight.
+ * build, which is how one card came to draw five rows of a payload that carried eight.
  *
  * `HOME_CHART_ROWS` also decides how thick each bar can be: seven categories at ~81px per slot on a desktop card is the
  * largest set that still leaves a ~26px bar, and a wider payload would only thin every one of them.
  */
 export const HOME_CHART_ROWS = 7;
-export const HOME_TEXT_TO_IMAGE_ROWS = 5;
+export const HOME_CODING_AGENT_ROWS = 5;
 export const HOME_OPEN_SOURCE_ROWS = 5;
 export const HOME_PROVIDER_ROWS = 5;
 export const HOME_HALLUCINATION_ROWS = 5;

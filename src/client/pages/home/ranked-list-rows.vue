@@ -5,8 +5,8 @@
  * The rows arrive one after another (`ui-anim-rows`) the way the data tables do, and each row is a full 40px tall — the
  * height does the separating between rows, so no divider is drawn.
  *
- * Generic over the row so a caller that prints more than the pair — the text-to-image card puts two figures under the
- * name — receives its own row in the slot instead of looking it up by index again.
+ * Generic over the row so a caller that prints more than the pair — the coding-agents card adds the model under the
+ * agent's name — receives its own row in the slot instead of looking it up by index again.
  */
 import { staggerStyle } from "@/client/motion";
 

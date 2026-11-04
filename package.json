@@ -23,7 +23,7 @@
     "audit": "npm audit --registry=https://registry.npmjs.org"
   },
   "engines": {
-    "node": ">=24.11.0"
+    "node": ">=22.18.0"
   },
   "packageManager": "npm@11.19.1",
   "dependencies": {
@@ -40,15 +40,15 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.6",
     "@vitejs/plugin-vue": "^6.0.9",
     "esbuild": "^0.28.2",
-    "oxfmt": "0.74.0",
+    "oxfmt": "0.76.0",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "^8.2.2",
-    "vitest": "~5.0.1",
+    "vitest": "~5.1.0",
     "vue-tsc": "^3.3.13"
   },
   "allowScripts": {

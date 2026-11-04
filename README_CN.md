@@ -43,7 +43,7 @@ build/        构建脚本
 
 ## 快速开始
 
-要求 Node.js 24 或更高版本
+要求 Node.js 22.18 或更高版本
 
 ```bash
 npm install

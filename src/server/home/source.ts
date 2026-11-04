@@ -1,7 +1,7 @@
 import type { AppContext } from "@/server/api/context";
 import { fanOut } from "@/server/fan-out";
 import { getIntelligenceIndex } from "@/server/aa";
-import { getTextToImageLeaderboard } from "@/server/aa/text-to-image";
+import { getCodingAgentRankings } from "@/server/aa/coding-agents";
 import { getHomeOpenSourceModels } from "@/server/huggingface/source";
 import { getCursorBench } from "@/server/cursorbench/source";
 import { FIVE_MINUTES, OPEN_SOURCE_MODELS_DEFAULTS } from "@/shared/config";
@@ -24,7 +24,7 @@ import {
   HOME_HALLUCINATION_ROWS,
   HOME_OPEN_SOURCE_ROWS,
   HOME_PROVIDER_ROWS,
-  HOME_TEXT_TO_IMAGE_ROWS,
+  HOME_CODING_AGENT_ROWS,
 } from "@/shared/config/ui";
 import { definePartialSource, type PartialData } from "@/server/pipeline";
 
@@ -71,7 +71,7 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<PartialData<HomeDash
   const { values, failures } = await fanOut(
     ctx,
     [
-      { label: "textToImage", run: () => getTextToImageLeaderboard(ctx) },
+      { label: "codingAgents", run: () => getCodingAgentRankings(ctx) },
       { label: "opensource", run: () => getHomeOpenSourceModels(ctx, { ...OPEN_SOURCE_MODELS_DEFAULTS }) },
       { label: "artificial", run: () => getIntelligenceIndex(ctx) },
       { label: "cursorBench", run: () => getCursorBench(ctx) },
@@ -80,11 +80,11 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<PartialData<HomeDash
     // shared policy in runLegs replaces the hand-written null check this used to do after the fan-out returned.
     { tag: "home", allFailedMessage: "Home dashboard: all sources failed" },
   );
-  const [textToImage, opensource, artificial, cursorBench] = values;
+  const [codingAgents, opensource, artificial, cursorBench] = values;
   const artificialModels = artificial?.payload.data ?? [];
   const openSourceModels = opensource?.payload.data ?? [];
   const data: HomeDashboardData = {
-    textToImage: (textToImage?.payload.data ?? []).slice(0, HOME_TEXT_TO_IMAGE_ROWS),
+    codingAgents: (codingAgents?.payload.data ?? []).slice(0, HOME_CODING_AGENT_ROWS),
     opensource: openSourceModels.slice(0, HOME_OPEN_SOURCE_ROWS).map(homeOpenSourceRow),
     openSourceTasks: aggregateTaskShare(openSourceModels).slices,
     chart: homeChartRows(cursorBench?.payload.data ?? []),

@@ -4,7 +4,7 @@ import { parseRscPayload } from "./rsc-parser";
 
 /** What one RSC row parser has to say about its own payload. */
 interface RscRowsSpec<T> {
-  /** Names the payload in every message: "Text-to-image", "Decision index". */
+  /** Names the payload in every message: "Coding agents", "Decision index". */
   label: string;
   /** The Flight marker the row array is stored under. */
   marker: string;
