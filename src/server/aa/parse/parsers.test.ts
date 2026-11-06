@@ -36,7 +36,7 @@ function rawModel(over: Record<string, unknown> = {}): Record<string, unknown> {
     price1mInputTokens: 1.5,
     price1mOutputTokens: 6,
     cacheHitPrice: 0.75,
-    medianCanonicalAnswerOutputSpeed: 120,
+    outputSpeed: 120,
     releaseDate: "2026-09-22",
     inputModalityText: true,
     outputModalityText: true,
@@ -294,7 +294,7 @@ describe("parseLeaderboardModels", () => {
     price1mOutputTokens: 20,
     cacheHitPrice: 0.2,
     cacheWritePrice: 5,
-    medianOutputTokensPerSecond: 146.5,
+    outputSpeed: 146.5,
     // The leaderboard files benchmarks under `scores`, keyed by the upstream's kebab-case evaluation names. Reading
     // the camelCase fields off the row dropped every benchmark for the models the enrichment pages do not cover.
     scores: {
@@ -336,6 +336,11 @@ describe("parseLeaderboardModels", () => {
     expect(total?.attempt_rate).toBeNull();
     expect(total?.hallucination_rate).toBeCloseTo(0.586, 10);
     expect(total?.omniscience).toBe(46.4);
+  });
+
+  it("reads the output speed AA sends", () => {
+    const rows = unwrap(parseLeaderboardModels(leaderboardBody()));
+    expect(compact(rows[0]!).speed).toEqual({ median_output_speed: 146.5 });
   });
 
   it("drops deprecated rows and rows without a usable identity", () => {

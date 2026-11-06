@@ -37,7 +37,7 @@ export const MODELS_PATH_FIELDS: readonly (keyof AaRow)[] = [
 
 export const OMNISCIENCE_PATH_FIELDS: readonly (keyof AaRow)[] = [
   ...ENRICH_BASE_FIELDS,
-  "medianCanonicalAnswerOutputSpeed",
+  "outputSpeed",
   "omniscienceBreakdown",
   ...omniscienceBenchmarkWireNames,
   ...OMNISCIENCE_MODALITY_WIRE_NAMES,

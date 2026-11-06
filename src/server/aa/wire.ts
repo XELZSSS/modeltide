@@ -20,7 +20,7 @@ import type { BenchmarkWireName, LeaderboardScoreKey } from "./parse/benchmark-f
  *
  * The point of the split is drift: a field renamed upstream, in the projection list, or in `compact` now fails the
  * build instead of producing rows that parse but carry `null`s, which is the failure mode this stack kept hitting
- * (`scores` vs camelCase benchmarks, `medianOutputTokensPerSecond` vs `medianCanonicalAnswerOutputSpeed`).
+ * (`scores` vs camelCase benchmarks).
  */
 
 /** The leaderboard's `scores` object carries these three fields outside the benchmark table. */
@@ -52,7 +52,8 @@ export interface AaLeaderboardRow {
   price1mOutputTokens?: unknown;
   cacheHitPrice?: unknown;
   cacheWritePrice?: unknown;
-  medianOutputTokensPerSecond?: unknown;
+  /** The median output speed, which AA spells `outputSpeed` on every page that carries it. */
+  outputSpeed?: unknown;
   contextWindowTokens?: unknown;
   scores?: unknown;
 }
@@ -226,7 +227,7 @@ interface AaRowFields {
   price1mOutputTokens?: unknown;
   cacheHitPrice?: unknown;
   cacheWritePrice?: unknown;
-  medianCanonicalAnswerOutputSpeed?: unknown;
+  outputSpeed?: unknown;
   omniscience?: unknown;
   omniscienceBreakdown?: unknown;
   omniscienceHallucinationRate?: unknown;

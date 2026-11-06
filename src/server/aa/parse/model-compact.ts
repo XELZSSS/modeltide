@@ -110,7 +110,7 @@ function compactModalities(m: AaRow): ModelModalities {
 export function compact(m: AaRow, warn?: RatioWarn): ArtificialAnalysisModel {
   const creator = creatorOf(m);
   const parameters = numCoerce(m.parameters);
-  const speed = numCoerce(m.medianCanonicalAnswerOutputSpeed);
+  const speed = numCoerce(m.outputSpeed);
   const model: ArtificialAnalysisModel = {
     id: str(m.id) || str(m.slug),
     slug: str(m.slug),

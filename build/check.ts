@@ -6,9 +6,9 @@ import { pathToFileURL } from "node:url";
 /**
  * Runs the consistency rules without a build.
  *
- * `npm run build` is clean → types → lint → format → 34 tests → bundle, which nobody runs while editing; the same rules
- * therefore used to report only at `vite dev` startup/save or at the end of a full build. This is the fast entry point:
- * it loads the rules through Node's own TypeScript support and stops at the first violation.
+ * `npm run build` is clean → types → lint → format → the frozen 34 suites → bundle, which nobody runs while editing; the
+ * same rules therefore used to report only at `vite dev` startup/save or at the end of a full build. This is the fast
+ * entry point: it loads the rules through Node's own TypeScript support and stops at the first violation.
  *
  * Two things the Vite config graph gives the rules for free have to be provided here:
  *

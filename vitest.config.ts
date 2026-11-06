@@ -15,6 +15,7 @@ export default defineConfig({
     // payload decoding), the shared formatters and the server contract layer carry the same regression risk.
     include: ["src/**/*.{test,spec}.ts"],
     // The file set is frozen: do not add *.test.ts / *.spec.ts files. Update an existing suite when a change alters
-    // its expectations, and agree on new coverage with the maintainer first. See AGENTS.md.
+    // its expectations, and agree on new coverage with the maintainer first. `build/guards/tests.ts` enforces this
+    // against the named list, so the rule fails `npm run check` rather than living only in this comment. See AGENTS.md.
   },
 });

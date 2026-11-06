@@ -33,9 +33,8 @@ function benchmarkValue(row: AaLeaderboardRow, scores: LeaderboardScores | undef
 }
 
 /**
- * Maps one leaderboard row onto `AaRow`: the field names this stack reads downstream are the ones `/models` spells, so
- * the leaderboard's own spellings (`modelCreatorName`, `medianOutputTokensPerSecond`, `scores[…kebab…]`) are translated
- * here and nowhere else.
+ * Maps one leaderboard row onto `AaRow`: the field names this stack reads downstream are the ones the upstream sends,
+ * so the leaderboard's own spellings (`modelCreatorName`, `scores[…kebab…]`) are translated here and nowhere else.
  */
 function normalizeRow(
   row: AaLeaderboardRow,
@@ -65,7 +64,7 @@ function normalizeRow(
     price1mOutputTokens: row.price1mOutputTokens,
     cacheHitPrice: row.cacheHitPrice,
     cacheWritePrice: row.cacheWritePrice,
-    medianCanonicalAnswerOutputSpeed: row.medianOutputTokensPerSecond,
+    outputSpeed: row.outputSpeed,
     contextWindowTokens: row.contextWindowTokens,
   };
   const shortName = text(row.shortName);
