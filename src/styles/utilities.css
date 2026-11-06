@@ -4,7 +4,7 @@
  * of re-deriving the same utility strings, so the type scale and the surfaces cannot drift file by file.
  *
  * shadcn/ui "new-york" look: hairline borders, one small radius step for controls and one larger for surfaces, a
- * tight type scale where the page title carries `tracking-tight` and everything below it is 14px or smaller.
+ * type scale where the page title carries `tracking-tight`, reading text sits at 16px and nothing falls below 13px.
  *
  * Elevation is spent once: a surface gets its edge from the hairline border alone, and only a layer that actually
  * floats above the page (`ui-overlay`) gets a shadow. A card carrying both drew two greys along the same edge on a
@@ -101,37 +101,37 @@
 }
 
 @utility ui-card-title {
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.375rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 /* ---------- Body text ---------- */
 
-/* 14px/`--leading-text`, the reading size. The two roles differ only in emphasis, which is why they share the metrics. */
+/* 16px/`--leading-text`, the reading size. The two roles differ only in emphasis, which is why they share the metrics. */
 @utility ui-body {
-  font-size: 0.875rem;
+  font-size: 1rem;
   line-height: var(--leading-text);
   color: var(--text-primary);
 }
 
 @utility ui-body-secondary {
-  font-size: 0.875rem;
+  font-size: 1rem;
   line-height: var(--leading-text);
   color: var(--text-secondary);
 }
 
-/* 12px/16px, the supporting size: captions carry meaning, meta is the tertiary annotation. */
+/* 13px/18px, the supporting size: captions carry meaning, meta is the quieter annotation. */
 @utility ui-caption {
-  font-size: 0.75rem;
-  line-height: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
   color: var(--text-secondary);
 }
 
 @utility ui-meta {
-  font-size: 0.75rem;
-  line-height: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
   color: var(--text-tertiary);
 }
 
@@ -154,16 +154,16 @@
 @utility ui-mono-value {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.375rem;
   color: var(--text-primary);
 }
 
-/* Column headers: sentence case at 12px, quiet colour, never wrapped so a sticky header keeps its height. The wide
+/* Column headers: sentence case at 13px, quiet colour, never wrapped so a sticky header keeps its height. The wide
    uppercase tracking of the previous scale is gone — the reference design system sets table headers as normal text. */
 @utility ui-table-header {
-  font-size: 0.75rem;
-  line-height: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
   font-weight: 500;
   letter-spacing: var(--tracking-text);
   color: var(--text-secondary);

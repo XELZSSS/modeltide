@@ -2,6 +2,7 @@ import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from "vue"
 import type {
   ArtificialAnalysisModel,
   ClosedReleaseEntry,
+  CodingAgentEntry,
   CursorBenchEntry,
   DecisionIndexEntry,
   HallucinationRankingEntry,
@@ -16,6 +17,7 @@ import { malformedPayload } from "./transport/error";
 import {
   qArtificialList,
   qClosedReleasesList,
+  qCodingAgentRankings,
   qCursorBench,
   qDecisionIndex,
   qHomeDashboard,
@@ -87,10 +89,19 @@ export function useArtificialRankings(enabled: MaybeRefOrGetter<boolean> = true)
 export const useSuspenseArtificialRankingsState = () =>
   suspenseListState<ArtificialAnalysisModel>(qArtificialList.use(), "artificialIndex");
 
-export const useSuspenseHomeDashboard = async (): Promise<ComputedRef<NormalizedHomeDashboard>> => {
+export interface SuspenseHomeDashboard {
+  data: ComputedRef<NormalizedHomeDashboard>;
+  /** When the payload last arrived, in `Date.now()` ms: the page header prints it as the data's age. */
+  updatedAt: ComputedRef<number>;
+}
+
+export const useSuspenseHomeDashboard = async (): Promise<SuspenseHomeDashboard> => {
   const query = qHomeDashboard.use();
   await query.suspense();
-  return computed(() => normalizeHomeDashboard(query.data.value));
+  return {
+    data: computed(() => normalizeHomeDashboard(query.data.value)),
+    updatedAt: computed(() => query.dataUpdatedAt.value),
+  };
 };
 
 const OPEN_ROUTER_LABEL = "openRouterRankings";
@@ -163,3 +174,5 @@ export function useHallucinationRankings(
 }
 
 export const useSuspenseCursorBenchState = () => suspenseListState<CursorBenchEntry>(qCursorBench.use(), "cursorBench");
+export const useSuspenseCodingAgentRankings = () =>
+  suspenseListState<CodingAgentEntry>(qCodingAgentRankings.use(), "codingAgentRankings");

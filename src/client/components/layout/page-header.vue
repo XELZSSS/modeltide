@@ -12,9 +12,7 @@ withDefaults(defineProps<{ title: string; description?: string; compact?: boolea
 
 const slots = useSlots();
 
-const classes = computed(() =>
-  cn("flex ui-anim-rise flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4"),
-);
+const classes = computed(() => cn("flex flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4"));
 </script>
 
 <template>

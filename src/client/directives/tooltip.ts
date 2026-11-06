@@ -36,7 +36,7 @@ function show(el: HTMLElement, text: string): void {
   // `max-w-[min(...)]` rather than `max-w-xs`: the bubble is clamped 8px inside the viewport on both sides below, so a
   // flat 20rem cap would put its right edge 8px past the viewport on a 320px screen.
   tip.className =
-    "ui-surface pointer-events-none fixed z-[9999] max-w-[min(20rem,calc(100vw-16px))] rounded-lg bg-popover px-2.5 py-1.5 text-xs leading-4 text-text-primary break-words";
+    "ui-surface pointer-events-none fixed z-[9999] max-w-[min(20rem,calc(100vw-16px))] rounded-lg bg-popover px-2.5 py-1.5 text-[0.8125rem] leading-[1.125rem] text-text-primary break-words";
   tip.setAttribute("role", "tooltip");
   tip.textContent = text;
   tip.style.visibility = "hidden";

@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { cn } from "@/client/utils/cn";
 import { useTranslation } from "@/client/i18n";
-import { formatScore } from "@/shared/utils";
 import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
 import { navigate } from "@/client/router";
 import { MIN_QUERY, useSearchAllRankings } from "./use-search";
 import { errorText } from "@/client/api/present/error-text";
 import Combobox from "./combobox.vue";
+import SearchResultRow from "./search-result-row.vue";
 import { useCombobox } from "./use-combobox";
 
 const { t } = useTranslation();
@@ -75,36 +74,14 @@ const pending = computed(() => isPending.value || inputValue.value !== searchTer
         {{ t("partialDataNotice") }}
       </div>
     </template>
-    <div
+    <SearchResultRow
       v-for="(result, index) in results"
-      :id="`${listboxId}-option-${index}`"
       :key="`${result.source}-${result.id}`"
-      role="option"
-      :aria-selected="activeIndex === index"
-      :class="
-        cn(
-          `w-full cursor-pointer rounded-md p-2.5 text-left ui-motion`,
-          activeIndex === index ? 'bg-surface-hover' : 'hoverable:hover:bg-surface-hover',
-        )
-      "
-      @mouseenter="onHover(index)"
-      @mousedown.prevent
-      @click="onSelectIndex(index)"
-    >
-      <span class="flex items-center justify-between gap-2">
-        <span class="truncate ui-body font-medium" v-tooltip="result.name">{{ result.name }}</span>
-        <span
-          v-if="typeof result.score === 'number' && Number.isFinite(result.score)"
-          class="ml-2 shrink-0 font-mono ui-caption tabular-nums"
-          v-tooltip="result.scoreLabel ? t(result.scoreLabel) : undefined"
-        >
-          {{ formatScore(result.score, t) }}
-        </span>
-      </span>
-      <span class="mt-1 flex min-w-0 items-center gap-2">
-        <span class="shrink-0 ui-caption">{{ t(result.source) }}</span>
-        <span v-if="result.provider" class="min-w-0 truncate ui-meta">{{ result.provider }}</span>
-      </span>
-    </div>
+      :result="result"
+      :active="activeIndex === index"
+      :option-id="`${listboxId}-option-${index}`"
+      @hover="onHover(index)"
+      @select="onSelectIndex(index)"
+    />
   </Combobox>
 </template>

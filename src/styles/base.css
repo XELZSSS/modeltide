@@ -24,7 +24,7 @@
   body {
     margin: 0;
     font-family: var(--font-sans);
-    font-size: 14px;
+    font-size: 16px;
     line-height: var(--leading-text);
     letter-spacing: var(--tracking-text);
     /* No font-smoothing override: the platform default keeps subpixel (LCD) antialiasing on Windows, where forcing

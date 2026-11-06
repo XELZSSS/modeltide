@@ -22,6 +22,8 @@ export type {
   HomeChartPoint,
   HomeProviderSpeed,
   HomeHallucinationPoint,
+  HomeUsagePoint,
+  HomeDecisionPoint,
   TaskSlice,
   ModelSource,
 } from "./app.ts";

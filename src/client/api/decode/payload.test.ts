@@ -10,7 +10,10 @@ const EMPTY_LISTS = {
   codingAgents: [],
   opensource: [],
   openSourceTasks: [],
-  chart: [],
+  intelligence: [],
+  coding: [],
+  usage: [],
+  decision: [],
   providers: [],
   hallucinations: [],
 };
@@ -66,7 +69,10 @@ describe("normalizeHomeDashboard", () => {
         codingAgents: [{ slug: "x" }],
         opensource: [{ id: "m", downloads: 1 }],
         openSourceTasks: [{ key: "text-generation", total: 1 }],
-        chart: [{ id: "c" }],
+        intelligence: [{ id: "c" }],
+        coding: [{ id: "b" }],
+        usage: [{ id: "u", totalTokens: 1 }],
+        decision: [{ id: "d", index: 1 }],
         providers: [{ name: "p" }],
         hallucinations: [{ name: "h" }],
       }),
@@ -76,7 +82,10 @@ describe("normalizeHomeDashboard", () => {
     expect(normalized.codingAgents).toHaveLength(1);
     expect(normalized.opensource).toHaveLength(1);
     expect(normalized.openSourceTasks).toHaveLength(1);
-    expect(normalized.chart).toHaveLength(1);
+    expect(normalized.intelligence).toHaveLength(1);
+    expect(normalized.coding).toHaveLength(1);
+    expect(normalized.usage).toHaveLength(1);
+    expect(normalized.decision).toHaveLength(1);
     expect(normalized.providers).toHaveLength(1);
     expect(normalized.hallucinations).toHaveLength(1);
   });

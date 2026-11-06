@@ -26,6 +26,7 @@ const SOURCE_LABEL: Record<ApiDomain, TranslationKey> = {
   openSourceModels: "openSourceDataSource",
   closedReleases: "releaseDataSources",
   news: "errorSourceNews",
+  codingAgentRankings: "artificialSource",
   homeDashboard: "errorSourceHomeDashboard",
   cursorBench: "cursorBenchSource",
 };

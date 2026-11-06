@@ -1,29 +1,42 @@
 <script setup lang="ts">
-import { Settings } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import { REPO_URL } from "@/client/nav/nav-config";
 import { useNavigation, usePrefetch } from "@/client/nav/navigation";
 import SafeLink from "@/client/components/ui/safe-link.vue";
-import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
+import { FOCUS_RING, ICON_BUTTON } from "@/client/components/ui/interactive-classes";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";
-
-const emit = defineEmits<{ settingsOpen: [] }>();
+import { PATHS } from "@/client/router/paths";
+import NavSearch from "@/client/search/nav-search.vue";
+import ThemeToggle from "./theme-toggle.vue";
+import LanguageToggle from "./language-toggle.vue";
 
 const { all, isActive } = useNavigation();
 const { t } = useTranslation();
 const { hover, cancel } = usePrefetch();
 
-const ICON_BUTTON = `rounded-md p-2 text-text-secondary hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary ui-motion ${FOCUS_RING}`;
-
 const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
 </script>
 
 <template>
+  <!--
+    Opaque, and in flow rather than `fixed`: `main` is the scroll port (`overflow-y-auto`), so this bar already never
+    moves over the content — the shell's flex column holds it above the scroll area, and `fixed` would only pull it out
+    of that column and need its height added back as padding. No translucency, no blur, no height change on scroll: a
+    bar that tints whatever passes beneath it also loses the 1px hairline that lines it up with the page's edges.
+    56px, the same height the phone bar uses: the tallest thing in it is a 32px control, so a taller bar only adds air
+    around small buttons.
+  -->
   <nav
-    class="sticky top-0 z-30 hidden h-14 shrink-0 items-center border-b border-border bg-bg-primary/80 backdrop-blur-md md:flex"
+    class="sticky top-0 z-30 hidden h-14 shrink-0 items-center border-b border-border bg-bg-primary md:flex"
     :aria-label="t('navPrimary')"
   >
     <div :class="INNER">
+      <SafeLink
+        :href="PATHS.home"
+        class="mr-3 shrink-0 text-[1.0625rem] font-semibold tracking-title text-text-primary"
+      >
+        {{ t("appName") }}
+      </SafeLink>
       <div class="flex items-center gap-0.5">
         <SafeLink
           v-for="item in all"
@@ -32,7 +45,7 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           :aria-label="item.label"
           :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
-            `inline-flex h-8 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap ui-motion ${FOCUS_RING}`,
+            `inline-flex h-8 items-center rounded-md px-3 text-[0.9375rem] font-medium whitespace-nowrap ui-motion ${FOCUS_RING}`,
             isActive(item)
               ? 'bg-surface-hover text-text-primary'
               : 'text-text-secondary hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary',
@@ -45,7 +58,10 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           {{ item.label }}
         </SafeLink>
       </div>
-      <div class="ml-auto flex items-center gap-1">
+      <div class="ml-auto flex min-w-0 items-center gap-2">
+        <NavSearch />
+        <ThemeToggle />
+        <LanguageToggle />
         <SafeLink :href="REPO_URL" target="_blank" rel="noopener noreferrer" aria-label="GitHub" :class="ICON_BUTTON">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path
@@ -53,9 +69,6 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
             />
           </svg>
         </SafeLink>
-        <button type="button" :aria-label="t('settings')" :class="ICON_BUTTON" @click="emit('settingsOpen')">
-          <Settings :size="16" aria-hidden="true" />
-        </button>
       </div>
     </div>
   </nav>

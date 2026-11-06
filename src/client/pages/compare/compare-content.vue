@@ -52,7 +52,7 @@ function clearAndBack(): void {
   <div class="flex min-w-0 flex-col gap-4">
     <PartialNotice v-if="state.partial" />
     <CompareChipBar :models="models" @remove="store.removeCompareModel" @clear="clearAndBack" />
-    <div v-if="models.length < 2" class="flex ui-anim-rise flex-col items-center gap-3 py-6 text-center">
+    <div v-if="models.length < 2" class="flex flex-col items-center gap-3 py-6 text-center">
       <EmptyState :message="t('compareLimit')" compact />
       <SafeLink :href="props.backTo" :class="buttonVariants({ variant: 'primary', size: 'sm' })">
         {{ t("pickModels") }}

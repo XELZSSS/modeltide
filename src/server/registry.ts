@@ -22,6 +22,7 @@ import { getOpenSourceModels } from "./huggingface/source";
 import { getOpenRouterRankings } from "./openrouter/rankings";
 import { getDecisionIndex } from "./aa/decision";
 import { getCursorBench } from "./cursorbench/source";
+import { getCodingAgentRankings } from "./aa/coding-agents";
 
 interface SourceEntry<D extends ApiDomain = ApiDomain, Q extends QuerySchema = QuerySchema> extends ApiRouteDef<D, Q> {
   readonly path: string;
@@ -77,6 +78,12 @@ const ENTRIES = {
   cursorBench: defineRoute("cursorBench", {
     cache: cacheDurationsForTtl(STATIC_TTL_MS),
     handler: getCursorBench,
+  }),
+  // AA's coding-agent index: a separate upstream page from the intelligence index, cached for the hour the source asks
+  // for. It answers both the rankings tab and the home card, so it is a domain like every other one.
+  codingAgentRankings: defineRoute("codingAgentRankings", {
+    cache: cacheDurationsForTtl(ONE_HOUR),
+    handler: getCodingAgentRankings,
   }),
 } satisfies Record<ApiDomain, unknown>;
 

@@ -1,6 +1,7 @@
 import type { Component } from "vue";
 import {
   qArtificialList,
+  qCodingAgentRankings,
   qCursorBench,
   qDecisionIndex,
   qOpenRouterList,
@@ -24,4 +25,5 @@ export const RANKING_TAB_DEFS: Record<
   decisionRankings: { load: () => import("./decision-rankings-tab.vue"), queries: [qDecisionIndex] },
   providerCompare: { load: () => import("./provider-compare-tab.vue"), queries: [qArtificialList] },
   cursorBenchRankings: { load: () => import("./cursorbench-rankings-tab.vue"), queries: [qCursorBench] },
+  codingAgentRankings: { load: () => import("./coding-agent-rankings-tab.vue"), queries: [qCodingAgentRankings] },
 };

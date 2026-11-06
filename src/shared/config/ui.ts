@@ -9,7 +9,9 @@ export const THEME_COLORS = { light: "#ffffff", dark: "#09090b" } as const;
  * the information, so a series that fades into its surface is a defect, not a style choice. That is also why this scale
  * departs from shadcn's `--chart-*` set — its yellow (#ffb900, 1.7:1) and amber (#fe9a00, 2.1:1) only work as
  * decorative fills. Hues are ordered so neighbours in a legend or a two-series chart never share a family:
- * orange → teal → navy → amber → cyan → purple → rose → green → blue → grey.
+ * orange → teal → navy → amber → cyan → pink → crimson → green → blue → grey. The palette carried a violet
+ * (#ad46ff, OKLCH hue 305) in the sixth slot until it moved to the nearest rose at hue 345 (#e12ca7) — violet and
+ * lavender are the one hue family the design system refuses, even in data.
  *
  * The dark scale lives in `theme.css` alone, held to the same floor against the dark card (#18181b).
  */
@@ -19,14 +21,14 @@ export const CHART_PALETTE = [
   "#104e64",
   "#b45309",
   "#0e7490",
-  "#ad46ff",
+  "#e12ca7",
   "#ff2056",
   "#059669",
   "#1447e6",
   "#71717b",
 ] as const;
 
-export const DONUT_PALETTE = ["#f54900", "#009689", "#104e64", "#b45309", "#ad46ff", "#71717b"] as const;
+export const DONUT_PALETTE = ["#f54900", "#009689", "#104e64", "#b45309", "#e12ca7", "#71717b"] as const;
 
 type SupportedLocale = "zh-CN" | "en-US";
 
@@ -58,11 +60,14 @@ export const MOBILE_MAX_WIDTH_PX = 767;
  * slice. They live in `src/shared` because both sides read them — a comment pinning two literals together cannot fail a
  * build, which is how one card came to draw five rows of a payload that carried eight.
  *
- * `HOME_CHART_ROWS` also decides how thick each bar can be: seven categories at ~81px per slot on a desktop card is the
- * largest set that still leaves a ~26px bar, and a wider payload would only thin every one of them.
+ * `HOME_CHART_ROWS` also decides how thick each bar can be. The card spans the whole page column, so seven categories
+ * would take a slot of about 200px on a 1600px screen and draw a slab rather than a bar; fourteen halves the slot to
+ * ~100px — the density the chart was drawn for — and doubles what the overview shows at the same time.
  */
-export const HOME_CHART_ROWS = 7;
+export const HOME_CHART_ROWS = 14;
 export const HOME_CODING_AGENT_ROWS = 5;
 export const HOME_OPEN_SOURCE_ROWS = 5;
 export const HOME_PROVIDER_ROWS = 5;
 export const HOME_HALLUCINATION_ROWS = 5;
+export const HOME_USAGE_ROWS = 5;
+export const HOME_DECISION_ROWS = 5;

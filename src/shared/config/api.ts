@@ -20,6 +20,7 @@ const API_DOMAINS = {
   homeDashboard: "home-dashboard",
   decisionIndex: "decision-index",
   cursorBench: "cursorbench",
+  codingAgentRankings: "coding-agent-rankings",
 } as const;
 
 export const API_PREFIX = "/api";
@@ -43,6 +44,7 @@ export const queryKeys = {
   homeDashboard: [...QUERY_KEY_PREFIX, API_DOMAINS.homeDashboard],
   decisionIndex: [...QUERY_KEY_PREFIX, API_DOMAINS.decisionIndex],
   cursorBench: [...QUERY_KEY_PREFIX, API_DOMAINS.cursorBench],
+  codingAgentRankings: [...QUERY_KEY_PREFIX, API_DOMAINS.codingAgentRankings],
 } as const satisfies Record<ApiDomain, unknown>;
 
 export const apiPaths = {
@@ -54,4 +56,5 @@ export const apiPaths = {
   homeDashboard: `${API_PREFIX}/${API_DOMAINS.homeDashboard}`,
   decisionIndex: `${API_PREFIX}/${API_DOMAINS.decisionIndex}`,
   cursorBench: `${API_PREFIX}/${API_DOMAINS.cursorBench}`,
+  codingAgentRankings: `${API_PREFIX}/${API_DOMAINS.codingAgentRankings}`,
 } as const satisfies Record<ApiDomain, string>;

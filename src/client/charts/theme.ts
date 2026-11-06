@@ -44,7 +44,7 @@ function fallbackTheme(): ChartTheme {
   const dark = documentIsDark();
   return {
     grid: dark ? "rgba(250, 250, 250, 0.10)" : "#e4e4e7",
-    tickSecondary: dark ? "#9f9fa9" : "#71717b",
+    tickSecondary: dark ? "#9f9fa9" : "#62626b",
     tooltipBg: dark ? "#27272a" : "#f4f4f5",
     tooltipText: dark ? "#fafafa" : "#09090b",
     palette: CHART_PALETTE,

@@ -25,7 +25,7 @@ import {
 } from "@/client/charts/theme";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import { useTranslation } from "@/client/i18n";
-import { formatIndex, formatPercent } from "@/shared/utils";
+import { formatIndex } from "@/shared/utils";
 import { isFiniteNumber } from "@/shared/utils/number";
 import { shortModelId } from "@/shared/utils/models";
 import { FALLBACK_DASH } from "@/shared/config/ui";
@@ -33,17 +33,18 @@ import { cn } from "@/client/utils/cn";
 import { useDevice } from "@/client/device";
 import type { HomeChartPoint } from "@/shared/types";
 
-/** The bar is ~26px thick on a desktop card, so 3px rounds the ends without turning it into a capsule. */
+/** A bar is ~60px thick in the wide card, so 3px rounds the ends without turning it into a capsule. */
 const BAR_RADIUS = 3;
 /**
- * Label caps, in characters. `HOME_CHART_ROWS` in src/shared/config/ui.ts fixes the category count at seven — ~81px per
- * slot on a desktop card is the largest set that still leaves a ~26px bar — and the server hands over exactly that many
- * rows. Desktop labels are trimmed to one line; phone labels tilt 45° below the axis, which costs no slot width and
- * carries more of the name. The tooltip title is always untrimmed.
+ * Label caps, in characters. `HOME_CHART_ROWS` in src/shared/config/ui.ts fixes the category count at fourteen: the card
+ * spans the page column, which leaves each slot ~100px on a wide screen and ~24px on a phone, and the server hands over
+ * exactly that many rows. Desktop labels are trimmed to one line; phone labels tilt 45° below the axis, which costs no
+ * slot width and carries more of the name. The tooltip title is always untrimmed.
  */
 const AXIS_LABEL_MAX_CHARS = 15;
 const MOBILE_AXIS_LABEL_MAX_CHARS = 16;
-
+/** How many of the fourteen rows a phone's slot width can carry without the tilted labels touching. */
+const PHONE_ROWS = 7;
 const tickLabel = (value: string | number): string => formatIndex(Number(value));
 
 function axisLabel(value: string, maxChars: number): string {
@@ -55,8 +56,14 @@ const props = defineProps<{ models: HomeChartPoint[] }>();
 const { t } = useTranslation();
 const theme = useChartTheme();
 const isMobile = useDevice();
-/** CursorBench is one pass rate per ranked entry, and a row without it is the only row this card drops. */
-const rows = computed(() => props.models.filter((model) => isFiniteNumber(model.score)));
+/** Every row of the index carries one 0-100 score, and a row without it is the only row this card drops. */
+/**
+ * The payload carries fourteen rows; a phone draws the first seven. Fourteen labels tilted 45° across 390px collide, and
+ * the same card on a desktop has a slot of ~100px where all fourteen sit straight.
+ */
+const rows = computed(() =>
+  props.models.filter((model) => isFiniteNumber(model.score)).slice(0, isMobile.value ? PHONE_ROWS : undefined),
+);
 const fullLabels = computed(() => rows.value.map((m) => shortModelId(m.name) || m.id || FALLBACK_DASH));
 const labels = computed(() =>
   fullLabels.value.map((label) =>
@@ -65,8 +72,9 @@ const labels = computed(() =>
 );
 
 /**
- * The pass rate is a 0..100 scale, so 100 is the floor of the value axis — but it must not also be the ceiling: a score
- * above 100 was drawn past the plot and clipped without a trace. `ceilToStep` grows the axis to the next gridline.
+/**
+ * The intelligence index is a 0..100 scale, so 100 is the floor of the value axis — but it must not also be the ceiling:
+ * a score above 100 was drawn past the plot and clipped without a trace. `ceilToStep` grows the axis to the gridline.
  */
 const valueMax = computed(() => ceilToStep(rows.value.reduce((peak, row) => Math.max(peak, row.score), AXIS_MAX)));
 
@@ -79,7 +87,7 @@ const data = computed<ChartData<"bar">>(() => ({
       backgroundColor: seriesColor(theme.value, 0),
       borderRadius: BAR_RADIUS,
       borderSkipped: false,
-      // Seven categories of one bar: the category band is 70% of the slot and the bar 90% of it, which is what makes a
+      // Fourteen categories of one bar: the category band is 70% of the slot and the bar 90% of it, which is what makes a
       // bar thick enough to read in a card this wide.
       categoryPercentage: 0.7,
       barPercentage: 0.9,
@@ -94,13 +102,13 @@ const options = computed<ChartOptions<"bar">>(() =>
       type: "category",
       ticks: {
         ...axisTickStyle(theme.value),
-        // 10px because the slot is ~81px on a desktop card: a 15-character name fits, a second tick font size does not.
+        // 10px because the slot is ~100px on a desktop card: a 15-character name fits, a second tick font size does not.
         font: { size: 10 },
         autoSkip: false,
         maxRotation: isMobile.value ? 45 : 0,
         minRotation: isMobile.value ? 45 : 0,
       },
-      // Category gridlines only add seven vertical rules behind seven bars.
+      // Category gridlines only add fourteen vertical rules behind fourteen bars.
       grid: { display: false },
     },
     y: {
@@ -114,20 +122,20 @@ const options = computed<ChartOptions<"bar">>(() =>
         label: (ctx) => {
           // The bar's `parsed.y` is `number | null` in chart.js's own types, so the fallback branch is reachable here.
           const value = ctx.parsed.y;
-          return `${ctx.dataset.label}: ${value == null ? FALLBACK_DASH : formatPercent(value, t)}`;
+          return `${ctx.dataset.label}: ${value == null ? FALLBACK_DASH : formatIndex(value)}`;
         },
       },
     },
   }),
 );
 
-const caption = computed(() => rows.value.map((m) => `${m.name}: ${formatPercent(m.score, t)}`).join("; "));
+const caption = computed(() => rows.value.map((m) => `${m.name}: ${formatIndex(m.score)}`).join("; "));
 </script>
 
 <template>
   <Card class="h-full">
     <CardContent class="flex h-full flex-col">
-      <CardHeader :title="t('codeIndex')" :subtitle="t('cursorBenchSource')" />
+      <CardHeader :title="t('intelligenceIndex')" :subtitle="t('artificialSource')" />
       <EmptyState
         v-if="rows.length === 0"
         variant="plain"
@@ -135,7 +143,7 @@ const caption = computed(() => rows.value.map((m) => `${m.name}: ${formatPercent
         :class="cn(CHART_EMPTY_CLASS, RANKING_CHART_HEIGHT)"
       />
       <ChartFrame v-else :height="RANKING_CHART_HEIGHT">
-        <ChartCanvas type="bar" :data="data" :options="options" :aria-label="t('codeIndex')" role="img" />
+        <ChartCanvas type="bar" :data="data" :options="options" :aria-label="t('intelligenceIndex')" role="img" />
         <figcaption class="sr-only">{{ caption }}</figcaption>
       </ChartFrame>
     </CardContent>

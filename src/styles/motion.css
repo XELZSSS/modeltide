@@ -29,9 +29,6 @@
   --motion-stagger-step: 18ms;
   --motion-stagger-max: 8;
 
-  --motion-stagger-step-rows: 26ms;
-  --motion-stagger-max-rows: 8;
-
   --motion-ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
   --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
@@ -50,19 +47,19 @@
   :root {
     --motion-stagger-step: 12ms;
     --motion-stagger-max: 4;
-
-    --motion-stagger-step-rows: 18ms;
-    --motion-stagger-max-rows: 5;
   }
 }
 
 /* ---------- 3. Transition pieces ---------- */
 
-/* The default transition: paint properties plus transforms, nothing that triggers layout. */
+/*
+ * The default transition: paint properties plus `translate`, nothing that triggers layout. It deliberately leaves
+ * `transform` and `scale` out — a scaled element is promoted to its own composited layer and resampled while it
+ * animates, so text inside it renders soft for the whole transition (the trade `.ui-pop-enter-active` refuses below).
+ */
 @utility ui-motion {
   transition-property:
-    color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity, transform,
-    translate, scale, rotate;
+    color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity, translate;
   transition-duration: var(--motion-duration-fast);
   /* Colour/border/press changes ease in both directions: a pure ease-out snaps to the target on the first frame and the
      rest of the transition is spent crawling, which reads as a flick rather than a change. */
@@ -80,17 +77,19 @@
 /* ---------- 4. Entrances ---------- */
 
 /*
- * Every enter animation fills `backwards`, never `both`. Holding the end frame costs nothing visually — the end state is
- * the element's own style — but a filled `transform` keeps the element a stacking context for the rest of its life (an
- * interpolated `transform: none` still resolves to the identity matrix), which used to trap the search panel behind the
- * table that follows the page header.
+ * Nothing on first paint animates: not a card, a row, a section or a page header. A rise, a fade or a staggered
+ * reveal holds back the data the reader came for, and a list that arrives item by item also moves content under a
+ * pointer already travelling toward it.
+ *
+ * Two entrances remain, and the reader causes both:
+ *   `ui-anim-pop`  a chip or panel the reader just added or opened
+ *   `ui-anim-swap` content that replaces other content in place (a re-fetch, a tab switch)
+ *
+ * Every one fills `backwards`, never `both`. Holding the end frame costs nothing visually — the end state is the
+ * element's own style — but a filled `transform` keeps the element a stacking context for the rest of its life (an
+ * interpolated `transform: none` still resolves to the identity matrix), which used to trap the search panel behind
+ * the table that follows the page header.
  */
-@keyframes ui-motion-rise {
-  from {
-    opacity: 0;
-    transform: translate3d(0, var(--motion-rise), 0);
-  }
-}
 
 @keyframes ui-motion-fade {
   from {
@@ -106,42 +105,17 @@
 }
 
 /*
- * Shared base: the stagger offset every list entrance carries, so a list arrives as a sequence and not a flash.
- *
- * The order below is load-bearing. `animation` is a shorthand that also resets `animation-delay`, so the offset has to
- * come *after* it: with the delay written first the shorthand silently zeroed it, and every card entrance played at once
- * (verified in the emitted CSS and against a browser's computed `animationDelay`). The rows variant carries its own
- * slower step — a rows list is longer than a card grid and the same feel needs more spacing — but the offset expression
- * itself is written once.
+ * The stagger offset a group of chips carries when several arrive together. `animation` is a shorthand that also
+ * resets `animation-delay`, so the offset has to come *after* it: with the delay written first the shorthand
+ * silently zeroed it and every chip played at once.
  */
 @utility ui-anim-stagger {
   animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
 }
 
-@utility ui-anim-stagger-rows {
-  animation-delay: calc(
-    min(var(--motion-stagger-index, 0), var(--motion-stagger-max-rows)) * var(--motion-stagger-step-rows)
-  );
-}
-
-@utility ui-anim-rise {
-  animation: ui-motion-rise var(--motion-duration-base) var(--motion-ease-out) backwards;
-  @apply ui-anim-stagger;
-}
-
-@utility ui-anim-fade {
-  animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) backwards;
-  @apply ui-anim-stagger;
-}
-
 @utility ui-anim-pop {
   animation: ui-motion-pop var(--motion-duration-base) var(--motion-ease-out) backwards;
   @apply ui-anim-stagger;
-}
-
-@utility ui-anim-rows {
-  animation: ui-motion-fade var(--motion-duration-base) var(--motion-ease-out) backwards;
-  @apply ui-anim-stagger-rows;
 }
 
 /* Content that replaces other content in place: no stagger, no travel, just a cross-fade. */

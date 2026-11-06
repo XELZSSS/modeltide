@@ -1,5 +1,5 @@
 import { computed, ref, toValue, useId, watch, type MaybeRefOrGetter, type Ref } from "vue";
-import { useClickOutside } from "./use-click-outside";
+import { useClickOutside } from "@/client/hooks/use-click-outside";
 import { useDebouncedTerm } from "./use-debounced-term";
 import { useListKeyboard } from "./use-list-keyboard";
 

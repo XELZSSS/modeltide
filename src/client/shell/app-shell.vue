@@ -92,11 +92,11 @@ onBeforeUnmount(() => {
   <div class="flex h-[100dvh] flex-col overflow-x-hidden bg-bg-primary pt-[env(safe-area-inset-top,0px)]">
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:border focus:border-border focus:bg-bg-primary focus:px-4 focus:py-2 focus:text-sm focus:ring-2 focus:ring-ring focus:outline-none"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:border focus:border-border focus:bg-bg-primary focus:px-4 focus:py-2 focus:text-[0.9375rem] focus:ring-2 focus:ring-ring focus:outline-none"
     >
       {{ t("skipToContent") }}
     </a>
-    <DesktopNav @settings-open="openSheet = 'settings'" />
+    <DesktopNav />
     <!-- No `scrollbar-gutter`: every scrollport hides its bar (see src/styles/scrollbar.css), so there is no strip and
          nothing to reserve — a `stable` gutter would have kept an empty 10px column and shifted the centred content.
          The x axis is still clipped explicitly: `overflow-y: auto` alone computes `overflow-x` to `auto` as well, which

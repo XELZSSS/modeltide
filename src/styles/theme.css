@@ -74,10 +74,10 @@
   --tracking-text: 0.01em;
   --tracking-title: -0.02em;
   --tracking-display: -0.025em;
-  --leading-text: 1.6;
-  /* Page titles get their own leading: 1.15 keeps a 30px Latin title tight, while CJK needs the room (see the
-     `html:lang(zh)` block at the bottom, which raises this and flattens the negative tracking). */
-  --leading-title: 1.15;
+  --leading-text: 1.65;
+  /* Page titles get their own leading, between the 1.15 a 30px Latin title is tight at and the 1.32 Chinese felt it
+     needed: one value for both scripts, so switching language cannot change a block's height. */
+  --leading-title: 1.2;
 
   /* Stacks are pinned by the consistency guard: the same strings appear in src/shared/config/typography.ts. */
   --font-sans:
@@ -111,10 +111,17 @@
      separates the sheet from the content on the light palette. */
   --scrim: color-mix(in srgb, #000000 50%, transparent);
 
-  /* Text */
+  /*
+   * The three text steps, measured against the surface each sits on (card #ffffff light, #18181b dark):
+   *   primary 19.9:1 / 17.0:1, secondary 6.0:1 / 6.8:1, tertiary 4.6:1 / 5.2:1.
+   * Every step clears 4.5:1, because `ui-caption`, `ui-meta` and `ui-table-header` are 13px text a reader actually
+   * reads, not 20px decoration. The previous tertiary (#9f9fa9) measured 2.62:1 on white: it read as "quiet grey" and
+   * was illegible at 13px, so it moved a step darker — and `--text-secondary` moved darker with it, or the third step
+   * would have collapsed into the second.
+   */
   --text-primary: #09090b;
-  --text-secondary: #71717b;
-  --text-tertiary: #9f9fa9;
+  --text-secondary: #62626b;
+  --text-tertiary: #75757e;
 
   /* Lines and interaction: the accent *is* the primary colour, so a filled button is monochrome and the brand colour
      only ever shows up in data. */
@@ -148,7 +155,7 @@
   --chart-3: #104e64;
   --chart-4: #b45309;
   --chart-5: #0e7490;
-  --chart-6: #ad46ff;
+  --chart-6: #e12ca7;
   --chart-7: #ff2056;
   --chart-8: #059669;
   --chart-9: #1447e6;
@@ -158,7 +165,7 @@
   --donut-2: #009689;
   --donut-3: #104e64;
   --donut-4: #b45309;
-  --donut-5: #ad46ff;
+  --donut-5: #e12ca7;
   --donut-6: #71717b;
 }
 
@@ -173,7 +180,7 @@
 
   --text-primary: #fafafa;
   --text-secondary: #9f9fa9;
-  --text-tertiary: #71717b;
+  --text-tertiary: #8a8a93;
 
   --border: color-mix(in srgb, #fafafa 10%, transparent);
   --accent: #e4e4e7;
@@ -191,7 +198,7 @@
   --chart-1: #38bdf8;
   --chart-2: #00bc7d;
   --chart-3: #fe9a00;
-  --chart-4: #ad46ff;
+  --chart-4: #e12ca7;
   --chart-5: #ff2056;
   --chart-6: #fc6c2f;
   --chart-7: #26bdae;
@@ -203,23 +210,22 @@
   --donut-2: #00bc7d;
   --donut-3: #fe9a00;
   --donut-4: #fc6c2f;
-  --donut-5: #ad46ff;
+  --donut-5: #e12ca7;
   --donut-6: #acacba;
 }
 
 /*
- * Chinese sets wider glyphs with no ascender/descender separation to compensate for, so the tracking that helps Latin
- * text at 14px only makes CJK feel loose, and the leading has to grow instead. The negative *display* tracking has the
- * opposite problem: CJK glyphs already sit almost edge to edge, so -0.025em closes the gaps until strokes touch. Both
- * therefore flatten here — the body tracking goes to zero, the title/display tracking to a hair of negative rather than
- * the Latin value.
+ * Only the tracking is script-specific. CJK glyphs sit almost edge to edge, so the positive body tracking that helps
+ * Latin at 16px makes Chinese feel loose, and the negative display tracking closes the gaps until strokes touch — both
+ * therefore flatten here.
+ *
+ * The leading used to differ as well (1.7 body and 1.32 titles for Chinese). It no longer does: a per-script leading
+ * means every text block on every page changes height the instant the language switches, so the whole page jumps. That
+ * cost is paid on each switch to buy 0.05em of line spacing; the two languages now share one leading, set between the
+ * two old values so neither reads tight.
  */
 html:lang(zh) {
   --tracking-text: 0em;
   --tracking-title: 0em;
   --tracking-display: -0.01em;
-  --leading-text: 1.7;
-  /* A CJK title at 1.15 sets its glyph boxes nearly edge to edge once it wraps; 1.32 restores the gap the Latin value
-     was tuned to remove. */
-  --leading-title: 1.32;
 }

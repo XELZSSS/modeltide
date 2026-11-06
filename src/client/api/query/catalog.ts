@@ -93,3 +93,8 @@ export const qCursorBench = createApiQuery("cursorBench", queryKeys.cursorBench,
   partialRefetchMs: PARTIAL_FAIL_TTL_MS,
   isPartialData: isPartialPayload,
 });
+
+export const qCodingAgentRankings = createApiQuery("codingAgentRankings", queryKeys.codingAgentRankings, {
+  partialRefetchMs: PARTIAL_FAIL_TTL_MS,
+  isPartialData: isPartialPayload,
+});

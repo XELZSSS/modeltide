@@ -50,7 +50,7 @@ watch(
       <Badge
         v-for="(model, index) in models"
         :key="modelKeyOf(model, index)"
-        class="ui-anim-pop border-border py-1 pr-1 pl-3 text-sm leading-5 text-text-primary"
+        class="ui-anim-pop border-border py-1 pr-1 pl-3 text-[0.8125rem] leading-[1.125rem] text-text-primary"
       >
         <span
           class="max-w-36 font-medium break-words whitespace-normal md:truncate"
@@ -83,7 +83,7 @@ watch(
       </Button>
     </div>
     <p v-if="hasCompare && !canCompare" class="w-full ui-caption">{{ t("compareLimit") }}</p>
-    <p v-if="showLimit" class="w-full ui-anim-rise ui-caption text-warning" role="alert">
+    <p v-if="showLimit" class="w-full ui-caption text-warning" role="alert">
       {{ t("compareLimitTwo") }}
     </p>
   </div>

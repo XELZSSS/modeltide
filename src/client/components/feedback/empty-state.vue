@@ -24,11 +24,11 @@ const props = withDefaults(
 
 const classes = computed(() =>
   props.variant === "plain"
-    ? cn("flex ui-anim-fade flex-col items-center justify-center gap-2 text-center", props.class)
+    ? cn("flex flex-col items-center justify-center gap-2 text-center", props.class)
     : cn(
         props.compact
-          ? "flex ui-anim-fade flex-col items-center justify-center gap-2 p-6 text-center"
-          : "flex min-h-[200px] ui-anim-fade flex-col items-center justify-center gap-3 p-8 text-center sm:min-h-[240px] sm:p-10",
+          ? "flex flex-col items-center justify-center gap-2 p-6 text-center"
+          : "flex min-h-[200px] flex-col items-center justify-center gap-3 p-8 text-center sm:min-h-[240px] sm:p-10",
         props.class,
       ),
 );

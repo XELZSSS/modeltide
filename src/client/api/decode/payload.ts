@@ -22,7 +22,10 @@ export interface NormalizedHomeDashboard {
   codingAgents: HomeDashboardData["codingAgents"];
   opensource: HomeOpenSourceEntry[];
   openSourceTasks: HomeDashboardData["openSourceTasks"];
-  chart: HomeDashboardData["chart"];
+  intelligence: HomeDashboardData["intelligence"];
+  coding: HomeDashboardData["coding"];
+  usage: HomeDashboardData["usage"];
+  decision: HomeDashboardData["decision"];
   providers: HomeDashboardData["providers"];
   hallucinations: HomeDashboardData["hallucinations"];
   partial: boolean;
@@ -33,7 +36,10 @@ const LIST_FIELDS = [
   "codingAgents",
   "opensource",
   "openSourceTasks",
-  "chart",
+  "intelligence",
+  "coding",
+  "usage",
+  "decision",
   "providers",
   "hallucinations",
 ] as const satisfies readonly (keyof HomeDashboardData)[];

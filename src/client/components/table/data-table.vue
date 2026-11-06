@@ -100,7 +100,7 @@ function handlePageChange(next: number): void {
     <template v-else>
       <MobileTableBody v-if="isMobile" v-bind="bodyBindings" @toggle-expand="expandedId = $event" />
       <div v-else class="ui-card overflow-x-auto">
-        <table class="w-full table-fixed text-sm">
+        <table class="w-full table-fixed text-base">
           <caption class="sr-only">
             {{
               t(captionKey)

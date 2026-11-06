@@ -14,13 +14,13 @@ export type ModelSource = "aa" | "or" | "os" | "hall" | "decision";
 export type HomeOpenSourceEntry = Pick<OpenSourceModelEntry, "id" | "downloads" | "task">;
 
 /**
- * Top-N slice of the CursorBench ranking, pre-aggregated for the home page's coding card. One score per row: CursorBench
- * ranks on a single pass rate, so the card draws one bar per model instead of a pair of AA indices.
+ * Top-N slice of Artificial Analysis' intelligence index, pre-aggregated for the home page's overview chart. One score
+ * per row: the index is a single 0-100 number, which is what makes one bar per model enough.
  */
 export interface HomeChartPoint {
   id: string;
   name: string;
-  /** CursorBench pass rate, 0-100. */
+  /** AA's intelligence index, 0-100. */
   score: number;
 }
 
@@ -42,6 +42,20 @@ export interface HomeHallucinationPoint {
   accuracy: number;
 }
 
+/** One OpenRouter usage row, pre-sliced: the card prints the model and the tokens it moved. */
+export interface HomeUsagePoint {
+  id: string;
+  name: string;
+  totalTokens: number;
+}
+
+/** One Decision Index row, pre-sliced: the composite is 0-100, the same scale the tab's table prints. */
+export interface HomeDecisionPoint {
+  id: string;
+  name: string;
+  index: number;
+}
+
 /** One slice of the home page's open-source task histogram, aggregated on the server. */
 export interface TaskSlice {
   key: string;
@@ -53,7 +67,10 @@ export interface HomeDashboardData {
   /** The full HF page's task histogram, so the client never needs the thousand rows behind it. */
   openSourceTasks: TaskSlice[];
   codingAgents: CodingAgentEntry[];
-  chart: HomeChartPoint[];
+  intelligence: HomeChartPoint[];
+  coding: HomeChartPoint[];
+  usage: HomeUsagePoint[];
+  decision: HomeDecisionPoint[];
   providers: HomeProviderSpeed[];
   hallucinations: HomeHallucinationPoint[];
 }

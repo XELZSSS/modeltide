@@ -8,7 +8,13 @@ type RankTabId =
   | "openRouterRankings"
   | "openSourceRankings"
   | "hallucinationRankings"
-  | "decisionRankings";
+  | "decisionRankings"
+  // The tabs whose links are only built here: the home dashboard's cards point at the provider table, CursorBench and
+  // AA's coding-agent ranking. `RANKING_TABS` in `nav/nav-config.ts` owns the same eight ids, but that file imports
+  // this one, so the list is stated twice rather than through a cycle.
+  | "cursorBenchRankings"
+  | "codingAgentRankings"
+  | "providerCompare";
 
 interface SourceDecl {
   labelKey: TranslationKey;

@@ -28,8 +28,8 @@ const tabButtonVariants = cva(
       // Touch first again: `h-10` under the `md:` breakpoint keeps a 40px target, then the desktop height matches the
       // 32px pill the reference segmented control uses.
       size: {
-        sm: "h-10 px-3 text-xs md:h-7 md:px-2.5",
-        md: "h-10 px-3.5 text-sm md:h-8 md:px-3",
+        sm: "h-10 px-3 text-[0.8125rem] md:h-7 md:px-2.5",
+        md: "h-10 px-3.5 text-[0.9375rem] md:h-8 md:px-3",
       },
     },
   },

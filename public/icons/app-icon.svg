@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><title>ModelTide logo</title><rect width="256" height="256" rx="57.6" fill="#4338CA"/><g transform="translate(-4.44 -3.65) scale(1.005)" fill="#FFFFFF">
-  <title id="title">ModelTide symbol — Curl (colour master)</title>
-  <g id="symbol">
-    <path fill="none" stroke="#FFFFFF" stroke-width="48" stroke-linecap="round" d="M56 210 C52 128 92 52 152 52 C194 52 216 84 205 116 C196 142 168 148 155 133"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><title>ModelTide logo</title><rect width="256" height="256" rx="57.6" fill="#18181B"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round">
+    <path d="M54 84 q37 -30 74 0 t74 0"/>
+    <path d="M54 128 q37 -30 74 0 t74 0"/>
+    <path d="M54 172 q37 -30 74 0 t74 0"/>
   </g>
-</g></svg>
+</svg>

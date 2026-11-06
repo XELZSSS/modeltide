@@ -61,5 +61,5 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <canvas ref="canvasRef" class="ui-anim-fade" />
+  <canvas ref="canvasRef" />
 </template>

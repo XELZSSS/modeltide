@@ -1,0 +1,97 @@
+<div align="center">
+
+# ModelTide
+
+**Lightweight AI model data aggregator** — deployable on Cloudflare
+
+[中文](./README.md) · English
+
+<p>
+  <a href="https://vuejs.org"><img src="https://img.shields.io/badge/Vue-3-41B883?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue" /></a>
+  <a href="https://vite.dev"><img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" /></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/Tailwind-4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" /></a>
+  <a href="https://pages.cloudflare.com"><img src="https://img.shields.io/badge/Cloudflare-Pages-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Pages" /></a>
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT" />
+</p>
+
+</div>
+
+## Features
+
+| Module           | Description                               |
+| ---------------- | ----------------------------------------- |
+| Model Rankings   | Multi-dimensional rankings and benchmarks |
+| Release Tracking | Latest and open-source releases           |
+| News Aggregation | Industry news across categories           |
+| Model Comparison | Side-by-side model and price comparison   |
+
+## Architecture
+
+- **Frontend**: Vite SPA, static output in `dist`, SPA fallback via `public/_redirects`
+- **API**: `/api/*` runs as Pages Functions (`functions/api/`), cached in KV / memory
+
+### Data sources
+
+**Rankings** — the eight tabs under `/models`, from four upstreams
+
+| Source              | What it contributes                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| Artificial Analysis | intelligence index, output speed, pricing, omniscience accuracy, decision index, coding agents |
+| OpenRouter          | usage ranking (tokens moved), model directory and prices                                       |
+| Hugging Face        | open-source ranking (downloads, likes, licence, task)                                          |
+| Cursor              | CursorBench pass rate                                                                          |
+
+**News** — `/news` carries twelve RSS / Atom feeds, three per category, so one unreachable host cannot empty a category
+
+| Category    | Feeds                                               |
+| ----------- | --------------------------------------------------- |
+| Industry    | TechCrunch, Ars Technica, Google AI                 |
+| Open Source | Simon Willison, Hugging Face, InfoQ                 |
+| Hardware    | The Next Platform, ServeTheHome, NVIDIA             |
+| Research    | Google Research, Google DeepMind, Apple ML Research |
+
+Releases (`/releases`) come from the release data embedded in the Artificial Analysis leaderboard page, so they share its fetch and its cache entry
+
+## Structure
+
+```text
+src/client/   Frontend SPA
+src/server/   Backend API
+src/shared/   Shared code
+functions/    Pages Functions entry
+build/        Build scripts
+```
+
+## Quick Start
+
+Requires Node.js 22.18 or newer
+
+```bash
+npm install
+npm run dev    # http://localhost:5173
+```
+
+## Commands
+
+| Command           | Description                                   |
+| ----------------- | --------------------------------------------- |
+| `npm run dev`     | Dev server                                    |
+| `npm run build`   | Types, lint, format, tests, build             |
+| `npm run check`   | Types, lint, format and the consistency rules |
+| `npm run preview` | Serve the built `dist`                        |
+| `npm run test`    | Tests (`test:watch` to watch)                 |
+| `npm run lint`    | Lint                                          |
+| `npm run format`  | Format                                        |
+
+## Deployment
+
+Connect the repository to Cloudflare Pages with Framework `Vue`, build command `npm run build` and output directory
+`dist`, optionally binding a KV namespace named `CACHE` (case-sensitive) for persistent caching
+
+Keep `npm run build` as the build command: it generates `functions/api/[[route]].js`, so a bare `vite build` deploys a
+site whose `/api/*` requests all answer 404
+
+## License
+
+[MIT](./LICENSE)

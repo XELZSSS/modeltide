@@ -22,7 +22,7 @@ const invalid = computed(() => props.ariaInvalid === true);
 
 const classes = computed(() =>
   cn(
-    "h-10 max-w-full min-w-0 rounded-xl border border-transparent bg-muted/60 px-3 text-base text-text-primary ui-motion outline-none placeholder:text-text-tertiary sm:text-sm md:h-9",
+    "h-10 max-w-full min-w-0 rounded-xl border border-transparent bg-muted/60 px-3 text-base text-text-primary ui-motion outline-none placeholder:text-text-tertiary md:h-9",
     `focus-visible:bg-muted/80 ${FOCUS_RING} hoverable:hover:bg-muted/80`,
     "disabled:bg-muted/40 disabled:opacity-50",
     invalid.value && "bg-destructive/5 ring-2 ring-destructive",
