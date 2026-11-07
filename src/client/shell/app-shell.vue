@@ -47,7 +47,11 @@ onBeforeUnmount(() => systemThemeQuery.removeEventListener("change", onSystemThe
  * The setting is a preference, not a resolved colour: "system" follows the OS, which can change while the app is open, so
  * the shell watches the resolved value rather than the stored mode.
  */
-const isDark = computed(() => (settings.themeMode === "system" ? systemDark.value : settings.themeMode === "dark"));
+function isDarkPreference(): boolean {
+  if (settings.themeMode === "system") return systemDark.value;
+  return settings.themeMode === "dark";
+}
+const isDark = computed(isDarkPreference);
 
 function applyTheme(): void {
   const dark = isDark.value;

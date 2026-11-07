@@ -9,10 +9,6 @@ export function dedupeBy<T>(items: T[], keyFn: (item: T) => string | null | unde
   });
 }
 
-export function toStringOrNull(v: unknown): string | null {
-  return typeof v === "string" ? v.trim() || null : null;
-}
-
 const QUALIFIER_TOKENS = new Set(["adaptive", "effort", "xhigh", "extended"]);
 
 /**

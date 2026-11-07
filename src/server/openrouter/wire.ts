@@ -5,9 +5,10 @@ import { isValidOpenRouterDirectoryRow } from "@/server/formats/content-guards";
  * OpenRouter's wire contract: the two JSON endpoints, and the derived record the directory is read into.
  *
  * The endpoints are kept apart because they answer different things — `/api/frontend/v1/rankings/models` is usage, and
- * `/api/v1/models` is the catalog every source is priced from — and because only the second one is a *shared* input:
- * `artificialAnalysis` merges its `benchmarks.artificial_analysis` block. Both readers now speak these interfaces instead
- * of a flat `Record<string, unknown>` that made a renamed field invisible to everything but a runtime miss.
+ * `/api/v1/models` is the catalog: `rankings.ts` prices its rows from it and the AA index backfills its three index
+ * fields from the same directory meta (see `aa/parse/meta-backfill.ts`), but no other source takes a price from here.
+ * Both readers speak these interfaces instead of a flat `Record<string, unknown>` that made a renamed field invisible
+ * to everything but a runtime miss.
  */
 
 /**

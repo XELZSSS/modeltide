@@ -5,7 +5,11 @@ export type Lookup<T> = Map<string, T> | Record<string, T>;
 const NORMALIZED_KEY_CACHE_MAX = 8192;
 const normalizedKeyCache = new Map<string, string>();
 
-function normalizeKeyCached(raw: string): string {
+/**
+ * `normalizeModelKey` behind a shared memo. Exported because the AA catalog's metadata backfill normalizes the same
+ * model names on every refresh: one cache serves both lookups instead of a second copy of the same table.
+ */
+export function normalizedModelKey(raw: string): string {
   const cached = normalizedKeyCache.get(raw);
   if (cached !== undefined) {
     // Re-insert on hit so pruning evicts the least recently used key: a directory refresh asks about the same model
@@ -26,7 +30,9 @@ function normalizeKeyCached(raw: string): string {
 }
 
 export function lookupHit<T>(table: Lookup<T>, key: string): T | undefined {
-  return table instanceof Map ? table.get(key) : Object.hasOwn(table, key) ? table[key] : undefined;
+  if (table instanceof Map) return table.get(key);
+  if (Object.hasOwn(table, key)) return table[key];
+  return undefined;
 }
 
 /**
@@ -40,19 +46,13 @@ export function lookupHit<T>(table: Lookup<T>, key: string): T | undefined {
  * one Set across 20k rows.
  */
 export function fillModelKeys(target: Set<string>, values: readonly unknown[]): void {
-  const present: string[] = [];
-  for (const value of values) if (typeof value === "string" && value !== "") present.push(value);
   target.clear();
-  for (const value of present) target.add(value.toLowerCase());
-  for (const value of present) {
-    const normalized = normalizeKeyCached(value);
+  // Two passes over `values` rather than one over a `present` copy: every raw form has to be probed before any
+  // normalized one, and that copy was an array per call for a directory that makes tens of thousands of them.
+  for (const value of values) if (typeof value === "string" && value !== "") target.add(value.toLowerCase());
+  for (const value of values) {
+    if (typeof value !== "string" || value === "") continue;
+    const normalized = normalizedModelKey(value);
     if (normalized !== "") target.add(normalized);
   }
-}
-
-/** The same forms as `fillModelKeys`, for the read paths that do not keep a Set around. */
-export function modelKeyCandidates(values: readonly unknown[]): string[] {
-  const keys = new Set<string>();
-  fillModelKeys(keys, values);
-  return [...keys];
 }

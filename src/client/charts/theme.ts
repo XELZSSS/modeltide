@@ -79,18 +79,17 @@ const CHART_FONT_SIZE = 12;
 const TOOLTIP_FADE_MS = 150;
 
 /**
- * Chart.js tweens the tooltip's own geometry (`x`, `y`, `width`, `height`, `caretX`, `caretY`). On a duration the
- * panel glides after the cursor and the box resizes while the labels are already laid out against the old width, so
- * the text visibly drifts. The geometry snaps and only the fade animates: the panel still arrives softly, nothing
- * inside it slides. Under `prefers-reduced-motion` the fade is dropped too — motion.css zeroes every CSS duration for
- * that preference, and Chart.js animations are not CSS.
+ * Chart.js tweens the numbers a tooltip prints, so a value already laid out against the previous label width visibly
+ * slides while the panel follows the cursor. The numbers snap and only the opacity fade animates: the panel still
+ * arrives softly, nothing inside it moves. Under `prefers-reduced-motion` the fade is dropped too — motion.css zeroes
+ * every CSS duration for that preference, and Chart.js animations are not CSS.
+ *
+ * Plugin defaults only exist once the Tooltip plugin has been registered, so `register.ts` calls this again after every
+ * `register()` instead of relying on the module-level call alone.
  */
-
 export function applyChartDefaults(chart: typeof ChartJS): void {
   chart.defaults.font.family = chartFontFamily();
   chart.defaults.font.size = CHART_FONT_SIZE;
-  // Plugin defaults only exist once the Tooltip plugin has been registered, so register.ts calls this again after every
-  // `register()` instead of relying on the module-level call alone.
   const plugins = (chart.defaults as unknown as { plugins?: Record<string, unknown> }).plugins;
   const tooltip = plugins?.tooltip as
     | { animations?: Record<string, { duration?: number }>; callbacks?: { labelColor?: unknown } }

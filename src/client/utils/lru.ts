@@ -1,6 +1,6 @@
 /**
  * "Keep the newest N entries" is the one eviction policy the client has: the per-id query memo in `api/catalog.ts`,
- * the last `ETag` per request URL in `api/api-client.ts` and the partial-poll counters in `api/partial-poll.ts`. Each
+ * the last `ETag` per request URL in `api/transport/client.ts` and the partial-poll counters in `api/partial-poll.ts`. Each
  * used to carry its own `delete` + `set` + evict-the-oldest loop.
  *
  * `set` returns the value so a caller can write `cache.get(k) ?? cache.set(k, create(k))`. Recency is insertion order,

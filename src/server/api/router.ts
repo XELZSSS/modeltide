@@ -39,7 +39,8 @@ function errorHeaders(): Headers {
 function collectQueryParams(url: URL): Record<string, string | string[]> {
   const raw: Record<string, string | string[]> = Object.create(null) as Record<string, string | string[]>;
   url.searchParams.forEach((value, key) => {
-    const existing = Object.hasOwn(raw, key) ? raw[key] : undefined;
+    // `raw` is a null-prototype object, so a missing key reads `undefined` with no own-check in between.
+    const existing = raw[key];
     if (existing === undefined) raw[key] = value;
     else if (Array.isArray(existing)) existing.push(value);
     else raw[key] = [existing, value];

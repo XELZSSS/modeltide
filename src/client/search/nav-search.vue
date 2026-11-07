@@ -16,7 +16,7 @@ import Input from "@/client/components/ui/input.vue";
 import { ICON_BUTTON } from "@/client/components/ui/interactive-classes";
 import { useTranslation } from "@/client/i18n";
 import { navigate } from "@/client/router";
-import { errorText } from "@/client/api/present/error-text";
+import { errorTextOf } from "@/client/api/present/error-text";
 import SearchResultRow from "./search-result-row.vue";
 import { useClickOutside } from "@/client/hooks/use-click-outside";
 import { useDebouncedTerm } from "./use-debounced-term";
@@ -38,7 +38,7 @@ const { results, isPending, error, partial } = useSearchAllRankings(debounced, {
   warm: open,
 });
 
-const failure = computed(() => (error.value === null ? null : errorText(error.value, t)));
+const failure = computed(() => errorTextOf(error.value, t));
 
 const { activeIndex, setActiveIndex, handleKeyDown } = useListKeyboard(
   computed(() => results.value.length),

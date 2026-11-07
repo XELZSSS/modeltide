@@ -1,5 +1,5 @@
 import type { OpenRouterRankEntry } from "@/shared/types";
-import { titleCase } from "@/server/formats/scalars";
+import { capLabel } from "@/server/formats/scalars";
 
 const CREATORS: Record<string, string> = {
   anthropic: "Anthropic",
@@ -52,9 +52,9 @@ export function creatorFromSlug(slug: unknown): string {
   if (!owner) return "Unknown";
   const lower = owner.toLowerCase();
   if (Object.hasOwn(CREATORS, lower)) return CREATORS[lower]!;
-  // `titleCase` already splits on `[-_]` and drops empty parts, so the owner is handed over whole: the split here
-  // rebuilt the same token list only for `titleCase` to redo it.
-  return titleCase(owner);
+  // The owner goes over whole: `capLabel` capitalizes it as it stands, so token-splitting it first — which the previous
+  // `titleCase` chain did — only built an array nothing then read.
+  return capLabel(owner);
 }
 
 const CODING_RE = /\b(?:coder|coding|code|codex)\b/;
@@ -80,12 +80,49 @@ export function categoryFrom(slug: unknown, name: unknown): OpenRouterRankEntry[
   return "general";
 }
 
+/** The whitespace `/[-\s]+/` in the chain this replaced also matched above ASCII; a permaslug never has one. */
+const UNICODE_SPACE_RE = /\s/;
+
+/** `: / _ -`, plus the ASCII whitespace codes, without building a string to compare against. */
+function isSlugSeparator(ch: string): boolean {
+  const code = ch.charCodeAt(0);
+  if (code === 0x2f || code === 0x3a || code === 0x5f || code === 0x2d) return true;
+  if (code === 0x20) return true;
+  if (code < 0x20) return code >= 0x09 && code <= 0x0d;
+  return code > 0x7f && UNICODE_SPACE_RE.test(ch);
+}
+
+/** One slug token, cased the way the model cards spell it: digit-led stays lower, three characters or fewer upper. */
+function formatToken(token: string): string {
+  if (/^\d/.test(token)) return token.toLowerCase();
+  if (token.length <= 3) return token.toUpperCase();
+  return capLabel(token);
+}
+
+/**
+ * The model's display name from its permaslug: the part after the owner, split on `: / _ -` and whitespace, each token
+ * shaped by `formatToken`.
+ *
+ * Hand-written rather than `split` / `replace` / `split` / `filter` / `map` / `join`: that chain rebuilt six arrays and
+ * ran two regexes per token for every ranked row (≈600 per refresh), and this runs inside the rankings parse's share of
+ * the 10 ms CPU budget.
+ */
 export function titleFromSlug(permaslug: string): string {
-  const raw = permaslug.split("/").slice(1).join("/") || permaslug;
-  return raw
-    .replace(/[:/_]/g, " ")
-    .split(/[-\s]+/)
-    .filter(Boolean)
-    .map((p) => (/^\d/.test(p) ? p.toLowerCase() : p.length <= 3 ? p.toUpperCase() : titleCase(p)))
-    .join(" ");
+  const ownerEnd = permaslug.indexOf("/");
+  const model = ownerEnd === -1 ? permaslug : permaslug.slice(ownerEnd + 1);
+  const source = model === "" ? permaslug : model;
+  let out = "";
+  let start = -1;
+  for (let i = 0; i <= source.length; i++) {
+    if (i < source.length && !isSlugSeparator(source[i]!)) {
+      if (start === -1) start = i;
+      continue;
+    }
+    if (start === -1) continue;
+    const token = source.slice(start, i);
+    start = -1;
+    const formatted = formatToken(token);
+    out = out === "" ? formatted : `${out} ${formatted}`;
+  }
+  return out;
 }

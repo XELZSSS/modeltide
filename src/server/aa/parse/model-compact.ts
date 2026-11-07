@@ -49,9 +49,18 @@ function compactBenchmarks(m: AaRow, warn?: RatioWarn): Partial<Record<Benchmark
   return benchmarks;
 }
 
+/** Reads one projected benchmark as a 0-1 ratio: through the wire-name table and the alias-aware accessor. */
+function compactRatio(m: AaRow, key: BenchmarkKey, warn?: RatioWarn): number | null {
+  const wire = benchmarkWireName(key);
+  return ratioScore(wire, numCoerce(fieldValue(m, wire)), warn);
+}
+
 function compactCodingIndex(m: AaRow, warn?: RatioWarn): number | null {
-  const tb = ratioScore("terminalBench21", numCoerce(m.terminalBench21), warn);
-  const sc = ratioScore("scicode", numCoerce(m.scicode), warn);
+  // Both terms are read by their `BenchmarkKey`, not by a key spelled at this call site: `benchmarkWireName` owns the
+  // upstream spelling and `fieldValue` is what honors the alias table, so a second name for either evaluation now has
+  // to be added to the table the rest of the stack already reads.
+  const tb = compactRatio(m, "terminalbench_v2_1", warn);
+  const sc = compactRatio(m, "scicode", warn);
   if (tb == null) return sc;
   if (sc == null) return tb;
   return (tb + sc) / 2;
@@ -73,15 +82,18 @@ function compactOmniscience(
   warn?: RatioWarn,
 ): ModelOmniscienceBreakdown | null {
   if (omniscienceBreakdown == null && omniscience == null && hallucinationRate == null) return null;
+  // The leaderboard derives this rate as `1 − non-hallucination` (`parse/leaderboard.ts`); the enrichment pages carry
+  // the upstream's own value, both in its breakdown block and once at the top level. The block is preferred, and each
+  // spelling is bound-checked before the next one is tried: reading `block ?? top` *before* the check let a block value
+  // that arrived on another scale drop the row's rate to `null` while a valid top-level rate sat unused beside it.
+  const hallucination =
+    ratioAsIs("omniscienceBreakdown.hallucinationRate", numCoerce(omniscienceBreakdown?.hallucinationRate), warn) ??
+    ratioAsIs("omniscienceHallucinationRate", hallucinationRate, warn);
   return {
     total: {
       accuracy: ratioAsIs("omniscienceBreakdown.accuracy", numCoerce(omniscienceBreakdown?.accuracy), warn),
       attempt_rate: ratioAsIs("omniscienceBreakdown.attemptRate", numCoerce(omniscienceBreakdown?.attemptRate), warn),
-      hallucination_rate: ratioAsIs(
-        "omniscienceBreakdown.hallucinationRate",
-        numCoerce(omniscienceBreakdown?.hallucinationRate) ?? hallucinationRate,
-        warn,
-      ),
+      hallucination_rate: hallucination,
       // A signed index, not a percentage: it is negative for models that hallucinate more than they know.
       omniscience: numCoerce(omniscience),
     },
@@ -93,10 +105,14 @@ function compactOmniscience(
  * text only — and one it declares wins, which is what the eight per-row booleans said at ten times the size.
  */
 function pickModalities(m: AaRow, prefix: "input" | "output"): ModalityKey[] {
-  return MODALITY_WIRES.filter((wire) => {
+  const picked: ModalityKey[] = [];
+  // One push loop rather than `filter().map()`: that pair built two arrays per direction (four per model) to produce
+  // the one array this returns.
+  for (const wire of MODALITY_WIRES) {
     const declared = bool(m[wire[prefix]]);
-    return declared === undefined ? wire.key === "text" : declared;
-  }).map((wire) => wire.key);
+    if (declared === undefined ? wire.key === "text" : declared) picked.push(wire.key);
+  }
+  return picked;
 }
 
 function compactModalities(m: AaRow): ModelModalities {

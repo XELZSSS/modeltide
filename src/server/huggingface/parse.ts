@@ -35,9 +35,13 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
   const id = text(model.id);
   const downloads = numIntCoerceNonNegative(model.downloads) ?? 0;
   const likes = numIntCoerceNonNegative(model.likes) ?? 0;
-  const tags = Array.isArray(model.tags) ? model.tags.filter((t): t is string => typeof t === "string") : [];
+  // Licences come out of `tags` in the walk that also builds the detail row's tag list: a list row keeps no tags, so
+  // the old `filter` built a filtered copy for all 1000 rows and dropped it, while the licence still had to be found.
+  const tags: string[] = [];
   const licenseIds: string[] = [];
-  for (const tag of tags) {
+  for (const tag of Array.isArray(model.tags) ? model.tags : []) {
+    if (typeof tag !== "string") continue;
+    if (includeTags) tags.push(tag);
     const licenseId = licenseTagId(tag);
     if (licenseId) licenseIds.push(licenseId);
   }

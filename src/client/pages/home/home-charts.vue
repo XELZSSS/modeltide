@@ -56,10 +56,10 @@ const props = defineProps<{ models: HomeChartPoint[] }>();
 const { t } = useTranslation();
 const theme = useChartTheme();
 const isMobile = useDevice();
-/** Every row of the index carries one 0-100 score, and a row without it is the only row this card drops. */
 /**
- * The payload carries fourteen rows; a phone draws the first seven. Fourteen labels tilted 45° across 390px collide, and
- * the same card on a desktop has a slot of ~100px where all fourteen sit straight.
+ * The card's rows. The index carries one 0-100 score per row and a row without it is the only row this card drops; the
+ * payload carries fourteen rows, and a phone draws the first seven — fourteen labels tilted 45° across 390px collide,
+ * where the same card on a desktop has a slot of ~100px for all fourteen.
  */
 const rows = computed(() =>
   props.models.filter((model) => isFiniteNumber(model.score)).slice(0, isMobile.value ? PHONE_ROWS : undefined),
@@ -71,7 +71,6 @@ const labels = computed(() =>
   ),
 );
 
-/**
 /**
  * The intelligence index is a 0..100 scale, so 100 is the floor of the value axis — but it must not also be the ceiling:
  * a score above 100 was drawn past the plot and clipped without a trace. `ceilToStep` grows the axis to the gridline.

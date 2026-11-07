@@ -50,7 +50,7 @@ const freePricing = new Map<string, PricingEntry>([["a/b", FREE_PRICING]]);
 
 /** The scan counters before `mapModels` has read a row. */
 function emptyStats(): RankingScanStats {
-  return { scannedRows: 0, validRows: 0, expiredRows: 0 };
+  return { validRows: 0, expiredRows: 0 };
 }
 
 function metaWith(entries: Record<string, { expiresAt: string }>): MetaLookup {

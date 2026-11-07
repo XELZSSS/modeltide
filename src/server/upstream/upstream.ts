@@ -19,7 +19,7 @@ export const upstreamEndpoints = {
   cursorBench: "/cn/cursorbench",
 } as const;
 
-export { MAX_FEED_BYTES, MAX_JSON_BYTES, MAX_RSC_BYTES } from "@/server/formats/limits";
+export { MAX_FEED_BYTES, MAX_HTML_BYTES, MAX_JSON_BYTES, MAX_RSC_BYTES } from "@/server/formats/limits";
 
 export const USER_AGENT = `ModelTide/1.0 (+${SITE_URLS.repository})`;
 

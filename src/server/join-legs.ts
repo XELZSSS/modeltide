@@ -14,7 +14,7 @@ export interface Leg<T> {
   run: () => Promise<T>;
 }
 
-interface LegFailure {
+export interface LegFailure {
   label: string;
   reason: unknown;
 }

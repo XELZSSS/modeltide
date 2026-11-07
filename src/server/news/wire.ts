@@ -26,6 +26,9 @@ export const FEED_ELEMENTS = {
   text: "#text",
 } as const;
 
+/** The two spellings an element's text arrives under: `#text` is the parser's text node, `text` a publisher's own child. */
+export const FEED_TEXT_KEYS = ["#text", "text"] as const;
+
 /** The relation that marks the article link in an Atom feed that lists several. */
 export const FEED_ALTERNATE_REL = "alternate";
 

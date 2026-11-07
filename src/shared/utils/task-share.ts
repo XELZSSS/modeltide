@@ -28,12 +28,15 @@ export function aggregateTaskShare(models: readonly { task: string | null | unde
   }
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   let total = untagged;
-  const slices: TaskSlice[] = ranked.slice(0, TASK_SLICE_LIMIT).map(([key, count]) => {
+  const slices: TaskSlice[] = [];
+  let tailTotal = 0;
+  // One walk over the sorted counts: the two `slice` calls allocated both halves of the ranking to add the tail up.
+  for (let i = 0; i < ranked.length; i++) {
+    const [key, count] = ranked[i]!;
     total += count;
-    return { key, total: count };
-  });
-  const tailTotal = ranked.slice(TASK_SLICE_LIMIT).reduce((sum, [, count]) => sum + count, 0);
-  total += tailTotal;
+    if (i < TASK_SLICE_LIMIT) slices.push({ key, total: count });
+    else tailTotal += count;
+  }
   if (untagged > 0) slices.push({ key: UNTAGGED_TASK_KEY, total: untagged });
   if (tailTotal > 0) slices.push({ key: OTHER_TASK_KEY, total: tailTotal });
   return { slices, total };

@@ -66,6 +66,11 @@ export class CacheService {
     this.log = opts?.log ?? logger;
   }
 
+  /** A fresh entry served as current data: shaped here so the three fresh-hit paths cannot disagree about it. */
+  private freshResult<T>(entry: MemoryEntry<T>, serveBody: boolean): CacheResult<T> {
+    return { value: entry.d, degraded: false, body: serveBody ? entry.s : undefined, producedAt: entry.f };
+  }
+
   /** The freshest expired copy still inside `budget`, drawn from the KV entry and the L1 mirror together. */
   private usableStale<T>(miss: Miss<T>, budget: StaleBudget): StaleCandidate<T> | undefined {
     const includeBody = serveBodyOf(miss.scope);
@@ -100,6 +105,15 @@ export class CacheService {
   private async refreshOrStale<T>(miss: Miss<T>): Promise<CacheResult<T>> {
     const { vk, ttl, fn, kv } = miss;
     const serveBody = serveBodyOf(miss.scope);
+    // A concurrent refresh may have stored a fresh generation in this isolate's L1 while this request's KV read was in
+    // flight: `miss.mem` is the snapshot taken before that await, and `miss.kvHit` can be a generation the refresh just
+    // replaced. Serving either as stale would hand out superseded data and start a second upstream refresh, so a fresh
+    // copy wins here exactly as it does on the fresh-KV path above.
+    const fresher = sharedL1.get<T>(vk);
+    if (fresher !== undefined && fresher.e > Date.now()) {
+      noteCacheStat("l1Hits");
+      return this.freshResult(fresher, serveBody);
+    }
     // Serving a complete-but-stale copy while a detached refresh runs is normal stale-while-revalidate, not a data
     // gap: flagging it degraded would show "some sources failed" on routine post-TTL requests.
     //
@@ -170,7 +184,7 @@ export class CacheService {
       const mem = sharedL1.get<T>(vk);
       if (mem && mem.e > now) {
         noteCacheStat("l1Hits");
-        return { value: mem.d, degraded: false, body: serveBody ? mem.s : undefined, producedAt: mem.f };
+        return this.freshResult(mem, serveBody);
       }
       const hit = kv ? await this.tier.getVersioned<T>(kv, k) : undefined;
       if (hit && hit.env.e > now) {
@@ -180,7 +194,7 @@ export class CacheService {
         const fresher = sharedL1.get<T>(vk);
         if (fresher !== undefined && fresher.e > now && fresher.f > hit.env.f) {
           noteCacheStat("l1Hits");
-          return { value: fresher.d, degraded: false, body: serveBody ? fresher.s : undefined, producedAt: fresher.f };
+          return this.freshResult(fresher, serveBody);
         }
         noteCacheStat("kvHits");
         const retained = serveBody ? hit.body : undefined;

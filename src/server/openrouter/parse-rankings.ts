@@ -17,7 +17,7 @@ import {
 export type { RankingScanStats };
 
 export function mapModels(
-  rows: unknown,
+  rows: readonly unknown[],
   pricing: PricingLookup,
   stats?: RankingScanStats,
   meta?: MetaLookup,

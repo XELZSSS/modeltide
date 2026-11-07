@@ -65,7 +65,7 @@ build/        构建脚本
 
 ## 快速开始
 
-要求 Node.js 22.18 或更高版本
+要求 Node.js 22.18 或更高版本（仓库不钉构建版本，`npm run build` 会校验这个下限）
 
 ```bash
 npm install
@@ -74,15 +74,20 @@ npm run dev    # http://localhost:5173
 
 ## 命令
 
-| 命令              | 说明                         |
-| ----------------- | ---------------------------- |
-| `npm run dev`     | 开发服务器                   |
-| `npm run build`   | 类型、lint、格式、测试、构建 |
-| `npm run check`   | 类型、lint、格式与一致性规则 |
-| `npm run preview` | 预览已构建的 `dist`          |
-| `npm run test`    | 测试（`test:watch` 可监听）  |
-| `npm run lint`    | 静态检查                     |
-| `npm run format`  | 代码格式化                   |
+| 命令              | 说明                                 |
+| ----------------- | ------------------------------------ |
+| `npm run dev`     | 开发服务器                           |
+| `npm run build`   | 类型、lint、格式、测试、构建         |
+| `npm run check`   | 类型、lint、格式与一致性规则         |
+| `npm run preview` | 预览已构建的 `dist`                  |
+| `npm run test`    | 测试（`test:watch` 可监听）          |
+| `npm run lint`    | 静态检查                             |
+| `npm run format`  | 代码格式化                           |
+| `npm run guard`   | 只跑一致性规则（`check` 的最后一环） |
+| `npm run clean`   | 删除 `dist` 与生成的 Functions 入口  |
+| `npm run audit`   | 依赖审计（只走 npmjs registry）      |
+
+`npm run gen:cache-version` 生成缓存与契约版本戳，`dev` / `build` / `test` 都会先执行它。
 
 ## 部署
 

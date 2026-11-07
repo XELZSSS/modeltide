@@ -46,11 +46,7 @@ export const getOpenRouterRankings = defineSource<OpenRouterRaw, OpenRouterRankE
     }
     const rows = requireArrayBody(upstreamEndpoints.openRouterRankings, rankings.data, "OpenRouter rankings");
     const totalRows = rows.length;
-    const stats: RankingScanStats = {
-      scannedRows: 0,
-      validRows: 0,
-      expiredRows: 0,
-    };
+    const stats: RankingScanStats = { validRows: 0, expiredRows: 0 };
     return { rows, totalRows, stats, directory: values[1] };
   },
   parse: (raw) => {
@@ -69,7 +65,9 @@ export const getOpenRouterRankings = defineSource<OpenRouterRaw, OpenRouterRankE
   partialWhen: ({ raw }) => {
     const droppedRows = raw.totalRows - raw.stats.validRows;
     const drift = droppedRows >= Math.max(1, Math.ceil(raw.totalRows * RANKINGS_DRIFT_RATIO));
-    const pricingCount = Object.keys(raw.directory?.payload.data.pricing ?? {}).length;
+    // The directory leg is optional, so an absent one counts as no pricing; a present one carries the key count it
+    // counted while filing (≈40k keys on a full page, which `Object.keys` used to materialize to compare with zero).
+    const pricingCount = raw.directory?.payload.data.pricingKeys ?? 0;
     const directoryPartial = raw.directory == null || raw.directory.payload.partial;
     const partial = pricingCount === 0 || drift || directoryPartial;
     return {

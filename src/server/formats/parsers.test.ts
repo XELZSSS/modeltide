@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { decodeEntities } from "./html-entities";
 import { stripHtml } from "./html-to-text";
 import { parseFeed as parseFeedResult, capItems } from "./rss-feed-parser";
-import { findNextData, findLongestData } from "./rsc-data";
+import { findLongestData } from "./rsc-data";
 import { parseRscPayload, parseRscPayloads } from "./rsc-parser";
 import { findMarkerValue } from "./rsc-text";
 import { getOpenLicenseId, licenseTagId } from "./licenses";
@@ -87,17 +87,32 @@ describe("stripHtml", () => {
   });
 });
 
-describe("findNextData / findLongestData", () => {
+describe("findLongestData", () => {
+  // The gate the AA leaderboard parser passes: a row is only usable if it carries the index the ranking orders by.
+  const hasIndex = (row: unknown) => typeof row === "object" && row !== null && "intelligenceIndex" in row;
   const LOOKUPS: [string, () => unknown, unknown][] = [
-    [
-      "finds the first array under a key in a nested tree",
-      () => findNextData({ leaderboard: { entries: [{ rank: 1 }] } }, "entries"),
-      [{ rank: 1 }],
-    ],
     [
       "returns the longest array found under the key",
       () => findLongestData({ a: { initialModels: [1] }, b: { initialModels: [1, 2, 3] } }, "initialModels"),
       [1, 2, 3],
+    ],
+    [
+      "takes the gated array even when a shorter one sits first",
+      () =>
+        findLongestData(
+          {
+            a: { initialModels: [{ legend: "speed" }] },
+            b: { initialModels: [{ intelligenceIndex: 1 }, { intelligenceIndex: 2 }] },
+          },
+          "initialModels",
+          hasIndex,
+        ),
+      [{ intelligenceIndex: 1 }, { intelligenceIndex: 2 }],
+    ],
+    [
+      "returns null when every array under the key fails the gate",
+      () => findLongestData({ a: { initialModels: [{ legend: "speed" }] } }, "initialModels", hasIndex),
+      null,
     ],
   ];
 
@@ -105,9 +120,10 @@ describe("findNextData / findLongestData", () => {
     expect(run()).toEqual(expected);
   });
 
-  it("returns null when the key is absent", () => {
-    expect(findNextData({ other: [1] }, "entries")).toBeNull();
+  it("returns null when the key is absent or the only array under it is empty", () => {
+    expect(findLongestData({ other: [1] }, "entries")).toBeNull();
     expect(findLongestData({}, "initialModels")).toBeNull();
+    expect(findLongestData({ a: { initialModels: [] } }, "initialModels")).toBeNull();
   });
 });
 
@@ -175,7 +191,7 @@ describe("parseRscPayload", () => {
       '0:{"$a":1}\nc:["$","$L5",null,{"models":[{"slug":"claude-opus-5-5"},{"slug":"gpt-6-1-sol"}]}]\n1:{"ignore":true}\n';
     expect(
       unwrap(
-        parseRscPayload<{ slug: string }>(body, "models", (tree) => findNextData<{ slug: string }>(tree, "models")),
+        parseRscPayload<{ slug: string }>(body, "models", (tree) => findLongestData<{ slug: string }>(tree, "models")),
       ),
     ).toEqual([{ slug: "claude-opus-5-5" }, { slug: "gpt-6-1-sol" }]);
   });
@@ -228,7 +244,7 @@ describe("parseRscPayloads", () => {
     expect(
       unwrap(
         parseRscPayload<{ slug: string }>(body, "initialModels", (tree) =>
-          findNextData<{ slug: string }>(tree, "initialModels"),
+          findLongestData<{ slug: string }>(tree, "initialModels"),
         ),
       ),
     ).toEqual(rows);

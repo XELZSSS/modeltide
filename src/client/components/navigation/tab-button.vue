@@ -54,7 +54,12 @@ const classes = computed(() => cn(tabButtonVariants({ active: props.active, size
 const ariaChecked = computed(() =>
   props.role === "tab" ? { "aria-selected": props.active } : { "aria-checked": props.active },
 );
-const tabindex = computed(() => props.tabIndex ?? (props.role === "tab" ? (props.active ? 0 : -1) : 0));
+function tabIndexOf(): number {
+  if (props.tabIndex !== undefined) return props.tabIndex;
+  if (props.role !== "tab") return 0;
+  return props.active ? 0 : -1;
+}
+const tabindex = computed(tabIndexOf);
 </script>
 
 <template>

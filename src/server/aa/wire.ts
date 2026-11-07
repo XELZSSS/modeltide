@@ -274,8 +274,9 @@ export function leaderboardScores(row: AaLeaderboardRow): LeaderboardScores | un
 
 /**
  * A leaderboard row is usable only if it carries the index the ranking is ordered by: the `initialModels` prop also
- * carries the page's legend and changelog snapshots, and one of those came back as the row source the day `findNextData`
- * picked the first array.
+ * carries the page's legend and changelog snapshots, and one of those came back as the row source the day the parser
+ * took the first array it found under the marker. `parseLeaderboardModels` now passes this to the array picker, so a
+ * snapshot never reaches the row loop at all.
  */
 export function isLeaderboardRow(row: Record<string, unknown>): row is Record<string, unknown> & AaLeaderboardRow {
   return "intelligenceIndex" in row;
@@ -284,5 +285,5 @@ export function isLeaderboardRow(row: Record<string, unknown>): row is Record<st
 /** The creator record a normalized row carries: AA sends `{ name, color }` or nothing. */
 export function creatorOf(row: AaRow): { name: string; color: string } {
   const creator = isRecord(row.creator) ? row.creator : undefined;
-  return { name: creator ? text(creator.name) : "", color: creator ? text(creator.color) : "" };
+  return { name: text(creator?.name), color: text(creator?.color) };
 }

@@ -16,16 +16,15 @@ import type {
   HomeDashboardData,
   HomeDecisionPoint,
   HomeHallucinationPoint,
-  HomeOpenSourceEntry,
   HomeProviderSpeed,
   HomeUsagePoint,
   OpenRouterRankEntry,
-  OpenSourceModelEntry,
 } from "@/shared/types";
 import { computeProviderStats } from "@/shared/utils/models";
 import { aggregateTaskShare } from "@/shared/utils";
 import {
   HOME_CHART_ROWS,
+  HOME_CURSORBENCH_ROWS,
   HOME_DECISION_ROWS,
   HOME_HALLUCINATION_ROWS,
   HOME_OPEN_SOURCE_ROWS,
@@ -34,10 +33,7 @@ import {
   HOME_USAGE_ROWS,
 } from "@/shared/config/ui";
 import { definePartialSource, type PartialData } from "@/server/pipeline";
-
-function homeOpenSourceRow({ id, downloads, task }: OpenSourceModelEntry): HomeOpenSourceEntry {
-  return { id, downloads, task };
-}
+import { byNumberDesc } from "@/server/formats/ordering";
 
 /**
  * The overview chart's rows: Artificial Analysis' intelligence index, highest first, sliced to the bar count. A model
@@ -49,15 +45,16 @@ function homeIntelligenceRows(models: ArtificialAnalysisModel[]): HomeChartPoint
     if (model.intelligence_index == null) continue;
     rows.push({ id: model.id, name: model.name, score: model.intelligence_index });
   }
-  return rows.sort((a, b) => b.score - a.score).slice(0, HOME_CHART_ROWS);
+  return rows.sort(byNumberDesc<HomeChartPoint>((row) => row.score)).slice(0, HOME_CHART_ROWS);
 }
 
 /**
- * The coding card's rows: CursorBench's own pass-rate ranking, sliced to the card's row count. This is a second coding
- * dataset from a different source than AA's coding-agent index, which is why the page shows both and labels each one.
+ * The coding card's rows: CursorBench's own pass-rate ranking, sliced to the card's own row count. This is a second
+ * coding dataset from a different source than AA's coding-agent index, which is why the page shows both and labels
+ * each one.
  */
 function homeCodingRows(entries: CursorBenchEntry[]): HomeChartPoint[] {
-  return entries.slice(0, HOME_CHART_ROWS).map(({ id, model, score }) => ({ id, name: model, score }));
+  return entries.slice(0, HOME_CURSORBENCH_ROWS).map(({ id, model, score }) => ({ id, name: model, score }));
 }
 
 /**
@@ -66,7 +63,7 @@ function homeCodingRows(entries: CursorBenchEntry[]): HomeChartPoint[] {
  */
 function homeUsageRows(entries: OpenRouterRankEntry[]): HomeUsagePoint[] {
   const rows = entries.map(({ id, name, totalTokens }) => ({ id, name, totalTokens }));
-  return rows.sort((a, b) => b.totalTokens - a.totalTokens).slice(0, HOME_USAGE_ROWS);
+  return rows.sort(byNumberDesc<HomeUsagePoint>((row) => row.totalTokens)).slice(0, HOME_USAGE_ROWS);
 }
 
 /** The decision card's rows: that source already returns its rows by index, so this only slices. */
@@ -79,7 +76,7 @@ function homeProviderRows(models: ArtificialAnalysisModel[]): HomeProviderSpeed[
   // client fill in the translated label, the only layer that can.
   return computeProviderStats(models, "")
     .filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
-    .sort((a, b) => b.avgSpeed - a.avgSpeed)
+    .sort(byNumberDesc<HomeProviderSpeed>((provider) => provider.avgSpeed))
     .slice(0, HOME_PROVIDER_ROWS)
     .map(({ name, color, avgSpeed }) => ({ name: name || null, color, avgSpeed }));
 }
@@ -92,7 +89,7 @@ function homeHallucinationRows(models: ArtificialAnalysisModel[]): HomeHallucina
     if (total?.omniscience == null || total.accuracy == null) continue;
     rows.push({ name: model.name, accuracy: total.accuracy });
   }
-  return rows.sort((a, b) => b.accuracy - a.accuracy).slice(0, HOME_HALLUCINATION_ROWS);
+  return rows.sort(byNumberDesc<HomeHallucinationPoint>((row) => row.accuracy)).slice(0, HOME_HALLUCINATION_ROWS);
 }
 
 async function fetchHomeDashboard(ctx: AppContext): Promise<PartialData<HomeDashboardData>> {
@@ -115,7 +112,9 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<PartialData<HomeDash
   const openSourceModels = opensource?.payload.data ?? [];
   const data: HomeDashboardData = {
     codingAgents: (codingAgents?.payload.data ?? []).slice(0, HOME_CODING_AGENT_ROWS),
-    opensource: openSourceModels.slice(0, HOME_OPEN_SOURCE_ROWS).map(homeOpenSourceRow),
+    opensource: openSourceModels
+      .slice(0, HOME_OPEN_SOURCE_ROWS)
+      .map(({ id, downloads, task }) => ({ id, downloads, task })),
     openSourceTasks: aggregateTaskShare(openSourceModels).slices,
     intelligence: homeIntelligenceRows(artificialModels),
     providers: homeProviderRows(artificialModels),

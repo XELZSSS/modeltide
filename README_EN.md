@@ -65,7 +65,7 @@ build/        Build scripts
 
 ## Quick Start
 
-Requires Node.js 22.18 or newer
+Requires Node.js 22.18 or newer (the repository pins no build version; `npm run build` checks this floor)
 
 ```bash
 npm install
@@ -74,15 +74,20 @@ npm run dev    # http://localhost:5173
 
 ## Commands
 
-| Command           | Description                                   |
-| ----------------- | --------------------------------------------- |
-| `npm run dev`     | Dev server                                    |
-| `npm run build`   | Types, lint, format, tests, build             |
-| `npm run check`   | Types, lint, format and the consistency rules |
-| `npm run preview` | Serve the built `dist`                        |
-| `npm run test`    | Tests (`test:watch` to watch)                 |
-| `npm run lint`    | Lint                                          |
-| `npm run format`  | Format                                        |
+| Command           | Description                                           |
+| ----------------- | ----------------------------------------------------- |
+| `npm run dev`     | Dev server                                            |
+| `npm run build`   | Types, lint, format, tests, build                     |
+| `npm run check`   | Types, lint, format and the consistency rules         |
+| `npm run preview` | Serve the built `dist`                                |
+| `npm run test`    | Tests (`test:watch` to watch)                         |
+| `npm run lint`    | Lint                                                  |
+| `npm run format`  | Format                                                |
+| `npm run guard`   | Just the consistency rules (the last step of `check`) |
+| `npm run clean`   | Remove `dist` and the generated Functions entry       |
+| `npm run audit`   | Dependency audit (npmjs registry only)                |
+
+`npm run gen:cache-version` writes the cache and contract version stamps; `dev`, `build` and `test` run it first.
 
 ## Deployment
 

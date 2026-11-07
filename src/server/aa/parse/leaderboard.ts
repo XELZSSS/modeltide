@@ -3,7 +3,7 @@ import { mapRows } from "@/server/formats/parse-rows";
 import { collectModelReleaseLinksFromArrays, scanReleaseIndex, type ReleaseInfo } from "./release-index";
 import { benchmarkWireName, LEADERBOARD_BENCHMARK_KEYS, LEADERBOARD_SCORE_KEYS } from "./benchmark-fields";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
-import { findNextData } from "@/server/formats/rsc-data";
+import { findLongestData } from "@/server/formats/rsc-data";
 import { parseRscPayload } from "@/server/formats/rsc-parser";
 import type { BenchmarkKey } from "@/shared/config";
 import { AA_FLIGHT_MARKERS } from "../markers";
@@ -40,6 +40,7 @@ function normalizeRow(
   row: AaLeaderboardRow,
   releases: Map<string, ReleaseInfo>,
   links: Map<string, string>,
+  seenKeys: Set<BenchmarkKey>,
 ): AaRow | null {
   const slug = text(row.slug);
   const name = text(row.name);
@@ -74,7 +75,11 @@ function normalizeRow(
   if (release) normalized.releaseDate = release.releaseDate;
   for (const key of LEADERBOARD_BENCHMARK_KEYS) {
     const value = benchmarkValue(row, scores, key);
-    if (value !== undefined) setField(normalized, benchmarkWireName(key), value);
+    if (value === undefined) continue;
+    // Noted on the way past the lookup this row already required: the wire-name warning used to run the same
+    // 33-key scan a second time per row, which doubled that loop to feed one log line.
+    seenKeys.add(key);
+    setField(normalized, benchmarkWireName(key), value);
   }
   return normalized;
 }
@@ -83,24 +88,16 @@ export function parseLeaderboardModels(html: unknown): ParseResult<AaRow[]> {
   if (typeof html !== "string" || !html) return parseFail("AA leaderboard page is not a string");
   const { releases, modelArrays, unparsableSlices } = scanReleaseIndex(html);
   const links = collectModelReleaseLinksFromArrays(modelArrays);
+  const seenKeys = new Set<BenchmarkKey>();
   const prop = parseRscPayload<unknown[]>(html, AA_FLIGHT_MARKERS.models, (tree) =>
-    findNextData(tree, AA_FLIGHT_MARKERS.models),
+    findLongestData(tree, AA_FLIGHT_MARKERS.models, (row) => isRecord(row) && isLeaderboardRow(row)),
   );
   // `parseRscPayload` only answers `ok` with a non-empty array, so what used to be read as "an empty list" is a parse
   // failure and belongs in the error, not in a payload that then reported "no usable model rows" for either cause.
+  // The array it hands over is the longest one whose first row passes `isLeaderboardRow`: the legend and changelog
+  // snapshots the same prop carries are now rejected where the array is chosen, not by a second scan of every row.
   if (!prop.ok) return parseFail(prop.error);
-  const rows = prop.data;
-  if (!rows.some((raw) => isRecord(raw) && isLeaderboardRow(raw))) {
-    return parseFail("AA leaderboard page yielded no usable model rows");
-  }
-  const seenKeys = new Set<BenchmarkKey>();
-  const { rows: kept, dropped } = mapRows(rows, (raw) => {
-    const scores = leaderboardScores(raw);
-    for (const key of LEADERBOARD_BENCHMARK_KEYS) {
-      if (benchmarkValue(raw, scores, key) !== undefined) seenKeys.add(key);
-    }
-    return normalizeRow(raw, releases, links);
-  });
+  const { rows: kept, dropped } = mapRows(prop.data, (raw) => normalizeRow(raw, releases, links, seenKeys));
   if (kept.length === 0) return parseFail("AA leaderboard page yielded no usable model rows");
   const missing = LEADERBOARD_BENCHMARK_KEYS.filter((key) => !seenKeys.has(key));
   const warnings: string[] = [];

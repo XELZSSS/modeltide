@@ -4,7 +4,7 @@ import { useTranslation } from "@/client/i18n";
 import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
 import { navigate } from "@/client/router";
 import { MIN_QUERY, useSearchAllRankings } from "./use-search";
-import { errorText } from "@/client/api/present/error-text";
+import { errorTextOf } from "@/client/api/present/error-text";
 import Combobox from "./combobox.vue";
 import SearchResultRow from "./search-result-row.vue";
 import { useCombobox } from "./use-combobox";
@@ -20,7 +20,7 @@ const { results, isPending, error, partial } = useSearchAllRankings(searchTerm, 
   warm: isFocused,
 });
 
-const failure = computed(() => (error.value === null ? null : errorText(error.value, t)));
+const failure = computed(() => errorTextOf(error.value, t));
 
 const combobox = useCombobox({
   initialValue: searchTerm.value,

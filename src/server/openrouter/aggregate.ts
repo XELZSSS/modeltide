@@ -3,7 +3,7 @@ import { parseTs } from "@/server/formats/dates";
 import { isValidRowId } from "@/server/formats/content-guards";
 import { isOrRankingRow } from "./wire";
 import { MAX_RANKING_ROWS } from "@/server/formats/limits";
-import { lookupHit, modelKeyCandidates, type Lookup } from "./lookup";
+import { fillModelKeys, lookupHit, type Lookup } from "./lookup";
 
 import type { OrMetaEntry, OrRankingRow } from "./wire";
 import type { PricingEntry } from "./parse-directory";
@@ -46,8 +46,16 @@ function changeToPercent(value: unknown): number | null {
 
 export type PricingLookup = Lookup<PricingEntry>;
 
+/**
+ * The key forms of the group being resolved. Reused, because `modelKeyCandidates` built a Set, a `present` array and a
+ * spread array per call, and the rankings resolve pricing and expiry for every group (≈1,200 lookups a refresh). Safe as
+ * module state: both resolvers run synchronously, one after the other, inside `mapModels`.
+ */
+const candidateKeys = new Set<string>();
+
 function resolvePricing(pricing: PricingLookup, id: string, variantKey: string | undefined): PricingEntry | undefined {
-  for (const key of modelKeyCandidates([variantKey, id])) {
+  fillModelKeys(candidateKeys, [variantKey, id]);
+  for (const key of candidateKeys) {
     const hit = lookupHit(pricing, key);
     if (hit) return hit;
   }
@@ -55,7 +63,6 @@ function resolvePricing(pricing: PricingLookup, id: string, variantKey: string |
 }
 
 export interface RankingScanStats {
-  scannedRows: number;
   validRows: number;
   expiredRows: number;
 }
@@ -64,16 +71,18 @@ export type MetaLookup = Lookup<OrMetaEntry>;
 
 export function resolveExpiry(meta: MetaLookup | undefined, id: string, variantKey: string | undefined): string | null {
   if (!meta) return null;
-  for (const key of modelKeyCandidates([variantKey, id])) {
+  fillModelKeys(candidateKeys, [variantKey, id]);
+  for (const key of candidateKeys) {
     const hit = lookupHit(meta, key);
     if (hit?.expiresAt) return hit.expiresAt;
   }
   return null;
 }
 
-function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> {
+function groupRows(rows: readonly unknown[], stats?: RankingScanStats): Map<string, Group> {
   const grouped = new Map<string, Group>();
-  if (!Array.isArray(rows)) return grouped;
+  // `rankings.ts` proves the body is an array with `requireArrayBody` before these rows get here, so the empty-map
+  // branch this line used to be answered only a body the caller had already rejected.
   const count = Math.min(rows.length, MAX_RANKING_ROWS);
   let valid = 0;
   for (let i = 0; i < count; i++) {
@@ -117,13 +126,10 @@ function groupRows(rows: unknown, stats?: RankingScanStats): Map<string, Group> 
     }
     if (metric != null && (group.metric == null || metric > group.metric)) group.metric = metric;
   }
-  // `groupRows` owns the counters it is the only producer of: `scannedRows` and `validRows` are read straight off the
-  // rows it just walked. `expiredRows` is not one of them — `mapModels` counts retired groups after this returns — so
-  // resetting it here made the count depend on call order instead of on what the scan found.
-  if (stats) {
-    stats.scannedRows = count;
-    stats.validRows = valid;
-  }
+  // `validRows` is the one counter `groupRows` is the only producer of. `expiredRows` is not — `mapModels` counts
+  // retired groups after this returns — so resetting it here made the count depend on call order instead of on what the
+  // scan found.
+  if (stats) stats.validRows = valid;
   return grouped;
 }
 
@@ -143,7 +149,9 @@ function compareRanked(a: RankedGroup, b: RankedGroup): number {
   if (a.derivedTokens !== b.derivedTokens) return b.derivedTokens - a.derivedTokens;
   const aid = a.group.agg.model_permaslug;
   const bid = b.group.agg.model_permaslug;
-  return aid === bid ? 0 : aid < bid ? -1 : 1;
+  if (aid === bid) return 0;
+  if (aid < bid) return -1;
+  return 1;
 }
 
 export { groupRows, compareRanked, usageTotal, resolvePricing, changeToPercent };

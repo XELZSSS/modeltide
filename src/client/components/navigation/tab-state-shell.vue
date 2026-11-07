@@ -27,8 +27,6 @@ useMalformedGuard(
 );
 
 const { t } = useTranslation();
-
-// Only the model rankings say "no rankings data"; every other tab says "no data".
 </script>
 
 <template>
@@ -37,6 +35,7 @@ const { t } = useTranslation();
        them, and both `v-if`s above can be true at once (partial + no rows), which is the case that shows the notice
        above the empty state instead of the empty state alone. -->
   <template v-if="props.state.items.length === 0">
+    <!-- Only the model rankings say "no rankings data"; every other tab says "no data". -->
     <EmptyState
       variant="plain"
       class="min-h-[50vh]"

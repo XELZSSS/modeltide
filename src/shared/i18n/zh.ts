@@ -7,7 +7,6 @@ export const zh = {
   dataComplete: "数据完整",
   dataPartial: "部分数据暂未返回",
   codingAgentRankings: "智能体",
-  mostDownloaded: "下载最多",
   searchAction: "搜索模型",
   usageRankings: "模型用量",
   rankings: "排行",

@@ -22,18 +22,17 @@ const MODE_LABEL = { light: "themeLight", dark: "themeDark", system: "themeSyste
 const settings = useSettingsStore();
 const { t } = useTranslation();
 
-const mode = computed(() => settings.themeMode);
-const label = computed(() => `${t("themeToggle")} · ${t(MODE_LABEL[mode.value])}`);
+const label = computed(() => `${t("themeToggle")} · ${t(MODE_LABEL[settings.themeMode])}`);
 
 function cycle(): void {
-  settings.setThemeMode(NEXT[mode.value]);
+  settings.setThemeMode(NEXT[settings.themeMode]);
 }
 </script>
 
 <template>
   <button type="button" :class="ICON_BUTTON" :aria-label="label" v-tooltip="label" @click="cycle">
-    <Moon v-if="mode === 'dark'" :size="16" aria-hidden="true" />
-    <Sun v-else-if="mode === 'light'" :size="16" aria-hidden="true" />
+    <Moon v-if="settings.themeMode === 'dark'" :size="16" aria-hidden="true" />
+    <Sun v-else-if="settings.themeMode === 'light'" :size="16" aria-hidden="true" />
     <SunMoon v-else :size="16" aria-hidden="true" />
   </button>
 </template>

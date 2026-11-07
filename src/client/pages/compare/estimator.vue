@@ -42,13 +42,9 @@ const costSummary = computed(() => {
   return { best, avg: count === 0 ? null : total / count };
 });
 
-const bestMonthlyCost = computed(() => costSummary.value.best);
-
-const avgMonthlyCost = computed(() => costSummary.value.avg);
-
 function isBestCost(model: ArtificialAnalysisModel): boolean {
   const cost = monthlyOf(model);
-  return cost != null && bestMonthlyCost.value != null && approxEq(cost, bestMonthlyCost.value);
+  return cost != null && costSummary.value.best != null && approxEq(cost, costSummary.value.best);
 }
 </script>
 
@@ -58,7 +54,7 @@ function isBestCost(model: ArtificialAnalysisModel): boolean {
       <CardHeader :title="t('estimatedMonthlyCost')" />
       <div class="flex flex-col gap-3">
         <div class="flex flex-col flex-wrap gap-2 sm:flex-row">
-          <CostEstimatorInputs :state="costState" :avg-cost="avgMonthlyCost" />
+          <CostEstimatorInputs :state="costState" :avg-cost="costSummary.avg" />
         </div>
         <div class="flex flex-col gap-1.5">
           <div

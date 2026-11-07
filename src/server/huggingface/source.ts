@@ -2,10 +2,9 @@ import { isValidRowId } from "@/server/formats/content-guards";
 import { MAX_MODEL_ID_CHARS, ONE_MINUTE, SLOW_TTL_MS } from "@/shared/config";
 import { upstreamConfig } from "@/server/upstream/upstream";
 import { cacheKeys } from "@/server/cache/keys";
-import type { OpenSourceModelEntry } from "@/shared/types";
+import type { OpenSourceModelEntry, SourcePayload } from "@/shared/types";
 import type { AppContext } from "@/server/api/context";
 import { UpstreamError } from "@/server/api/errors";
-import { dedupeBy } from "@/shared/utils";
 import { encodeModelIdPath } from "@/shared/utils/models";
 import { keepOpenSourceRanking, mapListModel, mapModel } from "./parse";
 import { LicenseDropTally } from "./license-tally";
@@ -79,16 +78,23 @@ function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTa
 
 function parseHFItems(items: HfModel[], ctx: AppContext, rankByUsage: boolean): OpenSourceModelEntry[] {
   const tally = new LicenseDropTally();
-  const kept = items
-    .map((m) => mapListModel(m, tally))
-    .filter(
-      (m): m is OpenSourceModelEntry =>
-        m !== null && m.license != null && (!rankByUsage || keepOpenSourceRanking(m, tally)),
-    );
+  // One pass over the page: the `map` / `filter` / `dedupeBy` chain walked the thousand rows three times and built three
+  // arrays to keep the same rows. The tally sees the rows in the same order — licence gate first, then the download gate.
+  const bucket: OpenSourceModelEntry[] = [];
+  const keptIds = new Set<string>();
+  let kept = 0;
+  for (const item of items) {
+    const mapped = mapListModel(item, tally);
+    if (mapped === null || mapped.license === null) continue;
+    if (rankByUsage && !keepOpenSourceRanking(mapped, tally)) continue;
+    kept += 1;
+    if (keptIds.has(mapped.id)) continue;
+    keptIds.add(mapped.id);
+    bucket.push(mapped);
+  }
   logLicenseDrops(ctx, items.length, tally);
-  const bucket = dedupeBy(kept, (m) => m.id);
   requireRows(bucket, "HuggingFace", "usable models", `raw=${items.length}, kept=0`);
-  const dropped = items.length - kept.length;
+  const dropped = items.length - kept;
   if (dropped > 0) {
     ctx.log(
       "info",
@@ -146,7 +152,12 @@ const modelByIdSource = defineParamSource<string, OpenSourceModelEntry | null, O
     // No `served`: `getOpenSourceModels` composes this row into a fresh list envelope that carries no body, so a stored
     // response copy would never be served — it only cost resident bytes in L1 (counted at the 4× body factor) and a
     // larger KV value.
-    scope: { staleCapMs: (value) => (value === null ? NEGATIVE_STALE_CAP_MS : undefined) },
+    // The cache stores the pipeline's envelope, so a miss is `data === null` inside it rather than the value itself:
+    // compared against the envelope, the bare `value === null` matched no entry at all and the cap never applied.
+    scope: {
+      staleCapMs: (value) =>
+        (value as SourcePayload<OpenSourceModelEntry | null>).data === null ? NEGATIVE_STALE_CAP_MS : undefined,
+    },
     fetch: (ctx, id) => (isValidHfModelId(id) ? fetchHfModelById(ctx, id) : Promise.resolve(null)),
     parse: (raw) => raw,
     partialWhen: ({ raw }) => (raw == null ? { partial: false, ttl: ONE_MINUTE } : { partial: false }),

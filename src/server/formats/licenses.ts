@@ -42,10 +42,14 @@ function normalizeLicenseId(raw: string): string {
 const LICENSE_PREFIX = "license:";
 
 export function licenseTagId(tag: string): string | null {
-  // HF rows carry ~20 tags and only a couple are licenses, so the prefix test happens before copying the whole tag.
+  // HF rows carry ~20 tags and only a couple are licenses, so the prefix test happens before copying the whole tag — and
+  // it compares code units instead of slicing and lowercasing them, which allocated a string for every tag on the page.
   const trimmed = tag.trim();
   if (trimmed.length <= LICENSE_PREFIX.length) return null;
-  if (trimmed.slice(0, LICENSE_PREFIX.length).toLowerCase() !== LICENSE_PREFIX) return null;
+  for (let i = 0; i < LICENSE_PREFIX.length; i++) {
+    // `| 0x20` lowercases an ASCII letter and leaves `:` untouched, which is the whole comparison this needs.
+    if ((trimmed.charCodeAt(i) | 0x20) !== LICENSE_PREFIX.charCodeAt(i)) return null;
+  }
   return normalizeLicenseId(trimmed.slice(LICENSE_PREFIX.length).toLowerCase()) || null;
 }
 

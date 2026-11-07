@@ -56,27 +56,40 @@ function hueOf([r, g, b]: readonly [number, number, number]): number | null {
   const min = Math.min(r, g, b);
   const delta = max - min;
   if (delta === 0) return null;
-  const sector = max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+  let sector: number;
+  if (max === r) sector = ((g - b) / delta) % 6;
+  else if (max === g) sector = (b - r) / delta + 2;
+  else sector = (r - g) / delta + 4;
   const degrees = sector * 60;
   return degrees < 0 ? degrees + 360 : degrees;
+}
+
+/**
+ * The RGB triple for HSL sextant `h` (`0 ≤ h < 6`), before the lightness offset is applied. A switch over the sextant
+ * index rather than a ternary chain: six branches read top to bottom keep the formula legible.
+ */
+function sextantToRgb(h: number, chroma: number, x: number): [number, number, number] {
+  switch (Math.floor(h)) {
+    case 0:
+      return [chroma, x, 0];
+    case 1:
+      return [x, chroma, 0];
+    case 2:
+      return [0, chroma, x];
+    case 3:
+      return [0, x, chroma];
+    case 4:
+      return [x, 0, chroma];
+    default:
+      return [chroma, 0, x];
+  }
 }
 
 function hslToRgb(hue: number, saturation: number, lightness: number): [number, number, number] {
   const h = (((hue % 360) + 360) % 360) / 60;
   const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
   const x = chroma * (1 - Math.abs((h % 2) - 1));
-  const [r, g, b] =
-    h < 1
-      ? [chroma, x, 0]
-      : h < 2
-        ? [x, chroma, 0]
-        : h < 3
-          ? [0, chroma, x]
-          : h < 4
-            ? [0, x, chroma]
-            : h < 5
-              ? [x, 0, chroma]
-              : [chroma, 0, x];
+  const [r, g, b] = sextantToRgb(h, chroma, x);
   const m = lightness - chroma / 2;
   return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 }

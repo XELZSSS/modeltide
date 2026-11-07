@@ -16,19 +16,17 @@ function nextIndexForKey(key: string, index: number, length: number): number | n
   return null;
 }
 
-function nextRovingId(
+/** The id an arrow / Home / End keypress moves to, or `null` for a key the strip does not handle. */
+function nextRovingId<Id extends string>(
   event: KeyboardEvent,
-  items: readonly { id: string }[],
-  currentId: string | undefined,
-): string | null {
-  const nextIndex = nextIndexForKey(
-    event.key,
-    items.findIndex((item) => item.id === currentId),
-    items.length,
-  );
-  if (nextIndex == null) return null;
+  ids: readonly Id[],
+  currentId: Id | undefined,
+): Id | null {
+  const currentIndex = currentId === undefined ? -1 : ids.indexOf(currentId);
+  const nextIndex = nextIndexForKey(event.key, currentIndex, ids.length);
+  if (nextIndex === null) return null;
   event.preventDefault();
-  return items[nextIndex]?.id ?? null;
+  return ids[nextIndex] ?? null;
 }
 
 interface RovingRadioConfig<Id extends string> {
@@ -49,16 +47,10 @@ export function useRovingRadio<Id extends string>(config: RovingRadioConfig<Id>)
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    const ids = config.items();
-    const nextId = nextRovingId(
-      event,
-      ids.map((id) => ({ id })),
-      config.activeId(),
-    );
-    const next = ids.find((id) => id === nextId);
-    if (next == null) return;
-    config.select(next);
-    document.getElementById(config.elementId(next))?.focus();
+    const nextId = nextRovingId(event, config.items(), config.activeId());
+    if (nextId === null) return;
+    config.select(nextId);
+    document.getElementById(config.elementId(nextId))?.focus();
   }
 
   return { tabIndexFor, onKeydown };

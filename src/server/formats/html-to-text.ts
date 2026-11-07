@@ -47,7 +47,7 @@ function tagNameOf(tagInner: string): string {
   i++;
   while (i < tagInner.length && isTagNameChar(tagInner.charCodeAt(i))) i++;
   const name = tagInner.slice(start, i);
-  return name === name.toLowerCase() ? name : name.toLowerCase();
+  return name.toLowerCase();
 }
 
 export function stripHtml(s: unknown): string {

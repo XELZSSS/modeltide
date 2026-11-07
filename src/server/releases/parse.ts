@@ -7,32 +7,30 @@ import { dedupeBy } from "@/shared/utils";
 import { aaModelPageUrl } from "@/shared/utils/models";
 
 function toClosedEntry(
-  id: string,
-  modelSlug: string,
+  slug: string,
   model: string,
   provider: string,
   rawDate: string,
   modelsBaseUrl: string,
 ): ClosedReleaseEntry | null {
-  const cleanId = id.trim();
-  const cleanSlug = modelSlug.trim();
+  const cleanSlug = slug.trim();
   const cleanModel = model.trim();
   const cleanProvider = provider.trim();
-  if (!cleanId || !cleanModel || !cleanProvider) return null;
-  if (cleanId.length > MAX_ID_CHARS || cleanModel.length > MAX_ID_CHARS || cleanProvider.length > MAX_NAME_CHARS)
+  if (!cleanSlug || !cleanModel || !cleanProvider) return null;
+  if (cleanSlug.length > MAX_ID_CHARS || cleanModel.length > MAX_ID_CHARS || cleanProvider.length > MAX_NAME_CHARS)
     return null;
   const date = isoDatePrefix(rawDate);
   if (!date) return null;
   return {
-    id: cleanId,
+    id: cleanSlug,
     model: cleanModel,
     provider: cleanProvider,
     releaseDate: date,
-    // AA serves a model page at its **model** slug, and a release slug only equals that for some releases: where it does
-    // not (`ling-3-1-flash-rc5` announces the model page `ling-3-1-flash-1019`) the link answered 404. The row is the
-    // model — its id is that same slug — and points at that page; a row whose model slug the source does not give us
-    // stays in the list without a link rather than with a dead one.
-    link: cleanSlug ? aaModelPageUrl(modelsBaseUrl, cleanSlug) : null,
+    // AA serves a model page at its **model** slug, and a release slug only equals that for some releases: where it
+    // does not (`ling-3-1-flash-rc5` announces the model page `ling-3-1-flash-1019`) the link answered 404. Both callers
+    // pass the model slug as the row's identity, so id and link are the same value by construction rather than two
+    // arguments that had to be kept equal.
+    link: aaModelPageUrl(modelsBaseUrl, cleanSlug),
   };
 }
 
@@ -42,7 +40,7 @@ function toClosedEntry(
  * `(Non-reasoning)` are two entries a reader distinguishes even though AA files them under one release.
  */
 function toClosedRelease(e: ChangelogModel, modelsBaseUrl: string): ClosedReleaseEntry | null {
-  return toClosedEntry(e.slug, e.slug, e.name, e.creatorName, e.releaseDate, modelsBaseUrl);
+  return toClosedEntry(e.slug, e.name, e.creatorName, e.releaseDate, modelsBaseUrl);
 }
 
 /**
@@ -52,7 +50,7 @@ function toClosedRelease(e: ChangelogModel, modelsBaseUrl: string): ClosedReleas
 function toClosedReleaseFromIndex(m: ArtificialAnalysisModel, modelsBaseUrl: string): ClosedReleaseEntry | null {
   const slug = m.slug.trim() !== "" ? m.slug : m.id;
   if (!slug || !m.name) return null;
-  return toClosedEntry(slug, slug, m.name, m.model_creators?.name ?? "", m.release_date ?? "", modelsBaseUrl);
+  return toClosedEntry(slug, m.name, m.model_creators?.name ?? "", m.release_date ?? "", modelsBaseUrl);
 }
 
 export function toClosedReleasesFromIndex(

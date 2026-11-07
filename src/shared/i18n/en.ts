@@ -5,7 +5,6 @@ export const en = {
   dataComplete: "All sources responded",
   dataPartial: "Some sources did not respond",
   codingAgentRankings: "Agents",
-  mostDownloaded: "Most downloaded",
   searchAction: "Search models",
   usageRankings: "Model usage",
   rankings: "Rankings",

@@ -13,7 +13,7 @@ import EmptyState from "@/client/components/feedback/empty-state.vue";
 import Button from "@/client/components/ui/button.vue";
 import { reportClientError } from "@/client/monitoring";
 import PageContainer from "@/client/components/layout/page-container.vue";
-import { errorText } from "@/client/api/present/error-text";
+import { errorTextOf } from "@/client/api/present/error-text";
 
 const props = defineProps<{ reset?: () => void }>();
 
@@ -22,7 +22,7 @@ const { t } = useTranslation();
 const error = ref<Error | null>(null);
 const attempt = ref(0);
 const online = ref(navigator.onLine !== false);
-const failure = computed(() => (error.value === null ? null : errorText(error.value, t)));
+const failure = computed(() => errorTextOf(error.value, t));
 
 function syncOnline(): void {
   online.value = navigator.onLine !== false;

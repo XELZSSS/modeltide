@@ -72,3 +72,11 @@ export function errorText(err: unknown, t: TFunction): ErrorText {
   const copy = KIND_TEXT[kind];
   return { kind, title: t(copy.title), message: t(copy.message), details: errorDetails(err, t) };
 }
+
+/**
+ * The same view for a failure that may be absent: the three call sites (the error boundary, the search bar and the
+ * mobile search panel) all read `error === null` first, so the branch lives here instead of three times beside them.
+ */
+export function errorTextOf(err: Error | null, t: TFunction): ErrorText | null {
+  return err === null ? null : errorText(err, t);
+}

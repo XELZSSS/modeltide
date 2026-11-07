@@ -30,9 +30,9 @@ export function numericLabel(v: unknown): string | null {
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /**
- * A trimmed string, empty when the value is not one: the parser layer's default for a text field. Every wire reader
- * used to spell this as `str(v).trim()`, and the two other spellings of the same idea (`strOr`'s null/undefined pass-
- * through and the client's `toStringOrNull`) made a row's identity depend on which one a parser happened to import.
+ * A trimmed string, empty when the value is not one: the parser layer's default for a text field. Every wire reader used
+ * to spell this as `str(v).trim()`, and the other spelling of the same idea (`strOr`'s null/undefined pass-through) made
+ * a field's identity depend on which one a parser happened to import.
  */
 export const text = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -42,7 +42,11 @@ export const textOrNull = (v: unknown): string | null => {
   return t === "" ? null : t;
 };
 
-export const strOr = (v: unknown): string | null | undefined => (v == null ? v : typeof v === "string" ? v : undefined);
+/** A string as-is, `null`/`undefined` passed through, and every other type dropped. */
+export function strOr(v: unknown): string | null | undefined {
+  if (typeof v === "string") return v;
+  return v == null ? v : undefined;
+}
 
 export const bool = (v: unknown): boolean | undefined => (typeof v === "boolean" ? v : undefined);
 
@@ -51,8 +55,16 @@ export const obj = (v: unknown): Record<string, unknown> | undefined =>
 
 export const isRecord = (v: unknown): v is Record<string, unknown> => obj(v) !== undefined;
 
-export const titleCase = (s: string): string =>
-  s ? (s.length >= 2 && s === s.toUpperCase() ? s : s[0]!.toUpperCase() + s.slice(1).toLowerCase()) : s;
+/**
+ * A label capitalized in place, the rest lowercased: `size_class` values and model tokens pass through it. The shared
+ * `titleCase` is a different function (it splits on `[-_]`), so this one is named apart to keep the two from being
+ * imported for each other.
+ */
+export function capLabel(s: string): string {
+  if (!s) return s;
+  if (s.length >= 2 && s === s.toUpperCase()) return s;
+  return s[0]!.toUpperCase() + s.slice(1).toLowerCase();
+}
 
 /** Cuts at a code-unit boundary without splitting a surrogate pair. */
 export function truncateSafe(s: string, max: number): string {

@@ -14,6 +14,7 @@ import { useTranslation } from "@/client/i18n";
 import { rankingTabHref } from "@/client/nav/sources";
 import { cn } from "@/client/utils/cn";
 import { formatIndex, formatPercent, formatScore, formatShortNumber } from "@/shared/utils";
+import type { TranslationKey } from "@/shared/i18n";
 import { shortModelId } from "@/shared/utils/models";
 import { localeOf } from "@/shared/config/ui";
 import { useHomeStats } from "./use-home-stats";
@@ -69,6 +70,21 @@ const statusLine = computed(() => {
 });
 
 /**
+ * One figure of the strip. Every leg of the dashboard is optional, so each row is either absent — printing "not
+ * available" with an empty detail line, which is what the six call sites used to spell out twice each — or it is read
+ * through the two accessors its card uses.
+ */
+function kpiOf<T>(
+  labelKey: TranslationKey,
+  row: T | undefined,
+  valueOf: (row: T) => string,
+  detailOf: (row: T) => string,
+): { label: string; value: string; detail: string } {
+  if (row === undefined) return { label: t(labelKey), value: t("notAvailable"), detail: "" };
+  return { label: t(labelKey), value: valueOf(row), detail: detailOf(row) };
+}
+
+/**
  * Six figures, one per row head on the page: the same numbers read once, above the detail. Every one is optional
  * because a payload leg can fail on its own — a missing top row prints "not available" and the card it belongs to says
  * the same thing. The set spans all four upstreams on purpose (AA twice, OpenRouter, Hugging Face, CursorBench), so the
@@ -82,36 +98,44 @@ const kpis = computed(() => {
   const usage = dashboardData.value.usage[0];
   const download = trendingStats.value[0];
   return [
-    {
-      label: t("intelligenceIndex"),
-      value: index === undefined ? t("notAvailable") : formatIndex(index.score),
-      detail: index === undefined ? "" : index.name,
-    },
-    {
-      label: t("hallucinationStats"),
-      value: accuracy === undefined ? t("notAvailable") : accuracy.valueLabel,
-      detail: accuracy === undefined ? "" : accuracy.label,
-    },
-    {
-      label: t("providerSpeed"),
-      value: provider === undefined ? t("notAvailable") : `${formatIndex(provider.avgSpeed)} ${t("tokensPerSecond")}`,
-      detail: provider === undefined ? "" : provider.name,
-    },
-    {
-      label: t("cursorBenchRankings"),
-      value: coding === undefined ? t("notAvailable") : formatPercent(coding.score, t),
-      detail: coding === undefined ? "" : shortModelId(coding.name) || coding.id,
-    },
-    {
-      label: t("usageRankings"),
-      value: usage === undefined ? t("notAvailable") : formatShortNumber(usage.totalTokens, t("notAvailable")),
-      detail: usage === undefined ? "" : shortModelId(usage.name) || usage.id,
-    },
-    {
-      label: t("mostDownloaded"),
-      value: download === undefined ? t("notAvailable") : download.valueLabel,
-      detail: download === undefined ? "" : download.label,
-    },
+    kpiOf(
+      "intelligenceIndex",
+      index,
+      (row) => formatIndex(row.score),
+      (row) => row.name,
+    ),
+    kpiOf(
+      "hallucinationStats",
+      accuracy,
+      (row) => row.valueLabel,
+      (row) => row.label,
+    ),
+    kpiOf(
+      "providerSpeed",
+      provider,
+      (row) => `${formatIndex(row.avgSpeed)} ${t("tokensPerSecond")}`,
+      (row) => row.name,
+    ),
+    kpiOf(
+      "cursorBenchRankings",
+      coding,
+      (row) => formatPercent(row.score, t),
+      (row) => shortModelId(row.name) || row.id,
+    ),
+    kpiOf(
+      "usageRankings",
+      usage,
+      (row) => formatShortNumber(row.totalTokens, t("notAvailable")),
+      (row) => shortModelId(row.name) || row.id,
+    ),
+    // The trending list's head, which is what the payload carries: `downloads` names that figure instead of claiming the
+    // global "most downloaded" model, which this list is not ordered by.
+    kpiOf(
+      "downloads",
+      download,
+      (row) => row.valueLabel,
+      (row) => row.label,
+    ),
   ];
 });
 

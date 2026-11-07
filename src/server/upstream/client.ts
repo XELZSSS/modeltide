@@ -1,4 +1,4 @@
-import { MAX_JSON_BYTES, MAX_RSC_BYTES, USER_AGENT, upstreamUrl } from "./upstream";
+import { MAX_HTML_BYTES, MAX_JSON_BYTES, MAX_RSC_BYTES, USER_AGENT, upstreamUrl } from "./upstream";
 import { FEED_FETCH_OPTS, NETWORK_RETRY_BACKOFF_MS, UPSTREAM_FETCH_OPTS } from "./timeouts";
 import { ClientAbortError, UpstreamError, errMsg } from "@/server/api/errors";
 import type { Logger } from "@/server/api/logger";
@@ -82,6 +82,8 @@ type AttemptOutcome<T> =
   | { kind: "abort" }
   | { kind: "fail"; message: string | null; cause: unknown; status: number | null; timedOut: boolean };
 
+type FailOutcome = Extract<AttemptOutcome<unknown>, { kind: "fail" }>;
+
 /**
  * What one attempt can report about itself: time to the response *headers* (DNS + connect + TLS + first byte), the size
  * when the upstream declared one, and the status. The body is read after `ttfbMs`, so `total - ttfb` is the body time.
@@ -102,11 +104,14 @@ interface AttemptInput<T> {
   rest: Omit<FetchOptions, "timeoutMs" | "retries" | "headers" | "signal">;
 }
 
-function finalError<T>(url: string, fail: Extract<AttemptOutcome<T>, { kind: "fail" }>): UpstreamError {
-  const err = new UpstreamError(
-    fail.message ?? `HTTP failed for ${url}`,
-    fail.timedOut ? { timeout: true } : fail.status != null ? { status: fail.status } : { retryable: true },
-  );
+function failureOptions(fail: FailOutcome): { timeout: true } | { status: number } | { retryable: true } {
+  if (fail.timedOut) return { timeout: true };
+  if (fail.status != null) return { status: fail.status };
+  return { retryable: true };
+}
+
+function finalError(url: string, fail: FailOutcome): UpstreamError {
+  const err = new UpstreamError(fail.message ?? `HTTP failed for ${url}`, failureOptions(fail));
   if (fail.cause !== undefined) err.cause = fail.cause;
   return err;
 }
@@ -288,7 +293,7 @@ export class HttpClient {
     );
   }
 
-  async text(url: string, init?: FetchOptionsInput, maxBytes: number = MAX_JSON_BYTES): Promise<string> {
+  async text(url: string, init?: FetchOptionsInput, maxBytes: number = MAX_HTML_BYTES): Promise<string> {
     return this.doFetch(
       url,
       { ...UPSTREAM_FETCH_OPTS, ...init },

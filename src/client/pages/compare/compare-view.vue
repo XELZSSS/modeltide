@@ -16,7 +16,8 @@ const { t } = useTranslation();
 const metricRows = computed(() => buildMetricRows(t));
 
 /**
- * One cell of the metric matrix. A missing index stays blank instead of reading as 0 — the two mean different things —
+ * One cell of the metric matrix. A missing index prints the `notAvailable` label instead of reading as 0 — the two mean
+ * different things —
  * and the winner marks only appear on rows where at least two models carry a number.
  */
 const renderMetric = makeWinnerRenderer(t, (value) => formatScore(value, t));

@@ -13,8 +13,6 @@ export function fetchAaRsc(ctx: AppContext, path: string): Promise<string> {
   return ctx.http.getRsc(upstreamConfig.artificialAnalysis, path);
 }
 
-type EnrichRow = AaRow;
-
 interface EnrichSpec {
   key: string;
   label: string;
@@ -27,20 +25,22 @@ interface EnrichSpec {
   fields: readonly (keyof AaRow)[];
 }
 /**
- * Both AA pages carry their rows under the same Flight marker, which `AA_FLIGHT_MARKERS` names once for this parser and
- * for the leaderboard parser — the two cannot disagree about which prop to read.
+ * The enrichment pages and the leaderboard read their rows out of the same Flight marker, which `AA_FLIGHT_MARKERS`
+ * names once so the two cannot disagree about which prop to look at.
  *
- * `findLongestData` rather than `findNextData`, matching the leaderboard parser: the RSC tree is walked for every array
- * filed under the marker and the longest wins. A live probe of all three AA pages (leaderboard 274 rows, `/models` 28,
- * `/evaluations/omniscience` 28) found exactly one such array each, so the two helpers answer identically today — the
- * point is that a page that later carries a second, shorter copy cannot silently project the wrong one, which is the
- * failure mode `findNextData` would have.
+ * `findLongestData` with no row gate: a projection page carries one shape under the marker and the longest array is the
+ * complete one. The leaderboard is the page that needs a gate — its prop also bundles the legend and the changelog
+ * snapshots, so it recognizes rows through `isLeaderboardRow` (see `parse/leaderboard.ts`).
+ *
+ * A live probe of the three AA pages (leaderboard 274 rows, `/models` 28, `/evaluations/omniscience` 28) found exactly
+ * one array each, so both readings answer identically today; what matters is that a page that later carries a second,
+ * shorter copy cannot silently project the wrong one.
  */
 const ENRICH_MARKER = AA_FLIGHT_MARKERS.models;
-const extractEnrichRows = (tree: unknown): EnrichRow[] | null => findLongestData<EnrichRow>(tree, ENRICH_MARKER);
+const extractEnrichRows = (tree: unknown): AaRow[] | null => findLongestData<AaRow>(tree, ENRICH_MARKER);
 
-function parseEnrich(spec: EnrichSpec, body: string): EnrichRow[] {
-  const parsed = parseRscPayload<EnrichRow>(body, ENRICH_MARKER, extractEnrichRows);
+function parseEnrich(spec: EnrichSpec, body: string): AaRow[] {
+  const parsed = parseRscPayload<AaRow>(body, ENRICH_MARKER, extractEnrichRows);
   if (!parsed.ok) {
     throw new UpstreamError(`${spec.label} enrichment parse failed: ${parsed.error}`, { retryable: true });
   }
@@ -54,7 +54,7 @@ function parseEnrich(spec: EnrichSpec, body: string): EnrichRow[] {
  * "this field under any of its upstream spellings". The loop used to call `fieldAliases`, which allocates a one-element
  * array for every field without an alias — all but one of them, per field per row.
  */
-function missingFields(rows: readonly EnrichRow[], fields: readonly (keyof AaRow)[]): readonly string[] {
+function missingFields(rows: readonly AaRow[], fields: readonly (keyof AaRow)[]): readonly string[] {
   const seen = new Set<string>();
   for (const row of rows) {
     for (const field of fields) {
@@ -68,8 +68,8 @@ function missingFields(rows: readonly EnrichRow[], fields: readonly (keyof AaRow
 }
 
 /** One cached enrichment page, exposed through the same source interface as every other data source. */
-export function defineEnrichSource(spec: EnrichSpec): FixedSource<EnrichRow[]> {
-  return defineSource<string, EnrichRow[]>({
+export function defineEnrichSource(spec: EnrichSpec): FixedSource<AaRow[]> {
+  return defineSource<string, AaRow[]>({
     key: spec.key,
     ttl: SLOW_TTL_MS,
     label: spec.label,

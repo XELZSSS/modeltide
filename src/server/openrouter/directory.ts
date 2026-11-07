@@ -20,7 +20,7 @@ async function fetchModelDirectory(ctx: AppContext): Promise<PartialData<Directo
   }
   const rows = res.data;
   const { entry, totalRows, missingPricing: missing } = parseDirectoryRows(rows);
-  if (Object.keys(entry.pricing).length === 0) {
+  if (entry.pricingKeys === 0) {
     throw new UpstreamError(`OpenRouter: empty pricing response (raw=${rows.length}, kept=0)`);
   }
   const partial = missing >= Math.ceil(totalRows * PRICING_GAP_RATIO);

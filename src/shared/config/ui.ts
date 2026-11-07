@@ -71,3 +71,4 @@ export const HOME_PROVIDER_ROWS = 5;
 export const HOME_HALLUCINATION_ROWS = 5;
 export const HOME_USAGE_ROWS = 5;
 export const HOME_DECISION_ROWS = 5;
+export const HOME_CURSORBENCH_ROWS = 5;

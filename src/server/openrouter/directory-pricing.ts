@@ -1,7 +1,7 @@
 import { numCoerce, numCoerceNonNegative, textOrNull } from "@/server/formats/scalars";
 import { PER_MILLION, perMillionOrNull } from "@/server/formats/limits";
 import { fillModelKeys } from "./lookup";
-import { OR_DYNAMIC_PRICING, type OrPricedRow, type OrPricingBlock } from "./wire";
+import { OR_DYNAMIC_PRICING, type OrPricedRow } from "./wire";
 
 /**
  * The prices one model is filed under, in USD per million tokens: the wire states USD per token, so the conversion
@@ -31,16 +31,9 @@ function buildPricingEntry(
   };
 }
 
-/**
- * The price block of a row `isOrDirectoryRow` accepted, read as a declared member: the guard is what establishes that
- * `pricing` is an object, so this needs no cast of its own.
- */
-function pricingBlock(raw: OrPricedRow): OrPricingBlock {
-  return raw.pricing;
-}
-
 export function pricingOfValidRow(raw: OrPricedRow): PricingEntry | null {
-  const pricing = pricingBlock(raw);
+  // `isOrDirectoryRow` is what established `pricing` is an object, so this reads it as a declared member.
+  const pricing = raw.pricing;
   // `-1` is the upstream's "not applicable" sentinel and `numCoerceNonNegative` is what drops it, so the fallback has
   // to run after coercion: `??` alone kept `"-1"` and masked the hourly cache-write price behind a null.
   const cacheWrite =
@@ -54,15 +47,18 @@ export function pricingOfValidRow(raw: OrPricedRow): PricingEntry | null {
 }
 
 export function hasDynamicPricing(raw: OrPricedRow): boolean {
-  const pricing = pricingBlock(raw);
+  const pricing = raw.pricing;
   return numCoerce(pricing.prompt) === OR_DYNAMIC_PRICING && numCoerce(pricing.completion) === OR_DYNAMIC_PRICING;
 }
 
 /**
  * Indexes one row's price under the raw id, its canonical slug and the canonical slug plus the
  * variant suffix, each in lowercase and normalized form. `seen` is reused across rows by the caller.
+ *
+ * Answers how many keys this row filled: the price record has ~2-3 keys per directory row (tens of thousands on a full
+ * page), and both readers of "is anything priced" used `Object.keys(record).length`, which materialized that array.
  */
-export function recordPricing(record: PricingRecord, raw: OrPricedRow, entry: PricingEntry, seen: Set<string>): void {
+export function recordPricing(record: PricingRecord, raw: OrPricedRow, entry: PricingEntry, seen: Set<string>): number {
   const id = textOrNull(raw.id);
   const slug = textOrNull(raw.canonical_slug);
   const variantAt = id === null ? -1 : id.lastIndexOf(":");
@@ -73,5 +69,11 @@ export function recordPricing(record: PricingRecord, raw: OrPricedRow, entry: Pr
   const variantSlug = slug !== null && variantSuffix !== "" ? `${slug}${variantSuffix}` : null;
   const bareSlug = variantSuffix === "" ? slug : null;
   fillModelKeys(seen, [id, bareSlug, variantSlug]);
-  for (const index of seen) if (record[index] === undefined) record[index] = entry;
+  let added = 0;
+  for (const index of seen) {
+    if (record[index] !== undefined) continue;
+    record[index] = entry;
+    added += 1;
+  }
+  return added;
 }

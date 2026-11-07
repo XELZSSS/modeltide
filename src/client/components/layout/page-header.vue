@@ -3,7 +3,7 @@
  * The page heading: one `h1` at the display size (or the compact size inside a detail page), an optional description,
  * and a right-hand actions slot that stacks under the title on a phone.
  */
-import { computed, useSlots } from "vue";
+import { useSlots } from "vue";
 import { cn } from "@/client/utils/cn";
 
 withDefaults(defineProps<{ title: string; description?: string; compact?: boolean }>(), {
@@ -12,7 +12,7 @@ withDefaults(defineProps<{ title: string; description?: string; compact?: boolea
 
 const slots = useSlots();
 
-const classes = computed(() => cn("flex flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4"));
+const classes = cn("flex flex-col justify-between gap-3 sm:flex-row sm:items-end sm:gap-4");
 </script>
 
 <template>

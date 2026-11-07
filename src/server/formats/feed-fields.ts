@@ -4,21 +4,23 @@ import { isSuitableNewsItem, MAX_NEWS_TITLE_CHARS } from "./content-guards";
 import { sourceNameFromUrl as channelHost } from "./url";
 import { decodeEntities } from "./html-entities";
 import { stripHtml } from "./html-to-text";
-import { FEED_ALTERNATE_REL, FEED_DATE_KEYS, FEED_ELEMENTS } from "@/server/news/wire";
+import { FEED_ALTERNATE_REL, FEED_DATE_KEYS, FEED_ELEMENTS, FEED_TEXT_KEYS } from "@/server/news/wire";
+import { MAX_LINK_CHARS } from "./limits";
 
 // oxlint-disable-next-line no-control-regex
 const UNSAFE_LINK_CHARS_RE = /["<>\u0000-\u001f\u007f]/;
 const SPACE_RE = / /g;
-const MAX_LINK_CHARS = 2048;
 
 export function textOf(v: unknown): string | null {
   if (Array.isArray(v)) v = v[0];
   if (typeof v === "string") return v.trim() ? v : null;
   if (typeof v === "number" && Number.isFinite(v)) return String(v);
   if (isRecord(v)) {
-    const t = v["#text"] ?? v.text;
-    if (typeof t === "string" && t.trim()) return t;
-    if (typeof t === "number" && Number.isFinite(t)) return String(t);
+    for (const key of FEED_TEXT_KEYS) {
+      const t = v[key];
+      if (typeof t === "string" && t.trim()) return t;
+      if (typeof t === "number" && Number.isFinite(t)) return String(t);
+    }
   }
   return null;
 }
@@ -48,13 +50,15 @@ export function channelTitle(channel: Record<string, unknown>, sourceUrl: string
   return cleanTitle(text) || channelHost(sourceUrl);
 }
 
+/** Where a feed's `link` element points: a bare string, or the first of the three attributes a feed spells it in. */
+function linkTargetOf(link: unknown): unknown {
+  if (typeof link === "string") return link;
+  if (!isRecord(link)) return undefined;
+  return link[FEED_ELEMENTS.href] ?? link[FEED_ELEMENTS.hrefText] ?? link[FEED_ELEMENTS.text];
+}
+
 function linkHref(link: unknown): string | null {
-  const raw =
-    typeof link === "string"
-      ? link
-      : isRecord(link)
-        ? (link[FEED_ELEMENTS.href] ?? link[FEED_ELEMENTS.hrefText] ?? link[FEED_ELEMENTS.text])
-        : undefined;
+  const raw = linkTargetOf(link);
   return typeof raw === "string" ? decodeEntities(raw.trim()) || null : null;
 }
 

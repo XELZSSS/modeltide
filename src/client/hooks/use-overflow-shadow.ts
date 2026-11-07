@@ -16,20 +16,17 @@ const EDGE_EPSILON_PX = 1;
  */
 export function useOverflowShadow(el: Readonly<Ref<HTMLElement | null>>) {
   const moreBelow = ref(false);
-  const moreRight = ref(false);
 
   function measure(): void {
     const node = el.value;
     if (node === null) return;
     moreBelow.value = node.scrollTop + node.clientHeight < node.scrollHeight - EDGE_EPSILON_PX;
-    moreRight.value = node.scrollLeft + node.clientWidth < node.scrollWidth - EDGE_EPSILON_PX;
   }
 
   watch(el, (node) => {
     if (node === null) {
       // The scrollport unmounted: a flag left set would draw its fade on the next open, before anything is measured.
       moreBelow.value = false;
-      moreRight.value = false;
       return;
     }
     measure();
@@ -41,5 +38,5 @@ export function useOverflowShadow(el: Readonly<Ref<HTMLElement | null>>) {
   onUpdated(measure);
   onBeforeUnmount(() => window.removeEventListener("resize", measure));
 
-  return { moreBelow, moreRight, measure };
+  return { moreBelow, measure };
 }

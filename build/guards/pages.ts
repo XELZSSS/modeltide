@@ -152,38 +152,40 @@ function paddedVersion(version: string): string {
 }
 
 /**
- * The two Node numbers that have to agree.
+ * The Node running this build has to meet the floor `engines.node` declares.
  *
- * Cloudflare Pages' v3 build image cannot read `engines.node` — a documented limitation — so the version the build runs
- * with reaches it through `.nvmrc`, while npm reads `engines.node` and `.npmrc` sets `engine-strict`. `engines.node` is
- * the floor the scripts need (unflagged TypeScript entry points, `module.registerHooks`); `.nvmrc` is the version the
- * project is developed and deployed on, so it must not fall below that floor.
+ * The repository pins no version for the build environment: the Pages build image picks its own Node, and `npm run
+ * build` — the command the dashboard is configured to run — is what says whether that one works. The floor is what the
+ * scripts here need (unflagged TypeScript entry points, `module.registerHooks`), and without this rule an image below
+ * it would fail somewhere obscure instead: the first `node build/*.ts` of the pipeline, on a syntax error.
  */
 function assertBuildNodeVersion(ctx: GuardContext): void {
-  const nvmrc = ctx.readText(".nvmrc").trim();
-  if (!/^\d+\.\d+\.\d+$/.test(nvmrc)) {
-    throw new Error(`.nvmrc: "${nvmrc}" is not of the form X.Y.Z, which the Pages build image needs`);
-  }
   const engines = (JSON.parse(ctx.readText("package.json")) as { engines?: { node?: string } }).engines?.node;
   const floor = /^>=\s*(\d+\.\d+\.\d+)$/.exec(engines ?? "")?.[1];
   if (floor === undefined) {
     throw new Error(`package.json: engines.node "${engines ?? "none"}" is not of the form ">=X.Y.Z"`);
   }
-  if (paddedVersion(nvmrc) < paddedVersion(floor)) {
-    throw new Error(`.nvmrc pins Node ${nvmrc}, below the ${engines ?? ""} floor in package.json`);
+  // A prerelease build of Node reports e.g. `v26.0.0-rc.1`: the three leading numbers are what the floor compares to,
+  // and a version this coarse to read is not a Node this toolchain claims to support.
+  const running = /^v?(\d+\.\d+\.\d+)/.exec(process.version)?.[1];
+  if (running === undefined) {
+    throw new Error(`process.version "${process.version}" carries no X.Y.Z version to compare with the floor`);
+  }
+  if (paddedVersion(running) < paddedVersion(floor)) {
+    throw new Error(`Node ${running} is below the >=${floor} floor package.json declares`);
   }
 }
 
 /**
- * The Node version pair: `.nvmrc` is what the Pages build image reads, `engines.node` what npm enforces, so nothing in
- * the toolchain sees the two disagreeing.
+ * The Node floor: `engines.node` is the declaration and this rule is the check, so a machine or a build image below
+ * it is named here rather than failing later inside the toolchain.
  *
  * The service worker's API prefix used to be checked here too. `build/sw-version.ts` now overwrites it from
  * `src/shared/config/api.ts` while writing `dist/sw.js`, so there is no second copy left to drift.
  */
 export const runtimeRule: GuardRule = {
   id: "runtime",
-  watches: [".nvmrc", "package.json"],
+  watches: ["package.json"],
   run(ctx: GuardContext) {
     assertBuildNodeVersion(ctx);
   },

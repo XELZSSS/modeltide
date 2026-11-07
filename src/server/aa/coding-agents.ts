@@ -22,6 +22,9 @@ export const getCodingAgentRankings = defineSource<string, CodingAgentEntry[]>({
   key: cacheKeys.codingAgents,
   ttl: ONE_HOUR,
   label: "Coding agents",
+  // This payload answers a route directly, so the cache keeps its serialized body beside it. Without this the router
+  // re-encoded the whole leaderboard on every request, including every hit the cache itself had served.
+  served: true,
   fetch: (ctx: AppContext) => ctx.http.getRsc(upstreamConfig.artificialAnalysis, upstreamEndpoints.aaCodingAgents),
   parse: (body, ctx) => {
     const parsed = parseCodingAgentsRows(body);

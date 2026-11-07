@@ -6,8 +6,9 @@ import { WinnerValue } from "./winner-marks.ts";
 
 /**
  * The cell renderer both comparison pages hand to `CompareTable`: they differ only in how a number is formatted, so the
- * "no value" branch — a tertiary blank, never a 0, because the two mean different things — lives here once. `t` is
- * passed in rather than taken from a setup scope, because this module has none: the page reads it at render, so a
+ * "no value" branch — the tertiary `notAvailable` label, never a 0, because the two mean different things — lives
+ * here once. `t` is passed in rather than taken from a setup scope, because this module has none: the page reads it at
+ * render, so a
  * language switch still repaints the cell.
  */
 export function makeWinnerRenderer(

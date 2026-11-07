@@ -1,6 +1,6 @@
 import type { AppContext } from "./api/context";
 import { errMsg, rethrowIfClientAbort } from "./api/errors";
-import { runLegs, type Leg, type LegValues } from "./join-legs";
+import { runLegs, type Leg, type LegFailure, type LegValues } from "./join-legs";
 
 /**
  * `tag` prefixes the per-leg failure logs and `allFailedMessage` is the one policy worth sharing between the two entry
@@ -17,14 +17,9 @@ interface FanOutOptions {
   allFailedMessage?: string;
 }
 
-interface FanOutFailure {
-  label: string;
-  reason: unknown;
-}
-
 interface FanOutResult<L extends readonly Leg<unknown>[]> {
   values: LegValues<L>;
-  failures: FanOutFailure[];
+  failures: LegFailure[];
 }
 
 export async function fanOut<L extends readonly Leg<unknown>[]>(
@@ -32,12 +27,11 @@ export async function fanOut<L extends readonly Leg<unknown>[]>(
   legs: readonly [...L],
   opts: FanOutOptions,
 ): Promise<FanOutResult<L>> {
-  const { values, failures } = await runLegs(legs, {
+  return runLegs(legs, {
     allFailedMessage: opts.allFailedMessage,
     onFailure: (failure) => {
       rethrowIfClientAbort(failure.reason);
       ctx.log("warn", `[${opts.tag}] ${failure.label} leg failed: ${errMsg(failure.reason)}`);
     },
   });
-  return { values, failures };
 }

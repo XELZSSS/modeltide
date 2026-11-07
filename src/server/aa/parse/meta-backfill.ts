@@ -1,29 +1,32 @@
 import type { ArtificialAnalysisModel } from "@/shared/types";
-import { normalizeModelKey } from "@/shared/utils";
+import { normalizedModelKey } from "@/server/openrouter/lookup";
 import type { OrMetaEntry } from "@/server/openrouter/wire";
 import { INDEX_FIELDS } from "@/server/formats/meta-fields";
 
 const TRAILING_VERSION_DIGITS_RE = /\d{4,8}$/;
 
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, OrMetaEntry>): OrMetaEntry | undefined {
-  const keys: string[] = [m.slug, m.name, m.short_name]
-    .filter((v): v is string => v != null)
-    .map(normalizeModelKey)
-    .filter((key) => key !== "");
-  const valued = (e: OrMetaEntry): boolean => INDEX_FIELDS.some((field) => e[field.meta] != null);
+  // One array and one memoized normalization per name. The chain built four arrays per model, and it re-normalized every
+  // name with `normalizeModelKey` while the OpenRouter lookup beside it already keeps that result in its LRU.
+  const keys: string[] = [];
+  for (const value of [m.slug, m.name, m.short_name]) {
+    if (value == null) continue;
+    const key = normalizedModelKey(value);
+    if (key !== "") keys.push(key);
+  }
   let looseHit: OrMetaEntry | undefined;
   for (const key of keys) {
-    const e = meta[key];
-    if (!e) continue;
-    if (valued(e)) return e;
-    looseHit ??= e;
+    const entry = meta[key];
+    if (!entry) continue;
+    if (INDEX_FIELDS.some((field) => entry[field.meta] != null)) return entry;
+    looseHit ??= entry;
   }
   if (looseHit) return looseHit;
   for (const key of keys) {
     const stripped = key.replace(TRAILING_VERSION_DIGITS_RE, "");
     if (!stripped || stripped === key) continue;
-    const e = meta[stripped];
-    if (e) return e;
+    const entry = meta[stripped];
+    if (entry) return entry;
   }
   return undefined;
 }

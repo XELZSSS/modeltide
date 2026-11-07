@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient, type UseQueryReturnType } from "@tanstack/vue-query";
 import type { MaybeRefOrGetter } from "vue";
-import { ONE_DAY, THIRTY_MINUTES, apiPaths } from "@/shared/config";
+import { ONE_DAY, THIRTY_MINUTES, apiPaths, ttlFor } from "@/shared/config";
 import type { ApiDomain, PayloadOf } from "@/shared/contract";
 import type { SourcePayload } from "@/shared/types";
 import { fetcher } from "../transport/client";
@@ -42,10 +42,14 @@ export function createApiQuery<D extends ApiDomain>(
   const path = query ? `${apiPaths[domain]}?${new URLSearchParams(query)}` : apiPaths[domain];
   const queryFn = fetcher<PayloadOf<D>>(path);
   const ttlMs = ttl ?? QUERY_DEFAULTS.ttlMs;
-  const staleTimeFor = (payload: RawPayload<D> | undefined): number =>
-    missTtlMs !== undefined && payload !== undefined && Array.isArray(payload.data) && payload.data.length === 0
-      ? missTtlMs
-      : ttlMs;
+  // A partial payload is stored under the shorter window `ttlFor` gives it (`src/server/pipeline.ts`), so the browser
+  // holds it for that same window too: keeping it for the full domain TTL left a dashboard the origin had already
+  // replaced rendering as current until the next mount, after the partial-poll budget had been spent.
+  const staleTimeFor = (payload: RawPayload<D> | undefined): number => {
+    if (payload === undefined) return ttlMs;
+    if (missTtlMs !== undefined && Array.isArray(payload.data) && payload.data.length === 0) return missTtlMs;
+    return isPartialData(payload) ? ttlFor(true, ttlMs) : ttlMs;
+  };
   const residentMs = Math.min(
     Math.max(ttlMs * QUERY_DEFAULTS.gcTimeMultiplier, QUERY_DEFAULTS.gcTimeMs),
     QUERY_DEFAULTS.maxGcTimeMs,
