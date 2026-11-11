@@ -1,18 +1,8 @@
 /*
- * The single stylesheet entry point (imported by src/client/main.ts).
- *
- * Layer map — each file has exactly one job, and the import order below is also the emission order for the plain
- * rules they contain, so it must not be rearranged casually:
- *
- *   theme.css       design tokens: the palette, and the @theme mapping that turns them into Tailwind names
- *   base.css        element normalisation (Tailwind's `base` layer)
- *   motion.css      every duration, curve and travel distance in the app
- *   scrollbar.css   the global scrollbar theme and its opt-out utility
- *   utilities.css   the `ui-*` design-system utilities components compose
- *
- * build/consistency-guard.ts reads this file: the `@font-face` blocks below are the canonical font list, and the
- * preloads in index.html plus FONT_FILES in src/shared/pwa.ts (which drives the service-worker precache) are
- * checked against it. Keep them here.
+ * The single stylesheet entry point (imported by src/client/main.ts); the import order is also the emission order
+ * for the plain rules each file contains. build/consistency-guard.ts reads this file: the `@font-face` blocks below are
+ * the canonical font list, and the preloads in index.html plus FONT_FILES in src/shared/pwa.ts (which drives the
+ * service-worker precache) are checked against it.
  */
 
 @import "tailwindcss";
@@ -22,8 +12,7 @@
 @import "./scrollbar.css";
 @import "./utilities.css";
 
-/* Hover is a pointer capability, not a viewport width: `hoverable:` keeps an effect off touch screens, where the same
-   rule would fire on tap and stay applied until the next tap. */
+/* Hover is a pointer capability, not a viewport width: `hoverable:` keeps an effect off touch screens. */
 @custom-variant hoverable {
   @media (hover: hover) and (pointer: fine) {
     &:hover {
@@ -33,14 +22,10 @@
 }
 
 /*
- * IBM Plex, self-hosted (see public/fonts). Two faces: the sans face is a variable font covering the basic Latin range,
- * the mono face is split into the three weights the UI uses. `font-display: swap` plus a matching `unicode-range` per
- * file means a missing glyph falls back (to the metric-matched `Plex Fallback` or the platform stack) instead of
- * blanking.
- *
- * There is deliberately no extended-Latin file: none of the strings the six data sources deliver carries a character
- * outside the ranges below, so it would only ever be precached and never used. A future name that needs one falls back
- * per character.
+ * IBM Plex, self-hosted (see public/fonts). The sans face is a variable font covering the basic Latin range, the mono
+ * face is split into the three weights the UI uses. `font-display: swap` plus a matching `unicode-range` per file lets
+ * a missing glyph fall back instead of blanking; there is deliberately no extended-Latin file, because no string the
+ * six data sources deliver carries a character outside the ranges below.
  */
 
 @font-face {
@@ -55,12 +40,9 @@
 }
 
 /*
- * The pre-swap face. With `font-display: swap` the first frame is painted with a local font and then replaced by Plex; if
- * the two disagree on ascent/descent the line boxes reflow and the page jumps. Every value below is measured from the
- * shipped face rather than guessed: upm 1000, hhea ascent 1025 / descent 275 / line-gap 0 (=> 102.5% / 27.5% / 0), and
- * size-adjust 97.56% comes from the A–Za–z advance average (Plex 0.5693em vs Arial's metric clone 0.5835em). The
- * overrides are divided by size-adjust, which is what the spec multiplies them against, so the fallback's em box lands
- * exactly on Plex's.
+ * The pre-swap face: with `font-display: swap` the first frame paints in a local font and is then replaced by Plex, so
+ * the metrics must agree or the line boxes reflow and the page jumps. The overrides come from the shipped face's hhea
+ * metrics and its A-Za-z advance average, divided by `size-adjust`.
  */
 @font-face {
   font-family: "Plex Fallback";

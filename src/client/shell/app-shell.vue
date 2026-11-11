@@ -43,10 +43,8 @@ const onSystemTheme = (event: MediaQueryListEvent): void => {
 systemThemeQuery.addEventListener("change", onSystemTheme);
 onBeforeUnmount(() => systemThemeQuery.removeEventListener("change", onSystemTheme));
 
-/**
- * The setting is a preference, not a resolved colour: "system" follows the OS, which can change while the app is open, so
- * the shell watches the resolved value rather than the stored mode.
- */
+/** The setting is a preference, not a resolved colour: "system" follows the OS, which can change while the app is open, so
+ * the shell watches the resolved value rather than the stored mode. */
 function isDarkPreference(): boolean {
   if (settings.themeMode === "system") return systemDark.value;
   return settings.themeMode === "dark";
@@ -67,9 +65,8 @@ watch(
   () => route.fullPath,
   (now, was) => {
     openSheet.value = null;
-    // Any navigation resets or restores the scroll, query included: a tab switch (`?tab=`, `?view=`) is a push onto a
-    // new history entry with different content lengths, and comparing only the path left the viewport where the
-    // previous tab had scrolled to.
+    // Any navigation resets or restores the scroll, query included: a tab switch (`?tab=`, `?view=`) is a push onto a new
+    // history entry with different content lengths.
     if (now !== was) restoreScroll();
   },
   { flush: "post" },
@@ -96,13 +93,13 @@ onBeforeUnmount(() => {
   <div class="flex h-[100dvh] flex-col overflow-x-hidden bg-bg-primary pt-[env(safe-area-inset-top,0px)]">
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:border focus:border-border focus:bg-bg-primary focus:px-4 focus:py-2 focus:text-[0.9375rem] focus:ring-2 focus:ring-ring focus:outline-none"
+      class="sr-only ui-label focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:border focus:border-border focus:bg-bg-primary focus:px-4 focus:py-2 focus:ring-2 focus:ring-ring focus:outline-none"
     >
       {{ t("skipToContent") }}
     </a>
     <DesktopNav />
     <!-- No `scrollbar-gutter`: every scrollport hides its bar (see src/styles/scrollbar.css), so there is no strip and
-         nothing to reserve — a `stable` gutter would have kept an empty 10px column and shifted the centred content.
+         nothing to reserve — a `stable` gutter would have kept an empty column and shifted the centred content.
          The x axis is still clipped explicitly: `overflow-y: auto` alone computes `overflow-x` to `auto` as well, which
          turned this column into a sideways-scrollable box. -->
     <main

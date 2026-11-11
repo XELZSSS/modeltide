@@ -16,10 +16,8 @@ const CONTRACT_VERSION_HEADER = "x-contract-version";
 const NOT_MODIFIED = 304;
 const MAX_RESPONSE_TEXT_SHOWN = 500;
 
-/**
- * Last `ETag` per request URL. The API answers a matching `If-None-Match` with a bodiless 304, so a refetch whose data
- * did not change costs no transfer and no parse. Bounded because per-model detail queries mint a key per id.
- */
+/** Last `ETag` per request URL: a matching `If-None-Match` gets a bodiless 304, so an unchanged refetch costs no
+ * transfer and no parse. Bounded because per-model detail queries mint a key per id. */
 const ETAG_STORE_MAX = 96;
 const etagByUrl = new LruCache<string, string>(ETAG_STORE_MAX);
 
@@ -36,25 +34,17 @@ interface QueryCtx {
 
 export const contractSkew = ref(false);
 
-/**
- * Our own function sends this header on success and error alike, so an absent header means the response came from
- * something unverifiable (service-worker copy, middlebox). That is treated as "no information" rather than pinning a
- * previous mismatch, which left the notice up indefinitely.
- *
- * Compared against CONTRACT_VERSION, not the cache version: only the payload shape decides whether this bundle can
- * still read the answer.
- */
+/** Our own function sends this header on success and error alike, so an absent header means an unverifiable response
+ * (service-worker copy, middlebox) and reads as "no information" rather than a pinned mismatch.
+ * Compared against CONTRACT_VERSION, not the cache version: only the payload shape decides whether this bundle can read it. */
 function noteContractVersion(res: Response): void {
   const served = res.headers.get(CONTRACT_VERSION_HEADER);
   contractSkew.value = served !== null && served !== CONTRACT_VERSION;
 }
 
-/**
- * Same-origin only: the API ships no CORS headers, so every call goes back to this origin.
- *
- * `?v=` carries the cache version rather than the contract version: the values in a payload can change without the
- * shape changing, and that still has to miss every browser and edge copy of the previous build.
- */
+/** Same-origin only: the API ships no CORS headers.
+ * `?v=` carries the cache version rather than the contract version: values can change without the shape changing, and
+ * that still has to miss every browser and edge copy of the previous build. */
 function buildApiUrl(path: string): string {
   const [base, query] = path.split("?", 2);
   const params = new URLSearchParams(query);
@@ -70,13 +60,9 @@ interface MergedSignal {
 
 const NO_DISPOSE = (): void => {};
 
-/**
- * The caller's abort signal joined with a timeout.
- *
- * `AbortSignal.timeout` is inside the `baseline-widely-available` set Vite builds for (Chrome 111 / Safari 16.4 floor,
- * and it shipped in Safari 16), so it is used directly. `AbortSignal.any` is *not*: it shipped in Chrome 116 and Safari
- * 17.4, both above that floor, so the merge is still hand-written for the browsers the build targets.
- */
+/** The caller's abort signal joined with a timeout.
+ * `AbortSignal.timeout` is inside the `baseline-widely-available` set Vite builds for (Chrome 111 / Safari 16.4 floor), so
+ * it is used directly; `AbortSignal.any` is not (Chrome 116 / Safari 17.4), so the merge is hand-written. */
 function withTimeout(signal: AbortSignal | undefined, ms: number): MergedSignal {
   const timeout = AbortSignal.timeout(ms);
   if (!signal) return { signal: timeout, dispose: NO_DISPOSE };
@@ -107,11 +93,8 @@ interface ParsedError {
   upstreamStatus?: number;
 }
 
-/**
- * Our own failures carry `{ error: { kind, message, source, upstreamStatus } }`. Anything else on this path is a
- * middlebox, a service-worker copy or an edge response from an older build: the status is all those still get right, so
- * the kind is derived from it and the body text is kept as the message.
- */
+/** Our own failures carry `{ error: { kind, message, source, upstreamStatus } }`; anything else on this path (a middlebox,
+ * a service-worker copy, an older edge build) only gets its status right, so the kind is derived from it. */
 async function parseErrorResponse(res: Response): Promise<ParsedError> {
   const kind = defaultApiErrorKind(res.status);
   const ct = res.headers.get("content-type") ?? "";
@@ -143,11 +126,8 @@ function retryAfterSeconds(header: string | null): number | undefined {
   return header !== null && Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
-/**
- * `previous` is the payload the query cache already holds for this key. It is what makes `If-None-Match` answerable:
- * the API replies to a matching tag with a bodiless 304, so a revalidation that changed nothing costs no transfer, no
- * JSON parse and no re-render (the caller gets its own object back, which structural sharing recognises).
- */
+/** `previous` is the payload the query cache already holds for this key, which is what makes `If-None-Match` answerable:
+ * a matching tag gets a bodiless 304, so a revalidation that changed nothing costs no transfer, no parse and no re-render. */
 async function apiFetch<T>(
   path: string,
   signal: AbortSignal | undefined,
@@ -158,8 +138,7 @@ async function apiFetch<T>(
   const headers: Record<string, string> = { accept: "application/json" };
   if (etag !== undefined) headers["if-none-match"] = etag;
   const merged = withTimeout(signal, CLIENT_FETCH_TIMEOUT_MS);
-  // The listeners stay attached until the body has been read — the timeout has to bound a response whose body never
-  // finishes — and are detached before this function returns either way.
+  // The listeners stay attached until the body has been read — the timeout has to bound a response whose body never finishes.
   try {
     let res: Response;
     try {
@@ -171,8 +150,7 @@ async function apiFetch<T>(
       throw err;
     }
     noteContractVersion(res);
-    // Only sent when `previous` exists, so this branch always has a body to hand back; the status is a success signal
-    // here, not the failure `res.ok` treats it as.
+    // Only sent when `previous` exists, so this branch always has a body; the status is a success signal here, not a failure.
     if (res.status === NOT_MODIFIED && previous !== undefined) return previous;
     if (!res.ok) {
       const failure = await parseErrorResponse(res);

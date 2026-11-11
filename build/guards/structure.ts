@@ -12,10 +12,7 @@ const COMPONENT_GROUPS = new Set(["ui", "layout", "feedback", "navigation", "cha
 const KEBAB_STEM = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const COMPONENT_EXTENSIONS = new Set([".vue", ".ts"]);
 
-/**
- * `src/client/components` is six flat groups. The rule is mechanical on purpose: a component that needs a group of its
- * own is a component that is about a page, and page-local components belong under `src/client/pages`.
- */
+/** `src/client/components` is six flat groups; a component that needs a group of its own is about a page, and page-local components belong under `src/client/pages`. */
 function assertComponentLayout(ctx: GuardContext): void {
   const groups = [...COMPONENT_GROUPS].join(", ");
   for (const entry of listDir(ctx.rootDir, COMPONENTS_DIR)) {
@@ -42,20 +39,12 @@ function assertComponentLayout(ctx: GuardContext): void {
 }
 
 /**
- * The inflight hang guard releases a wedged refresh, and it only ever runs if it fires inside the platform's
- * post-response window (`ctx.waitUntil`, 30 s). The budget arithmetic lives in src/server/upstream/timeouts.ts; raising a
- * fetch timeout there is what would quietly push the guard past the cap, which no test would see.
- *
- * The numbers are imported instead of parsed out of the source text: the rule then compares the values the worker
- * actually runs with, and it stops being a regex that breaks the day one constant is renamed.
- * `timeouts.ts` imports nothing at all, which is what makes it safe to pull into the DOM-typed app project.
- *
- * The check is on the *slack* left after the guard fires, not on the guard plus its margin: the old form passed while
- * leaving exactly zero room for the timer, so a fetch-budget change could eat the last second unnoticed.
+ * The guard only runs if it fires inside the platform's post-response window (`ctx.waitUntil`); the numbers are
+ * imported from src/server/upstream/timeouts.ts rather than parsed out of the text, and the check is on the *slack* left
+ * after it fires.
  */
 function assertWaitUntilBudget(): void {
-  // `WORST_CASE_UPSTREAM_CALL_MS` in timeouts.ts adds exactly one `BACKOFF_MAX_MS` to `timeoutMs × (retries + 1)`, so a
-  // retry wait above that backoff cap would push a call past the refresh timeout the guard is derived from.
+  // `WORST_CASE_UPSTREAM_CALL_MS` in timeouts.ts adds exactly one `BACKOFF_MAX_MS`, so a retry wait above that cap would push a call past the refresh timeout.
   if (NETWORK_RETRY_BACKOFF_MS > BACKOFF_MAX_MS) {
     throw new Error(
       `src/server/upstream/timeouts.ts: NETWORK_RETRY_BACKOFF_MS (${NETWORK_RETRY_BACKOFF_MS}) is above BACKOFF_MAX_MS ` +
@@ -74,14 +63,12 @@ function assertWaitUntilBudget(): void {
 }
 
 /**
- * The parsing optimisations that keep a cold invocation inside the Workers CPU budget are not observable from types or
- * tests: a refactor can quietly restore the expensive shape and only production shows it, as Error 1102. These are the
- * three that mattered, each measured against real upstream payloads.
+ * The CPU-budget parsing optimisations are not observable from types or tests: a refactor can quietly restore the
+ * expensive shape and only production shows it. Three shapes matter, and each guard below pins one.
  */
 function assertCpuBudgetShape(ctx: GuardContext): void {
-  // 1. RSS: parse only the items that can still be reached, and keep article bodies opaque. Without either, one refresh
-  //    of a full news category (a 30-row shelf over feeds that ship hundreds of items with full article bodies) exceeds
-  //    the whole CPU budget.
+  // 1. RSS: parse only the items that can still be reached, and keep article bodies opaque, or one refresh of a full
+  //    news category (a 30-row shelf over feeds shipping hundreds of full bodies) exceeds the whole CPU budget.
   const feed = ctx.readText("src/server/formats/rss-feed-parser.ts");
   if (!feed.includes("parser.parse(capItems(")) {
     throw new Error(
@@ -96,8 +83,7 @@ function assertCpuBudgetShape(ctx: GuardContext): void {
     );
   }
 
-  // 2. The RSC unescaper must stay a manual scan: the regex form allocated a match result per escape and cost 13 ms on a
-  //    1.9 MB body, where the loop costs 5.6 ms.
+  // 2. The RSC unescaper must stay a manual scan: the regex form allocates a match result per escape, where the loop walks the string once.
   const scan = ctx.readText("src/server/formats/rsc-scan.ts");
   if (scan.includes("EMBEDDED_ESCAPE_RE")) {
     throw new Error(
@@ -117,10 +103,8 @@ function assertCpuBudgetShape(ctx: GuardContext): void {
 }
 
 /**
- * Every URL the app ships has exactly one owner. `ClosedReleaseEntry.link` used to be assembled by hand from the release
- * slug instead of the model slug, and every row it produced pointed at a page that answered 404 — a wrong string that no
- * type, lint rule or unit test can see, and the second such URL is one `+=` away. A hand-built URL, a hand-built route,
- * or a second place that assembles the AA model page now fails the build instead.
+ * Every URL the app ships has exactly one owner. A hand-built URL, a hand-built route or a second place that assembles
+ * the AA model page fails the build: that is the class of wrong string no type, lint rule or unit test can see.
  */
 const EXTERNAL_URL_LITERAL = /["'`]https?:\/\//;
 const ROUTE_LITERAL = /["'`]\/(?:model|models|compare|price-compare|releases|news)(?=[/"'`?#]|$)/;
@@ -176,11 +160,7 @@ function assertUrlOwners(ctx: GuardContext): void {
 /**
  * `src/client/components`' six flat groups, the waitUntil budget the hang guard has to land inside, and the CPU-budget
  * shapes the parsers must keep. The parsers are read as text rather than imported: a `src/server` import would pull a
- * Workers-only tree into the DOM-typed app project (`tsconfig.app.json` includes `build/**`), and `timeouts.ts` is the one
- * server module that imports nothing, so it is imported directly above.
- *
- * The news leg round used to be checked here too. `NEWS_LEG_CONCURRENCY` is now derived from the widest category in
- * `src/server/news/feeds.ts`, so a category cannot outgrow its round and there is nothing left to compare.
+ * Workers-only tree into the DOM-typed app project (`tsconfig.app.json` includes `build/**`).
  */
 export const structureRule: GuardRule = {
   id: "structure",

@@ -28,10 +28,7 @@ interface CacheOptions {
 
 type Loader<T> = () => Promise<{ data: T; ttl?: number }>;
 
-/**
- * Everything the miss/expired path needs, as one object: the same values as positional parameters made
- * `refreshOrStale`'s call site unreadable and let `serveBody` travel beside the `scope` it was derived from.
- */
+/** Everything the miss/expired path needs, as one object: as positional parameters, `refreshOrStale`'s call site was unreadable. */
 interface Miss<T> {
   vk: string;
   ttl: number;
@@ -98,42 +95,26 @@ export class CacheService {
     return pickFreshestStale(candidates, budget, capFor);
   }
 
-  /**
-   * Miss/expired tail: serve a stale copy stale-while-revalidate when possible, otherwise refresh in-band and fall
-   * back to the freshest stale copy within the fallback budget when the refresh fails.
-   */
+  /** Miss/expired tail: serve a stale copy stale-while-revalidate when possible, otherwise refresh in-band and fall back to the freshest stale copy within the fallback budget. */
   private async refreshOrStale<T>(miss: Miss<T>): Promise<CacheResult<T>> {
     const { vk, ttl, fn, kv } = miss;
     const serveBody = serveBodyOf(miss.scope);
     // A concurrent refresh may have stored a fresh generation in this isolate's L1 while this request's KV read was in
-    // flight: `miss.mem` is the snapshot taken before that await, and `miss.kvHit` can be a generation the refresh just
-    // replaced. Serving either as stale would hand out superseded data and start a second upstream refresh, so a fresh
-    // copy wins here exactly as it does on the fresh-KV path above.
+    // flight, so a fresh copy wins here exactly as on the fresh-KV path: serving it as stale would start a second refresh.
     const fresher = sharedL1.get<T>(vk);
     if (fresher !== undefined && fresher.e > Date.now()) {
       noteCacheStat("l1Hits");
       return this.freshResult(fresher, serveBody);
     }
-    // Serving a complete-but-stale copy while a detached refresh runs is normal stale-while-revalidate, not a data
-    // gap: flagging it degraded would show "some sources failed" on routine post-TTL requests.
-    //
-    // A copy whose refresh is *known to have failed* is the other case: it is a data gap, and it has to be reported
-    // as one. The detached refresh below answers the current request immediately and swallows its rejection, so the
-    // failure used to stay invisible — the reader kept `partial: false` on a copy that could no longer be brought up
-    // to date, the partial notice never appeared, and the client's partial-poll never started. `isFailing` covers
-    // both shapes of that failure: one recorded by a previous detached refresh (`noteRefreshFailure`), and one whose
-    // attempt is inside the cooldown `RefreshRunner` sets when it awaits a failure itself.
+    // Serving a complete-but-stale copy while a detached refresh runs is normal stale-while-revalidate, not a data gap: flagging it degraded would show "some sources failed" on routine post-TTL requests. A copy whose refresh is known to have failed is the other case, and must be reported as degraded.
     const degraded = refreshFailureCooldown.isFailing(vk);
     if (this.onDetach) {
       const stale = this.usableStale(miss, "swr");
       if (stale) {
-        // The entry is expired, so this request is a miss for the same reason the in-band refresh below is: nothing
-        // fresh was served. Counting it only on the synchronous path left `l1Hits + kvHits + cacheMisses` short of the
-        // request count by exactly the number of stale-but-usable reads.
+        // The entry is expired, so this request is a miss: counting it only on the synchronous path left the tier counters short of the request count.
         noteCacheStat("cacheMisses");
         noteCacheStat("staleServed");
-        // `shouldCoolDown` keeps a client abort out of the cooldown, and `noteRefreshFailure` applies the same rule, so a
-        // reader that went away does not make the next reader see a degraded answer.
+        // `shouldCoolDown` keeps a client abort out of the cooldown, so a reader that went away does not make the next reader see a degraded answer.
         const refresh = this.refreshRunner.run(vk, ttl, fn, kv, serveBody).catch((err: unknown) => {
           if (shouldCoolDown(err)) refreshFailureCooldown.noteRefreshFailure(vk, err);
         });
@@ -188,9 +169,8 @@ export class CacheService {
       }
       const hit = kv ? await this.tier.getVersioned<T>(kv, k) : undefined;
       if (hit && hit.env.e > now) {
-        // The KV read above is an await, so a concurrent refresh may have stored a fresher generation in this isolate's
-        // L1 while it was in flight. Serving and then re-storing the older KV copy would hand out superseded data as
-        // fresh and pin it there until that L1 entry aged out, so the newer copy wins and is never overwritten.
+        // The KV read above is an await, so a concurrent refresh may have stored a fresher generation in this isolate's L1
+        // while it was in flight: the newer copy wins and is never overwritten.
         const fresher = sharedL1.get<T>(vk);
         if (fresher !== undefined && fresher.e > now && fresher.f > hit.env.f) {
           noteCacheStat("l1Hits");

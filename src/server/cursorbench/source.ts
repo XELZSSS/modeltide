@@ -7,9 +7,8 @@ import type { CursorBenchEntry } from "@/shared/types";
 import { parseCursorBench } from "./parse";
 
 /**
- * CursorBench publishes no API: the ranking is server-rendered HTML, so this source is one page fetch plus a table scan
- * (`parse.ts`). It moves only when Cursor re-runs the benchmark, which is what `STATIC_TTL_MS` is for — the same window
- * the release list uses.
+ * CursorBench publishes no API: the ranking is server-rendered HTML, so this source is one page fetch plus a table scan. It
+ * moves only when Cursor re-runs the benchmark, which is what `STATIC_TTL_MS` is for.
  */
 export const getCursorBench = defineSource<string, CursorBenchEntry[]>({
   key: cacheKeys.cursorBench,

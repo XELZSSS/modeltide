@@ -33,13 +33,10 @@ export class RefreshRunner {
     const work = (async (): Promise<RefreshResult<T>> => {
       noteCacheStat("refreshes");
       const { data, ttl: t } = await fn();
-      // The source answered with a payload, so a failure recorded by an earlier detached attempt is no longer this key's
-      // state: keeping it would report the *next* stale read as degraded even though the data was refreshed.
+      // The source answered with a payload, so a failure recorded by an earlier detached attempt is no longer this key's state.
       refreshFailureCooldown.noteRefreshSuccess(vk);
-      // Only the run that still owns this key may persist. `owner` is `p` for a normal run — the slot is released in
-      // `finally`, after `work` has stored — so anything else means the hang guard took the slot away: another attempt
-      // owns it now, or owned it and already finished (an empty slot cannot be told apart from that). Persisting then
-      // would overwrite a fresher generation with this late completion, so a displaced run only answers its waiters.
+      // Only the run that still owns this key may persist: `owner` is `p` for a normal run, so anything else means the hang
+      // guard took the slot away, and persisting would overwrite a fresher generation with this late completion.
       const owner = sharedInflight.get(vk);
       if (owner !== p) return { value: data, body: undefined, producedAt: Date.now() };
       const stored = await this.tier.storeCurrent(kv, vk, data, t ?? ttl, serveBody);

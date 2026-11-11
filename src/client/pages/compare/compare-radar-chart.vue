@@ -83,8 +83,8 @@ const legend = computed(() => {
 const options = computed<ChartOptions<"radar">>(() => ({
   ...chartBase,
   interaction: { mode: "index", intersect: false },
-  // 0 left the outermost label flush against the canvas: the polygon is as large as it can be, but a 12-character axis
-  // name ("Intelligence") is wider than that slack. 4px of layout padding costs 8px of radius and fits it.
+  // No padding left the outermost label flush against the canvas: the polygon is as large as it can be, but an axis
+  // name ("Intelligence") is wider than that slack. A little layout padding costs radius and fits it.
   layout: { padding: isMobile.value ? 4 : 8 },
   scales: {
     r: {
@@ -97,8 +97,7 @@ const options = computed<ChartOptions<"radar">>(() => ({
       },
       grid: { color: theme.value.grid },
       angleLines: { color: theme.value.grid },
-      // Chart.js draws point labels outside the polygon but does not reserve space for them, so a long axis name was
-      // clipped by the canvas edge — `padding` is both the gap to the vertex and the only lever that keeps it inside.
+      // Chart.js draws point labels outside the polygon but reserves no space for them: `padding` is the only lever.
       pointLabels: { color: theme.value.tickSecondary, font: { size: isMobile.value ? 10 : 11 }, padding: 4 },
     },
   },

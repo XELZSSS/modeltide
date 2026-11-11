@@ -1,11 +1,6 @@
 <script setup lang="ts">
-/**
- * The scrolling content area of a sheet: capped to 70vh so the body scrolls alone. Every child keeps the box's own
- * padding — no negative margins — so nothing can be pulled out from under its neighbours.
- *
- * The scrollbar is hidden app-wide, so the bottom edge carries a fade while more content is still hidden below it: on
- * touch that is the only cue that the list continues, and it disappears as soon as the last row is in view.
- */
+/** The scrolling content area of a sheet: capped to 70vh so the body scrolls alone, and every child keeps the box's own
+ * padding. The scrollbar is hidden app-wide, so the bottom edge carries a fade while more content is still hidden below. */
 import { ref } from "vue";
 import { cn } from "@/client/utils/cn";
 import { useOverflowShadow } from "@/client/hooks/use-overflow-shadow";

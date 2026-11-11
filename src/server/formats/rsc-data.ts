@@ -34,11 +34,9 @@ function* dataArrays<T>(root: unknown, key: string): Generator<T[]> {
 }
 
 /**
- * The longest array filed under `key` whose rows the caller recognizes.
- *
- * `accept` is the page's own row shape, tested on a candidate array's first row: the Flight props that carry the model
- * matrix also carry the page's legend and changelog snapshots, and those sit beside it as shorter arrays. A caller
- * without a row shape to recognize omits `accept` and simply gets the longest array under the marker.
+ * The longest array filed under `key` whose rows the caller recognizes. `accept` is the page's own row shape, tested on a
+ * candidate's first row: the props that carry the model matrix also carry the page's legend and changelog snapshots as
+ * shorter arrays. A caller without a row shape omits `accept` and gets the longest array under the marker.
  */
 export function findLongestData<T>(root: unknown, key: string, accept?: (row: T) => boolean): T[] | null {
   let best: T[] | null = null;

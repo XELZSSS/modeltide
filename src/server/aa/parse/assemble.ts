@@ -23,11 +23,8 @@ interface AssembledModels {
 }
 
 /**
- * Merges the leaderboard catalog with both enrichment pages, compacts the result onto the public
- * model shape, and backfills missing index fields from OpenRouter directory metadata.
- *
- * Every input is an `AaRow`: the three legs speak one declared shape, and the public model is the only type that leaves
- * this function.
+ * Merges the leaderboard catalog with both enrichment pages, compacts the result onto the public model shape, and
+ * backfills missing index fields from OpenRouter directory metadata.
  */
 export function assembleModels({ indexModels, modelsEnrich, omniscienceEnrich, meta }: AssembleInput): AssembledModels {
   // Declared-ratio fields that arrive on another scale are dropped by `compact`; surface them instead of losing data

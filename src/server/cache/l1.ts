@@ -26,8 +26,7 @@ export class MemoryL1 {
   get<T>(vk: string): MemoryEntry<T> | undefined {
     const item = this.map.get(vk);
     if (!item) return undefined;
-    // An entry past every stale budget can never be served again (`pickFreshestStale` drops it), so it must not be
-    // promoted to the MRU end: that promotion kept a dead entry resident while eviction dropped one that was live.
+    // An entry past every stale budget can never be served again, so it must not be promoted to the MRU end.
     if (Date.now() - item.entry.e > maxStaleMs(item.entry.t)) {
       this.delete(vk);
       return undefined;
@@ -57,8 +56,7 @@ export class MemoryL1 {
     // Reject before evicting: an oversized replacement must not cost the caller the copy that is already resident.
     if (bytes > MEMORY_CACHE_MAX_BYTES) return false;
     this.delete(vk);
-    // Reclaim entries that are already past every stale budget before evicting one that can still be served: they
-    // hold resident bytes without being reachable through `usableStale`, so they are dead weight under pressure.
+    // Reclaim entries past every stale budget before evicting one that can still be served: they hold resident bytes unreachable through `usableStale`.
     if (this.bytes + bytes > MEMORY_CACHE_MAX_BYTES) this.sweepDead(Date.now());
     while (this.map.size >= MEMORY_CACHE_MAX_KEYS || this.bytes + bytes > MEMORY_CACHE_MAX_BYTES) {
       const oldest = this.map.keys().next();

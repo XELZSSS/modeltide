@@ -7,10 +7,8 @@ import { buttonVariants } from "@/client/components/ui/button-variants";
 import PageContainer from "@/client/components/layout/page-container.vue";
 import SafeLink from "@/client/components/ui/safe-link.vue";
 
-/**
- * One template for two different situations: a real route 404, and "this model is not in the index". The second
- * case passes `code: null` so a valid URL is not presented as a wrong one, and its own copy keys.
- */
+/** One template for two different situations: a real route 404, and "this model is not in the index" — the second passes
+ * `code: null` so a valid URL is not presented as a wrong one. */
 const props = withDefaults(
   defineProps<{ headingKey?: TranslationKey; bodyKey?: TranslationKey; code?: string | null }>(),
   { headingKey: "notFoundTitle", bodyKey: "notFound", code: "404" },
@@ -26,7 +24,7 @@ const { t } = useTranslation();
         {{ props.code }}
       </div>
       <h1 class="ui-section-title">{{ t(props.headingKey) }}</h1>
-      <p class="max-w-md ui-body-secondary text-balance">{{ t(props.bodyKey) }}</p>
+      <p class="max-w-md ui-body-secondary text-pretty">{{ t(props.bodyKey) }}</p>
       <SafeLink href="/" :class="cn('mt-2', buttonVariants({ variant: 'primary', size: 'md' }))">
         <ArrowLeft :size="14" aria-hidden="true" />
         {{ t("backToHome") }}

@@ -5,12 +5,8 @@ import type { TFunction, TranslationKey } from "@/shared/i18n";
 import SearchableDataTable from "./data-table.vue";
 import type { DataTableColumn, RowAccessors } from "./table-columns.ts";
 
-/**
- * A ranking table: the page supplies a `buildBodyColumns(t)` factory instead of a column array, so every column label
- * goes through the translator on each render and switches language with the rest of the UI.
- *
- * Tables that need the same column builder outside a page (the model-name column) import it from table-columns.ts.
- */
+/** A ranking table: the page supplies a `buildBodyColumns(t)` factory instead of a column array, so every column label
+ * goes through the translator on each render and switches language with the rest of the UI. */
 const props = defineProps<
   RowAccessors<T> & {
     rows: T[];

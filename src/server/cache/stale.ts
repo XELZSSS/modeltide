@@ -4,10 +4,9 @@ const STALE_WINDOW_MS = ONE_DAY;
 const MAX_STALE_EXTRA_MS = 60 * ONE_MINUTE;
 
 /**
- * A stale copy served while a detached refresh runs has to stay close to its own TTL: `maxStaleMs` allows up to 2 h
- * for a 30 min source, which would hand out very old data as a normal, non-partial response. Past this window the
- * request refreshes synchronously instead, so an upstream failure surfaces as `degraded` (partial) rather than as old
- * data pretending to be current.
+ * A stale copy served while a detached refresh runs has to stay close to its own TTL: `maxStaleMs` allows up to 2 h for a
+ * 30 min source, which would hand out very old data as a non-partial response. Past this window the request refreshes
+ * synchronously instead, so an upstream failure surfaces as `degraded`.
  */
 const SWR_STALE_EXTRA_MS = 60 * ONE_MINUTE;
 
@@ -36,10 +35,8 @@ function staleLimitMs(storedTtl: number, budget: StaleBudget, capMs?: number): n
 }
 
 /**
- * The freshest copy that is still inside its stale budget, or `undefined` when every candidate is too old.
- *
- * `capFor` answers the per-copy cap rather than taking one number for the whole call: a source whose *miss* must not be
- * pinned (the Hugging Face by-id lookup) still wants the full budget for the copies it found something in.
+ * The freshest copy still inside its stale budget, or `undefined` when every candidate is too old. `capFor` answers the
+ * per-copy cap: a source whose *miss* must not be pinned still wants the full budget for copies it found something in.
  */
 export function pickFreshestStale<T>(
   candidates: readonly StaleCandidate<T>[],

@@ -58,14 +58,9 @@ function shortTarget(url: string): string {
   return target.length > 64 ? `${target.slice(0, 61)}...` : target;
 }
 
-/**
- * Both a client hang-up and a watchdog deadline abort the same signal. Only the former is a client
- * disconnect: the shared refresh context hands this client an `AbortSignal.timeout()`, and reporting
- * that as a client abort would surface a non-retryable 499 for a merely slow upstream.
- */
+/** Both a client hang-up and a watchdog deadline abort the same signal, so only the former is a client disconnect: the shared refresh context hands this client an `AbortSignal.timeout()`, and reporting it as one would surface a 499. */
 function abortedByDeadline(signal: AbortSignal): boolean {
-  // Only a `TimeoutError` reason means the watchdog fired. A caller hang-up carries `AbortError`,
-  // and the shared error helper treats both as timeout-like, so match the name precisely here.
+  // Only a `TimeoutError` reason means the watchdog fired; a caller hang-up carries `AbortError`, so match the name precisely.
   const reason = signal.reason as { name?: unknown } | undefined;
   return reason?.name === "TimeoutError";
 }
@@ -84,10 +79,7 @@ type AttemptOutcome<T> =
 
 type FailOutcome = Extract<AttemptOutcome<unknown>, { kind: "fail" }>;
 
-/**
- * What one attempt can report about itself: time to the response *headers* (DNS + connect + TLS + first byte), the size
- * when the upstream declared one, and the status. The body is read after `ttfbMs`, so `total - ttfb` is the body time.
- */
+/** What one attempt can report: time to the response *headers* (DNS + connect + TLS + first byte), the declared size, and the status; the body is read after `ttfbMs`, so `total - ttfb` is the body time. */
 interface AttemptTiming {
   ttfbMs: number | null;
   bytes: number | null;
@@ -243,25 +235,17 @@ export class HttpClient {
         throw new UpstreamError(`Upstream deadline exceeded for ${url}`, { timeout: true });
       }
       if (attempt === retries) throw finalError(url, outcome);
-      // A failure that never reached the upstream — DNS, refused, reset — spends none of this attempt's timeout, and the
-      // 500 ms an attempt-0 backoff waits lands inside the very blip that caused it. `NETWORK_RETRY_BACKOFF_MS` waits
-      // past that blip while staying inside the budget `timeouts.ts` documents for this call.
+      // A failure that never reached the upstream spends none of this attempt's timeout, and the attempt-0 backoff lands inside the very blip: wait past it with `NETWORK_RETRY_BACKOFF_MS`.
       const networkFailure = outcome.status === null && !outcome.timedOut;
       await sleepAbortable(networkFailure ? NETWORK_RETRY_BACKOFF_MS : computeBackoff(attempt), initSignal);
       if (initSignal?.aborted) throw abortFailure(url, initSignal);
     }
-    // Not reachable from the loop above — every `attempt` either returns, throws, or is the last one — but the loop is
-    // the function's only exit, so TypeScript needs a terminator for `Promise<T>`. Kept as a throw rather than a bare
-    // `return` so a future edit that does fall through fails loudly instead of resolving `undefined` as a payload.
+    // Not reachable from the loop above — every `attempt` either returns, throws, or is the last one — but the loop is the
+    // function's only exit, so TypeScript needs a terminator; a throw makes a future fall-through fail loudly.
     throw new UpstreamError(`HTTP failed for ${url}`);
   }
 
-  /**
-   * One line per upstream attempt, and every data source the API reads goes through this client (Artificial Analysis'
-   * RSC pages and JSON, OpenRouter's directory and rankings, Hugging Face, the news feeds). The leg-level warnings that
-   * already exist cannot tell a stalled local network from a slow origin — both read "fetch failed" — so this is the line
-   * that separates them: `ttfb` covers DNS + connect + TLS + first byte, `total - ttfb` is the body.
-   */
+  /** One line per upstream attempt, and every data source the API reads goes through this client. `ttfb` covers DNS + connect + TLS + first byte and `total - ttfb` is the body, which is what separates a stalled local network from a slow origin. */
   private logAttempt<T>(
     url: string,
     attempt: {

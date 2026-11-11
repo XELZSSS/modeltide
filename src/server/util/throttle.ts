@@ -14,10 +14,7 @@ export function pruneBounded<K, V>(map: Map<K, V>, maxKeys: number, isExpired: (
   }
 }
 
-/**
- * A single-key gate: the keyed variant it replaced was called with one key and a one-entry bound, so the state is one
- * timestamp and the `Map` it kept held nothing the closure below does not.
- */
+/** A single-key gate: the state is one timestamp, not a one-entry `Map`. */
 export function throttleGate(intervalMs: number): { open: () => boolean } {
   let lastOpenAt = 0;
   return {

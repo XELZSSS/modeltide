@@ -6,12 +6,9 @@ export function isFiniteNumber(v: unknown): v is number {
 }
 
 /**
- * Scales a 0-1 ratio onto a 0-100 scale. The unit is declared by the caller, never sniffed from the value: anything
- * outside 0-1 is dropped (`null`) rather than rescaled by a guess, so a field that silently changed units shows up as
- * missing data instead of a plausible 100x error.
- *
- * Fields that legitimately leave 0-1 (the signed omniscience index, Briefcase Elo, the Cyber index) are declared in
- * `ABSOLUTE_SCORE_BENCHMARKS` and must not come through here.
+ * Scales a 0-1 ratio onto a 0-100 scale; anything outside 0-1 is dropped (`null`) rather than rescaled by a guess, so a
+ * field that changed units shows up as missing data instead of a plausible 100x error. Fields that legitimately leave
+ * 0-1 (the signed omniscience index, Briefcase Elo, the Cyber index) are declared in `ABSOLUTE_SCORE_BENCHMARKS`.
  */
 export function ratioToPercent(value: number | null | undefined): number | null {
   if (!isFiniteNumber(value) || value < 0 || value > 1) return null;
@@ -49,7 +46,6 @@ const scaleLadder = (promote: number): ScaleEntry[] => [
 const SHORT_SCALES = scaleLadder(PROMOTE_2DEC);
 const TOKEN_SCALES = scaleLadder(PROMOTE_1DEC);
 
-/** A scaled figure split from its unit, so a caller that prints the number differently keeps the suffix intact. */
 interface ScaledText {
   num: string;
   suffix: string;
@@ -62,11 +58,7 @@ function formatScaled(abs: number, sign: string, scales: ScaleEntry[], decimals:
   return null;
 }
 
-/**
- * Compact scaled text for a count, always on `SHORT_SCALES`: the token table used to arrive through a `decimals === 1`
- * branch no caller ever reached — `formatTokens` picks the token scales itself — so the parameter is gone instead of
- * staying as a choice that cannot be made.
- */
+/** Compact scaled text for a count, always on `SHORT_SCALES`; `formatTokens` picks the token scales itself. */
 export function formatShortNumber(n: number | null | undefined, fallback = FALLBACK_DASH): string {
   if (!isFiniteNumber(n)) return fallback;
   const { abs, sign } = compactParts(n);
@@ -78,8 +70,7 @@ export function formatShortNumber(n: number | null | undefined, fallback = FALLB
 
 export function formatTokens(n: number | null | undefined, t?: TFunction): string {
   if (!isFiniteNumber(n)) return t ? t("notAvailable") : FALLBACK_NA;
-  // The sign travels on its own and the scaled figure is built from `abs`, so nothing has to be recovered from the
-  // division — a negative token count reads as negative for the same reason a positive one does.
+  // The sign travels on its own and the scaled figure is built from `abs`, so nothing has to be recovered from the division.
   const { abs, sign } = compactParts(n);
   const scaled = formatScaled(abs, sign, TOKEN_SCALES, 1);
   if (scaled) return `${scaled.num.replace(/\.0$/, "")}${scaled.suffix}`;
@@ -95,9 +86,6 @@ function percentText(v: number, signed = false): string {
   return `${signed && v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
-// Scores span several scales at once: percentages sit in 0-100, index scores a bit above, and Briefcase Elo around
-// 1500. Decimals are kept where they carry signal and dropped where they are noise, so a column stays readable
-// without inventing a unit suffix.
 const SCORE_ONE_DECIMAL_AT = 100;
 const SCORE_INTEGER_AT = 1000;
 
@@ -113,9 +101,8 @@ export function formatScore(n: number | null | undefined, t: TFunction): string 
 }
 
 /**
- * A benchmark value on the scale the upstream sent it — no scaling, no percentage — printed to exactly `RATIO_DECIMALS`
- * places: `0.917171717171717` prints `0.92`, `0.8` prints `0.80`. Twelve float digits are not a measurement anyone
- * took, and a fixed two places keeps a grid of them aligned.
+ * A benchmark value on the scale the upstream sent it - no scaling, no percentage - printed to exactly `RATIO_DECIMALS`
+ * places: `0.917171717171717` prints `0.92`, `0.8` prints `0.80`, and a fixed two places keeps a grid aligned.
  */
 const RATIO_DECIMALS = 2;
 
@@ -140,13 +127,9 @@ export function formatSpeed(v: number | null | undefined, t: TFunction): string 
 }
 
 /**
- * The trend column is two digits wide: `+96.0%`, `-32.4%`. A seven-day window can produce four-digit growth (the live
- * payload carries a model at +7725%), which overflowed the column and pushed the neighbouring cells, so anything past
- * `TREND_MAX_PERCENT` reports its bound the way `formatRatio` reports a sub-printable one: `>99%` / `<-99%`. The bound
- * is a floor on what the reader can see, not a claim that the figure equals 99.
- *
- * The comparison uses the value as it will be *printed* (rounded to one decimal) rather than the raw number: 99.96
- * passes a naive `> 99` check and then formats as `100.0%`, which is the three-digit case this exists to prevent.
+ * The trend column is two digits wide (`+96.0%`): a seven-day window can produce four-digit growth, which overflowed the
+ * column, so anything past `TREND_MAX_PERCENT` reports its bound the way `formatRatio` reports a sub-printable one. The
+ * comparison uses the value as it will be *printed* (rounded to one decimal) rather than as stored.
  */
 const TREND_MAX_PERCENT = 99;
 

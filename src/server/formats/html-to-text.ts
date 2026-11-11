@@ -35,8 +35,8 @@ const isAsciiLetter = (c: number): boolean => (c >= 0x61 && c <= 0x7a) || (c >= 
 const isTagNameChar = (c: number): boolean => isAsciiLetter(c) || (c >= 0x30 && c <= 0x39) || c === 0x2d;
 
 /**
- * Reads the tag name between `<` and `>` by scanning. The previous `trim()` + regex + `replace()` built three
- * intermediate strings per tag, and a page body runs this once for every tag it contains.
+ * Reads the tag name between `<` and `>` by scanning: `trim()` + regex + `replace()` built three intermediate strings per
+ * tag, and a page body runs this once for every tag it contains.
  */
 function tagNameOf(tagInner: string): string {
   let i = 0;
@@ -75,8 +75,7 @@ export function stripHtml(s: unknown): string {
     if (s.startsWith("<![CDATA[", i)) {
       const end = s.indexOf("]]>", i + 9);
       // The CDATA payload is markup by definition (`content:encoded` is HTML in an XML wrapper), so its text is folded
-      // back into the same scan instead of being emitted verbatim: pushing it raw left every tag inside `<![CDATA[…]]>`
-      // in the output, and `feed-fields` had to strip the decoded title a second time to cover it.
+      // back into the same scan instead of being emitted verbatim.
       const inner = end === -1 ? s.slice(i + 9) : s.slice(i + 9, end);
       if (inner.includes("<")) {
         parts.push(stripHtml(inner));

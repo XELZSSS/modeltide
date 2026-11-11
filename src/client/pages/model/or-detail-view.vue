@@ -20,10 +20,8 @@ const { model, partial } = useModelLookup(
   () => state.value.partial,
 );
 
-/**
- * The ranking leaves retired rows out (their rank no longer exists), but the row is still the model a reader followed a
- * link to: its last served snapshot is real data, so it is rendered with a notice instead of a "not found" page.
- */
+/** The ranking leaves retired rows out (their rank no longer exists), but the row is still the model a reader followed a
+ * link to: its last served snapshot is real data, so it is rendered with a notice instead of a "not found" page. */
 const retired = computed(() => model.value !== null && isRetiredRankEntry(model.value.expiresAt));
 </script>
 

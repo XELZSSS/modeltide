@@ -43,9 +43,8 @@ export function useCombobox({
 
   const select = (index: number) => {
     if (index < 0 || index >= toValue(itemCount)) return;
-    // Only the panel closes: the term stays in the route's memory. Clearing it here told `search-input.vue`'s
-    // `debounced` watcher to write "" back into the search store, so returning from a result — the one trip the
-    // per-route memory exists for — dropped the query and the table filter with it.
+    // Only the panel closes: the term stays in the route's memory, so returning from a result keeps the query and the
+    // table filter — the one trip the per-route memory exists for.
     isOpen.value = false;
     onSelect(index);
   };

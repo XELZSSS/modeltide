@@ -2,7 +2,9 @@ import { UpstreamError } from "@/server/api/errors";
 import { utf8ByteLength } from "@/server/util/hash";
 import { MAX_RSC_BYTES, MAX_RSC_LINE_CHARS, type RscExtractor } from "./limits";
 import { findMarkerValue, iterateLines, markerNeedle, rscNotFoundMessage } from "./rsc-text";
-import { jsonCandidates, scanOversizedMarkers } from "./rsc-scan";
+import { jsonCandidates, scanOversizedMarkers } from "./rsc-oversized";
+import { takeValue } from "./rsc-scan";
+import { tryJsonParse } from "./json-parse";
 import { parseFail, parseOk, type ParseResult } from "./parse-result";
 /**
  * Resolves markers against one stream line that fits the parse budget. The needle gate decides which markers this
@@ -22,19 +24,11 @@ function resolveLine<T>(
   if (hits.length === 0) return 0;
   let resolved = 0;
   for (const raw of jsonCandidates(line)) {
-    let tree: unknown;
-    try {
-      tree = JSON.parse(raw);
-    } catch {
-      continue;
-    }
+    const tree = tryJsonParse(raw);
+    if (tree === undefined) continue;
     for (const mi of hits) {
       if (results[mi]) continue;
-      const value = extract(tree, markers[mi]!);
-      if (value && value.length > 0) {
-        results[mi] = value;
-        resolved++;
-      }
+      if (takeValue(results, mi, extract(tree, markers[mi]!))) resolved++;
     }
     if (hits.every((mi) => results[mi] !== null)) break;
   }
@@ -47,9 +41,8 @@ export function parseRscPayloads<T>(
   extract: RscExtractor<T>,
 ): ParseResult<T[][]> {
   if (typeof body !== "string") return parseFail("RSC body is not a string");
-  // `markers` comes from the caller's own constant list, so only the upstream body is validated.
-  // `body.length` counts UTF-16 code units and one costs at most 3 UTF-8 bytes, so the exact O(n) byte count is only
-  // needed in the band where the cheap bounds cannot decide.
+  // `markers` comes from the caller's own constant list, so only the upstream body is validated. `body.length` counts
+  // UTF-16 code units and one costs at most 3 UTF-8 bytes, so the byte count is only needed in the undecided band.
   const oversized =
     body.length > MAX_RSC_BYTES || (body.length * 3 > MAX_RSC_BYTES && utf8ByteLength(body) > MAX_RSC_BYTES);
   if (oversized) {

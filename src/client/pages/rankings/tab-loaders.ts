@@ -10,10 +10,8 @@ import {
 import type { Prefetchable } from "@/client/router/route-meta";
 import type { RankingTabId } from "@/client/nav/nav-config";
 
-/**
- * The tab table itself: `load` is the lazy import the hub renders and the router preloads, `queries` is what a tab
- * prefetches on intent. One entry per tab, so a new tab cannot arrive with only one of the two.
- */
+/** The tab table itself: `load` is the lazy import the hub renders and the router preloads, `queries` is what a tab
+ * prefetches on intent. One entry per tab, so a new tab cannot arrive with only one of the two. */
 export const RANKING_TAB_DEFS: Record<
   RankingTabId,
   { readonly load: () => Promise<{ default: Component }>; readonly queries: readonly Prefetchable[] }

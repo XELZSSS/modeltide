@@ -52,8 +52,7 @@ export function creatorFromSlug(slug: unknown): string {
   if (!owner) return "Unknown";
   const lower = owner.toLowerCase();
   if (Object.hasOwn(CREATORS, lower)) return CREATORS[lower]!;
-  // The owner goes over whole: `capLabel` capitalizes it as it stands, so token-splitting it first — which the previous
-  // `titleCase` chain did — only built an array nothing then read.
+  // The owner goes over whole: `capLabel` capitalizes it as it stands, so token-splitting it would build an array nothing reads.
   return capLabel(owner);
 }
 
@@ -101,11 +100,8 @@ function formatToken(token: string): string {
 
 /**
  * The model's display name from its permaslug: the part after the owner, split on `: / _ -` and whitespace, each token
- * shaped by `formatToken`.
- *
- * Hand-written rather than `split` / `replace` / `split` / `filter` / `map` / `join`: that chain rebuilt six arrays and
- * ran two regexes per token for every ranked row (≈600 per refresh), and this runs inside the rankings parse's share of
- * the 10 ms CPU budget.
+ * shaped by `formatToken`. Hand-written rather than a `split`/`replace`/`map`/`join` chain: that rebuilt an array per row
+ * of a refresh, where this walks the string once.
  */
 export function titleFromSlug(permaslug: string): string {
   const ownerEnd = permaslug.indexOf("/");

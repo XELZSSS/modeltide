@@ -28,12 +28,9 @@ const props = withDefaults(
 
 const { t, lang } = useTranslation();
 
-/**
- * The four numbers this page leads with. The three indices go through `formatScore` and carry the "index" unit: they are
- * 0-100 indices — the upstream's own scale for `intelligence_index`, and the one the OpenRouter directory files
- * `codingIndex` / `agenticIndex` on — never percentages. Speed carries the unit the home provider card prints, because a
- * bare "2658" beside three indices otherwise reads as a fourth index.
- */
+/** The four numbers this page leads with. The three indices are 0-100 indices — never percentages — the upstream's own
+ * scale for `intelligence_index` and the one the OpenRouter directory files `codingIndex` / `agenticIndex` on. Speed
+ * carries a unit, because a bare "2658" beside three indices reads as a fourth index. */
 const speedText = computed(() => {
   const speed = getOutputSpeed(props.model);
   return speed == null ? t("notAvailable") : `${formatSpeed(speed, t)} ${t("tokensPerSecond")}`;

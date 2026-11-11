@@ -30,9 +30,7 @@ export function numericLabel(v: unknown): string | null {
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /**
- * A trimmed string, empty when the value is not one: the parser layer's default for a text field. Every wire reader used
- * to spell this as `str(v).trim()`, and the other spelling of the same idea (`strOr`'s null/undefined pass-through) made
- * a field's identity depend on which one a parser happened to import.
+ * A trimmed string, empty when the value is not one: the parser layer's default for a text field.
  */
 export const text = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -57,8 +55,7 @@ export const isRecord = (v: unknown): v is Record<string, unknown> => obj(v) !==
 
 /**
  * A label capitalized in place, the rest lowercased: `size_class` values and model tokens pass through it. The shared
- * `titleCase` is a different function (it splits on `[-_]`), so this one is named apart to keep the two from being
- * imported for each other.
+ * `titleCase` splits on `[-_]`, so this one is named apart.
  */
 export function capLabel(s: string): string {
   if (!s) return s;

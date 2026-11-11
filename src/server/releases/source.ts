@@ -22,8 +22,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<PartialData<ClosedR
   const [index, changelog] = values;
   const models = index?.payload.data ?? [];
   const changelogModels = changelog?.payload.data ?? [];
-  // Broader than runLegs' `allFailedMessage`: this fires when neither source produced a usable row, which also covers
-  // a leg that fulfilled with an empty array. The fan-out therefore stays without that option.
+  // Broader than runLegs' `allFailedMessage`: this fires when neither source produced a usable row, which also covers a leg that fulfilled with an empty array.
   if (models.length === 0 && changelogModels.length === 0) {
     throw new UpstreamError(`Releases: both index and changelog failed`, { retryable: true });
   }
@@ -38,8 +37,7 @@ async function fetchClosedReleases(ctx: AppContext): Promise<PartialData<ClosedR
     finalEntries = toClosedReleasesFromIndex(models, upstreamConfig.artificialAnalysis);
     ctx.log("warn", `[closed-releases] changelog empty, index fallback rows=${finalEntries.length}`);
   }
-  // The row check lives here rather than in a `refine` of its own: the counts it reports are already in scope, and a
-  // throw out of `fetch` reports failure the way every other source does.
+  // The row check lives here rather than in a `refine`: the counts it reports are already in scope, and a throw out of `fetch` reports failure like every other source.
   requireRows(finalEntries, "Releases", "rows", `changelog=${changelogModels.length}, index=${models.length}`);
   const partial = index == null || index.payload.partial || indexFallback || changelog?.payload.partial === true;
   if (partial) ctx.log("warn", "[closed-releases] serving partial (degraded enrichment)");

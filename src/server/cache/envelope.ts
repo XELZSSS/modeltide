@@ -8,10 +8,7 @@ interface StoredEnvelope<T> {
   d: T;
   /** When the entry stops being fresh (epoch ms). */
   e: number;
-  /**
-   * The TTL the entry was stored with, jitter included; the stale budgets are derived from it. Required: `putEntry`
-   * always writes it, and `parseKvMetadata` answers an entry without one as a miss rather than a guess.
-   */
+  /** The TTL the entry was stored with, jitter included; `parseKvMetadata` answers an entry without one as a miss rather than a guess. */
   t: number;
   /** When the payload was produced (epoch ms) — the ETag's basis, which the response body no longer carries. */
   f: number;
@@ -21,10 +18,7 @@ export interface DecodedEnvelope<T> {
   env: StoredEnvelope<T>;
   /** The exact bytes the response body is served from. */
   body: string;
-  /**
-   * Resident-size estimate for the L1 byte budget, in code units rather than UTF-8 bytes: the only consumer evicts
-   * by a 4× resident factor, and measuring the real byte length is a full scan of a multi-MB body on every KV hit.
-   */
+  /** Resident-size estimate for the L1 byte budget, in code units rather than UTF-8 bytes: measuring the real byte length is a full scan of a multi-MB body on every KV hit. */
   bytes: number;
 }
 
@@ -36,7 +30,7 @@ interface KvEntryMetadata {
 
 /**
  * KV keeps the expiry in metadata rather than inside the value, which is what lets the value be the response body
- * itself. Metadata is written by `kvMetadata`; anything else (a legacy key, a truncated write) is a miss, not a guess.
+ * itself; metadata written any other way is a miss, not a guess.
  */
 function parseKvMetadata(metadata: unknown): KvEntryMetadata | undefined {
   if (typeof metadata !== "object" || metadata === null) return undefined;
@@ -45,10 +39,7 @@ function parseKvMetadata(metadata: unknown): KvEntryMetadata | undefined {
   return { e, t, f };
 }
 
-/**
- * Decodes one KV value: the body is parsed for composition (a parent source reads it as a payload) and kept verbatim
- * for the response, so a hit never re-serializes the object it just parsed.
- */
+/** Decodes one KV value: the body is parsed for composition and kept verbatim for the response, so a hit never re-serializes it. */
 export function decodeStored<T>(
   body: string,
   metadata: unknown,

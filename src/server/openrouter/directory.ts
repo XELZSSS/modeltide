@@ -13,8 +13,7 @@ async function fetchModelDirectory(ctx: AppContext): Promise<PartialData<Directo
   const res: unknown = await ctx.http.json(
     upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterDirectory),
   );
-  // A non-array `data` is a wire-shape failure, not an empty directory: collapsing it here reported it as "empty pricing"
-  // further down and hid which of the two actually happened.
+  // A non-array `data` is a wire-shape failure, not an empty directory: collapsing it reported it as "empty pricing" and hid which happened.
   if (!isRecord(res) || !Array.isArray(res.data)) {
     throw new UpstreamError("OpenRouter: directory returned a non-array response");
   }

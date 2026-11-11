@@ -50,11 +50,7 @@ export class TierStore {
     return decodeStored<T>(read.value, read.metadata, vk, this.log);
   }
 
-  /**
-   * Stores one entry in both tiers. The body is encoded once here — the same string becomes the KV value, and for a
-   * source a route returns, the L1 response copy the router serves. An internal source keeps no response copy: its
-   * payload is only read as an object by another source, so its body exists solely to be the KV value.
-   */
+  /** Stores one entry in both tiers; the body is encoded once here — the same string becomes the KV value and, for a source a route returns, the L1 response copy. */
   async storeCurrent<T>(
     kv: KvStore | undefined,
     vk: string,
@@ -73,8 +69,7 @@ export class TierStore {
     }
     if (body === undefined) return { body: undefined, producedAt };
     const expiresAt = producedAt + effective;
-    // The L1 lifetime must not depend on whether KV is bound: without KV an entry kept its full TTL (up to 6 h) in the
-    // same isolate instead of being re-read. Cap it, and keep the jittered TTL as the stale budget.
+    // The L1 lifetime must not depend on whether KV is bound: cap it, and keep the jittered TTL as the stale budget.
     const retained = serveBody ? body : undefined;
     const cached = this.l1.set(vk, data, l1TtlFor(effective), body.length, effective, producedAt, retained);
     if (!cached) this.log("warn", `[cache] L1 skipped oversized entry for ${vk}`);
@@ -83,9 +78,8 @@ export class TierStore {
       this.log("warn", `[cache] KV write failed for ${vk}: ${errMsg(err)}`);
     });
     if (this.onDetach) {
-      // The write is already in flight, so a throwing hook must not turn a stored refresh into a failure: the caller
-      // would fall back to the stale copy this run just replaced, and `RefreshRunner` would record a 45 s cooldown.
-      // `service.ts` and `util/abort.ts` guard their detach hooks the same way.
+      // The write is already in flight, so a throwing hook must not turn a stored refresh into a failure: the caller would
+      // fall back to the stale copy this run just replaced, and `RefreshRunner` would record a cooldown.
       try {
         this.onDetach(put);
       } catch (err) {

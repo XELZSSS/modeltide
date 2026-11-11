@@ -13,8 +13,7 @@ export function useRouteSearchTerm(): {
   return {
     term: computed(() => store.terms[pathname.value] ?? ""),
     path: pathname,
-    // `at` files a term under the route it was typed on rather than whichever route is current when the write lands: a
-    // debounced term arriving after a navigation used to filter the page the reader had just moved to.
+    // `at` files a term under the route it was typed on rather than whichever route is current when the write lands.
     setTerm: (term, at = pathname.value) => store.setTerm(at, term),
   };
 }

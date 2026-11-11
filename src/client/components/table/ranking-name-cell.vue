@@ -3,11 +3,9 @@ import SafeLink from "@/client/components/ui/safe-link.vue";
 import { FALLBACK_DASH } from "@/shared/config/ui";
 import { cn } from "@/client/utils/cn";
 
-/**
- * A ranking row's name. `rank` is the row's position in the delivered ranking, which is what makes the table's order
- * explicit rather than implied, and `href` turns the name into the link to its detail page — a row that has no id to link
- * to keeps plain text, because a dead link is worse than none.
- */
+/** A ranking row's name. `rank` is the row's position in the delivered ranking, which is what makes the table's order
+ * explicit rather than implied; `href` turns the name into the link to its detail page, and a row with no id to link to
+ * keeps plain text — a dead link is worse than none. */
 defineProps<{ name: string; title?: string; rank?: number | null; href?: string }>();
 
 const NAME_CLASS = "flex-1 min-w-0 ui-body font-medium break-words md:truncate";

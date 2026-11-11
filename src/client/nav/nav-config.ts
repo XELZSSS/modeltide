@@ -32,10 +32,8 @@ export const RANKING_TAB_SOURCE_LABEL: Record<RankingTabId, TranslationKey> = {
   providerCompare: SOURCES.aa.labelKey,
 };
 
-/**
- * The line under the description. Every tab carries the site-wide "for reference only" line; a tab whose source can say
- * what it actually measures overrides it here instead of the hub growing a branch of its own.
- */
+/** The line under the description. Every tab carries the site-wide "for reference only" line; a tab whose source can say
+ * what it actually measures overrides it here. */
 export const RANKING_TAB_NOTE: Partial<Record<RankingTabId, TranslationKey>> = {
   cursorBenchRankings: "cursorBenchAbout",
 };

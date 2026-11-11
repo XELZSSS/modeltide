@@ -11,10 +11,7 @@ export type CostFieldId =
 
 export type CostFieldValues = Record<CostFieldId, string>;
 
-/**
- * The estimator's starting values — and what a cleared field falls back to. They live here rather than in the store so the
- * parser that prices a scenario and the store that pre-fills the form cannot disagree about what an empty field means.
- */
+/** The estimator's starting values - and what a cleared field falls back to; here rather than in the store so the parser and the store cannot disagree about what an empty field means. */
 export const DEFAULT_COST_FIELDS: CostFieldValues = {
   dailyInput: "2",
   dailyOutput: "1",
@@ -27,9 +24,8 @@ export const DEFAULT_COST_FIELDS: CostFieldValues = {
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
 /**
- * The one grammar a cost field accepts: a non-negative decimal, optionally left off at the point while typing. Exponential
- * text (`1e3`) and a sign are not it, and `fieldNumber` refuses exactly what the form flags, so a field the reader is told
- * is invalid cannot also be the number the estimate is priced from.
+ * The one grammar a cost field accepts: a non-negative decimal, optionally left off at the point while typing. `1e3`
+ * and a sign are not it, and `fieldNumber` refuses exactly what the form flags.
  */
 const COST_FIELD_DECIMAL_RE = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
 export const isCostFieldInput = (value: string): boolean => {
@@ -38,9 +34,8 @@ export const isCostFieldInput = (value: string): boolean => {
 };
 
 /**
- * One field's number. A blank field is not zero: the reader is mid-edit, or cleared the field to get the default back, and
- * pricing a blank "2M tokens/day" as 0 silently claims the model is free. Text the grammar above rejects — which is what a
- * hand-edited localStorage entry can hold — falls back the same way.
+ * One field's number. A blank field is not zero: the reader is mid-edit or cleared it to get the default back, and
+ * pricing a blank "2M tokens/day" as 0 silently claims the model is free. Rejected text falls back the same way.
  */
 function fieldNumber(raw: string, id: CostFieldId): number {
   const fallback = Number(DEFAULT_COST_FIELDS[id]);

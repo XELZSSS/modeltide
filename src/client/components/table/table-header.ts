@@ -2,24 +2,23 @@ import { h, type FunctionalComponent } from "vue";
 import { cn } from "@/client/utils/cn";
 import { cellClasses, cellInnerClasses, type HeaderColumn } from "./cell-classes.ts";
 
-/**
- * The `<thead>` of a data table: a functional component rather than an SFC because it renders a single `<tr>` of `<th>`s
+/** The `<thead>` of a data table: a functional component rather than an SFC because it renders a single `<tr>` of `<th>`s
  * with no state. The leading 28px (`w-7`) spacer appears only when the body has row expanders, so the header labels line
- * up with the cell text and not with the chevron.
- */
+ * up with the cell text and not with the chevron. */
 export const TableHeader: FunctionalComponent<{ columns: HeaderColumn[]; isExpandable: boolean }> = (props) =>
   h(
     "thead",
     h(
       "tr",
-      { class: "border-b border-border" },
       props.columns.map((col, colIdx) =>
         h(
           "th",
           {
             key: col.id,
             scope: "col",
-            class: cn(cellClasses(col), "ui-table-header"),
+            // The header sticks to the shell's scrollport while the card scrolls under it; the bottom border lives on
+            // the cell, because a border on the `<tr>` scrolls away with the row.
+            class: cn(cellClasses(col), "ui-table-header", "sticky top-0 z-10 border-b border-border bg-bg-card"),
             style: { width: col.width },
           },
           h("div", { class: cellInnerClasses(col) }, [

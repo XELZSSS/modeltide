@@ -26,12 +26,12 @@ const rankedProviders = computed(() =>
   <Card class="h-full">
     <CardContent class="flex h-full flex-col">
       <CardHeader :title="t('providerSpeed')" :subtitle="t('artificialSource')" />
-      <!-- Five 40px rows when filled: the same box here, so the card does not collapse and shift the grid. -->
+      <!-- The same box whether or not the list is filled, so the card does not collapse and shift the grid. -->
       <EmptyState
         v-if="providerStats.length === 0"
         variant="plain"
         compact
-        class="min-h-[200px]"
+        class="min-h-50"
         :message="t('notAvailable')"
       />
       <RankedListRows v-else :rows="rankedProviders">

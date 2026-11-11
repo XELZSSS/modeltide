@@ -1,11 +1,7 @@
 <script setup lang="ts">
-/**
- * A text input bound with `v-model`. It exposes its element so a caller can focus it, and takes `ariaInvalid` as a prop
- * rather than a fall-through attribute so the invalid styling and the attribute can never disagree.
- *
- * Shape is the reference design system's filled input: no visible border, a muted fill that darkens on hover/focus,
- * `rounded-xl`, and a 2px low-opacity ring instead of a coloured outline.
- */
+/** A text input bound with `v-model`. It exposes its element so a caller can focus it, and takes `ariaInvalid` as a prop
+ * rather than a fall-through attribute so the invalid styling and the attribute can never disagree. Shape is the
+ * reference design system's filled input: a muted fill, `rounded-md` and a 2px low-opacity ring, no visible border. */
 import { computed, ref } from "vue";
 import { cn } from "@/client/utils/cn";
 import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
@@ -22,7 +18,7 @@ const invalid = computed(() => props.ariaInvalid === true);
 
 const classes = computed(() =>
   cn(
-    "h-10 max-w-full min-w-0 rounded-xl border border-transparent bg-muted/60 px-3 text-base text-text-primary ui-motion outline-none placeholder:text-text-tertiary md:h-9",
+    "h-10 max-w-full min-w-0 rounded-md border border-transparent bg-muted/60 px-3 ui-body ui-motion outline-none placeholder:text-text-tertiary md:h-9",
     `focus-visible:bg-muted/80 ${FOCUS_RING} hoverable:hover:bg-muted/80`,
     "disabled:bg-muted/40 disabled:opacity-50",
     invalid.value && "bg-destructive/5 ring-2 ring-destructive",

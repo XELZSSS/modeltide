@@ -12,12 +12,9 @@ import InfoGrid from "@/client/components/layout/info-grid.vue";
 import InfoRow from "@/client/components/layout/info-row.vue";
 import type { OpenSourceModelEntry } from "@/shared/types";
 
-/**
- * The repository facts, printed identically by the addressable detail page and by the open-source ranking's expanded
- * row: they are one answer to one question ("what is this repository?"), and the two hand-written copies had already
- * drifted on the `task` accessor's signature. The row's own counts stay with each caller — the ranking prints them as a
- * caption line, the detail page as stat cards — because that is the part the two views deliberately say differently.
- */
+/** The repository facts, printed identically by the addressable detail page and by the open-source ranking's expanded
+ * row. The row's own counts stay with each caller — the ranking prints them as a caption line, the detail page as stat
+ * cards — because that is the part the two views deliberately say differently. */
 const props = defineProps<{ entry: OpenSourceModelEntry }>();
 
 const { t, lang } = useTranslation();

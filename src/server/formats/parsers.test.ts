@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { decodeEntities } from "./html-entities";
 import { stripHtml } from "./html-to-text";
-import { parseFeed as parseFeedResult, capItems } from "./rss-feed-parser";
+import { parseFeed as parseFeedResult } from "./rss-feed-parser";
+import { capItems } from "./feed-cap";
 import { findLongestData } from "./rsc-data";
 import { parseRscPayload, parseRscPayloads } from "./rsc-parser";
 import { findMarkerValue } from "./rsc-text";
@@ -33,7 +34,7 @@ describe("capItems", () => {
   it.each([
     ["keeps the first `keep` items and reuses the document's own tail", rss(manyItems(200)), "</channel></rss>"],
     // Namespaced tags, a comment between the closers and CRLF are shapes a literal tail list would miss, and an
-    // un-capped feed is the 19 ms of a 10 ms CPU budget this function exists to prevent.
+    // un-capped feed is the cost this function exists to prevent.
     [
       "caps a namespaced container with a comment and CRLF tail",
       `<rss:rss><rss:channel><title>T</title>${manyItems(200)}</rss:channel>\r\n<!--f--></rss:rss>`,
@@ -226,9 +227,9 @@ describe("parseRscPayloads", () => {
   });
 
   it("resolves the marker on a real AA line: one long JSON line with sibling keys carrying the same text", () => {
-    // The shape a live AA leaderboard body takes (verified against a real 643 KB payload): the whole page arrives as one
-    // ~380 KB JSON stream line, `initialModels` sits deep inside a `["$","div",null,{…}]` node, and the marker text also
-    // appears in earlier sibling keys that hold no array. The parser has to pick the array, not the first occurrence.
+    // The shape a live AA leaderboard body takes: the page arrives as one long JSON stream
+    // line, `initialModels` sits deep inside a `["$","div",null,{…}]` node, and the marker text also appears in earlier
+    // sibling keys that hold no array.
     const rows = [
       { slug: "m0", url: "https://example.com/a" },
       { slug: "m1", url: "https://example.com/b" },
@@ -297,9 +298,8 @@ describe("parseFeed", () => {
   });
 
   /**
-   * The declared name wins over the channel title. Four of the twelve live feeds ship a title that is a section name, a
-   * tagline or the bare word `AI`, so the name is declared in `news/feeds.ts` rather than derived; a feed the table does
-   * not list still falls back to its own title.
+   * The declared name wins over the channel title: four of the twelve live feeds ship a title that is a section name, a
+   * tagline or the bare word `AI`, so the name is declared in `news/feeds.ts`; a feed the table does not list falls back.
    */
   it("prefers the declared source name and falls back to the channel title", () => {
     const xml = rssFeed(`<title>Keep</title><link>https://y.example/keep</link>`);

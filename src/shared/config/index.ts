@@ -28,7 +28,9 @@ export {
   ABSOLUTE_SCORE_BENCHMARKS,
   BENCHMARK_GROUPS,
   BENCHMARK_GROUP_OF,
+  benchmarkNoticeOf,
   benchmarkScaleOf,
   type BenchmarkGroupId,
+  type BenchmarkNotice,
 } from "./benchmarks";
 export { THEME_COLORS } from "./ui";

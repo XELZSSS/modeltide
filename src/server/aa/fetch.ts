@@ -17,25 +17,10 @@ interface EnrichSpec {
   key: string;
   label: string;
   path: string;
-  /**
-   * The fields this page serves. The same list is what `missingFields` warns about and what the rows are projected
-   * down to — as one value, because two lists that had to agree could only drift into a warning about a field the row
-   * keeps, or a row keeping a field nobody checks.
-   */
+  /** The fields this page serves: the same list is what `missingFields` warns about and what the rows are projected down to, as one value so the two cannot drift. */
   fields: readonly (keyof AaRow)[];
 }
-/**
- * The enrichment pages and the leaderboard read their rows out of the same Flight marker, which `AA_FLIGHT_MARKERS`
- * names once so the two cannot disagree about which prop to look at.
- *
- * `findLongestData` with no row gate: a projection page carries one shape under the marker and the longest array is the
- * complete one. The leaderboard is the page that needs a gate — its prop also bundles the legend and the changelog
- * snapshots, so it recognizes rows through `isLeaderboardRow` (see `parse/leaderboard.ts`).
- *
- * A live probe of the three AA pages (leaderboard 274 rows, `/models` 28, `/evaluations/omniscience` 28) found exactly
- * one array each, so both readings answer identically today; what matters is that a page that later carries a second,
- * shorter copy cannot silently project the wrong one.
- */
+/** The enrichment pages and the leaderboard read their rows out of the same Flight marker, named once in `AA_FLIGHT_MARKERS`. `findLongestData` with no row gate suits a projection page, which carries one shape under the marker; the leaderboard's prop also bundles legend and changelog snapshots, so it recognizes rows through `isLeaderboardRow`. */
 const ENRICH_MARKER = AA_FLIGHT_MARKERS.models;
 const extractEnrichRows = (tree: unknown): AaRow[] | null => findLongestData<AaRow>(tree, ENRICH_MARKER);
 
@@ -44,15 +29,13 @@ function parseEnrich(spec: EnrichSpec, body: string): AaRow[] {
   if (!parsed.ok) {
     throw new UpstreamError(`${spec.label} enrichment parse failed: ${parsed.error}`, { retryable: true });
   }
-  // The projection runs on every row before anything reads them, so a row that is not an object is already a parse
-  // failure here rather than an empty field below.
+  // The projection runs on every row before anything reads them, so a row that is not an object is a parse failure here.
   return parsed.data.map(projectFields(spec.fields));
 }
 
 /**
  * Which expected fields no row carries, checked through `presentField` so the alias table stays the one definition of
- * "this field under any of its upstream spellings". The loop used to call `fieldAliases`, which allocates a one-element
- * array for every field without an alias — all but one of them, per field per row.
+ * "this field under any of its upstream spellings".
  */
 function missingFields(rows: readonly AaRow[], fields: readonly (keyof AaRow)[]): readonly string[] {
   const seen = new Set<string>();

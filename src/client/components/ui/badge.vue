@@ -1,13 +1,7 @@
 <script setup lang="ts">
-/**
- * Small label for a tag or a state: `rounded-md` at 12px with a hairline, the shadcn badge shape. The caller decides the
- * colour through `class`; the default is the muted/secondary pair.
- *
- * `max-w-full` and `overflow-hidden` are an invariant, not a look: a label never paints outside the box that holds it.
- * Both are needed because `whitespace-nowrap` makes min-content equal max-content, so `w-fit` alone does not cap the
- * width and a long upstream tag pushed straight past its card. A caller whose text must stay readable gives it a
- * `truncate` child (see the tag list on the open-source detail page).
- */
+/** Small label for a tag or a state: `rounded-md` at 12px with a hairline; the caller decides the colour through `class`.
+ * `max-w-full` and `overflow-hidden` are an invariant: `whitespace-nowrap` makes min-content equal max-content, so `w-fit`
+ * alone does not cap the width. A caller whose text must stay readable gives it a `truncate` child. */
 import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 

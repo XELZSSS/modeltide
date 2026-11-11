@@ -27,22 +27,16 @@ export interface OpenSourceModelEntry {
   task: string | null;
   createdAt: string | null;
   lastModified: string | null;
-  /**
-   * Tags are the largest field on a row and belong to the detail payload only: the up-to-1000-row list omits the key
-   * outright instead of sending an empty array on every row.
-   */
+  /** Tags are the largest field on a row and belong to the detail payload only: the up-to-1000-row list omits the key outright instead of sending an empty array on every row. */
   tags?: string[];
 }
 
 export interface ClosedReleaseEntry {
   /**
-   * The Artificial Analysis **model** slug this row is. One release can carry several variants — `DeepSeek V4.1 Flash 1017`
-   * ships a `(Max)` and a `(Non-reasoning)` entry — and each is its own row, because a reader distinguishes them even
-   * though AA files them under one release. Both paths that build a row (`toClosedReleases` from the changelog and
-   * `toClosedReleasesFromIndex` when the changelog is empty) name it this way, so the two id spaces are the same one.
+   * The AA **model** slug this row is: one release can carry several variants - `DeepSeek V4.1 Flash 1017` ships a `(Max)`
+   * and a `(Non-reasoning)` entry, each its own row. `toClosedReleases` and `toClosedReleasesFromIndex` both name it so.
    */
   id: string;
-  /** The variant's own display name, e.g. `DeepSeek V4.1 Flash 1017 (Non-reasoning)`. */
   model: string;
   provider: string;
   releaseDate: string;
@@ -50,10 +44,7 @@ export interface ClosedReleaseEntry {
   link: string | null;
 }
 
-/**
- * One row of the hallucination ranking. The three rates are the upstream 0-1 ratios as sent and `omniscienceIndex` is
- * AA's signed index, so the row carries two scales: each column is formatted with its own formatter.
- */
+/** One row of the hallucination ranking: the three rates are the upstream 0-1 ratios as sent, `omniscienceIndex` is AA's signed index, so each column gets its own formatter. */
 export interface HallucinationRankingEntry {
   id: string;
   slug: string;
@@ -64,28 +55,28 @@ export interface HallucinationRankingEntry {
   omniscienceIndex: number;
 }
 
-/**
- * `llm` answers with a structured output in one call; `decisionModel` returns a probability for every option, which is
- * what makes its calibration measurable. The ranking shows both side by side.
- */
+/** `llm` answers with a structured output in one call; `decisionModel` returns a probability for every option, which is what makes its calibration measurable. */
 export type DecisionKind = "llm" | "decisionModel";
 
-/**
- * The five columns the Decision Index composites, over four datasets: omniscience contributes two of them, the others
- * one each. Every column is nullable because a run that failed a dataset has no score for it, and the list keeps the row.
- */
+/** The Decision Index's score columns, as 0-100 percentage points. Nullable: a run that failed a dataset has no score. */
 export interface DecisionScores {
   omniscienceAccuracy: number | null;
   omniscienceNonHallucinationRate: number | null;
-  hleTextMcqAccuracy: number | null;
+  omniscienceDecisionScore: number | null;
+  hleAccuracy: number | null;
+  hleNonHallucinationRate: number | null;
+  hleDecisionScore: number | null;
   when2callAccuracy: number | null;
-  wildguardtestAverageF1: number | null;
+  when2callDecisionScore: number | null;
+  evalsafeOnetAccuracy: number | null;
+  evalsafeOnetDecisionScore: number | null;
+  documentDecisionAllPassRate: number | null;
+  documentDecisionDecisionScore: number | null;
+  invarianceAllPassRate: number | null;
+  invarianceSymmetry: number | null;
 }
 
-/**
- * One Artificial Analysis Decision Index contestant. `id` is AA's contestant slug (`creator_model-effort`), which is
- * unique per run — the same model at two reasoning efforts is two rows.
- */
+/** `id` is AA's contestant slug (`creator_model-effort`), unique per run - the same model at two reasoning efforts is two rows. */
 export interface DecisionIndexEntry {
   id: string;
   name: string;
@@ -99,9 +90,8 @@ export interface DecisionIndexEntry {
 }
 
 /**
- * One row of Cursor's own agentic coding benchmark. The label Cursor prints *is* the identity: `Opus 5.5 Max` is a
- * model at a named reasoning effort, and the page ranks each effort variant separately, so the row key is a slug of the
- * whole label rather than a model name.
+ * The label Cursor prints *is* the identity: `Opus 5.5 Max` is a model at a named reasoning effort, and the page ranks
+ * each effort variant separately, so the row key is a slug of the whole label.
  */
 export interface CursorBenchEntry {
   /** Slug of `model`; the row key, because the label already carries the effort variant. */
@@ -111,19 +101,15 @@ export interface CursorBenchEntry {
   rank: number;
   /** Pass rate, 0-100 — the page prints it with a `%`, and nothing is rescaled on the way in. */
   score: number;
-  /**
-   * USD per task, from Cursor's published per-token prices (input, cache read, cache write, output) applied to the
-   * tokens each task used. `null` when the page prints no figure.
-   */
+  /** USD per task, from Cursor's published per-token prices (input, cache read, cache write, output) applied to the tokens each task used; `null` when the page prints no figure. */
   costPerTask: number | null;
   tokensPerTask: number | null;
   stepsPerTask: number | null;
 }
 
 /**
- * One row of Artificial Analysis' Coding Agent Index: an agent (`Claude Code`, `Codex`, …) with the model it scored
- * highest on. The index is the equally weighted mean of three evaluations — FrontierCode v1.1, SWE-Atlas-QnA and
- * Terminal-Bench v4 — and AA publishes one row per agent × model pairing, so the pairing kept here is the agent's best.
+ * One row of AA's Coding Agent Index: an agent with the model it scored highest on. The index is the equally weighted
+ * mean of FrontierCode v1.1, SWE-Atlas-QnA and Terminal-Bench v4, and AA publishes one row per agent x model pairing.
  */
 export interface CodingAgentEntry {
   /** The upstream id of the pairing this row was taken from: the agent's highest-scoring one. */
@@ -133,13 +119,12 @@ export interface CodingAgentEntry {
   /** The agent's publisher (`Anthropic`), or `null` when the upstream names none. */
   creator: string | null;
   /**
-   * The model the agent scored highest on, e.g. `Claude Sonnet 5.5 (max with fallback)`. A router agent (GitHub Copilot,
-   * Devin Fusion) reports the models it routes between instead, joined by the upstream
-   * (`GPT-6 Astra XHigh + SWE-2 Medium`); `null` only when the row names none at all.
+   * The model the agent scored highest on, e.g. `Claude Sonnet 5.5 (max with fallback)`; a router agent (GitHub Copilot,
+   * Devin Fusion) reports the models it routes between instead, joined by the upstream; `null` when the row names none.
    */
   model: string | null;
   /**
-   * The composite index on AA's own 0-100 scale. The upstream sends the fraction (`0.593`); it is scaled here the way
+   * The composite index on AA's own 0-100 scale; the upstream sends a 0-1 fraction and it is scaled here the way
    * `coding_index` and `agentic_index` are, because this is an index and not a 0-1 benchmark score.
    */
   score: number;

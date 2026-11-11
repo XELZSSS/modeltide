@@ -6,11 +6,9 @@ export const OTHER_TASK_KEY = "__other__";
 export const UNTAGGED_TASK_KEY = "__untagged__";
 
 /**
- * Aggregates the task histogram of an open-source model list into the slices the home doughnut draws.
- *
- * The server runs this over the full HF page and ships only the slices, so `/` never has to carry the thousand rows the
- * histogram was derived from. `total` counts every model, including the untagged and the aggregated tail, because it is
- * the denominator of each slice's share.
+ * Aggregates the task histogram of an open-source model list into the slices the home doughnut draws. The server runs
+ * this over the full HF page and ships only the slices, so `/` never carries the thousand rows behind them; `total`
+ * counts every model, including the untagged and the aggregated tail, because it is the denominator of each share.
  */
 export function aggregateTaskShare(models: readonly { task: string | null | undefined }[]): {
   slices: TaskSlice[];

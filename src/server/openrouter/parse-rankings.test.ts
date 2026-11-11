@@ -125,9 +125,7 @@ describe("mapModels", () => {
   });
 
   /**
-   * `change` is a ratio on every row, whatever its magnitude: the live payload carries `2.6249` for a model that grew
-   * 262%, and OpenRouter's own page prints it as `+262%`. Reading anything at or above 1 as an already-percent figure
-   * printed the fastest-growing models at a hundredth of their real growth.
+   * `change` is a ratio on every row, whatever its magnitude, and OpenRouter's own page prints it as a percentage.
    */
   it.each([
     ["a sub-1 ratio", -0.9, -90],

@@ -1,10 +1,9 @@
 import type { GuardContext, GuardRule } from "./context.ts";
 
 /**
- * Pages parses `public/_headers`, `public/_redirects` and `public/_routes.json` itself, at deploy time; Vite only
- * copies them. A malformed block, a rule count past the documented limit or a redirect that reaches into the API
- * prefix is therefore invisible to type-check and lint, and surfaces as a production 404 instead. The security-header
- * ban is AGENTS.md's first rule, and nothing else enforced it.
+ * Pages parses `public/_headers`, `public/_redirects` and `public/_routes.json` itself at deploy time; Vite only copies
+ * them. A malformed block, a rule count past the documented limit or a redirect reaching into the API prefix is
+ * invisible to type-check and lint, and surfaces as a production 404 instead.
  */
 const SECURITY_HEADER_NAMES =
   /^(?:content-security-policy(?:-report-only)?|x-frame-options|x-content-type-options|referrer-policy|strict-transport-security|permissions-policy|feature-policy|cross-origin-(?:opener|embedder|resource)-policy|x-xss-protection)$/i;
@@ -18,7 +17,6 @@ const REDIRECTS_MAX_STATIC = 2000;
 const REDIRECTS_MAX_DYNAMIC = 100;
 
 interface PagesFileLine {
-  /** The line with surrounding whitespace removed. */
   text: string;
   /** Both `_headers` and `_redirects` use leading whitespace to mean "attached to the line above". */
   indented: boolean;
@@ -87,8 +85,7 @@ function assertPagesRoutes(source: string, apiPrefix: string): void {
       throw new Error(`public/_routes.json: "${rule}" is longer than the ${ROUTES_MAX_RULE_CHARS} character limit`);
     }
   }
-  // Every invoked route has to sit under the API prefix: an include rule on a page path makes that page run through a
-  // Function, which is exactly what this file exists to prevent.
+  // Every invoked route has to sit under the API prefix: an include rule on a page path makes that page run through a Function.
   const stray = routes.include.filter((rule) => !rule.startsWith(`${apiPrefix}/`));
   if (stray.length > 0) {
     throw new Error(
@@ -106,8 +103,7 @@ function assertPagesRedirects(source: string, apiPrefix: string): void {
     if (from === undefined || to === undefined) {
       throw new Error(`public/_redirects: "${text}" is not a "source destination [code]" rule`);
     }
-    // Pages applies `_redirects` while serving the static side of the request, so a rule that reaches into the API
-    // prefix answers an /api URL with the SPA shell instead of letting `functions/api/` handle it.
+    // Pages applies `_redirects` while serving the static side of the request, so a rule that reaches into the API prefix answers an /api URL with the SPA shell.
     if (from === apiPrefix || from.startsWith(`${apiPrefix}/`) || from.startsWith(`${apiPrefix}*`)) {
       throw new Error(`public/_redirects: "${from}" would answer an API URL with the SPA shell`);
     }
@@ -126,10 +122,9 @@ function assertPagesRedirects(source: string, apiPrefix: string): void {
 }
 
 /**
- * The three files Cloudflare Pages parses at deploy time, which no other check reads: `_headers` may not carry a
- * security or policy header, `_routes.json` may only invoke a Function under the API prefix, and `_redirects` may not
- * answer an API URL with the SPA shell. `apiPrefix` is passed in rather than imported so this rule stays a pure function
- * of the bytes it is handed.
+ * The three files Cloudflare Pages parses at deploy time: `_headers` may not carry a security or policy header,
+ * `_routes.json` may only invoke a Function under the API prefix, `_redirects` may not answer an API URL with the SPA
+ * shell. `apiPrefix` is passed in so this rule stays a pure function of the bytes handed in.
  */
 export function pagesRule(apiPrefix: string): GuardRule {
   return {
@@ -152,12 +147,8 @@ function paddedVersion(version: string): string {
 }
 
 /**
- * The Node running this build has to meet the floor `engines.node` declares.
- *
- * The repository pins no version for the build environment: the Pages build image picks its own Node, and `npm run
- * build` — the command the dashboard is configured to run — is what says whether that one works. The floor is what the
- * scripts here need (unflagged TypeScript entry points, `module.registerHooks`), and without this rule an image below
- * it would fail somewhere obscure instead: the first `node build/*.ts` of the pipeline, on a syntax error.
+ * The Node running this build has to meet the floor `engines.node` declares: the Pages build image picks its own Node,
+ * and without this rule an image below the floor fails somewhere obscure - the first `node build/*.ts` of the pipeline.
  */
 function assertBuildNodeVersion(ctx: GuardContext): void {
   const engines = (JSON.parse(ctx.readText("package.json")) as { engines?: { node?: string } }).engines?.node;
@@ -165,8 +156,7 @@ function assertBuildNodeVersion(ctx: GuardContext): void {
   if (floor === undefined) {
     throw new Error(`package.json: engines.node "${engines ?? "none"}" is not of the form ">=X.Y.Z"`);
   }
-  // A prerelease build of Node reports e.g. `v26.0.0-rc.1`: the three leading numbers are what the floor compares to,
-  // and a version this coarse to read is not a Node this toolchain claims to support.
+  // A prerelease build of Node reports e.g. `v26.0.0-rc.1`: the three leading numbers are what the floor compares to.
   const running = /^v?(\d+\.\d+\.\d+)/.exec(process.version)?.[1];
   if (running === undefined) {
     throw new Error(`process.version "${process.version}" carries no X.Y.Z version to compare with the floor`);
@@ -179,9 +169,6 @@ function assertBuildNodeVersion(ctx: GuardContext): void {
 /**
  * The Node floor: `engines.node` is the declaration and this rule is the check, so a machine or a build image below
  * it is named here rather than failing later inside the toolchain.
- *
- * The service worker's API prefix used to be checked here too. `build/sw-version.ts` now overwrites it from
- * `src/shared/config/api.ts` while writing `dist/sw.js`, so there is no second copy left to drift.
  */
 export const runtimeRule: GuardRule = {
   id: "runtime",

@@ -2,8 +2,7 @@ import { fnv1aHashUint32 } from "./hash";
 
 /**
  * `#abc` / `#aabbcc` (the `#` is optional, case-insensitive) to channels, or `null` when the value is not a hex
- * colour. `hexToRgba` and `parseRgb` used to decode this separately; a brand colour is upstream data, so the `null`
- * arm is a real one: those callers fall back to `color-mix` / a derived hue.
+ * colour; a brand colour is upstream data, so the `null` arm is a real one (callers fall back to `color-mix`).
  */
 function parseHexChannels(value: string): [number, number, number] | null {
   const hex = value.startsWith("#") ? value.slice(1) : value;
@@ -27,8 +26,7 @@ export function hexToRgba(hex: string, alpha: number): string {
 
 /**
  * Provider dots need one thing from a brand colour: a recognisable hue that stays visible on both the white and the
- * #18181b canvas. Brand colours range from #000000 to pale pastels, so each one is re-rendered at a fixed perceptual
- * luminance (~0.2, about 4:1 against either surface) and duplicates are rotated to the next free hue.
+ * #18181b canvas, so each is re-rendered at one target luminance and duplicates rotate to the next hue.
  */
 const PROVIDER_TARGET_LUMINANCE = 0.2;
 const PROVIDER_SATURATION = 0.62;
@@ -65,8 +63,7 @@ function hueOf([r, g, b]: readonly [number, number, number]): number | null {
 }
 
 /**
- * The RGB triple for HSL sextant `h` (`0 ≤ h < 6`), before the lightness offset is applied. A switch over the sextant
- * index rather than a ternary chain: six branches read top to bottom keep the formula legible.
+ * The RGB triple for HSL sextant `h` (`0 <= h < 6`), before the lightness offset is applied.
  */
 function sextantToRgb(h: number, chroma: number, x: number): [number, number, number] {
   switch (Math.floor(h)) {

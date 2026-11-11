@@ -12,11 +12,7 @@ export interface CacheSpec {
   cdn: string;
 }
 
-/**
- * The durations a `CacheSpec` renders from. Kept apart from the rendered strings because a `partial` payload is
- * re-rendered from the numbers with shorter windows; building it out of the rendered header instead would lose the
- * stale-if-error decision, which belongs to the route rather than to one answer.
- */
+/** The durations a `CacheSpec` renders from: a `partial` payload is re-rendered from the numbers with shorter windows. */
 export interface CacheDurations {
   browserMaxAgeS: number;
   cdnMaxAgeS: number;
@@ -33,25 +29,14 @@ const BROWSER_MIN_MAX_AGE_S = 30;
 const BROWSER_TTL_DIVISOR = 2;
 const SWR_HEADER_CAP_S = 300;
 
-/**
- * The shortest windows the API hands out: what `renderPartialCacheSpec` clamps a degraded payload to. Exported so a
- * route that must never be pinned at the edge — the Hugging Face by-id miss — reuses these numbers instead of
- * restating them, and the two can only move together.
- *
- * `staleIfErrorS` is deliberately absent: this is a route-level duration set whose whole point is that the edge may
- * not serve the answer after the origin failed.
- */
+/** The shortest windows the API hands out: what `renderPartialCacheSpec` clamps a degraded payload to. `staleIfErrorS` is deliberately absent — the edge may not serve this answer after the origin failed. */
 export const SHORTEST_CACHE_DURATIONS: CacheDurations = {
   browserMaxAgeS: 30,
   cdnMaxAgeS: 60,
   swrCapS: 60,
 };
 
-/**
- * Browsers keep an API response for half the server's TTL (floored at 30 s so a short-TTL source is not re-asked on
- * every navigation); the CDN keeps it for the full window, so an edge hit never hands out data older than one refresh
- * cycle. Both are capped so a change to a long-TTL source still reaches every reader within half an hour.
- */
+/** Browsers keep an API response for half the server's TTL (floored at 30 s); the CDN keeps the full window, both capped so a change to a long-TTL source still reaches every reader within half an hour. */
 export function cacheDurationsForTtl(ttlMs: number): CacheDurations {
   const source = Number.isFinite(ttlMs) && ttlMs > 0 ? Math.floor(ttlMs / 1000) : FALLBACK_TTL_HEADER_S;
   const cdnMaxAgeS = Math.min(source, MAX_TTL_HEADER_S);
@@ -64,8 +49,7 @@ export function cacheDurationsForTtl(ttlMs: number): CacheDurations {
 }
 
 export function renderCacheSpec(durations: CacheDurations): CacheSpec {
-  // The window is the smaller of the freshness window and the cap: a `stale-while-revalidate` that outlives `max-age`
-  // would be a contradictory header, so the cap is what keeps the two consistent by construction.
+  // The window is the smaller of the freshness window and the cap: a `stale-while-revalidate` that outlives `max-age` is a contradictory header.
   const swr = Math.min(durations.cdnMaxAgeS, durations.swrCapS);
   const staleIfError = durations.staleIfErrorS === undefined ? "" : `, stale-if-error=${durations.staleIfErrorS}`;
   return {
@@ -74,12 +58,7 @@ export function renderCacheSpec(durations: CacheDurations): CacheSpec {
   };
 }
 
-/**
- * The same policy with both freshness windows tightened, so a payload the origin could only partly refresh is re-asked
- * on the next visit. `staleIfErrorS` carries over untouched: whether this route's responses may outlive an origin
- * failure is a property of the route, not of this answer — adding it here handed the edge a day-long `stale-if-error`
- * for the Hugging Face by-id miss, whose point is precisely not to be pinned.
- */
+/** The same policy with both freshness windows tightened, so a payload the origin could only partly refresh is re-asked on the next visit. `staleIfErrorS` carries over untouched: whether a response may outlive an origin failure is a property of the route. */
 export function renderPartialCacheSpec(durations: CacheDurations): CacheSpec {
   return renderCacheSpec({
     ...durations,
@@ -113,11 +92,7 @@ export function ifNoneMatchSatisfied(ifNoneMatch: string | null, etag: string): 
   });
 }
 
-/**
- * Advertises the payload contract version — the hash of the wire types, the domain → payload map and the domain paths,
- * which is what the client compares against to detect a stale bundle. Deliberately not the cache version, so a
- * server-side change that leaves the payload shape alone does not report skew to every reader.
- */
+/** Advertises the payload contract version — the hash of the wire types, the domain → payload map and the domain paths, which is what the client compares against to detect a stale bundle. Deliberately not the cache version. */
 export function applyApiHeaders(h: Headers): void {
   h.set(CONTRACT_VERSION_HEADER, CONTRACT_VERSION);
 }

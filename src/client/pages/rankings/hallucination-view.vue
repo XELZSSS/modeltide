@@ -37,10 +37,8 @@ function buildHallColumns(
 // label, not a key: falling back to it would make a renamed model lose its expanded row and its row identity.
 const getHallRowId = (entry: HallucinationRankingEntry) => modelId(entry);
 
-/**
- * `models` is the AA index the rows were derived from, handed down by the tab: the expanded row shows the benchmarks the
- * ranking itself cannot carry, which only the AA model has, and the row's `id` identifies that model exactly.
- */
+/** `models` is the AA index the rows were derived from: the expanded row shows the benchmarks the ranking cannot carry,
+ * which only the AA model has, and the row's `id` identifies that model exactly. */
 const props = defineProps<{ rankings: HallucinationRankingEntry[]; models: ArtificialAnalysisModel[] }>();
 
 const { t } = useTranslation();

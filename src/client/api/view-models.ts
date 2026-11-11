@@ -62,10 +62,8 @@ function enabledListState<T>(query: ListQueryLike, label: string, enabled: Maybe
   };
 }
 
-/**
- * The shape every list state hook repeats: decode one query's payload into a `ListState`, using the same label for the
- * payload validator and for the state's error text, once the route's suspense has resolved.
- */
+/** The shape every list state hook repeats: decode one query's payload into a `ListState`, using the same label for the
+ * payload validator and for the state's error text, once the route's suspense has resolved. */
 async function suspenseListState<T>(query: SuspenseQueryLike, label: string): Promise<ComputedRef<ListState<T>>> {
   await query.suspense();
   return computed(() => {
@@ -106,13 +104,9 @@ export const useSuspenseHomeDashboard = async (): Promise<SuspenseHomeDashboard>
 
 const OPEN_ROUTER_LABEL = "openRouterRankings";
 
-/**
- * Non-suspense OpenRouter ranking query. Returns the decoded list state as well, so consumers (the search layer)
- * get the same `partial`/`malformed`/`error` view as every other source instead of unwrapping the raw payload.
- *
- * The rows arrive as served, retired ones included: whether a retired row may still occupy a rank is the ranking's
- * decision, and the detail view needs the row in order to report it as retired rather than as missing.
- */
+/** Non-suspense OpenRouter ranking query. Returns the decoded list state too, so consumers get the same
+ * `partial`/`malformed`/`error` view instead of unwrapping the raw payload.
+ * Rows arrive as served, retired ones included: whether a retired row may occupy a rank is the ranking's decision. */
 export function useOpenRouterRankings(enabled: MaybeRefOrGetter<boolean> = true) {
   const query = qOpenRouterList.use(enabled);
   const state = computed(() => enabledListState<OpenRouterRankEntry>(query, OPEN_ROUTER_LABEL, enabled));
@@ -125,17 +119,13 @@ export const useSuspenseOpenRouterRankings = () =>
 export const useSuspenseOpenSourceModelsState = () =>
   suspenseListState<OpenSourceModelEntry>(qOpenSourceModelsList.use(), "openSourceModels");
 
-/**
- * Single-model state, decoded like every other source so the detail page can show the same `partial` notice the list
- * views do. `items` holds zero or one entry; `items[0]` is the not-found signal (`getModelById` answers 200 + empty).
- */
+/** Single-model state, decoded like every other source so the detail page can show the same `partial` notice the list
+ * views do. `items` holds zero or one entry; `items[0]` is the not-found signal (`getModelById` answers 200 + empty). */
 export const useSuspenseOpenSourceModelState = (id: string) =>
   suspenseListState<OpenSourceModelEntry>(qOpenSourceModelById(id).use(), "openSourceModels");
 
-/**
- * Non-suspense Decision Index query. The search layer folds every ranking list in as it loads, so it needs the same
- * `partial`/`malformed`/`error` view the ranking tab gets, without suspending the page that happens to be open.
- */
+/** Non-suspense Decision Index query: the search layer folds every ranking list in as it loads, so it needs the same
+ * `partial`/`malformed`/`error` view without suspending the page that happens to be open. */
 export function useDecisionIndex(enabled: MaybeRefOrGetter<boolean> = true) {
   const query = qDecisionIndex.use(enabled);
   const state = computed(() => enabledListState<DecisionIndexEntry>(query, "decisionIndex", enabled));
@@ -151,10 +141,7 @@ export const useSuspenseClosedReleasesState = () =>
 export const useSuspenseNewsState = (category: NewsCategory) =>
   suspenseListState<NewsItem>(qNewsByCategory(category).use(), `news:${category}`);
 
-/**
- * Every open-source row is one of at most a thousand and arrives already filtered by the parser (an id the loader
- * could not key never reaches the payload), so this hook is the same five lines as the three above it.
- */
+/** Every open-source row arrives already filtered by the parser (an id the loader could not key never reaches the payload). */
 export function useAllOpenSourceModels(enabled: MaybeRefOrGetter<boolean> = true) {
   const query = qOpenSourceModelsList.use(enabled);
   const state = computed(() => enabledListState<OpenSourceModelEntry>(query, "openSourceModels", enabled));

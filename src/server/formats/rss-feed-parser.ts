@@ -6,6 +6,8 @@ import { utf8ByteLength } from "@/server/util/hash";
 import { zeroUpstreamMessage, errMsg } from "@/server/api/errors";
 import { FEED_CONTAINERS, FEED_ELEMENTS, FEED_ITEM_KEYS, FEED_OPAQUE_BODY_NODE } from "@/server/news/wire";
 import { channelTitle, toNewsItem } from "./feed-fields";
+import { capItems, MAX_ITEMS_SCAN_FACTOR } from "./feed-cap";
+import { mapRows } from "./parse-rows";
 import { parseFail, parseOk, type ParseResult } from "./parse-result";
 
 const MAX_ITEMS_PER_FEED = SOURCE_LIMITS.feedItemsPerFeed;
@@ -19,8 +21,7 @@ const parser = new XMLParser({
   htmlEntities: false,
   /**
    * Keeps the article body as one opaque string. `toNewsItem` reads title, link and dates only, while a full-text feed
-   * spends most of its bytes inside `content:encoded` — building a subtree for that text cost 10.1 ms of a 10 ms CPU
-   * budget per refresh (7.4 ms with this). The emitted NewsItem rows are identical either way.
+   * spends most of its bytes inside `content:encoded`, which would otherwise be parsed into a subtree per article.
    */
   stopNodes: [FEED_OPAQUE_BODY_NODE],
 });
@@ -47,103 +48,6 @@ export function parseFeed(xml: unknown, sourceUrl: unknown, sourceName?: string)
     return parseFail(`Unparseable feed at ${urlLabel}: ${errMsg(err)}`);
   }
   return parseChannel(parsed, urlLabel, MAX_ITEMS_PER_FEED, sourceName);
-}
-
-/**
- * How many items past the wanted count are still parsed, matching the bound `parseChannel` then applies. Params that
- * could drop an item (a missing link or date) mean the kept ones can come from further down the list.
- */
-const MAX_ITEMS_SCAN_FACTOR = 4;
-
-const ITEM_CLOSERS = FEED_ITEM_KEYS.map((key) => `</${key}>`);
-const COMMENT_OPEN = "<!--";
-const COMMENT_CLOSE = "-->";
-const CDATA_OPEN = "<![CDATA[";
-const CDATA_CLOSE = "]]>";
-/** Advances `i` past a comment or CDATA section when one opens there; otherwise returns `i` unchanged. Both walks that
- * scan the document must skip the same regions: a closer inside a comment or a CDATA body is content, not an item. */
-function skipOpaque(xml: string, i: number): number {
-  if (xml.startsWith(COMMENT_OPEN, i)) {
-    const end = xml.indexOf(COMMENT_CLOSE, i + COMMENT_OPEN.length);
-    return end < 0 ? xml.length : end + COMMENT_CLOSE.length;
-  }
-  if (xml.startsWith(CDATA_OPEN, i)) {
-    const end = xml.indexOf(CDATA_CLOSE, i + CDATA_OPEN.length);
-    return end < 0 ? xml.length : end + CDATA_CLOSE.length;
-  }
-  return i;
-}
-
-/**
- * The document's own container closing tags: everything the feed wrote after its last item closer, copied verbatim.
- * A table of literal tails — `</channel></rss>`, `</feed>` and their whitespace variants — missed a feed whose
- * container was named anything else (a namespaced `<rss>`, an RDF document, a comment before the closer), left the
- * document alone, and then built a subtree for every item in it: the CPU cost this function exists to avoid, failing
- * silently. Reusing the bytes the document already carries cannot miss.
- *
- * `undefined` when nothing follows the last item: an unclosed document stays untouched rather than getting a guess.
- */
-function feedTail(xml: string, closer: string): string | undefined {
-  // The last real item closer, skipping the comment/CDATA regions the cut scan skips: `lastIndexOf` would land on a
-  // closer a trailing commented-out item carries, splicing an unmatched `-->` into the document.
-  let last = -1;
-  let i = 0;
-  while (i < xml.length) {
-    const after = skipOpaque(xml, i);
-    if (after !== i) {
-      i = after;
-      continue;
-    }
-    if (xml.startsWith(closer, i)) {
-      last = i + closer.length;
-      i += closer.length;
-      continue;
-    }
-    i += 1;
-  }
-  if (last < 0) return undefined;
-  const tail = xml.slice(last);
-  return tail.trim() === "" ? undefined : tail;
-}
-
-/**
- * Cuts the document after the last item the caller can still reach, so the XML parser does not build a subtree for
- * every item in a long feed. A feed that ships hundreds of items against a 30-item limit costs 19 ms of a 10 ms CPU
- * budget — the largest single cost in the news route.
- *
- * Only a feed carrying more items than `keep` is touched, and only when its own closing tag can be reused, so the
- * document the parser sees stays well-formed: the tail is whatever bytes the feed wrote after its last item closer.
- *
- * A closer inside a comment or a CDATA section is not an item: `content:encoded` is HTML in a CDATA wrapper, so a code
- * sample can carry a literal `</item>`, and a commented-out item carries a whole one. Counting either put the cut
- * inside an item and left the document malformed.
- */
-export function capItems(xml: string, keep: number): string {
-  for (const closer of ITEM_CLOSERS) {
-    let cut = -1;
-    let seen = 0;
-    let i = 0;
-    while (i < xml.length && seen < keep) {
-      const after = skipOpaque(xml, i);
-      if (after !== i) {
-        i = after;
-        continue;
-      }
-      if (xml.startsWith(closer, i)) {
-        seen += 1;
-        i += closer.length;
-        cut = i;
-        continue;
-      }
-      i += 1;
-    }
-    if (seen < keep || cut < 0 || cut >= xml.length) continue;
-    const tail = feedTail(xml, closer);
-    // Nothing follows the last item: leave the document alone rather than append a guess.
-    if (tail === undefined) continue;
-    return xml.slice(0, cut) + tail;
-  }
-  return xml;
 }
 
 function resolveChannel(feed: unknown): Record<string, unknown> | undefined {
@@ -177,18 +81,10 @@ function parseChannel(
   if (records.length === 0 && rawItems.length > 0) {
     return parseFail(`Unrecognized feed items at ${sourceUrl}`);
   }
+  // `mapRows` stops once `maxItems` rows are kept and counts the entries `toNewsItem` rejects on the way, which is the
+  // number the warning names.
   const bounded = records.slice(0, maxItems * MAX_ITEMS_SCAN_FACTOR);
-  const parsed: NewsItem[] = [];
-  let dropped = 0;
-  for (const item of bounded) {
-    const news = toNewsItem(item, source);
-    if (!news) {
-      dropped += 1;
-      continue;
-    }
-    parsed.push(news);
-    if (parsed.length >= maxItems) break;
-  }
+  const { rows: parsed, dropped } = mapRows(bounded, (item) => toNewsItem(item, source), maxItems);
   if (parsed.length === 0) {
     return parseFail(zeroUpstreamMessage(`Feed at ${sourceUrl}`, "usable items", `raw=${records.length}, kept=0`));
   }

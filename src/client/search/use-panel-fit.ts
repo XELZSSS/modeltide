@@ -11,13 +11,9 @@ interface PanelFitOptions {
   inputRef: Ref<HTMLInputElement | null>;
 }
 
-/**
- * Caps the result panel to the room it actually has, and keeps that cap current while the panel is open.
- *
- * The panel is clipped by the scrolling `<main>`, and on small screens the fixed bottom bar covers the same area, so a
- * long result list would be cut off or painted over. The panel sits at `z-20`: above page content (the table's sticky
- * column is `z-10`), below the nav bars (`z-30`) and the modal layer (`z-40`/`z-50`).
- */
+/** Caps the result panel to the room it actually has, and keeps that cap current while the panel is open: the panel is
+ * clipped by the scrolling `<main>` and on small screens the fixed bottom bar covers the same area. The panel stacks
+ * above page content, below the nav bars and the modals. */
 export function usePanelFit(opts: PanelFitOptions): { panelStyle: ComputedRef<CSSProperties | undefined> } {
   const panelHeight = ref<number | null>(null);
   let fitFrame = 0;
@@ -35,7 +31,7 @@ export function usePanelFit(opts: PanelFitOptions): { panelStyle: ComputedRef<CS
       window.innerHeight,
     );
     // `clipBottom` is the scrollport's bottom edge, and the bottom bar is a row of that layout rather than an overlay, so
-    // the space below the input is already net of the bar; subtracting it again cost the panel 64px of height.
+    // the space below the input is already net of the bar; subtracting it again ate into the panel's height.
     const room = clipBottom - input.getBoundingClientRect().bottom - PANEL_GAP_PX - PANEL_EDGE_PX;
     panelHeight.value = Math.max(PANEL_MIN_PX, Math.min(PANEL_MAX_PX, Math.round(room)));
   }
@@ -48,10 +44,8 @@ export function usePanelFit(opts: PanelFitOptions): { panelStyle: ComputedRef<CS
     });
   }
 
-  /**
-   * `flush: "post"` is load-bearing: the panel is drawn by the same tick that opens it, so a pre-flush measurement reads
-   * a zero height and the panel jumps to its maximum before shrinking to the real cap — a visible two-step.
-   */
+  /** `flush: "post"` is load-bearing: the panel is drawn by the same tick that opens it, so a pre-flush measurement reads
+   * a zero height and the panel jumps to its maximum before shrinking to the real cap. */
   watch(
     [opts.isOpen, opts.canSearch],
     ([open, searchable]) => {

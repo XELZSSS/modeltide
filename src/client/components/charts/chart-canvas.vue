@@ -1,9 +1,6 @@
 <script setup lang="ts">
-/**
- * A Chart.js instance bound to a `canvas`: created on mount, updated in place on data change, destroyed with the
- * component. Diffing in place instead of recreating per render is what keeps a hover from being thrown away on every
- * data tick.
- */
+/** A Chart.js instance bound to a `canvas`: created on mount, updated in place on data change, destroyed with the
+ * component — diffing in place keeps a hover from being thrown away on every data tick. */
 import { onUnmounted, ref, watch } from "vue";
 import { Chart, type ChartData, type ChartOptions, type ChartType } from "chart.js";
 
@@ -18,10 +15,9 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 let chart: Chart | null = null;
 
 /**
- * A chart here shows a snapshot, so a data update must land in the same frame. `animation: { duration: 0 }` does that while
- * keeping the animation system alive: `animation: false` also silenced the tooltip, which resolves its own animation from
- * `chart.options.animation`, so hover panels used to appear in one hard step. This is the one place the rule lives — the
- * charts' own `chartBase` no longer repeats it.
+ * A chart here shows a snapshot, so a data update must land in the same frame. `animation: { duration: 0 }` keeps the
+ * animation system alive, which `animation: false` would not: the tooltip resolves its own animation from
+ * `chart.options.animation`. This is the one place the rule lives.
  */
 function withoutDataAnimation(options: ChartOptions): ChartOptions {
   return { ...options, animation: { duration: 0 } };

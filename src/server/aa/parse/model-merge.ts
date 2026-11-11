@@ -1,9 +1,10 @@
 import { str } from "@/server/formats/scalars";
-import { omniscienceBreakdownOf, overlayBreakdown, setField, type AaRow } from "../wire";
+import { setField, type AaRow } from "../wire";
+import { omniscienceBreakdownOf, overlayBreakdown } from "../wire-read";
 
 /**
- * The slug a catalog row is keyed by, or `null` when the row cannot be a catalog entry: the leaderboard's own rows
- * carry both fields, and a row without them is the legend or changelog snapshot the same prop bundles.
+ * The slug a catalog row is keyed by, or `null` when the row cannot be a catalog entry: a row without the fields is the
+ * legend or changelog snapshot the same prop bundles.
  */
 function catalogSlug(row: AaRow): string | null {
   const slug = str(row.slug);
@@ -12,9 +13,8 @@ function catalogSlug(row: AaRow): string | null {
 }
 
 function mergeEntry(cur: AaRow, patch: AaRow): void {
-  // Read the catalog's breakdown before the patch replaces it: spreading `cur` afterwards spread the patch object and
-  // then merged the patch into a copy of itself, so the leaderboard's own accuracy/hallucination values were lost
-  // whenever the enrichment row carried the block with some of its fields absent.
+  // Read the catalog's breakdown before the patch replaces it: spreading `cur` afterwards would merge the patch into a copy
+  // of itself and lose the leaderboard's own accuracy/hallucination values.
   const prevBreakdown = omniscienceBreakdownOf(cur);
   const patchBreakdown = omniscienceBreakdownOf(patch);
   for (const [key, value] of Object.entries(patch)) {
@@ -28,13 +28,7 @@ function mergeEntry(cur: AaRow, patch: AaRow): void {
   }
 }
 
-/**
- * Overlays enrichment rows onto the leaderboard catalog, keyed by slug and skipping rows without an identity.
- *
- * The catalog is the `AaRow` array the leaderboard parser produces and the enrichment pages produce one `AaRow` per row
- * through `projectFields` — both sides are the same declared shape, so a field one side writes and the other reads is
- * checked by the compiler instead of by whether a number happens to come back `null`.
- */
+/** Overlays enrichment rows onto the leaderboard catalog, keyed by slug and skipping rows without an identity. Both sides are the same declared `AaRow` shape, so a field one side writes and the other reads is checked by the compiler. */
 export function mergeBySlug(catalog: readonly AaRow[], ...enrich: readonly (readonly AaRow[])[]): AaRow[] {
   const bySlug = new Map<string, AaRow>();
   for (const raw of catalog) {
@@ -42,8 +36,8 @@ export function mergeBySlug(catalog: readonly AaRow[], ...enrich: readonly (read
     if (slug === null) continue;
     if (!bySlug.has(slug)) bySlug.set(slug, raw);
   }
-  // Two phases, so the copy is paid only where a patch lands. Spreading every catalog row up front cost 1.8 ms on the
-  // 272-row leaderboard (31 keys each) while only the 27 enriched rows are ever mutated.
+  // Two phases, so the copy is paid only where a patch lands: spreading every catalog row up front would copy rows that
+  // no enrichment ever mutates.
   const patches = new Map<string, AaRow[]>();
   for (const group of enrich) {
     for (const raw of group) {

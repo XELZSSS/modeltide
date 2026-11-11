@@ -17,8 +17,7 @@ export const queryClient = new QueryClient({
       },
       retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
       refetchOnWindowFocus: true,
-      // `staleTime` and `gcTime` have no default here: `createApiQuery` is the only creator of queries and always
-      // passes both, so a value set on this object would never be read.
+      // `staleTime`/`gcTime` have no default here: `createApiQuery` always passes both.
     },
   },
 });

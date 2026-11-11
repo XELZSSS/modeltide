@@ -4,18 +4,10 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 /**
- * Runs the consistency rules without a build.
- *
- * `npm run build` is clean → types → lint → format → the frozen 34 suites → bundle, which nobody runs while editing; the
- * same rules therefore used to report only at `vite dev` startup/save or at the end of a full build. This is the fast
- * entry point: it loads the rules through Node's own TypeScript support and stops at the first violation.
- *
- * Two things the Vite config graph gives the rules for free have to be provided here:
- *
- * 1. The guards import `src/shared` modules, which import each other through the `@/` alias. Node resolves it to nothing,
- *    so a sync resolve hook maps `@/x` to `src/x`, trying `x`, `x.ts` and `x/index.ts` — the same three shapes the alias
- *    covers in the workspace.
- * 2. `build/guards/index.ts` imports its siblings with explicit `.ts` specifiers, which Node accepts as-is.
+ * Runs the consistency rules without a build: `npm run build` goes types -> lint -> format -> suites -> bundle, which
+ * nobody runs while editing, so this loads the rules through Node's own TypeScript support and stops at the first
+ * violation. Two things the Vite config graph gives the rules for free are provided here: a sync resolve hook maps the
+ * `@/x` alias to `src/x` (trying `x`, `x.ts`, `x/index.ts`), and the guards' explicit `.ts` specifiers Node accepts.
  */
 const rootDir = path.resolve(import.meta.dirname, "..");
 

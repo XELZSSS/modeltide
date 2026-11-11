@@ -1,8 +1,5 @@
 <script setup lang="ts">
-/**
- * Previous/next paging with the page counter announced politely. It renders nothing for a single page, so a short list
- * does not grow a control that cannot do anything.
- */
+/** Previous/next paging with the page counter announced politely; renders nothing for a single page. */
 import { ChevronLeft, ChevronRight } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";
 import Button from "@/client/components/ui/button.vue";

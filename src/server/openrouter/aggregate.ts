@@ -28,16 +28,8 @@ interface Group {
 }
 
 /**
- * Converts the upstream `change` figure to percent.
- *
- * `change` is a **ratio** on every row: OpenRouter's own rankings page prints this column as `change * 100`, and a
- * live probe of `/api/frontend/v1/rankings/models` reproduced that exactly (change `2.6249` renders as `+262%`,
- * `77.2504` as `>999%`, `0.9562` as `+96%`). The payload therefore carries no unit ambiguity to resolve: a ratio
- * above 1 is a genuine growth of over 100% over the seven-day window, not a percent figure.
- *
- * The previous implementation read `Math.abs(n) < 1` as a ratio and anything above it as an already-percent number.
- * On the live payload that misread 65 of 588 rows — every model that grew more than 100%, the very rows a ranking
- * page exists to surface, printed at a hundredth of their real growth (`2.6249` showed as `2.6%` instead of `262%`).
+ * Converts the upstream `change` figure to percent. `change` is a **ratio** on every row: OpenRouter's page prints it
+ * times 100, so a ratio above 1 is genuine growth over the seven-day window.
  */
 function changeToPercent(value: unknown): number | null {
   const n = numCoerce(value);
@@ -47,9 +39,8 @@ function changeToPercent(value: unknown): number | null {
 export type PricingLookup = Lookup<PricingEntry>;
 
 /**
- * The key forms of the group being resolved. Reused, because `modelKeyCandidates` built a Set, a `present` array and a
- * spread array per call, and the rankings resolve pricing and expiry for every group (≈1,200 lookups a refresh). Safe as
- * module state: both resolvers run synchronously, one after the other, inside `mapModels`.
+ * The key forms of the group being resolved, reused across every lookup a refresh makes. Safe as module state: both
+ * resolvers run synchronously inside `mapModels`.
  */
 const candidateKeys = new Set<string>();
 
@@ -81,8 +72,7 @@ export function resolveExpiry(meta: MetaLookup | undefined, id: string, variantK
 
 function groupRows(rows: readonly unknown[], stats?: RankingScanStats): Map<string, Group> {
   const grouped = new Map<string, Group>();
-  // `rankings.ts` proves the body is an array with `requireArrayBody` before these rows get here, so the empty-map
-  // branch this line used to be answered only a body the caller had already rejected.
+  // `rankings.ts` proves the body is an array with `requireArrayBody` before these rows get here.
   const count = Math.min(rows.length, MAX_RANKING_ROWS);
   let valid = 0;
   for (let i = 0; i < count; i++) {
@@ -126,9 +116,8 @@ function groupRows(rows: readonly unknown[], stats?: RankingScanStats): Map<stri
     }
     if (metric != null && (group.metric == null || metric > group.metric)) group.metric = metric;
   }
-  // `validRows` is the one counter `groupRows` is the only producer of. `expiredRows` is not — `mapModels` counts
-  // retired groups after this returns — so resetting it here made the count depend on call order instead of on what the
-  // scan found.
+  // `validRows` is the one counter `groupRows` produces; `expiredRows` is not — `mapModels` counts retired groups after
+  // this returns, so resetting it here made the count depend on call order.
   if (stats) stats.validRows = valid;
   return grouped;
 }

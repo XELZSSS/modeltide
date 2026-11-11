@@ -6,6 +6,14 @@ import { getOpenLicenseId, licenseTagId } from "@/server/formats/licenses";
 import type { HfModel } from "./wire";
 import type { LicenseDropTally } from "./license-tally";
 
+/** What one wire row is mapped into; the two variants are named so a variant gains a field without every caller's argument list shifting. */
+interface EntryOptions {
+  /** The detail variant keeps its tag list; the up-to-1000-row list variant leaves the key out. */
+  tags: boolean;
+  /** The page-wide licence gate, when the caller reports on it. */
+  tally?: LicenseDropTally;
+}
+
 function resolveAuthor(m: HfModel, id: string): string | null {
   const explicit = textOrNull(m.author);
   if (explicit) return explicit;
@@ -14,12 +22,16 @@ function resolveAuthor(m: HfModel, id: string): string | null {
   return owner.trim() || null;
 }
 
+/** The two variants as shared options objects: a ranking page maps up to 1000 rows, so the list variant must not build a fresh object per row. */
+const DETAIL_ROW: EntryOptions = { tags: true };
+const LIST_ROW: EntryOptions = { tags: false };
+
 export function mapModel(m: unknown): OpenSourceModelEntry | null {
-  return toEntry(m, true);
+  return toEntry(m, DETAIL_ROW);
 }
 
 export function mapListModel(m: unknown, tally?: LicenseDropTally): OpenSourceModelEntry | null {
-  return toEntry(m, false, tally);
+  return toEntry(m, tally === undefined ? LIST_ROW : { tags: false, tally });
 }
 
 export function keepOpenSourceRanking(m: { downloads: number }, tally?: LicenseDropTally): boolean {
@@ -28,25 +40,24 @@ export function keepOpenSourceRanking(m: { downloads: number }, tally?: LicenseD
   return false;
 }
 
-function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): OpenSourceModelEntry | null {
+function toEntry(m: unknown, opts: EntryOptions): OpenSourceModelEntry | null {
   if (!isRecord(m)) return null;
   const model: HfModel = m;
   if (!isValidRowId(model.id)) return null;
   const id = text(model.id);
   const downloads = numIntCoerceNonNegative(model.downloads) ?? 0;
   const likes = numIntCoerceNonNegative(model.likes) ?? 0;
-  // Licences come out of `tags` in the walk that also builds the detail row's tag list: a list row keeps no tags, so
-  // the old `filter` built a filtered copy for all 1000 rows and dropped it, while the licence still had to be found.
+  // Licences come out of `tags` in the walk that also builds the detail row's tag list: a list row keeps no tags, so a separate `filter` built a copy of every row and dropped it.
   const tags: string[] = [];
   const licenseIds: string[] = [];
   for (const tag of Array.isArray(model.tags) ? model.tags : []) {
     if (typeof tag !== "string") continue;
-    if (includeTags) tags.push(tag);
+    if (opts.tags) tags.push(tag);
     const licenseId = licenseTagId(tag);
     if (licenseId) licenseIds.push(licenseId);
   }
   const license = getOpenLicenseId(licenseIds);
-  tally?.record(licenseIds, license);
+  opts.tally?.record(licenseIds, license);
   const entry: OpenSourceModelEntry = {
     id,
     author: resolveAuthor(model, id),
@@ -57,8 +68,7 @@ function toEntry(m: unknown, includeTags: boolean, tally?: LicenseDropTally): Op
     createdAt: isoDate(model.createdAt),
     lastModified: isoDate(model.lastModified),
   };
-  // Tags belong to the detail payload only. A ranking row is one of up to 1000 and tags are the largest field on it,
-  // so `mapListModel` leaves the key out entirely; the expanded row renders the facts the row actually carries.
-  if (includeTags) entry.tags = tags.slice(0, 100);
+  // Tags belong to the detail payload only: a ranking row is one of up to 1000 and tags are the largest field on it.
+  if (opts.tags) entry.tags = tags.slice(0, 100);
   return entry;
 }

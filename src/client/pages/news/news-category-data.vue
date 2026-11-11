@@ -13,6 +13,8 @@ import { formatDate, formatRelativeTime, safeHref } from "@/shared/utils";
 import type { NewsCategory, NewsItem } from "@/shared/types";
 import { ROW_PADDING } from "@/client/nav/layout";
 import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
+import Button from "@/client/components/ui/button.vue";
+import { useRouteSearchTerm } from "@/client/hooks/use-route-search-term";
 
 const ROW_CLASS = `group flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-4 ${ROW_PADDING} ui-motion ${FOCUS_RING} focus-visible:ring-inset hoverable:hover:bg-surface-hover`;
 
@@ -20,6 +22,7 @@ const props = defineProps<{ categoryId: NewsCategory }>();
 
 const { t, lang } = useTranslation();
 const isMobile = useDevice();
+const { term, setTerm } = useRouteSearchTerm();
 
 const state = await useSuspenseNewsState(props.categoryId);
 
@@ -38,11 +41,8 @@ const rows = computed(() =>
   paged.pagedData.value.map((item) => ({ item, id: getRowId(item), href: safeHref(item.link)! })),
 );
 
-/**
- * `link` is the row identity: the parser guarantees it non-empty, deduplication keys on it, and `NewsItem` carries no
- * separate id. The composite fallback only covers a row that reached the client without one, which the parser does not
- * produce — it keeps the table keyed rather than throwing over a row that is otherwise renderable.
- */
+/** `link` is the row identity: the parser guarantees it non-empty and deduplication keys on it, since `NewsItem` carries
+ * no separate id. The composite fallback only covers a row that reached the client without one. */
 function getRowId(item: NewsItem): string {
   return item.link || `${item.source}::${item.title}::${item.pubDate}`;
 }
@@ -50,7 +50,11 @@ function getRowId(item: NewsItem): string {
 
 <template>
   <PartialNotice v-if="state.partial" />
-  <EmptyState v-if="rows.length === 0" :icon="Search" :message="t('noResults')" />
+  <EmptyState v-if="rows.length === 0" :icon="Search" :message="t('noResults')">
+    <template v-if="term !== ''" #action>
+      <Button variant="outline" size="sm" @click="setTerm('')">{{ t("clear") }}</Button>
+    </template>
+  </EmptyState>
   <div v-else class="flex flex-col gap-2">
     <ul class="flex ui-card flex-col divide-y divide-border overflow-hidden">
       <li v-for="row in rows" :key="row.id">
@@ -62,7 +66,7 @@ function getRowId(item: NewsItem): string {
           :class="ROW_CLASS"
         >
           <h2
-            class="min-w-0 ui-body font-medium break-words decoration-text-primary/40 underline-offset-4 ui-motion [@media(hover:hover)]:group-hover:underline"
+            class="min-w-0 ui-body font-medium text-pretty break-words decoration-text-primary/40 underline-offset-4 ui-motion [@media(hover:hover)]:group-hover:underline"
           >
             {{ row.item.title }}
           </h2>

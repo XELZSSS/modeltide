@@ -30,8 +30,7 @@ export const getOpenRouterRankings = defineSource<OpenRouterRaw, OpenRouterRankE
     const { values, failures } = await runLegs([
       {
         label: "rankings",
-        // The body is `unknown` because the wire shape is decided below: declaring `{ data: unknown[] }` here made the
-        // type argument claim a validation that had not happened yet.
+        // The body is `unknown` because the wire shape is decided below: declaring `{ data: unknown[] }` here would claim a validation that had not happened.
         run: () => ctx.http.json<unknown>(upstreamUrl(upstreamConfig.openrouter, upstreamEndpoints.openRouterRankings)),
       },
       { label: "directory", run: () => getModelDirectory(ctx) },
@@ -55,8 +54,7 @@ export const getOpenRouterRankings = defineSource<OpenRouterRaw, OpenRouterRankE
     if (raw.stats.validRows === 0) {
       throw new UpstreamError(`OpenRouter: all ${raw.totalRows} ranking rows had invalid model_permaslug`);
     }
-    // `expiredRows` counts retired groups while `validRows` counts ranking rows, so the two are reported side by side
-    // rather than subtracted: the guard is about a payload that parsed but produced no model at all.
+    // `expiredRows` counts retired groups while `validRows` counts ranking rows: the two are reported side by side, and the guard is about a payload that produced no model at all.
     if (models.length === 0 && raw.stats.expiredRows < raw.stats.validRows) {
       throw new UpstreamError(`OpenRouter: parsing yielded 0 models from ${raw.stats.validRows} ranking rows`);
     }
@@ -65,8 +63,7 @@ export const getOpenRouterRankings = defineSource<OpenRouterRaw, OpenRouterRankE
   partialWhen: ({ raw }) => {
     const droppedRows = raw.totalRows - raw.stats.validRows;
     const drift = droppedRows >= Math.max(1, Math.ceil(raw.totalRows * RANKINGS_DRIFT_RATIO));
-    // The directory leg is optional, so an absent one counts as no pricing; a present one carries the key count it
-    // counted while filing (≈40k keys on a full page, which `Object.keys` used to materialize to compare with zero).
+    // The directory leg is optional, so an absent one counts as no pricing; a present one carries the key count it counted while filing.
     const pricingCount = raw.directory?.payload.data.pricingKeys ?? 0;
     const directoryPartial = raw.directory == null || raw.directory.payload.partial;
     const partial = pricingCount === 0 || drift || directoryPartial;

@@ -26,9 +26,8 @@ const CHART_PALETTE_GROUPS: readonly { prefix: string; constant: string; colors:
 ];
 
 /**
- * Chart colours are read from CSS custom properties at runtime, so the `:root` declarations are what the Canvas
- * fallback in src/client/charts/theme.ts has to agree with. Only `:root` is checked: `.dark` overrides the same
- * variables in CSS alone, and every dark value differs from its light counterpart per index.
+ * Chart colours are read from CSS custom properties at runtime, so the `:root` declarations are what the Canvas fallback
+ * in src/client/charts/theme.ts has to agree with. Only `:root` is checked; `.dark` overrides the same variables in CSS.
  */
 function assertChartPalette(css: string): void {
   for (const { prefix, constant, colors } of CHART_PALETTE_GROUPS) {
@@ -63,9 +62,8 @@ const COLOR_SITES: readonly { file: string; required: readonly string[] }[] = [
 ];
 
 /**
- * The font file list lives in three places (the `@font-face` rules, `FONT_FILES` for the service-worker precache, and
- * the `<link rel="preload">` hints). Only two are typed, so adding a weight in one place would break offline loading
- * silently — hence this check.
+ * The font file list lives in three places (`@font-face` rules, `FONT_FILES` for the service-worker precache and the
+ * `<link rel="preload">` hints). Only two are typed, so a weight added in one place would break offline loading.
  */
 function assertFontFiles(html: string, css: string): void {
   const declared = new Set<string>();
@@ -89,20 +87,17 @@ function assertFontFiles(html: string, css: string): void {
 }
 
 /**
- * The phone/tablet boundary exists twice: as `MOBILE_MAX_WIDTH_PX` in the `matchMedia` string that picks which
- * navigation and which table body render, and as a media query in the stylesheet that decides how a sheet enters. A
- * stylesheet cannot import a constant, so this is the one place that can hold the pair together — and it is the check
- * the comment linking the two files could never enforce.
- *
- * `scrollbar.css` used to be half of this pair. It no longer has a width-dependent rule at all: the bar is hidden at
- * every width (see that file), so there is no boundary left in it to drift.
+ * The phone/tablet boundary exists twice: as `MOBILE_MAX_WIDTH_PX` in the `matchMedia` string and as media queries in
+ * the style layer (`width < 768px` in motion.css, `width >= 768px` in utilities.css). A stylesheet cannot import a
+ * constant, so this is the one place that can hold the pair together.
  */
-function assertMobileBreakpoint(motionCss: string): void {
+function assertMobileBreakpoint(sheets: readonly string[]): void {
+  const css = sheets.join("\n");
   const wide = `${MOBILE_MAX_WIDTH_PX + 1}px`;
   for (const query of [`(width < ${wide})`, `(width >= ${wide})`]) {
-    if (!motionCss.includes(query)) {
+    if (!css.includes(query)) {
       throw new Error(
-        `src/styles/motion.css: no "@media ${query}" rule, but src/client/device.ts reads the phone boundary from ` +
+        `src/styles: no "@media ${query}" rule, but src/client/device.ts reads the phone boundary from ` +
           `MOBILE_MAX_WIDTH_PX = ${MOBILE_MAX_WIDTH_PX} (src/shared/config/ui.ts), which is one pixel inside ${wide}`,
       );
     }
@@ -111,9 +106,7 @@ function assertMobileBreakpoint(motionCss: string): void {
 
 /**
  * Every colour the UI paints enters through `src/styles/theme.css`, and three of those values are also constants the
- * TypeScript side reads at runtime (the theme colours in the html and the manifest, the chart scale, the font stacks).
- * A copy in either direction is invisible to types: the stylesheet cannot import a TS constant and a Canvas fallback
- * cannot read a CSS file.
+ * TypeScript side reads at runtime; a copy in either direction is invisible to types.
  */
 export const tokensRule: GuardRule = {
   id: "tokens",
@@ -143,6 +136,6 @@ export const tokensRule: GuardRule = {
     assertFontStack(themeCss, "font-mono", FONT_STACK_MONO);
     assertChartPalette(themeCss);
     assertFontFiles(html, ctx.readText("src/styles/globals.css"));
-    assertMobileBreakpoint(ctx.readText("src/styles/motion.css"));
+    assertMobileBreakpoint([ctx.readText("src/styles/motion.css"), ctx.readText("src/styles/utilities.css")]);
   },
 };

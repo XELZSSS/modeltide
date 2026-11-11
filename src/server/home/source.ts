@@ -35,10 +35,7 @@ import {
 import { definePartialSource, type PartialData } from "@/server/pipeline";
 import { byNumberDesc } from "@/server/formats/ordering";
 
-/**
- * The overview chart's rows: Artificial Analysis' intelligence index, highest first, sliced to the bar count. A model
- * without an index cannot be drawn, so it is dropped here rather than in the chart.
- */
+/** The overview chart's rows: AA's intelligence index, highest first, sliced to the bar count. A model without an index cannot be drawn, so it is dropped here. */
 function homeIntelligenceRows(models: ArtificialAnalysisModel[]): HomeChartPoint[] {
   const rows: HomeChartPoint[] = [];
   for (const model of models) {
@@ -48,19 +45,12 @@ function homeIntelligenceRows(models: ArtificialAnalysisModel[]): HomeChartPoint
   return rows.sort(byNumberDesc<HomeChartPoint>((row) => row.score)).slice(0, HOME_CHART_ROWS);
 }
 
-/**
- * The coding card's rows: CursorBench's own pass-rate ranking, sliced to the card's own row count. This is a second
- * coding dataset from a different source than AA's coding-agent index, which is why the page shows both and labels
- * each one.
- */
+/** The coding card's rows: CursorBench's own pass-rate ranking, a second coding dataset from a different source than AA's coding-agent index. */
 function homeCodingRows(entries: CursorBenchEntry[]): HomeChartPoint[] {
   return entries.slice(0, HOME_CURSORBENCH_ROWS).map(({ id, model, score }) => ({ id, name: model, score }));
 }
 
-/**
- * The usage card's rows, highest total tokens first: the OpenRouter payload keeps the upstream's own order, which is not
- * guaranteed to be by volume, so the card sorts the slice it claims to rank.
- */
+/** The usage card's rows, highest total tokens first: the OpenRouter payload keeps the upstream's own order, which is not guaranteed to be by volume. */
 function homeUsageRows(entries: OpenRouterRankEntry[]): HomeUsagePoint[] {
   const rows = entries.map(({ id, name, totalTokens }) => ({ id, name, totalTokens }));
   return rows.sort(byNumberDesc<HomeUsagePoint>((row) => row.totalTokens)).slice(0, HOME_USAGE_ROWS);
@@ -72,8 +62,7 @@ function homeDecisionRows(entries: DecisionIndexEntry[]): HomeDecisionPoint[] {
 }
 
 function homeProviderRows(models: ArtificialAnalysisModel[]): HomeProviderSpeed[] {
-  // `computeProviderStats` labels an unknown creator with "", which the payload does not: it sends `null` and lets the
-  // client fill in the translated label, the only layer that can.
+  // `computeProviderStats` labels an unknown creator with "", which the payload does not: it sends `null` and lets the client translate.
   return computeProviderStats(models, "")
     .filter((p): p is typeof p & { avgSpeed: number } => p.avgSpeed != null)
     .sort(byNumberDesc<HomeProviderSpeed>((provider) => provider.avgSpeed))
@@ -103,8 +92,7 @@ async function fetchHomeDashboard(ctx: AppContext): Promise<PartialData<HomeDash
       { label: "openRouter", run: () => getOpenRouterRankings(ctx) },
       { label: "decision", run: () => getDecisionIndex(ctx) },
     ],
-    // Every leg returns a payload object on success, so "all legs rejected" is exactly "every value is missing": the
-    // shared policy in runLegs replaces the hand-written null check this used to do after the fan-out returned.
+    // Every leg returns a payload object on success, so "all legs rejected" is exactly "every value is missing".
     { tag: "home", allFailedMessage: "Home dashboard: all sources failed" },
   );
   const [codingAgents, opensource, artificial, cursorBench, openRouter, decision] = values;

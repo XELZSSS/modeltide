@@ -32,10 +32,7 @@ export interface ModelOmniscienceBreakdown {
   total: ModelOmniscienceTotal;
 }
 
-/**
- * The modalities a model accepts and produces, as `MODALITY_KEYS`-ordered arrays. Eight booleans said the same thing at
- * ~226 bytes a row — of which six never changed value — and this costs a tenth of it.
- */
+/** The modalities a model accepts and produces, as `MODALITY_KEYS`-ordered arrays: eight separate booleans said the same thing at a far larger per-row cost. */
 export interface ModelModalities {
   in: ModalityKey[];
   out: ModalityKey[];

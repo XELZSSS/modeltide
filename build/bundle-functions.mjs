@@ -14,9 +14,8 @@ function fail(message) {
 }
 
 /**
- * Ceiling for the bundled worker. The budget is per-invocation CPU and cold-start size: the unminified build sat at
- * ~294 KB and minification alone lands near 140 KB, so this leaves roughly 20 KB of room for genuine growth while
- * still failing on a regression that pulls in something large instead of letting the bundle creep up unnoticed.
+ * Ceiling for the bundled worker, on per-invocation CPU and cold-start size: minification alone lands well under it, so the
+ * ceiling leaves room for small growth while still failing on a regression.
  */
 const MAX_BUNDLE_BYTES = 160 * 1024;
 

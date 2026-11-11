@@ -1,12 +1,6 @@
 <script setup lang="ts">
-/**
- * The Suspense fallback's dots, held back for one short delay.
- *
- * A warm suspend resolves inside a frame or two, so an immediate three-dot placeholder was mounted and thrown away
- * within a couple of frames — a flicker on every warm tab or route switch. Waiting first means a fast resolve shows
- * nothing at all. The caller still reserves the fallback's height, so the switch never changes the page's geometry,
- * and reusing the shell's refetch delay keeps the "don't flash a loader" rule to one number.
- */
+/** The Suspense fallback's dots, held back for one short delay: a warm suspend resolves inside a frame or two, so an
+ * immediate three-dot placeholder would flicker on every warm tab or route switch. */
 import { onMounted, onUnmounted, ref } from "vue";
 import LoadingDots from "@/client/components/ui/loading-dots.vue";
 import { MOTION_FAST_MS } from "@/client/motion";

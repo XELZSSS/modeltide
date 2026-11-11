@@ -21,11 +21,8 @@ const props = defineProps<{ rankings: DecisionIndexEntry[] }>();
 const rowIdOf = (row: DecisionIndexEntry) => row.id;
 const rowNameOf = (row: DecisionIndexEntry) => row.name;
 
-/**
- * Rank and detail link both come from the delivered order, which the source sorts by the index. The link opens the
- * contestant's own page rather than the Artificial Analysis model page the other rankings open: a contestant is a model
- * *at a reasoning effort*, and the decision-only models have no model page at all.
- */
+/** Rank and detail link both come from the delivered order, which the source sorts by the index. The link opens the
+ * contestant's own page: a contestant is a model *at a reasoning effort*, and decision-only models have no model page. */
 const buildColumns = useRankedColumns(() => props.rankings, rowIdOf, "decision", buildDecisionColumns);
 
 function buildDecisionColumns(

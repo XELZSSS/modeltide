@@ -5,10 +5,8 @@ import SegmentedGroup from "@/client/components/ui/segmented-group.vue";
 import TabButton from "@/client/components/navigation/tab-button.vue";
 import { useRovingRadio, type TabItem } from "@/client/components/navigation/tabs";
 
-/**
- * The tab strip plus its panel. Arrow/Home/End handling comes from the shared roving-radio helper rather than a local
- * `keydown`: the strip is one tab stop that the arrow keys move inside, and the panel is labelled by the active tab.
- */
+/** The tab strip plus its panel. Arrow/Home/End handling comes from the shared roving-radio helper rather than a local
+ * `keydown`: the strip is one tab stop that the arrow keys move inside, and the panel is labelled by the active tab. */
 const props = withDefaults(
   defineProps<{
     tabs: TabItem[];
@@ -53,8 +51,7 @@ const { onKeydown } = useRovingRadio({
       </TabButton>
     </SegmentedGroup>
     <!-- `ui-anim-swap` is the vocabulary's "content that replaces other content in place" step: a fast cross-fade with no
-         stagger and no travel. The panel is keyed per tab, so each switch mounts this fade — without it the old panel
-         vanished and the new one appeared in the same frame. -->
+         stagger and no travel. The panel is keyed per tab, so each switch mounts this fade. -->
     <div
       :key="activeTab"
       role="tabpanel"

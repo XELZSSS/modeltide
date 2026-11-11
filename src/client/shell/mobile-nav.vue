@@ -12,7 +12,7 @@ const { t } = useTranslation();
 const { mobilePrimary, mobileMore, isActive } = useNavigation();
 const { touch } = usePrefetch();
 
-const BAR_BUTTON = `flex-1 flex flex-col items-center justify-center gap-1 text-center text-[0.8125rem] font-medium ui-motion ui-press ${FOCUS_RING} focus-visible:ring-inset min-h-16 py-2`;
+const BAR_BUTTON = `flex-1 flex flex-col items-center justify-center gap-1 text-center ui-label font-medium ui-motion ui-press ${FOCUS_RING} focus-visible:ring-inset min-h-16 py-2`;
 
 // Selection is the raised pill behind the glyph, the same surface change the desktop segmented controls use.
 const barItemClass = (active: boolean) =>

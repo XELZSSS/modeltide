@@ -1,26 +1,9 @@
 /*
  * The design system's utility layer: each class names a role, not a set of Tailwind primitives, and is the single
- * definition of a repeated decision (a card surface, a heading level, a caption). Components compose these instead
- * of re-deriving the same utility strings, so the type scale and the surfaces cannot drift file by file.
- *
- * shadcn/ui "new-york" look: hairline borders, one small radius step for controls and one larger for surfaces, a
- * type scale where the page title carries `tracking-tight`, reading text sits at 16px and nothing falls below 13px.
- *
- * Elevation is spent once: a surface gets its edge from the hairline border alone, and only a layer that actually
- * floats above the page (`ui-overlay`) gets a shadow. A card carrying both drew two greys along the same edge on a
- * white page, which read as a fuzzy double line rather than depth.
- *
- * Conventions:
- *   - `ui-*` classes are utilities, so Tailwind primitives can still override one property (`ui-caption` +
- *     `text-warning`) without a specificity fight.
- *   - Colours come from a token in src/styles/theme.css; sizes/leading from the token or an on-scale rem value.
- *   - Blocks marked "shared base" exist only to be `@apply`-ed by their neighbours and are not used in markup;
- *     Tailwind emits a utility only when something references it, so they add no bytes.
+ * definition of a repeated decision. Colours come from a token in src/styles/theme.css; sizes and leading from the token
+ * or an on-scale rem value. Blocks marked "shared base" are `@apply`-ed by their neighbours only, so they cost no bytes.
  */
 
-/* ---------- Surfaces ---------- */
-
-/* Shared base for both surface roles below: the hairline and the flex/grid shrinking behaviour. */
 @utility ui-surface {
   border: 1px solid var(--border);
   min-width: 0;
@@ -31,13 +14,10 @@
   background-color: var(--bg-card);
 }
 
-/* Floating surfaces (sheets, popovers, the search panel): same hairline, one step more elevation. */
 @utility ui-overlay {
   @apply ui-surface rounded-xl shadow-lg;
   background-color: var(--bg-overlay);
 }
-
-/* ---------- Headings ---------- */
 
 /* The full-page figure/number line: page titles and metric displays share the display tracking and the tight leading. */
 @utility ui-display {
@@ -64,6 +44,7 @@
   letter-spacing: var(--tracking-display);
   color: var(--text-primary);
   overflow-wrap: break-word;
+  text-wrap: balance;
   min-width: 0;
 
   @media (width >= 640px) {
@@ -80,6 +61,7 @@
   letter-spacing: var(--tracking-title);
   color: var(--text-primary);
   overflow-wrap: break-word;
+  text-wrap: balance;
   min-width: 0;
 
   @media (width >= 640px) {
@@ -93,6 +75,7 @@
   font-weight: 600;
   letter-spacing: var(--tracking-title);
   color: var(--text-primary);
+  text-wrap: balance;
 
   @media (width >= 640px) {
     font-size: 1.125rem;
@@ -105,21 +88,22 @@
   line-height: 1.375rem;
   font-weight: 600;
   color: var(--text-primary);
+  text-wrap: balance;
 }
-
-/* ---------- Body text ---------- */
 
 /* 16px/`--leading-text`, the reading size. The two roles differ only in emphasis, which is why they share the metrics. */
 @utility ui-body {
   font-size: 1rem;
   line-height: var(--leading-text);
   color: var(--text-primary);
+  text-wrap: pretty;
 }
 
 @utility ui-body-secondary {
   font-size: 1rem;
   line-height: var(--leading-text);
   color: var(--text-secondary);
+  text-wrap: pretty;
 }
 
 /* 13px/18px, the supporting size: captions carry meaning, meta is the quieter annotation. */
@@ -135,10 +119,18 @@
   color: var(--text-tertiary);
 }
 
-/* ---------- Figures ---------- */
+/* Interactive chrome — buttons, tabs, nav links, tooltips: 14px on the touch layout, 13px from `md` up. */
+@utility ui-label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
 
-/* The headline figure: sans with tabular figures, which is how the reference dashboard sets a hero number. Monospace
-   stays on `ui-mono-value`, where digit alignment between rows is the point. */
+  @media (width >= 768px) {
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
+  }
+}
+
+/* The headline figure: sans with tabular figures; monospace stays on `ui-mono-value`, where digit alignment between rows is the point. */
 @utility ui-metric {
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
@@ -159,8 +151,7 @@
   color: var(--text-primary);
 }
 
-/* Column headers: sentence case at 13px, quiet colour, never wrapped so a sticky header keeps its height. The wide
-   uppercase tracking of the previous scale is gone — the reference design system sets table headers as normal text. */
+/* Column headers: sentence case at 13px, quiet colour, never wrapped so a sticky header keeps its height. */
 @utility ui-table-header {
   font-size: 0.8125rem;
   line-height: 1.125rem;

@@ -3,9 +3,8 @@ import type { CodingAgentEntry, OpenSourceModelEntry } from "./rankings.ts";
 export type ThemeMode = "system" | "light" | "dark";
 
 /**
- * The theme modes as a value, not only a type: `index.html` resolves the stored preference before the SPA boots, and
- * `settings-store` accepts a persisted value, so both carry their own copy of this enum. `consistency-guard` compares
- * the html against this list — a new mode that only reached the store would flash the OS preference on first paint.
+ * The theme modes as a value, not only a type: `index.html` resolves the stored preference before the SPA boots,
+ * `settings-store` accepts a persisted value, and `consistency-guard` compares the html against this list.
  */
 export const THEME_MODES = ["system", "light", "dark"] as const;
 
@@ -14,8 +13,7 @@ export type ModelSource = "aa" | "or" | "os" | "hall" | "decision";
 export type HomeOpenSourceEntry = Pick<OpenSourceModelEntry, "id" | "downloads" | "task">;
 
 /**
- * Top-N slice of Artificial Analysis' intelligence index, pre-aggregated for the home page's overview chart. One score
- * per row: the index is a single 0-100 number, which is what makes one bar per model enough.
+ * Top-N slice of AA's intelligence index for the home overview chart; one 0-100 score per row, so one bar per model.
  */
 export interface HomeChartPoint {
   id: string;
@@ -30,14 +28,12 @@ export interface HomeProviderSpeed {
    * is unknown and the client substitutes a translated label; an empty string is never sent.
    */
   name: string | null;
-  /** A creator's dot colour as `hsl(…)`, produced by `providerDotColor`; a brand colour without a usable hue still
-   * yields one, so this is never a CSS custom property. */
+  /** A creator's dot colour as `hsl(...)` from `providerDotColor`; never a CSS custom property. */
   color: string;
   avgSpeed: number;
 }
 
 export interface HomeHallucinationPoint {
-  /** The model's display name (the same value as `ArtificialAnalysisModel.name`). */
   name: string;
   accuracy: number;
 }

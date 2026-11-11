@@ -16,11 +16,8 @@ import { normalizeNewsLink } from "@/server/formats/url";
 import { defineParamSource, requireParsed, requireRows } from "@/server/pipeline";
 
 /**
- * The items a category serves: newest first, deduped on the normalised link, capped at `newsPerCategory`.
- *
- * An item whose link cannot be parsed is dropped here rather than keyed by its raw text — `normalizeNewsLink` reports
- * that as `null` instead of inventing a comparable form, so the count below is what tells the reader the feed was
- * partly unusable.
+ * The items a category serves: newest first, deduped on the normalised link, capped at `newsPerCategory`. An item whose
+ * link cannot be parsed is dropped here, so the count is what tells the reader the feed was partly unusable.
  */
 function pickNewsItems(ctx: AppContext, category: NewsCategory, allItems: NewsItem[]): NewsItem[] {
   let invalidDates = 0;
@@ -93,9 +90,8 @@ export const getNews = defineParamSource<{ category: NewsCategory }, NewsRaw, Ne
         "usable items",
         `raw=${raw.items.length}, feedsFailed=${raw.failCount}/${raw.total}`,
       ),
-    // A category that lost even one of its feeds is cached for the degraded TTL, so the next visit retries the gap
-    // instead of serving it for the full news TTL. Losing every feed in a category is "all legs failed" (`runLegs`
-    // throws), which the cache answers from its stale copy.
+    // A category that lost even one of its feeds is cached for the degraded TTL, so the next visit retries the gap. Losing
+    // every feed is "all legs failed" (`runLegs` throws), which the cache answers from its stale copy.
     partialWhen: ({ raw }) => ({
       partial: raw.failCount > 0,
       ttl: ttlFor(raw.failCount > 0, NEWS_TTL_MS),

@@ -1,8 +1,6 @@
 <script setup lang="ts">
-/**
- * The strip a tab bar or segmented control sits in: a muted pill container (`bg-muted`, `rounded-lg`, 3px inset) that
- * the active item pops out of. It only owns the layout of that strip.
- */
+/** The strip a tab bar or segmented control sits in: a muted pill container (`bg-muted`, `rounded-lg`, 3px inset) that the
+ * active item pops out of. It only owns the layout of that strip. */
 import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 

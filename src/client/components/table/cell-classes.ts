@@ -2,22 +2,15 @@ import { cn } from "@/client/utils/cn";
 import { ROW_PADDING } from "@/client/nav/layout";
 import type { DataTableColumn } from "./table-columns.ts";
 
-/**
- * Class helpers for the two halves of a data table.
- *
- * Header and body must agree on both, or a column breaks in one of the two views: `hiddenMd` has to hide the `th` *and*
- * the `td`, and the alignment wrapper pushes a right-aligned column's content to the end. They live in one module for
- * that reason, not because either is expensive.
- */
+/** Class helpers for the two halves of a data table. Header and body must agree on both, or a column breaks in one of the
+ * two views: `hiddenMd` has to hide the `th` *and* the `td`, and the alignment wrapper pushes a right-aligned column's
+ * content to the end. They live in one module for that reason. */
 
 /** The layout half of a column: everything a header cell needs, without the cell renderer. */
 export type HeaderColumn = Pick<DataTableColumn<never>, "id" | "header" | "width" | "hiddenMd" | "align">;
 
-/**
- * A column object outlives every render of its table, while both helpers below run once per cell per render (a 20-row
- * page with 8 columns calls each of them 160 times). Memoising on the column keeps the two `tailwind-merge` parses off
- * the render path without holding anything the definition does not already hold.
- */
+/** A column object outlives every render of its table, while both helpers below run once per cell per render, so
+ * memoising on the column keeps the `tailwind-merge` parses off the render path. */
 const outerClassCache = new WeakMap<HeaderColumn, string>();
 const innerClassCache = new WeakMap<HeaderColumn, string>();
 

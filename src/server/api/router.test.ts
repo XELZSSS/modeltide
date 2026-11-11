@@ -6,10 +6,7 @@ import { cacheDurationsForTtl } from "./headers";
 import { ClientAbortError, UpstreamError } from "./errors";
 import { served } from "@/server/served-payload";
 
-/**
- * Stands in for the pipeline, which is what stamps a payload in production. The fixed moment keeps two calls to the
- * same handler comparable, which is what the ETag tests turn on.
- */
+/** Stands in for the pipeline, which is what stamps a payload in production; the fixed moment keeps two calls comparable. */
 const STAMPED_AT = Date.parse("2026-01-01T00:00:00.000Z");
 const payloadOf = (partial: boolean) => served({ data: [], partial }, { producedAt: STAMPED_AT });
 

@@ -4,10 +4,8 @@ import { FALLBACK_NA } from "@/shared/config/ui";
 
 /**
  * Price precision by magnitude, never by trial: probing with `toFixed(2)` first made 0.0075 pass the two-decimal test
- * (it rounds to "0.01") and then fall through to the smallest-printable bound, so a $0.0075 model printed "<$0.01"
- * while the cheaper $0.0049 model printed "$0.005" — the pricier row read as the cheaper one.
- *
- * Takes the magnitude: the one caller has `Math.abs` in hand already.
+ * and then fall through to the smallest-printable bound, so a pricier row read as the cheaper one. Takes the magnitude -
+ * the one caller has `Math.abs` in hand already.
  */
 function priceDisplayPrecision(abs: number): number {
   if (abs === 0 || abs >= 0.01) return 2;
@@ -20,12 +18,10 @@ const MAX_PLAIN_DOLLARS = 1e15;
 function usdString(v: number): string {
   const abs = Math.abs(v);
   const precision = priceDisplayPrecision(abs);
-  // `toFixed` gives up on plain decimal notation past 1e21, and a hand-edited scenario can reach it: a "$3.7e+301"
-  // figure is not an amount anyone reads, so an out-of-range value reports its bound the way a sub-cent one does.
+  // `toFixed` gives up on plain decimal notation past 1e21 and a hand-edited scenario can reach it; such a value reports its bound.
   if (abs >= MAX_PLAIN_DOLLARS) return v < 0 ? ">-$1e15" : ">$1e15";
   const out = abs.toFixed(precision);
-  // Below the smallest printable amount, rounding would invent a value the price does not have: report the bound
-  // (">-$0.0001" / "<$0.0001") instead of a made-up one.
+  // Below the smallest printable amount, rounding would invent a value the price does not have: report the bound instead.
   if (abs > 0 && abs < 10 ** -precision) {
     const bound = (10 ** -precision).toFixed(precision);
     return v < 0 ? `>-$${bound}` : `<$${bound}`;

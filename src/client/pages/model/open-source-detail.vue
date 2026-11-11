@@ -42,8 +42,8 @@ const tags = computed(() => model.value?.tags ?? []);
       <PageSection v-if="tags.length > 0" :title="t('tags')">
         <div class="flex flex-wrap gap-2">
           <!-- `Badge` is `whitespace-nowrap` + `overflow-hidden`, so its own text is hard-clipped: a
-               `base_model:finetune:...` tag (routinely 40+ characters) lost its tail with no ellipsis and no
-               tooltip. The truncating child is what the Badge contract asks for. -->
+               `base_model:finetune:...` tag lost its tail with no ellipsis and no tooltip. The truncating child is
+               what the Badge contract asks for. -->
           <Badge v-for="tag in tags" :key="tag">
             <span class="min-w-0 break-words whitespace-normal md:truncate" v-tooltip="tag">{{ tag }}</span>
           </Badge>

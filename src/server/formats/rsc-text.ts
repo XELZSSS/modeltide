@@ -44,7 +44,6 @@ export function findNeedlePositions(text: string, needle: string, limit: number)
   return positions;
 }
 
-/** The value position of a `"marker": value` pair whose quoted key starts at `at`, or null. */
 export function markerValueAt(text: string, at: number, needle: string): number | null {
   if (!text.startsWith(needle, at)) return null;
   const colon = skipTrimWhitespace(text, at + needle.length);
@@ -52,7 +51,6 @@ export function markerValueAt(text: string, at: number, needle: string): number 
   return skipTrimWhitespace(text, colon + 1);
 }
 
-/** The value position of the first `"needle": value` pair in `text`, or null when the key never carries a value. */
 export function findMarkerValue(text: string, needle: string): number | null {
   let at = text.indexOf(needle);
   while (at !== -1) {

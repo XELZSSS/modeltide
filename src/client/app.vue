@@ -23,7 +23,7 @@ watch(lang, (value) => syncDocumentMeta(value), { immediate: true });
   <AppShell>
     <SuspenseQuery :key="routeKey">
       <!-- The wrapper is keyed with the route (through the SuspenseQuery key above), so a page switch mounts a fresh
-           cross-fade instead of snapping the old view out and the new one in on the same frame. -->
+           cross-fade rather than swapping both views in one frame. -->
       <div class="ui-anim-swap"><RouterView /></div>
     </SuspenseQuery>
   </AppShell>

@@ -60,8 +60,7 @@ async function readBodyText(
   try {
     for (;;) {
       if (signal.aborted) throw readAbortError(signal);
-      // Reading a chunk is the one await in this loop that no `AbortSignal` reaches by itself, so it is raced against
-      // the shared helper instead of a hand-written listener per chunk.
+      // Reading a chunk is the one await in this loop that no `AbortSignal` reaches by itself, so it is raced against the shared helper.
       const { done, value } = await raceAbort(reader.read(), signal, () => readAbortError(signal));
       if (done) break;
       if (value) {

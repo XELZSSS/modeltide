@@ -2,9 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * What one guard rule reads with. The cache lives for exactly one run of the guard: `configureServer` re-runs every
- * rule on each watched change, so a module-level cache would serve the files the dev server started with — the
- * failure mode the guard exists to prevent.
+ * What one guard rule reads with. The cache lives for exactly one run: `configureServer` re-runs every rule on each
+ * watched change, so a module-level cache would serve the files the dev server started with.
  */
 export interface GuardContext {
   readonly rootDir: string;
@@ -27,11 +26,8 @@ export function createGuardContext(rootDir: string): GuardContext {
 }
 
 /**
- * One consistency rule.
- *
- * `watches` is the part that keeps the dev server honest: `configureServer` used to carry a single hand-maintained
- * list of every file any rule touched, so a new rule that read a new file only re-checked itself after a restart. A
- * rule now names what invalidates it and the watcher set is the union.
+ * One consistency rule. `watches` is the part that keeps the dev server honest: a rule names what invalidates it and
+ * the watcher set is the union, instead of one hand-maintained list of every file any rule touched.
  */
 export interface GuardRule {
   /** Stable id, used by the registry for ordering and by a failure report to name the rule. */
@@ -43,7 +39,6 @@ export interface GuardRule {
   run(ctx: GuardContext): void;
 }
 
-/** Directory listing helper for the two rules that reason about a tree rather than a file. */
 export function listDir(rootDir: string, rel: string): fs.Dirent[] {
   return fs.readdirSync(path.join(rootDir, rel), { withFileTypes: true });
 }

@@ -11,28 +11,22 @@ type RawPayload<D extends ApiDomain> = SourcePayload<PayloadOf<D>>;
 const QUERY_DEFAULTS = {
   ttlMs: THIRTY_MINUTES,
   gcTimeMs: THIRTY_MINUTES,
-  // A payload stays resident this many times its freshness. With `gcTime === staleTime` the entry was dropped the
-  // moment it went stale, so a return to the page suspended on an empty plate instead of rendering the copy it had.
+  // A payload stays resident this many times its freshness, so returning to a page renders the cached copy instead of suspending.
   gcTimeMultiplier: 3,
   maxGcTimeMs: ONE_DAY,
 } as const;
 
 interface ApiQueryOptions<T> {
   ttl?: number;
-  /**
-   * Staleness for a payload that arrived empty. The origin answers a miss with its shortest cache window (the Hugging
-   * Face by-id lookup files "not found" for a minute), so keeping an empty list fresh for the full `ttl` left a model
-   * that had just been indexed showing the not-found page until the entry went stale.
-   */
+  /** Staleness for a payload that arrived empty: the origin answers a miss with its shortest window (Hugging Face by-id
+   * files "not found" for a minute), so an empty list kept for the full `ttl` hid a model that had just been indexed. */
   missTtlMs?: number;
-  // Every caller in `catalog.ts` registers the partial-poll pair together, so both are required: the "this query never
-  // polls" arm they used to feed is unreachable.
+  // Every caller registers the partial-poll pair together, so both are required.
   partialRefetchMs: number;
   isPartialData: (data: SourcePayload<T> | undefined) => boolean;
   query?: Record<string, string>;
 }
 
-// `opts` is required: all six `createApiQuery` calls in `catalog.ts` pass it, so the `?? {}` arm had no caller.
 export function createApiQuery<D extends ApiDomain>(
   domain: D,
   key: readonly (string | number)[],
@@ -43,8 +37,7 @@ export function createApiQuery<D extends ApiDomain>(
   const queryFn = fetcher<PayloadOf<D>>(path);
   const ttlMs = ttl ?? QUERY_DEFAULTS.ttlMs;
   // A partial payload is stored under the shorter window `ttlFor` gives it (`src/server/pipeline.ts`), so the browser
-  // holds it for that same window too: keeping it for the full domain TTL left a dashboard the origin had already
-  // replaced rendering as current until the next mount, after the partial-poll budget had been spent.
+  // holds it for that same window rather than the full domain TTL.
   const staleTimeFor = (payload: RawPayload<D> | undefined): number => {
     if (payload === undefined) return ttlMs;
     if (missTtlMs !== undefined && Array.isArray(payload.data) && payload.data.length === 0) return missTtlMs;

@@ -9,10 +9,8 @@ import type { DecisionIndexEntry } from "@/shared/types";
 import { parseDecisionRows } from "./parse/decision";
 
 /**
- * Artificial Analysis' Decision Index: a composite scored over five columns drawn from four datasets — omniscience
- * contributes both its accuracy and its non-hallucination rate, while HLE multiple choice, when2call and wildguardtest
- * contribute one each — with language models and decision models ranked side by side. The page renders as a leaderboard
- * already ordered by the index, but the order is re-established here so the payload decides it, not the markup.
+ * Artificial Analysis' Decision Index: a composite scored over the page's evaluation columns, with language models and
+ * decision models ranked side by side. The order is re-established here so the payload decides it, not the markup.
  */
 export const getDecisionIndex = defineSource<string, DecisionIndexEntry[]>({
   key: cacheKeys.decisionIndex,

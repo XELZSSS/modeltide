@@ -39,12 +39,9 @@ interface ErrorText {
   details: string[];
 }
 
-/**
- * `TimeoutError` is the client's own fetch budget and `AbortError` a navigation; both are the browser's names, not ours.
- * A request that never reached the server arrives as an `ApiClientError` of kind `network` (the fetch call wraps it),
- * so a bare `TypeError` here is an ordinary bug in our own code and stays `unknown` rather than telling the reader their
- * connection failed.
- */
+/** `TimeoutError` is the client's own fetch budget and `AbortError` a navigation; both are the browser's names, not ours.
+ * A request that never reached the server arrives as an `ApiClientError` of kind `network` (the fetch call wraps it), so a
+ * bare `TypeError` here is a bug in our own code and stays `unknown` rather than telling the reader their connection failed. */
 function classifyError(err: unknown): ClientErrorKind {
   if (err instanceof ApiClientError) return err.kind;
   const name = (err as { name?: unknown } | null | undefined)?.name;
@@ -73,10 +70,7 @@ export function errorText(err: unknown, t: TFunction): ErrorText {
   return { kind, title: t(copy.title), message: t(copy.message), details: errorDetails(err, t) };
 }
 
-/**
- * The same view for a failure that may be absent: the three call sites (the error boundary, the search bar and the
- * mobile search panel) all read `error === null` first, so the branch lives here instead of three times beside them.
- */
+/** The same view when the error may be absent: all three call sites read `error === null` first, so the branch lives here once. */
 export function errorTextOf(err: Error | null, t: TFunction): ErrorText | null {
   return err === null ? null : errorText(err, t);
 }

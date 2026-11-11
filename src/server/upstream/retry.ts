@@ -6,8 +6,7 @@ const BACKOFF_JITTER_MS = 250;
 export function parseRetryAfterMs(res: Response): number | null {
   const raw = res.headers.get("retry-after");
   if (raw === null) return null;
-  // Delta-seconds first, then the HTTP-date form. Both answer null for a value that has already passed: waiting for
-  // it would only be another failed attempt.
+  // Delta-seconds first, then the HTTP-date form; both answer null for a value that has already passed.
   const deltaMs = Math.min(Number(raw.trim()), RETRY_AFTER_MAX_MS / 1000) * 1000;
   if (deltaMs > 0) return deltaMs;
   const dateMs = Math.min(Date.parse(raw) - Date.now(), RETRY_AFTER_MAX_MS);

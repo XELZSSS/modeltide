@@ -1,9 +1,8 @@
 import { noteCacheStat } from "./stats";
 
 /**
- * Single-flight registry keyed by versioned cache key: concurrent callers share one in-flight promise. The refresh
- * path registers externally-owned work through get/insert/release (hang guard, displaced-owner check); readers
- * coalesce concurrent loads through runShared with auto-release on settle.
+ * Single-flight registry keyed by versioned cache key: concurrent callers share one in-flight promise. The refresh path
+ * registers externally-owned work through get/insert/release; readers coalesce through runShared.
  */
 class SingleFlight {
   private map = new Map<string, Promise<unknown>>();
@@ -41,8 +40,5 @@ class SingleFlight {
 
 export const sharedInflight = new SingleFlight();
 
-/**
- * Concurrent reads of one versioned key share a single KV round trip. The refresh path was already single-flighted;
- * the read path was not, so a burst on a cold key issued one KV read per request.
- */
+/** Concurrent reads of one versioned key share a single KV round trip: without this a burst on a cold key issued one KV read per request. */
 export const sharedReads = new SingleFlight(() => noteCacheStat("kvReadsCoalesced"));

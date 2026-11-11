@@ -1,9 +1,5 @@
-/**
- * The data-table contract: what a column is, how to build one, and the props/emits the desktop and mobile bodies share.
- *
- * Views never declare these shapes themselves — `data-table.vue`, the two bodies and the pages building columns all
- * speak this one vocabulary, which is what keeps a column definition working in both layouts.
- */
+/** The data-table contract: what a column is, how to build one, and the props/emits the desktop and mobile bodies share.
+ * Views never declare these shapes themselves, which is what keeps a column definition working in both layouts. */
 
 import { h, type FunctionalComponent, type VNodeChild } from "vue";
 import { cn } from "@/client/utils/cn";
@@ -15,10 +11,8 @@ export interface DataTableColumn<T> {
   cell: (row: T) => VNodeChild;
   align?: "left" | "right";
   width?: number | string;
-  /**
-   * Leave this column out of the mobile card. Only for a value that the primary cell already renders on a phone —
-   * every other column belongs in the card, because a hidden column is data the reader cannot reach at all.
-   */
+  /** Leave this column out of the mobile card. Only for a value that the primary cell already renders on a phone: every
+   * other column belongs in the card, because a hidden column is data the reader cannot reach at all. */
   hiddenMd?: boolean;
   mobilePrimary?: boolean;
 }
@@ -28,11 +22,8 @@ export interface RowAccessors<T> {
   getRowName?: (row: T) => string;
 }
 
-/**
- * The row decorations a ranking table adds to its model-name cell: the row's rank in the delivered ranking, and the link to
- * its detail page. Both are optional and both sit outside the column contract proper, because a table that is not a ranking
- * — or a row with no id to link to — simply omits them.
- */
+/** The row decorations a ranking table adds to its model-name cell: the row's rank in the delivered ranking and the link
+ * to its detail page. Both are optional, because a table that is not a ranking simply omits them. */
 export interface NameCellExtras<T> {
   rankOf?: (row: T) => number | null;
   hrefOf?: (row: T) => string | undefined;
@@ -65,11 +56,8 @@ export function trendClass(change: number | null | undefined): string {
   return change > 0 ? "text-success" : "text-destructive";
 }
 
-/**
- * A right-aligned column: the one place that shape is built, so a value that is also the phone card's right-hand figure
- * opts into `mobilePrimary` here instead of reaching for a second builder.
- * `width` is only read on a wide screen; the mobile card sizes its own primary cell.
- */
+/** A right-aligned column: the one place that shape is built, so a value that is also the phone card's right-hand figure
+ * opts into `mobilePrimary` here. `width` is only read on a wide screen; the mobile card sizes its own primary cell. */
 export function rightCol<T>(
   id: string,
   header: string,

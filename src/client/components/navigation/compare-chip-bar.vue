@@ -3,7 +3,6 @@ import { computed, watch } from "vue";
 import { ArrowLeftRight, Trash2, X } from "@lucide/vue";
 import Button from "@/client/components/ui/button.vue";
 import Badge from "@/client/components/ui/badge.vue";
-import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 import { useTranslation } from "@/client/i18n";
 import { useCompareStore } from "@/client/stores";
 import { modelDisplayName } from "@/shared/utils/models";
@@ -43,14 +42,15 @@ watch(
     <div class="flex min-w-0 flex-wrap items-center gap-2">
       <slot name="leading" />
       <!--
-        The remove button is a tap target pulled back over the pill's box with `-m-1.5`: 40px on touch, the same floor
-        the other icon controls keep, and 36px from `md`. `Badge` clips that overhang, which is what keeps the button
-        from painting its hover background outside the pill; its focus ring is `ring-inset` for the same reason.
+        The remove control keeps a 40px touch box (36px from `md`) pulled back over the pill with `-m-1.5`, but its
+        fill and focus ring are painted on a 20px disc inside that box. A background on the box itself is clipped by
+        the badge's `overflow-hidden` at three edges, which cuts the rounded corners mid-arc; the disc never reaches
+        an edge, so the hover state stays whole.
       -->
       <Badge
         v-for="(model, index) in models"
         :key="modelKeyOf(model, index)"
-        class="ui-anim-pop border-border py-1 pr-1 pl-3 text-[0.8125rem] leading-[1.125rem] text-text-primary"
+        class="ui-anim-pop border-border py-1 pr-1 pl-3 ui-label text-text-primary"
       >
         <span
           class="max-w-36 font-medium break-words whitespace-normal md:truncate"
@@ -60,10 +60,14 @@ watch(
         <button
           type="button"
           :aria-label="t('removeModel', { name: modelDisplayName(model) })"
-          :class="`-m-1.5 flex size-10 shrink-0 items-center justify-center rounded-md text-text-secondary ui-motion ${FOCUS_RING} focus-visible:ring-inset md:size-9 hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary`"
+          class="group -m-1.5 flex size-10 shrink-0 items-center justify-center rounded-md text-text-secondary ui-motion focus-visible:outline-none md:size-9"
           @click="emit('remove', model)"
         >
-          <X :size="14" />
+          <span
+            class="flex size-5 items-center justify-center rounded-full ui-motion group-focus-visible:bg-surface-hover group-focus-visible:text-text-primary group-focus-visible:ring-2 group-focus-visible:ring-ring [@media(hover:hover)]:group-hover:bg-surface-hover [@media(hover:hover)]:group-hover:text-text-primary"
+          >
+            <X :size="14" />
+          </span>
         </button>
       </Badge>
     </div>

@@ -4,12 +4,8 @@ import { runLegs, type Leg, type LegFailure, type LegValues } from "./join-legs"
 
 /**
  * `tag` prefixes the per-leg failure logs and `allFailedMessage` is the one policy worth sharing between the two entry
- * points: sources still decide for themselves what a *partial* result means, because "some legs down" differs per
- * source — the AA index needs its leaderboard leg specifically, the home dashboard needs any one of its four. A shared
- * `partial` flag would restate that policy one level too high, so the caller reads `failures` and decides.
- *
- * `runLegs` caps the width at the shared slot pool's six connections, so this layer queues the legs rather than
- * bounding them.
+ * points: sources decide for themselves what a *partial* result means, so the caller reads `failures` and decides.
+ * `runLegs` caps width at the shared slot pool's connection limit, so this layer queues the legs rather than bounding them.
  */
 interface FanOutOptions {
   tag: string;

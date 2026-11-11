@@ -1,8 +1,5 @@
-/**
- * Page state for a data table: de-duplicated rows, the current page clamped to the page count, and the slice the table
- * renders. The page size is a getter so the same table can use a smaller page on a phone, and the page resets when the
- * search term or the page size changes.
- */
+/** Page state for a data table: de-duplicated rows, the current page clamped to the page count, and the slice the table
+ * renders. The page size is a getter so the same table can use a smaller page on a phone. */
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
 import { dedupeBy } from "@/shared/utils";
 

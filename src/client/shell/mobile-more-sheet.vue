@@ -15,10 +15,8 @@ const { mobileMore, isActive } = useNavigation();
 const { t } = useTranslation();
 const prefetch = usePrefetch();
 
-/**
- * The phone's way into the search. The navigation palette is a desktop control (the bar it hangs from does not exist
- * below 768px), so this row opens the model table, whose own search field is the same one the palette ranks with.
- */
+/** The phone's way into the search. The navigation palette is a desktop control (the bar it hangs from does not exist below
+ * 768px), so this row opens the model table, whose own search field is the same one the palette ranks with. */
 const MODEL_SEARCH_HREF = rankingTabHref("modelRankings");
 </script>
 

@@ -110,8 +110,8 @@ export function useSearchAllRankings(
     ]);
   });
 
-  // The first source that failed, so the popup can name that failure instead of one shared "search failed": the four
-  // lists come from four different upstreams and which one broke is the only actionable part.
+  // The first source that failed, so the popup names it instead of one shared "search failed": which one broke is the
+  // only actionable part.
   const error = computed(() =>
     enabled.value
       ? (artificialQ.state.value.error ??

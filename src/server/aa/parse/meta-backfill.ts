@@ -6,8 +6,7 @@ import { INDEX_FIELDS } from "@/server/formats/meta-fields";
 const TRAILING_VERSION_DIGITS_RE = /\d{4,8}$/;
 
 function matchMeta(m: ArtificialAnalysisModel, meta: Record<string, OrMetaEntry>): OrMetaEntry | undefined {
-  // One array and one memoized normalization per name. The chain built four arrays per model, and it re-normalized every
-  // name with `normalizeModelKey` while the OpenRouter lookup beside it already keeps that result in its LRU.
+  // One array and one memoized normalization per name, not four arrays per model.
   const keys: string[] = [];
   for (const value of [m.slug, m.name, m.short_name]) {
     if (value == null) continue;

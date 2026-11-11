@@ -26,7 +26,6 @@ describe("isFiniteNumber", () => {
 });
 
 describe("ratioToPercent", () => {
-  // Out-of-range ratios are dropped rather than rescaled by a guess.
   it.each([
     [0, 0],
     [0.5, 50],
@@ -59,7 +58,6 @@ describe("formatShortNumber", () => {
     [1200, "1.20K"],
     [1_500_000, "1.50M"],
     [-1200, "-1.20K"],
-    // Missing or non-finite input falls back to the dash.
     [null, "—"],
     [Number.NaN, "—"],
   ])("%s -> %s", (value, expected) => {
@@ -93,7 +91,6 @@ describe("formatTrend", () => {
     // 99.96 rounds to 100.0 when printed, so it has to report its bound rather than grow a third digit.
     [99.96, ">99%"],
     [-99.96, "<-99%"],
-    // The live payload carries a model at +7725%: four digits, printed as its bound.
     [7725.04, ">99%"],
     [111714.24, ">99%"],
   ])("formats the trend %s as %s", (change, expected) => {

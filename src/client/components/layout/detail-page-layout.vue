@@ -1,8 +1,6 @@
 <script setup lang="ts">
-/**
- * The detail-page skeleton: back button, then the heading, then the view's own blocks at the detail rhythm. Pages
- * supply the return target and the labels; the spacing between every detail page comes from here.
- */
+/** The detail-page skeleton: back button, then the heading, then the view's own blocks at the detail rhythm — the spacing
+ * between every detail page comes from here. */
 import type { TranslationKey } from "@/shared/i18n";
 import BackButton from "@/client/shell/back-button.vue";
 import PageContainer from "@/client/components/layout/page-container.vue";

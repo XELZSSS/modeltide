@@ -1,36 +1,19 @@
 import { MODALITY_KEYS, type ModalityKey } from "@/shared/config";
-import { isRecord, text } from "@/server/formats/scalars";
 import type { BenchmarkWireName, LeaderboardScoreKey } from "./parse/benchmark-fields";
 
 /**
- * Artificial Analysis' wire contract, in one module.
- *
- * Three shapes are kept apart on purpose, because they used to be one `Record<string, unknown>` that every layer wrote
- * with a hand-spelled string key:
- *
- * 1. **The page rows** (`AaLeaderboardRow`, `AaContestantRow`, `AaCodingAgentRow`, `AaChangelogRow`) spell the field names
- *    *as AA sends them* — `modelCreatorName`, `price1mInputTokens`, `scores["aa-analyst-agent"]`. They are only read by
- *    the parser that maps them, and every member is `unknown`: a Flight body is a trust boundary, so nothing here
- *    claims a type the upstream has not proven.
- * 2. **`AaRow`** is the row the leaderboard parser *normalizes* onto and the enrichment pages *project* onto: one
- *    spelling per concept, the one `/models` uses. Every reader downstream (`compact`, `mergeBySlug`, `backfillFromMeta`)
- *    speaks this shape only.
- * 3. **`ChangelogModel`** is the changelog's mapped output, the one derived shape that leaves this file's parsers and is
- *    consumed by `releases/parse.ts`.
- *
- * The point of the split is drift: a field renamed upstream, in the projection list, or in `compact` now fails the
- * build instead of producing rows that parse but carry `null`s, which is the failure mode this stack kept hitting
- * (`scores` vs camelCase benchmarks).
+ * Artificial Analysis' wire contract: the shapes the upstream sends and the names it sends them under. The page rows
+ * spell field names as AA sends them and keep every member `unknown` — a Flight body is a trust boundary; `AaRow` is the
+ * normalized spelling every reader downstream speaks, and `ChangelogModel` the changelog's mapped output.
  */
 
-/** The leaderboard's `scores` object carries these three fields outside the benchmark table. */
+/** The three `scores` fields outside the benchmark table. */
 export const AA_SCORE_FIELDS = {
   analystAgent: "aa-analyst-agent",
   omniscienceAccuracy: "omniscience-accuracy",
   omniscienceNonHallucination: "omniscience-non-hallucination",
 } as const;
 
-/** Every spelling the leaderboard's `scores` object may carry — the benchmark names plus the three above. */
 export type LeaderboardScoreField = (typeof AA_SCORE_FIELDS)[keyof typeof AA_SCORE_FIELDS] | LeaderboardScoreKey;
 
 export type LeaderboardScores = Partial<Record<LeaderboardScoreField, unknown>>;
@@ -70,14 +53,7 @@ export interface AaContestantRow {
   scores?: unknown;
 }
 
-/**
- * One row of the coding-agent leaderboard, as both `benchmarkRows` and the `rows` array it references spell it.
- *
- * One row per agent × model pairing. The flags a row also carries (`isDefault`, `isHighlighted`, `isUnavailable`) and the
- * per-evaluation blocks (`evals`, `safety`, `rewardHacking`, `percentiles`) are not read: this app mirrors the table the
- * page prints instead of re-deciding which pairings it ranks. Everything read travels in nested objects
- * (`model.shortName`, `agentCreator.name`).
- */
+/** One row of the coding-agent leaderboard, as both `benchmarkRows` and the `rows` array spell it: one row per agent × model pairing, read through nested objects. */
 export interface AaCodingAgentRow {
   id?: unknown;
   agentName?: unknown;
@@ -104,23 +80,31 @@ export interface AaReleaseRow {
   creator?: unknown;
 }
 
-/** The five columns the Decision Index composites, as its page spells them. */
+/** The two names the row gates in `wire-read.ts` test for; `satisfies keyof` ties each to its interface, so a rename fails the build. */
+export const AA_ROW_GATES = {
+  leaderboardIndex: "intelligenceIndex" satisfies keyof AaLeaderboardRow,
+  releaseLink: "releaseSlug" satisfies keyof AaChangelogRow,
+} as const;
+
+/** The Decision Index's score block, as its page spells it: every member is a 0-100 percentage point. */
 export interface AaDecisionScores {
   omniscienceAccuracy?: unknown;
   omniscienceNonHallucinationRate?: unknown;
-  hleTextMcqAccuracy?: unknown;
+  omniscienceDecisionScore?: unknown;
+  hleAccuracy?: unknown;
+  hleNonHallucinationRate?: unknown;
+  hleDecisionScore?: unknown;
   when2callAccuracy?: unknown;
-  wildguardtestAverageF1?: unknown;
+  when2callDecisionScore?: unknown;
+  evalsafeOnetAccuracy?: unknown;
+  evalsafeOnetDecisionScore?: unknown;
+  documentDecisionAllPassRate?: unknown;
+  documentDecisionDecisionScore?: unknown;
+  invarianceAllPassRate?: unknown;
+  invarianceSymmetry?: unknown;
 }
 
-/** The `scores` block of one contestant row. */
-export function decisionScoresOf(row: AaContestantRow): AaDecisionScores | undefined {
-  return isRecord(row.scores) ? (row.scores as AaDecisionScores) : undefined;
-}
-
-/**
- * The changelog's mapped row: identity, the release family it belongs to, and the release's own facts.
- */
+/** The changelog's mapped row: identity, release family, and the release's own facts. */
 export interface ChangelogModel {
   slug: string;
   name: string;
@@ -130,12 +114,6 @@ export interface ChangelogModel {
   creatorName: string;
 }
 
-/** Copies `field` from one row onto another under its canonical spelling; a row without it is left untouched. */
-export function copyField(from: AaRow, to: AaRow, field: string): void {
-  const key = presentField(from, field);
-  if (key !== undefined) setField(to, field, (from as Record<string, unknown>)[key]);
-}
-
 /** The `omniscienceBreakdown` block of one row: AA's own spelling of the three rates. */
 export interface AaOmniscienceBreakdown {
   accuracy?: unknown;
@@ -143,30 +121,8 @@ export interface AaOmniscienceBreakdown {
   hallucinationRate?: unknown;
 }
 
-export function omniscienceBreakdownOf(row: AaRow): AaOmniscienceBreakdown | undefined {
-  return isRecord(row.omniscienceBreakdown) ? (row.omniscienceBreakdown as AaOmniscienceBreakdown) : undefined;
-}
-
-/**
- * The eight modality flags, spelled as AA spells them: `inputModalityText` … `outputModalityVideo`.
- *
- * Derived from `MODALITY_KEYS` rather than listed again: the suffix is the key capitalized, so a modality added to
- * the shared enum is a compile error here until its wire name follows, instead of a flag this app never reads.
- */
+/** The eight modality flags as AA spells them (`inputModalityText` … `outputModalityVideo`), the suffix being the key capitalized, so a new `MODALITY_KEYS` entry is a compile error until its wire name follows. */
 export type ModalityWireName = `${"input" | "output"}Modality${Capitalize<ModalityKey>}`;
-
-/**
- * Overlays one row's breakdown block onto another's: a field the patch carries wins, an absent one leaves the target's
- * value alone. The merge used to spread the patch over the target, which erased an accuracy the leaderboard had already
- * established whenever the enrichment row carried the block with only some of its fields.
- */
-export function overlayBreakdown(target: AaOmniscienceBreakdown, patch: AaOmniscienceBreakdown): void {
-  const into = target as Record<string, unknown>;
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === null || value === undefined || value === "") continue;
-    into[key] = value;
-  }
-}
 
 export const MODALITY_WIRES: readonly {
   readonly key: ModalityKey;
@@ -178,10 +134,7 @@ export const MODALITY_WIRES: readonly {
   output: modalityWireName("output", key),
 }));
 
-/**
- * The two spellings of one flag. The capitalization is what `ModalityWireName` cannot express at runtime, so it is
- * asserted once here instead of at every read.
- */
+/** The capitalization `ModalityWireName` cannot express at runtime, so it is asserted once here. */
 function modalityWireName(direction: "input" | "output", key: ModalityKey): ModalityWireName {
   const suffix = key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
   return `${direction}Modality${suffix}` as ModalityWireName;
@@ -199,11 +152,7 @@ export const OMNISCIENCE_MODALITY_WIRE_NAMES: readonly ModalityWireName[] = [
   "inputModalityVideo",
 ];
 
-/**
- * One field the upstream spells more than one way across its pages, so a projection list can ask for the concept and
- * get whichever spelling this row carries. `itbenchSre` is the only one today: `/models` capitalizes the B, the
- * omniscience page does not.
- */
+/** A field the upstream spells more than one way: `/models` capitalizes the B in `itbenchSre`, omniscience does not. */
 const AA_FIELD_ALIASES: Record<string, readonly string[]> = {
   itbenchSre: ["itbenchSre", "itBenchSre"],
 };
@@ -236,21 +185,10 @@ interface AaRowFields {
 /** The fields whose names are per-entity tables rather than literals: benchmarks and modality flags. */
 type AaRowTableFields = Partial<Record<BenchmarkWireName, unknown>> & Partial<Record<ModalityWireName, unknown>>;
 
-/**
- * The normalized AA row: the leaderboard's catalog fields plus whatever the enrichment pages add, one spelling each.
- *
- * A `Record<string, unknown>` is assignable to it (every member is optional and `unknown`), which is what lets a Flight
- * row be handed over without a cast; what it forbids is *writing* a key nothing declares, and *reading* one under a
- * spelling this interface does not have.
- */
+/** The normalized AA row: one spelling each, every member optional and `unknown`, so a `Record<string, unknown>` is assignable to it without a cast. */
 export type AaRow = AaRowFields & AaRowTableFields;
 
-/**
- * The spelling of `field` this row carries, or `undefined` when it carries none.
- *
- * Dynamic access has to happen somewhere — a projection list is a list of names — so it happens in these two functions
- * instead of at each call site: the cast is the alias table's promise that the name it returns is a field of this row.
- */
+/** The spelling of `field` this row carries, or `undefined` when it carries none; dynamic access happens in this file's four accessors. */
 export function presentField(row: AaRow, field: string): string | undefined {
   const aliases = AA_FIELD_ALIASES[field];
   if (aliases === undefined) return field in row ? field : undefined;
@@ -262,28 +200,12 @@ export function fieldValue(row: AaRow, field: string): unknown {
   return key === undefined ? undefined : (row as Record<string, unknown>)[key];
 }
 
-/** Writes one dynamic field: the tables above are the only keys this is used with. */
 export function setField(row: AaRow, field: string, value: unknown): void {
   (row as Record<string, unknown>)[field] = value;
 }
 
-/** The `scores` object of one leaderboard row, read as the declared spelling set. */
-export function leaderboardScores(row: AaLeaderboardRow): LeaderboardScores | undefined {
-  return isRecord(row.scores) ? (row.scores as LeaderboardScores) : undefined;
-}
-
-/**
- * A leaderboard row is usable only if it carries the index the ranking is ordered by: the `initialModels` prop also
- * carries the page's legend and changelog snapshots, and one of those came back as the row source the day the parser
- * took the first array it found under the marker. `parseLeaderboardModels` now passes this to the array picker, so a
- * snapshot never reaches the row loop at all.
- */
-export function isLeaderboardRow(row: Record<string, unknown>): row is Record<string, unknown> & AaLeaderboardRow {
-  return "intelligenceIndex" in row;
-}
-
-/** The creator record a normalized row carries: AA sends `{ name, color }` or nothing. */
-export function creatorOf(row: AaRow): { name: string; color: string } {
-  const creator = isRecord(row.creator) ? row.creator : undefined;
-  return { name: text(creator?.name), color: text(creator?.color) };
+/** Copies `field` from one row onto another under its canonical spelling; a row without it is left untouched. */
+export function copyField(from: AaRow, to: AaRow, field: string): void {
+  const key = presentField(from, field);
+  if (key !== undefined) setField(to, field, (from as Record<string, unknown>)[key]);
 }

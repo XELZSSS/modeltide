@@ -3,7 +3,7 @@ import { isUnsuitableContent } from "@/server/formats/content-guards";
 import { mapRows } from "@/server/formats/parse-rows";
 import { MAX_SCAN_CHARS } from "@/server/formats/limits";
 import type { AaChangelogRow, ChangelogModel } from "../wire";
-import { scanReleaseIndex, type ReleaseInfo } from "./release-index";
+import { rowArrays, scanReleaseIndex, type ReleaseInfo } from "./release-index";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
 
 const CHANGELOG_FIELD_MAX = 500;
@@ -21,9 +21,7 @@ function collectModels(
   // Distinct row counts, not one entry per array: the RSC scan reaches the same `models` array through several windows,
   // and its repeated copies are one candidate, not a competing one.
   const sources = new Set<number>();
-  for (const value of modelArrays) {
-    if (!Array.isArray(value)) continue;
-    const rows = value as unknown[];
+  for (const rows of rowArrays(modelArrays)) {
     const { rows: mapped, dropped } = mapRows(rows, (raw) => {
       const entry: AaChangelogRow = raw;
       const slug = text(entry.slug);

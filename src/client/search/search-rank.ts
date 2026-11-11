@@ -87,10 +87,8 @@ export function detailLink(source: SearchResultSource, id: string): string {
   return modelDetailPath(SEARCH_SOURCE_TO_MODEL_SOURCE[source], id);
 }
 
-/**
- * Descending by score, with a missing score last. Two missing scores tie explicitly: `-Infinity - -Infinity` is `NaN`,
- * and a comparator that returns `NaN` leaves the order to the sort's stability rather than to a stated rule.
- */
+/** Descending by score, with a missing score last. Two missing scores tie explicitly: `-Infinity - -Infinity` is `NaN`, and
+ * a comparator that returns `NaN` leaves the order to the sort's stability rather than to a stated rule. */
 function compareScores(a: number | null, b: number | null): number {
   if (a == null) return b == null ? 0 : 1;
   if (b == null) return -1;

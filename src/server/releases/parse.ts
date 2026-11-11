@@ -6,51 +6,39 @@ import type { ChangelogModel } from "@/server/aa/wire";
 import { dedupeBy } from "@/shared/utils";
 import { aaModelPageUrl } from "@/shared/utils/models";
 
-function toClosedEntry(
-  slug: string,
-  model: string,
-  provider: string,
-  rawDate: string,
-  modelsBaseUrl: string,
-): ClosedReleaseEntry | null {
-  const cleanSlug = slug.trim();
-  const cleanModel = model.trim();
-  const cleanProvider = provider.trim();
-  if (!cleanSlug || !cleanModel || !cleanProvider) return null;
-  if (cleanSlug.length > MAX_ID_CHARS || cleanModel.length > MAX_ID_CHARS || cleanProvider.length > MAX_NAME_CHARS)
-    return null;
-  const date = isoDatePrefix(rawDate);
-  if (!date) return null;
-  return {
-    id: cleanSlug,
-    model: cleanModel,
-    provider: cleanProvider,
-    releaseDate: date,
-    // AA serves a model page at its **model** slug, and a release slug only equals that for some releases: where it
-    // does not (`ling-3-1-flash-rc5` announces the model page `ling-3-1-flash-1019`) the link answered 404. Both callers
-    // pass the model slug as the row's identity, so id and link are the same value by construction rather than two
-    // arguments that had to be kept equal.
-    link: aaModelPageUrl(modelsBaseUrl, cleanSlug),
-  };
+/** The four facts a release row is built from, as each caller already holds them. */
+interface ReleaseFacts {
+  slug: string;
+  model: string;
+  provider: string;
+  date: string;
 }
 
-/**
- * One row per **variant**. `ChangelogModel` carries both identities — the release family (`releaseSlug`) and the model
- * this row is (`slug`) — and the feed keys on the model, because `DeepSeek V4.1 Flash 1017 (Max)` and
- * `(Non-reasoning)` are two entries a reader distinguishes even though AA files them under one release.
- */
-function toClosedRelease(e: ChangelogModel, modelsBaseUrl: string): ClosedReleaseEntry | null {
-  return toClosedEntry(e.slug, e.name, e.creatorName, e.releaseDate, modelsBaseUrl);
+/** The one mapper both callers go through: the changelog and the index fallback differ only in where the four facts come from. `slug` is the release's **model** slug, not its release family — AA serves a model page at the model slug, and the two are equal only for some releases (`ling-3-1-flash-rc5` announces `ling-3-1-flash-1019`). */
+function toClosedRelease(facts: ReleaseFacts, modelsBaseUrl: string): ClosedReleaseEntry | null {
+  const id = facts.slug.trim();
+  const model = facts.model.trim();
+  const provider = facts.provider.trim();
+  if (!id || !model || !provider) return null;
+  if (id.length > MAX_ID_CHARS || model.length > MAX_ID_CHARS || provider.length > MAX_NAME_CHARS) return null;
+  const releaseDate = isoDatePrefix(facts.date);
+  if (!releaseDate) return null;
+  return { id, model, provider, releaseDate, link: aaModelPageUrl(modelsBaseUrl, id) };
 }
 
-/**
- * The changelog-empty fallback: the caller passes the already-compacted index rows, so the shape is established and
- * only the release fields are picked out of each one.
- */
+/** The changelog-empty fallback: the caller passes the already-compacted index rows, so the mapper alone decides what makes a usable release. */
 function toClosedReleaseFromIndex(m: ArtificialAnalysisModel, modelsBaseUrl: string): ClosedReleaseEntry | null {
-  const slug = m.slug.trim() !== "" ? m.slug : m.id;
-  if (!slug || !m.name) return null;
-  return toClosedEntry(slug, m.name, m.model_creators?.name ?? "", m.release_date ?? "", modelsBaseUrl);
+  return toClosedRelease(
+    {
+      // AA leaves the slug blank on some index rows; the id is the same identity when it is.
+      slug: m.slug.trim() !== "" ? m.slug : m.id,
+      model: m.name,
+      // A row with no creator or no release date is not a release, and the mapper drops it on the empty field.
+      provider: m.model_creators?.name ?? "",
+      date: m.release_date ?? "",
+    },
+    modelsBaseUrl,
+  );
 }
 
 export function toClosedReleasesFromIndex(
@@ -60,29 +48,25 @@ export function toClosedReleasesFromIndex(
   const entries = models
     .map((m) => toClosedReleaseFromIndex(m, modelsBaseUrl))
     .filter((e): e is ClosedReleaseEntry => e !== null);
+  // Keyed on the model slug, so two variants of one release are two rows rather than one.
   const deduped = dedupeBy(entries, (e) => e.id);
   sortByDateDesc(deduped, (e) => e.releaseDate);
   return deduped;
 }
 
 /**
- * One row per model variant, newest release first.
- *
- * Variants of one release share a `releaseDate` and an entry in AA's `releases` array, so the feed used to collapse them
- * onto the release and print the family name — `DeepSeek V4.1 Flash 1017` hid both `(Max)` and `(Non-reasoning)`. A
- * release event is per model here, which is also the identity the index fallback (`toClosedReleasesFromIndex`) already
- * used, so the two paths now name a row the same way instead of carrying disjoint id spaces.
- *
- * Order within one date is the changelog's own: `sortByDateDesc` is stable and keeps AA's row order for a family, which
- * is its own ranking order.
+ * One row per model variant, newest release first. Variants of one release share a `releaseDate` and an entry in AA's
+ * `releases` array, so the feed keys on the model (`ChangelogModel.slug`), not the release family: `DeepSeek V4.1 Flash
+ * 1017 (Max)` and `(Non-reasoning)` are two entries a reader distinguishes. Order within one date is the changelog's own:
+ * `sortByDateDesc` is stable and keeps AA's row order for a family.
  */
 export function toClosedReleases(changelog: ChangelogModel[], modelsBaseUrl: string): ClosedReleaseEntry[] {
-  // Sorted in place: this function owns the output order, and the array is the changelog parse's own with no other
-  // reader.
+  // Sorted in place: this function owns the output order, and the array has no other reader.
   sortByDateDesc(changelog, (e) => e.releaseDate);
   const entries = changelog
-    .map((record) => toClosedRelease(record, modelsBaseUrl))
+    .map((e) =>
+      toClosedRelease({ slug: e.slug, model: e.name, provider: e.creatorName, date: e.releaseDate }, modelsBaseUrl),
+    )
     .filter((entry): entry is ClosedReleaseEntry => entry !== null);
-  // Keyed on the model slug, so two variants of one release are two rows rather than one.
   return dedupeBy(entries, (e) => e.id);
 }

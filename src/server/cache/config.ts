@@ -6,10 +6,7 @@ export const MEMORY_CACHE_MAX_BYTES = 32 * 1024 * 1024;
 export const L1_OBJECT_BYTES_FACTOR = 3;
 /** The serialized response body, when the entry keeps one. */
 const L1_BODY_BYTES_FACTOR = 1;
-/**
- * Resident estimate for one entry that serves a response: the parsed object plus the body copy. An internal source —
- * one whose payload is only composed into another source — skips the body and is accounted at `L1_OBJECT_BYTES_FACTOR`.
- */
+/** Resident estimate for one entry that serves a response: the parsed object plus the body copy; an internal source skips the body. */
 export const L1_RESIDENT_BYTES_FACTOR = L1_OBJECT_BYTES_FACTOR + L1_BODY_BYTES_FACTOR;
 export const L1_TTL_CAP_MS = FIFTEEN_MINUTES;
 /** Stand-in TTL when a caller's TTL is unusable (0, negative, NaN, ∞): keep the entry briefly instead of skipping L1. */

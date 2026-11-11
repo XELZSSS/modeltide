@@ -1,21 +1,9 @@
 /*
- * The motion system: the only place a duration, curve or travel distance is written down.
- *
- * Components refer to a token or a `<Transition>` recipe defined here;
- * build/motion-guard.ts fails the build when one hands in its own milliseconds, a raw `cubic-bezier()`,
- * `transition-all` or `will-change`.
- *
- * Sections: tokens → touch adaptation → transition pieces → entrances → loading dots →
- * `<Transition>` recipes (plain classes, because Vue generates those names at runtime) → reduced motion.
+ * The motion system: the only place a duration, curve or travel distance is written down; build/motion-guard.ts
+ * fails the build when a component hands in its own milliseconds, a raw `cubic-bezier()`, `transition-all` or
+ * `will-change`.
  */
 
-/* ---------- 1. Tokens ---------- */
-
-/*
- * Durations run a touch longer than a "snappy" default, the curves spend more time decelerating instead of yanking out
- * of the start and stopping hard, and the travel distances stay small so an entrance reads as a settle rather than a
- * jump.
- */
 :root {
   --motion-duration-fast: 160ms;
   --motion-duration-base: 220ms;
@@ -24,7 +12,6 @@
   --motion-duration-dots: 1400ms;
   --motion-dot-size: 0.375rem;
   --motion-dot-gap: 0.3125rem;
-  --motion-dot-lift: 3px;
 
   --motion-stagger-step: 18ms;
   --motion-stagger-max: 8;
@@ -33,16 +20,9 @@
   --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --motion-ease-emphasized: cubic-bezier(0.33, 1, 0.68, 1);
-
-  --motion-rise: 5px;
-  --motion-pop: 3px;
-  --motion-sheet: 100%;
 }
 
-/* ---------- 2. Touch adaptation ---------- */
-
-/* Under a coarse pointer one item sits under a finger and the rest of the list is usually off-screen, so a long desktop
-   stagger tail buys nothing and only delays the content the reader came for. */
+/* Under a coarse pointer the desktop stagger tail only delays content that already sits under the reader's thumb. */
 @media (pointer: coarse) {
   :root {
     --motion-stagger-step: 12ms;
@@ -50,45 +30,24 @@
   }
 }
 
-/* ---------- 3. Transition pieces ---------- */
-
-/*
- * The default transition: paint properties plus `translate`, nothing that triggers layout. It deliberately leaves
- * `transform` and `scale` out — a scaled element is promoted to its own composited layer and resampled while it
- * animates, so text inside it renders soft for the whole transition (the trade `.ui-pop-enter-active` refuses below).
- */
+/* The default transition: paint properties only, nothing that triggers layout and nothing that moves. */
 @utility ui-motion {
-  transition-property:
-    color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity, translate;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity;
   transition-duration: var(--motion-duration-fast);
-  /* Colour/border/press changes ease in both directions: a pure ease-out snaps to the target on the first frame and the
-     rest of the transition is spent crawling, which reads as a flick rather than a change. */
+  /* Colour/border/press changes ease in both directions: a pure ease-out snaps to the target on the first frame. */
   transition-timing-function: var(--motion-ease-in-out);
 }
 
-/* A pressed control only recolours its label: no background, no border, and no `scale` — so the box never shifts and the
-   text is never re-rasterized. `ui-motion` already transitions `color`, so the change eases in and back out. */
+/* A pressed control only recolours its label: no background, no border, no `scale`, so the box never shifts. */
 @utility ui-press {
   &:active {
     color: var(--press-text, var(--accent));
   }
 }
 
-/* ---------- 4. Entrances ---------- */
-
 /*
- * Nothing on first paint animates: not a card, a row, a section or a page header. A rise, a fade or a staggered
- * reveal holds back the data the reader came for, and a list that arrives item by item also moves content under a
- * pointer already travelling toward it.
- *
- * Two entrances remain, and the reader causes both:
- *   `ui-anim-pop`  a chip or panel the reader just added or opened
- *   `ui-anim-swap` content that replaces other content in place (a re-fetch, a tab switch)
- *
- * Every one fills `backwards`, never `both`. Holding the end frame costs nothing visually — the end state is the
- * element's own style — but a filled `transform` keeps the element a stacking context for the rest of its life (an
- * interpolated `transform: none` still resolves to the identity matrix), which used to trap the search panel behind
- * the table that follows the page header.
+ * Nothing on first paint animates: a fade or staggered reveal holds back the data the reader came for. The two
+ * entrances that remain (`ui-anim-pop`, `ui-anim-swap`) are fades, and both fill `backwards`, never `both`.
  */
 
 @keyframes ui-motion-fade {
@@ -100,15 +59,10 @@
 @keyframes ui-motion-pop {
   from {
     opacity: 0;
-    transform: translate3d(0, var(--motion-pop), 0);
   }
 }
 
-/*
- * The stagger offset a group of chips carries when several arrive together. `animation` is a shorthand that also
- * resets `animation-delay`, so the offset has to come *after* it: with the delay written first the shorthand
- * silently zeroed it and every chip played at once.
- */
+/* `animation` is a shorthand that also resets `animation-delay`, so the stagger offset has to come *after* it. */
 @utility ui-anim-stagger {
   animation-delay: calc(min(var(--motion-stagger-index, 0), var(--motion-stagger-max)) * var(--motion-stagger-step));
 }
@@ -118,28 +72,23 @@
   @apply ui-anim-stagger;
 }
 
-/* Content that replaces other content in place: no stagger, no travel, just a cross-fade. */
+/* Content that replaces other content in place: no stagger, just a cross-fade. */
 @utility ui-anim-swap {
   animation: ui-motion-fade var(--motion-duration-fast) var(--motion-ease-out) backwards;
 }
-
-/* ---------- 5. Loading dots ---------- */
 
 @keyframes ui-motion-dot {
   0%,
   70%,
   100% {
     opacity: 0.25;
-    transform: translate3d(0, 0, 0);
   }
   35% {
     opacity: 1;
-    transform: translate3d(0, calc(-1 * var(--motion-dot-lift)), 0);
   }
 }
 
-/* Three dots on a shared timeline, each offset by a sixth of it. Child-based so the caller only supplies colour and box
-   padding; sizing comes from `--motion-dot-size`. */
+/* Three dots on a shared timeline, each offset by a sixth of it; sizing comes from `--motion-dot-size`. */
 @utility ui-dots {
   display: inline-flex;
   align-items: flex-end;
@@ -162,11 +111,7 @@
   }
 }
 
-/* ---------- 6. `<Transition>` recipes ---------- */
-/*
- * These stay plain classes: Vue builds the names (`ui-fade-enter-active`, …) at runtime, so Tailwind never sees them in
- * markup and would not emit an `@utility`. Recipes whose declaration blocks are identical share one rule.
- */
+/* Plain classes: Vue builds the names (`ui-fade-enter-active`, ...) at runtime, so Tailwind would never emit an `@utility`. */
 
 /* Fade: content that replaces other content in place, and the scrim behind a sheet. */
 .ui-fade-enter-active {
@@ -182,78 +127,42 @@
   opacity: 0;
 }
 
-/* Pop: panels anchored under a trigger. No `scale()` in the recipe: a scaled layer is re-rasterized at the off-scale size
-   for the duration of the transition, so the text inside the panel renders soft and only snaps sharp once the transform
-   settles. A short slide gives the same "it arrived" cue without ever resampling the text. */
 .ui-pop-enter-active {
-  transform-origin: top center;
-  transition:
-    opacity var(--motion-duration-base) var(--motion-ease-emphasized),
-    transform var(--motion-duration-base) var(--motion-ease-emphasized);
+  transition: opacity var(--motion-duration-base) var(--motion-ease-emphasized);
 }
 
 .ui-pop-enter-from,
 .ui-pop-leave-to {
   opacity: 0;
-  transform: translate3d(0, calc(-1 * var(--motion-pop)), 0);
-}
-
-/* Sheet: the panel that owns the bottom edge on a phone and fades up under its trigger on a pointer device. */
-.ui-sheet-enter-active {
-  transition:
-    opacity var(--motion-duration-base) var(--motion-ease-emphasized),
-    transform var(--motion-duration-base) var(--motion-ease-emphasized);
-}
-
-.ui-sheet-leave-active {
-  transition:
-    opacity var(--motion-duration-fast) var(--motion-ease-in),
-    transform var(--motion-duration-fast) var(--motion-ease-in);
 }
 
 .ui-pop-leave-active {
-  transform-origin: top center;
-  transition:
-    opacity var(--motion-duration-fast) var(--motion-ease-in),
-    transform var(--motion-duration-fast) var(--motion-ease-in);
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-in);
 }
 
-/* ---------- 7. Sheet travel ---------- */
+/* Sheet: the panel that owns the bottom edge on a phone, faded in place rather than slid. */
+.ui-sheet-enter-active {
+  transition: opacity var(--motion-duration-base) var(--motion-ease-emphasized);
+}
 
-/* The bottom sheet changes between a slide-up and a fade at the same width the shell switches to its bottom nav. The
-   boundary is MOBILE_MAX_WIDTH_PX in src/shared/config/ui.ts (767, so one pixel inside the 768px below), and
-   build/consistency-guard.ts fails the build when this file or scrollbar.css stops stating it. At 640–767 the app was
-   already a bottom-bar layout whose sheets faded in from the centre instead of rising from the edge the thumb reaches
-   for. */
+.ui-sheet-leave-active {
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-in);
+}
+
+.ui-sheet-enter-from,
+.ui-sheet-leave-to {
+  opacity: 0;
+}
+
+/* The boundary is MOBILE_MAX_WIDTH_PX in src/shared/config/ui.ts (767, one pixel inside the 768px below). */
 @media (width < 768px) {
-  .ui-sheet-enter-from,
-  .ui-sheet-leave-to {
-    transform: translate3d(0, var(--motion-sheet), 0);
-  }
-
-  /* A sheet that travels its own height needs longer than a small fade-up to read as one movement, and the tail of the
-     ride is where the softness shows; closing is a little quicker than opening so dismissal never feels sluggish. */
+  /* A phone sheet covers the surface, so its fade reads slower than the base step. */
   .ui-sheet-enter-active {
     transition-duration: var(--motion-duration-slow);
   }
-
-  .ui-sheet-leave-active {
-    transition-duration: var(--motion-duration-base);
-  }
 }
 
-@media (width >= 768px) {
-  .ui-sheet-enter-from,
-  .ui-sheet-leave-to {
-    opacity: 0;
-    transform: translate3d(0, var(--motion-rise), 0);
-  }
-}
-
-/* ---------- 8. Reduced motion ---------- */
-
-/* The tokens collapse, and the blanket rule catches anything that carries a transition of its own (Vue's recipes above,
-   Tailwind's `transition` utilities, the smooth scroll). */
+/* The tokens collapse, and the blanket rule catches anything that carries a transition of its own. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-duration-fast: 1ms;

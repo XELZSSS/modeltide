@@ -3,11 +3,8 @@ import { ref } from "vue";
 import { cn } from "@/client/utils/cn";
 import { useSheetLock } from "./use-sheet-lock";
 
-/**
- * A modal sheet: the overlay, the panel, and the lock that keeps the page behind it out of reach (scroll lock, `inert`
- * on the rest of the app, focus trap — all in use-sheet-lock.ts). Teleported to <body> so the scroller that owns the
- * page content can never clip it.
- */
+/** A modal sheet: the overlay, the panel, and the lock that keeps the page behind it out of reach (scroll lock, `inert`
+ * on the rest of the app, focus trap — all in use-sheet-lock.ts). Teleported to <body> so the page's scroller cannot clip it. */
 const props = defineProps<{ open: boolean; label: string }>();
 const emit = defineEmits<{ close: [] }>();
 

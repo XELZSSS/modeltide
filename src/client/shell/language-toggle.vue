@@ -1,14 +1,7 @@
 <script setup lang="ts">
-/**
- * The bar's language switch: a button that opens the two languages as a menu, with a tick on the one in use.
- *
- * It is a menu rather than a toggle because a toggle has to print which language it would switch *to*, and `EN` reads
- * equally well as "you are in English" and "press for English" — the ambiguity the menu removes. Two rows is not too
- * many to list.
- *
- * The panel is the project's popover: `ui-pop` over `ui-overlay`, anchored to the button's right edge so it stays inside
- * the viewport at the end of the bar.
- */
+/** The bar's language switch: a button that opens the two languages as a menu, with a tick on the one in use. A menu
+ * rather than a toggle because `EN` reads equally well as "you are in English" and "press for English". The panel is the
+ * project's popover (`ui-pop` over `ui-overlay`), anchored to the button's right edge so it stays inside the viewport. */
 import { ref } from "vue";
 import { Check, Languages } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";

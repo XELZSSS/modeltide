@@ -20,22 +20,15 @@ function isValidHfModelId(value: string): boolean {
   return value.length <= MAX_MODEL_ID_CHARS && isValidRowId(value) && HF_MODEL_ID_RE.test(value);
 }
 
-// HF serves up to 1000 rows per response, so one page replaces the ten a limit of 100 needed: one subrequest and one
-// round trip against the invocation's 50-subrequest and connection budget. 1000 rows weigh ~0.5 MB, inside MAX_JSON_BYTES.
+// HF serves its maximum rows per response, so one page replaces the ten a limit of 100 needed: one subrequest and one
+// round trip rather than a page walk.
 const HF_PAGE_LIMIT = 1000;
 
-// A healthy list page answers in ~1.3 s, so the 12 s interactive default would let two attempts eat most of
-// INFLIGHT_HANG_GUARD_MS (28 s) and drop the whole refresh instead of degrading it.
+// A healthy list page answers quickly, so the interactive default would let two attempts eat most of
+// INFLIGHT_HANG_GUARD_MS and drop the whole refresh instead of degrading it.
 const HF_PAGE_TIMEOUT_MS = 8_000;
 
-/**
- * Sorts that ask for recency rather than a ranking. The download gate exists so a *ranking* is not padded with
- * repositories nobody has used yet, but sorting by creation date returns the repositories created hours ago: measured on
- * the live API, the newest 1000 rows had zero downloads on every sample, so the gate left 0 of 1000 usable rows and
- * `?sort=createdAt` answered 502 on every call — then held the 45 s failure cooldown, which is what made it look like a
- * dead upstream. Recency sorts keep the license gate and drop the download one: an unlicensed repository is not
- * open-source whatever its age, while a new one simply has no usage history yet.
- */
+/** Sorts that ask for recency rather than a ranking. The download gate exists so a *ranking* is not padded with repositories nobody has used, but the newest 1000 rows had zero downloads on every sample, so recency sorts keep the license gate and drop the download one. */
 const RECENCY_SORTS: ReadonlySet<string> = new Set(["createdAt", "lastModified"]);
 
 function hfListUrl(sort: string, limit: number): string {
@@ -44,11 +37,7 @@ function hfListUrl(sort: string, limit: number): string {
   return `${HF_API}?${params.toString()}`;
 }
 
-/**
- * One page, one subrequest. The list is trendingScore-ordered, so the first HF_PAGE_LIMIT rows are the head of the
- * ranking: hitting the ceiling is by design and always yields the same top-N, so it is logged but never reported as
- * partial. A failed page throws and degrades through the cache's stale fallback like every other source.
- */
+/** One page, one subrequest. The list is trendingScore-ordered, so the first HF_PAGE_LIMIT rows are the head of the ranking: hitting the ceiling is by design and logged, never reported as partial. */
 async function fetchHFList(ctx: AppContext, sort: string): Promise<HfModel[]> {
   const url = hfListUrl(sort, HF_PAGE_LIMIT);
   const body = await ctx.http.json<unknown>(url, { timeoutMs: HF_PAGE_TIMEOUT_MS, retries: 1 });
@@ -78,8 +67,7 @@ function logLicenseDrops(ctx: AppContext, rowCount: number, tally: LicenseDropTa
 
 function parseHFItems(items: HfModel[], ctx: AppContext, rankByUsage: boolean): OpenSourceModelEntry[] {
   const tally = new LicenseDropTally();
-  // One pass over the page: the `map` / `filter` / `dedupeBy` chain walked the thousand rows three times and built three
-  // arrays to keep the same rows. The tally sees the rows in the same order — licence gate first, then the download gate.
+  // One pass over the page: a `map`/`filter`/`dedupeBy` chain walked the rows three times. The tally sees them in the same order.
   const bucket: OpenSourceModelEntry[] = [];
   const keptIds = new Set<string>();
   let kept = 0;
@@ -125,9 +113,7 @@ async function fetchHfModelById(ctx: AppContext, id: string): Promise<OpenSource
   try {
     raw = await ctx.http.json<HfModel>(`${HF_API}/${encoded}`);
   } catch (err) {
-    // A missing repo answers 404, a private or gated one 401/403: from the public API both mean "this id is not
-    // readable". A 4xx never retries, so treating only 404 as a miss pinned the detail page on the error boundary
-    // forever — the retry asks the same question.
+    // A missing repo answers 404, a private or gated one 401/403: from the public API both mean "this id is not readable", and a 4xx never retries.
     if (err instanceof UpstreamError && (err.statusCode === 404 || err.statusCode === 401 || err.statusCode === 403)) {
       return null;
     }
@@ -138,22 +124,13 @@ async function fetchHfModelById(ctx: AppContext, id: string): Promise<OpenSource
 
 const NEGATIVE_STALE_CAP_MS = 5 * ONE_MINUTE;
 
-/**
- * An id that cannot exist on Hugging Face is a miss, not a bad request: the API would answer 400, and a 4xx never
- * retries, so a junk URL pinned the detail page on the error boundary forever (HF itself answers 404). The miss is
- * cached as briefly as the real 404 path — and the stale cap reaches *only* the not-found copy: applying it to the
- * source as a whole also expired the entries that had found a model, five minutes after the detail page last loaded.
- */
+/** An id that cannot exist on Hugging Face (HF itself answers 404) is a miss, not a bad request: the API would answer 400, which never retries. The miss is cached as briefly as the real 404 path, and the stale cap reaches only that copy. */
 const modelByIdSource = defineParamSource<string, OpenSourceModelEntry | null, OpenSourceModelEntry | null>(
   (id) => cacheKeys.openSourceModel(id),
   {
     ttl: SLOW_TTL_MS,
     label: "HuggingFace model",
-    // No `served`: `getOpenSourceModels` composes this row into a fresh list envelope that carries no body, so a stored
-    // response copy would never be served — it only cost resident bytes in L1 (counted at the 4× body factor) and a
-    // larger KV value.
-    // The cache stores the pipeline's envelope, so a miss is `data === null` inside it rather than the value itself:
-    // compared against the envelope, the bare `value === null` matched no entry at all and the cap never applied.
+    // No `served`: `getOpenSourceModels` composes this row into a fresh list envelope, so a stored response copy would never be served.
     scope: {
       staleCapMs: (value) =>
         (value as SourcePayload<OpenSourceModelEntry | null>).data === null ? NEGATIVE_STALE_CAP_MS : undefined,
@@ -164,11 +141,7 @@ const modelByIdSource = defineParamSource<string, OpenSourceModelEntry | null, O
   },
 );
 
-/**
- * The list route and the by-id lookup answer one domain, so the by-id result is composed into the list envelope here.
- * The composed payload is a different shape from the one the cache stored, so it carries no body: the router encodes
- * this envelope itself, and only the timestamp — which names the ETag — travels from the lookup.
- */
+/** The list route and the by-id lookup answer one domain, so the by-id result is composed into the list envelope here; the composed payload carries no body, and only the timestamp that names the ETag travels from the lookup. */
 export async function getOpenSourceModels(
   ctx: AppContext,
   p: OpenSourceModelsQuery,

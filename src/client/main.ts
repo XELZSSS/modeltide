@@ -26,11 +26,8 @@ app.config.errorHandler = (err, _instance, info) => {
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");
 
-/**
- * `isReady()` rejects when the *first* navigation fails, and mounting anyway is deliberate: the router has already
- * reported that failure through `onError`, the shell still has to render, and the reader can then navigate to a route
- * that resolves. Awaiting it unguarded would leave the app unmounted with a blank page.
- */
+/** `isReady()` rejects when the *first* navigation fails, and mounting anyway is deliberate: the router has already
+ * reported that failure through `onError`, the shell still has to render, and the reader can navigate from there. */
 router.onError((err) => reportClientError("router", err));
 
 // Mount *before* the first navigation resolves: the shell and its `Suspense` plate then paint while the route

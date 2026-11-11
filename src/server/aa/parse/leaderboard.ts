@@ -7,35 +7,36 @@ import { findLongestData } from "@/server/formats/rsc-data";
 import { parseRscPayload } from "@/server/formats/rsc-parser";
 import type { BenchmarkKey } from "@/shared/config";
 import { AA_FLIGHT_MARKERS } from "../markers";
-import {
-  AA_SCORE_FIELDS,
-  isLeaderboardRow,
-  leaderboardScores,
-  setField,
-  type AaLeaderboardRow,
-  type AaRow,
-  type LeaderboardScores,
-} from "../wire";
+import { AA_SCORE_FIELDS, setField, type AaLeaderboardRow, type AaRow, type LeaderboardScores } from "../wire";
+import { isLeaderboardRow, leaderboardScores } from "../wire-read";
 
 function hallucinationRate(nonHallucination: unknown): number | null {
   const value = numCoerce(nonHallucination);
   return value == null ? null : 1 - value;
 }
 
-/**
- * One benchmark value for a leaderboard row. Most live in `scores` under the upstream's kebab-case evaluation name;
- * the signed omniscience index is the one field that stays at the top level, so it is the one key
- * `LEADERBOARD_SCORE_KEYS` has no entry for.
- */
+/** One benchmark value for a leaderboard row: most live in `scores` under the upstream's kebab-case name, and the signed omniscience index is the one field at the top level. */
 function benchmarkValue(row: AaLeaderboardRow, scores: LeaderboardScores | undefined, key: BenchmarkKey): unknown {
   const scoreKey = LEADERBOARD_SCORE_KEYS[key];
   return scoreKey === undefined ? row.omniscience : scores?.[scoreKey];
 }
 
-/**
- * Maps one leaderboard row onto `AaRow`: the field names this stack reads downstream are the ones the upstream sends,
- * so the leaderboard's own spellings (`modelCreatorName`, `scores[…kebab…]`) are translated here and nowhere else.
- */
+/** Files the row's benchmark values under their wire names, noting every key the row carried: `seenKeys` is what the "omitted benchmark wire name(s)" warning is built from. */
+function addBenchmarkValues(
+  into: AaRow,
+  row: AaLeaderboardRow,
+  scores: LeaderboardScores | undefined,
+  seenKeys: Set<BenchmarkKey>,
+): void {
+  for (const key of LEADERBOARD_BENCHMARK_KEYS) {
+    const value = benchmarkValue(row, scores, key);
+    if (value === undefined) continue;
+    seenKeys.add(key);
+    setField(into, benchmarkWireName(key), value);
+  }
+}
+
+/** Maps one leaderboard row onto `AaRow`: the upstream's spellings (`modelCreatorName`, `scores[…kebab…]`) are translated here and nowhere else. One literal per row, grouped by concern, since `AaRow`'s members are optional and a group spread here would pay a scratch object per row (272 a refresh). */
 function normalizeRow(
   row: AaLeaderboardRow,
   releases: Map<string, ReleaseInfo>,
@@ -73,14 +74,7 @@ function normalizeRow(
   const sizeClass = text(row.paramClass);
   if (sizeClass) normalized.sizeClass = sizeClass;
   if (release) normalized.releaseDate = release.releaseDate;
-  for (const key of LEADERBOARD_BENCHMARK_KEYS) {
-    const value = benchmarkValue(row, scores, key);
-    if (value === undefined) continue;
-    // Noted on the way past the lookup this row already required: the wire-name warning used to run the same
-    // 33-key scan a second time per row, which doubled that loop to feed one log line.
-    seenKeys.add(key);
-    setField(normalized, benchmarkWireName(key), value);
-  }
+  addBenchmarkValues(normalized, row, scores, seenKeys);
   return normalized;
 }
 
@@ -92,22 +86,20 @@ export function parseLeaderboardModels(html: unknown): ParseResult<AaRow[]> {
   const prop = parseRscPayload<unknown[]>(html, AA_FLIGHT_MARKERS.models, (tree) =>
     findLongestData(tree, AA_FLIGHT_MARKERS.models, (row) => isRecord(row) && isLeaderboardRow(row)),
   );
-  // `parseRscPayload` only answers `ok` with a non-empty array, so what used to be read as "an empty list" is a parse
-  // failure and belongs in the error, not in a payload that then reported "no usable model rows" for either cause.
-  // The array it hands over is the longest one whose first row passes `isLeaderboardRow`: the legend and changelog
-  // snapshots the same prop carries are now rejected where the array is chosen, not by a second scan of every row.
+  // `parseRscPayload` only answers `ok` with a non-empty array, so an empty read is a parse failure, not a payload.
+  // The array it picks is the longest one whose first row passes `isLeaderboardRow`.
   if (!prop.ok) return parseFail(prop.error);
   const { rows: kept, dropped } = mapRows(prop.data, (raw) => normalizeRow(raw, releases, links, seenKeys));
   if (kept.length === 0) return parseFail("AA leaderboard page yielded no usable model rows");
   const missing = LEADERBOARD_BENCHMARK_KEYS.filter((key) => !seenKeys.has(key));
   const warnings: string[] = [];
-  // `dropped` counts every row `mapRows` rejected, not only the deprecated ones: a row with no slug or name is dropped by
-  // `normalizeRow` and lands in the same total, so the warning names the cause it actually aggregates.
+  // `dropped` counts every row `mapRows` rejected, not only the deprecated ones: a row with no slug or name lands in the
+  // same total, so the warning names the cause it actually aggregates.
   if (dropped > 0) warnings.push(`Skipped ${dropped} unusable leaderboard rows (deprecated or without an identity)`);
   if (missing.length > 0)
     warnings.push(`Leaderboard omitted ${missing.length} benchmark wire name(s): ${missing.join(", ")}`);
-  // A slice the needle scan could not parse is reported, not swallowed: the arrays that did parse still build the
-  // ranking, but a payload carrying fewer of them than it should is exactly what a silent `catch` used to hide.
+  // A slice the needle scan could not parse is reported, not swallowed: a payload carrying fewer arrays than it should
+  // is the failure this warning exists for.
   if (unparsableSlices > 0) warnings.push(`Leaderboard had ${unparsableSlices} unparsable JSON slice(s)`);
   return parseOk(kept, warnings);
 }

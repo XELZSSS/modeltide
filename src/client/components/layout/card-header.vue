@@ -1,9 +1,6 @@
 <script setup lang="ts">
-/**
- * A card's title row: one `font-semibold` 14px line over the body, with an optional muted subtitle beneath it. No rule
- * separates it from the content — the reference cards rely on spacing, and a full-width line at every card header was
- * the heaviest thing in the old surface.
- */
+/** A card's title row: one `font-semibold` 14px line over the body, with an optional muted subtitle beneath it. No rule
+ * separates it from the content — the reference cards rely on spacing. */
 import { computed, useSlots } from "vue";
 import { cn } from "@/client/utils/cn";
 

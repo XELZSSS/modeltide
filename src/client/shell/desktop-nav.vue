@@ -22,8 +22,8 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
     Opaque, and in flow rather than `fixed`: `main` is the scroll port (`overflow-y-auto`), so this bar already never
     moves over the content — the shell's flex column holds it above the scroll area, and `fixed` would only pull it out
     of that column and need its height added back as padding. No translucency, no blur, no height change on scroll: a
-    bar that tints whatever passes beneath it also loses the 1px hairline that lines it up with the page's edges.
-    56px, the same height the phone bar uses: the tallest thing in it is a 32px control, so a taller bar only adds air
+    bar that tints whatever passes beneath it also loses the hairline that lines it up with the page's edges.
+    The same height the phone bar uses: the tallest thing in it is a small control, so a taller bar only adds air
     around small buttons.
   -->
   <nav
@@ -33,7 +33,10 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
     <div :class="INNER">
       <SafeLink
         :href="PATHS.home"
-        class="mr-3 shrink-0 text-[1.0625rem] font-semibold tracking-title text-text-primary"
+        :class="[
+          'mr-3 shrink-0 rounded-md ui-card-title font-semibold tracking-title text-text-primary ui-motion hoverable:hover:opacity-70',
+          FOCUS_RING,
+        ]"
       >
         {{ t("appName") }}
       </SafeLink>
@@ -45,7 +48,7 @@ const INNER = [PAGE_WIDTH, PAGE_GUTTER, "flex items-center gap-1"];
           :aria-label="item.label"
           :aria-current="isActive(item) ? 'page' : undefined"
           :class="[
-            `inline-flex h-8 items-center rounded-md px-3 text-[0.9375rem] font-medium whitespace-nowrap ui-motion ${FOCUS_RING}`,
+            `inline-flex h-8 items-center rounded-md px-3 ui-label font-medium whitespace-nowrap ui-motion ${FOCUS_RING}`,
             isActive(item)
               ? 'bg-surface-hover text-text-primary'
               : 'text-text-secondary hoverable:hover:bg-surface-hover hoverable:hover:text-text-primary',

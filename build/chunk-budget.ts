@@ -5,13 +5,9 @@ import { rootDir } from "../vite.shared.ts";
 import { CLIENT_OUT_DIR_NAME } from "./constants.ts";
 
 /**
- * Vite warns above 500 KB per chunk, which is far past the point where a route chunk has already stopped being a lazy
- * win: the largest route bundle here is the Chart.js registration at ~187 KB, and the whole client ships under 1 MB.
- * This turns the size into a build error instead, so a dependency that quietly pulls its own copy of a charting or
- * parsing library fails locally rather than shipping.
- *
- * The budget is per chunk and deliberately generous against today's numbers (240 KB against a 187 KB largest chunk, ~1.3×)
- * — it is a guard against a regression, not a target to grow into.
+ * Vite warns far past the point where a route chunk has stopped being a lazy win: this turns the size into a build error,
+ * at a multiple of the largest route bundle (the Chart.js registration), so a dependency that quietly pulls its own copy of
+ * a charting or parsing library fails locally rather than shipping.
  */
 const MAX_CHUNK_BYTES = 240 * 1024;
 
@@ -42,8 +38,7 @@ export function chunkBudget(): Plugin {
   return {
     name: "modeltide:chunk-budget",
     apply: "build",
-    // `closeBundle` runs after Vite has written every chunk, which is the only point where the real gzip-excluded
-    // sizes exist. `writeBundle` would miss files emitted by other plugins' later hooks.
+    // `closeBundle` runs after Vite has written every chunk, the only point where the real sizes exist; `writeBundle` would miss files emitted by later hooks.
     closeBundle() {
       const assets = readEmittedAssets();
       const oversized = assets.filter((asset) => asset.bytes > MAX_CHUNK_BYTES);

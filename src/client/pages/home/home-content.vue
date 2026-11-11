@@ -59,21 +59,16 @@ const decisionRows = computed(() =>
   })),
 );
 
-/**
- * The header's one status line: when the payload arrived and whether every upstream answered. A dashboard that
- * aggregates four sources owes the reader both — a number with no age and no health is a number you cannot trust.
- */
+/** The header's one status line: when the payload arrived and whether every upstream answered. A number with no age and
+ * no health is a number you cannot trust. */
 const statusLine = computed(() => {
   const clock = new Intl.DateTimeFormat(localeOf(lang.value), { hour: "2-digit", minute: "2-digit" });
   const health = partial.value ? t("dataPartial") : t("dataComplete");
   return `${t("lastUpdated")} ${clock.format(updatedAt.value)} · ${health}`;
 });
 
-/**
- * One figure of the strip. Every leg of the dashboard is optional, so each row is either absent — printing "not
- * available" with an empty detail line, which is what the six call sites used to spell out twice each — or it is read
- * through the two accessors its card uses.
- */
+/** One figure of the strip: either absent — printing "not available" with an empty detail line — or read through the two
+ * accessors its card uses. Every leg of the dashboard is optional. */
 function kpiOf<T>(
   labelKey: TranslationKey,
   row: T | undefined,
@@ -84,12 +79,8 @@ function kpiOf<T>(
   return { label: t(labelKey), value: valueOf(row), detail: detailOf(row) };
 }
 
-/**
- * Six figures, one per row head on the page: the same numbers read once, above the detail. Every one is optional
- * because a payload leg can fail on its own — a missing top row prints "not available" and the card it belongs to says
- * the same thing. The set spans all four upstreams on purpose (AA twice, OpenRouter, Hugging Face, CursorBench), so the
- * strip is not four slices of the same source.
- */
+/** Six figures, one per row head on the page. Every one is optional because a payload leg can fail on its own; the set
+ * spans all four upstreams on purpose, so the strip is not four slices of the same source. */
 const kpis = computed(() => {
   const index = dashboardData.value.intelligence[0];
   const accuracy = hallucinationStats.value[0];
@@ -152,7 +143,7 @@ const TAB_HREFS = {
 } as const;
 
 /** The whole card is the link, so the page carries no repeated "see more" wording. */
-const CARD_LINK = cn("block h-full rounded-xl", FOCUS_RING);
+const CARD_LINK = cn("block h-full rounded-xl ui-motion", FOCUS_RING);
 </script>
 
 <template>

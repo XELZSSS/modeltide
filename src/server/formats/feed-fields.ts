@@ -32,18 +32,7 @@ function cleanTitle(raw: string): string {
   return truncateSafe(clean, MAX_NEWS_TITLE_CHARS).trim();
 }
 
-/**
- * The name a feed's items are attributed to, or `null` when neither the feed nor its URL names anything.
- *
- * `preferred` comes from the feed table (`news/feeds.ts`), which declares the name once per feed. A channel title is
- * written for its own site rather than for a byline beside a headline, and the live feeds proved it: `blog.google`
- * ships the title `AI` (which names nothing), TechCrunch ships `AI News & Artificial Intelligence | TechCrunch`, and
- * Google Research ships the sentence `The latest research from Google`. Those are correct channel titles and wrong
- * source names, and no structural rule can fix them: a heuristic that cut `|` tags and trailing `Blog` also turned
- * `Hugging Face - Blog` into `Hugging Face -` and `Simon Willison's Weblog` into `Simon Willison's`, so it broke two
- * names that were already right. The name is therefore declared, and the channel title is only the fallback for a feed
- * the table does not list.
- */
+/** The name a feed's items are attributed to, or `null` when neither the feed nor its URL names anything. `preferred` comes from the feed table (`news/feeds.ts`): live channel titles are written for their own site — `blog.google` ships `AI`, TechCrunch `AI News & Artificial Intelligence | TechCrunch` — and no heuristic that cut `|` tags fixed them. */
 export function channelTitle(channel: Record<string, unknown>, sourceUrl: string, preferred?: string): string | null {
   if (preferred !== undefined) return preferred;
   const text = textOf(channel[FEED_ELEMENTS.title]) ?? "";
@@ -76,13 +65,9 @@ function itemLink(item: Record<string, unknown>): string | null {
 }
 
 /**
- * The item's publication time as ISO 8601, or "" when none of the feed's date elements can be parsed.
- *
- * Feeds send this in three shapes — RFC 822 (`Sun, 01 Aug 2026 10:00:00 GMT`), ISO (`2026-08-01T10:00:00Z`) or an Atom
- * `updated` element — and the first one present used to be copied into the payload verbatim, so `NewsItem.pubDate` was
- * the only date field in the API that was not ISO. Parsing here also lets a malformed `pubDate` fall through to
- * `published`/`updated` instead of dropping the item; when no element parses the item is reported by returning "" and
- * the caller drops it, rather than shipping a date nothing downstream can read.
+ * The item's publication time as ISO 8601, or "" when none of the feed's date elements can be parsed. Feeds send this as
+ * RFC 822 (`Sun, 01 Aug 2026 10:00:00 GMT`), ISO (`2026-08-01T10:00:00Z`) or an Atom `updated` element; a malformed
+ * `pubDate` falls through to `published`/`updated`, and when nothing parses the caller drops the item.
  */
 function feedDate(item: Record<string, unknown>): string {
   for (const key of FEED_DATE_KEYS) {

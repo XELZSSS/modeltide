@@ -108,8 +108,7 @@ export function makeStorageSync<TStore extends Subscribable, TSnapshot>(def: {
       try {
         const payload = JSON.parse(event.newValue) as { state?: unknown; version?: unknown };
         // The rule `readPersisted` applies on load, applied to the cross-tab path too: a tab still running the previous
-        // build writes its own `version`, and adopting its state here was the one route that skipped the check — the
-        // same bytes a reload drops were accepted live.
+        // build writes its own `version`, so the same bytes a reload drops are dropped here as well.
         if (payload == null || typeof payload !== "object" || payload.version !== def.version) return;
         onStorageEvent(store, payload);
       } catch (err) {

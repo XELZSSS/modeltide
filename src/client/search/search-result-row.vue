@@ -1,9 +1,7 @@
 <script setup lang="ts">
-/**
- * One row of the search panel: the model's name, its score where the source has one, the source it came from and the
- * provider. It is shared by the page search and the navigation search so the two panels cannot drift apart in what they
- * show or in how they respond to the pointer and the keyboard.
- */
+/** One row of the search panel: the model's name, its score where the source has one, the source it came from and the
+ * provider. Shared by the page search and the navigation search, so the two panels cannot drift apart in what they show
+ * or in how they respond to the pointer and the keyboard. */
 import { useTranslation } from "@/client/i18n";
 import { cn } from "@/client/utils/cn";
 import { formatScore } from "@/shared/utils";

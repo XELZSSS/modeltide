@@ -4,15 +4,9 @@ import { onBeforeUnmount, onMounted, onUpdated, ref, watch, type Ref } from "vue
 const EDGE_EPSILON_PX = 1;
 
 /**
- * Whether a scrollport still hides content past its end edges — the flag a scroll fade is drawn from.
- *
- * Every scrollport hides its bar (src/styles/scrollbar.css), which left a clipped panel looking finished while more
- * rows sat below it: iOS paints its own overlay indicator only while a finger moves, and Android Chrome paints nothing
- * once the bar is styled away. A gradient drawn from this flag is the affordance instead — it is there exactly while
- * something is hidden and settles away at the end, which a static overlay cannot do.
- *
- * Measured on scroll, after every re-render (arriving data grows the content), when the element itself mounts or
- * unmounts, and on a window resize. Four layout reads per call; no observer to keep alive.
+ * Whether a scrollport still hides content past its end edges — the flag a scroll fade is drawn from. Every scrollport
+ * hides its bar, and iOS/Android Chrome then paint no indicator at rest, so a gradient drawn from this flag is the
+ * affordance. Measured on scroll, after every re-render, on mount/unmount and on resize: no observer to keep alive.
  */
 export function useOverflowShadow(el: Readonly<Ref<HTMLElement | null>>) {
   const moreBelow = ref(false);

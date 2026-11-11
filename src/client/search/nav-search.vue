@@ -1,15 +1,7 @@
 <script setup lang="ts">
-/**
- * The navigation's search. It is a panel under its trigger, not a field that takes the trigger's place: the bar keeps
- * its width and its widgets, and the panel arrives with the project's own popover recipe (`ui-pop` over `ui-overlay`,
- * the same pairing the settings and every dropdown use). A field swapped into the bar would reflow everything to its
- * right, which no other control on this page does.
- *
- * The term lives here instead of in the route: a navigation search that wrote `?q=` into whatever page the reader is on
- * would filter that page under them. It only navigates to the result it is given.
- *
- * `⌘K` / `Ctrl+K` opens it from a desktop pointer, `Esc` and a click outside close it.
- */
+/** The navigation's search: a panel under its trigger, not a field that takes the trigger's place — a field swapped into
+ * the bar would reflow everything to its right. The term lives here instead of in the route, since `?q=` on whatever
+ * page the reader is on would filter that page under them. `⌘K` / `Ctrl+K` opens it, `Esc` and a click outside close. */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId } from "vue";
 import { Search } from "@lucide/vue";
 import Input from "@/client/components/ui/input.vue";
@@ -123,12 +115,13 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
               :aria-activedescendant="activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined"
               aria-autocomplete="list"
               autocomplete="off"
+              :aria-label="t('searchPlaceholder')"
               :placeholder="t('searchPlaceholder')"
               class="h-full flex-1 rounded-none border-0 bg-transparent px-0 focus:border-transparent focus-visible:bg-transparent focus-visible:ring-0 hoverable:hover:bg-transparent"
               @update:model-value="onChange"
               @keydown="onKeydown"
             />
-            <kbd class="shrink-0 rounded border border-border px-1 font-mono ui-meta">esc</kbd>
+            <kbd class="shrink-0 rounded-md border border-border px-1 font-mono ui-meta">esc</kbd>
           </div>
 
           <div :id="listboxId" role="listbox" class="mt-1.5 max-h-[24rem] overflow-y-auto overscroll-contain">

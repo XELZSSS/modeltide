@@ -34,10 +34,8 @@ const isMobile = useDevice();
 
 const winners = computed(() => computeWinners(props.rows, props.models, modelKeyOf));
 
-/**
- * The key `winners` was built with, per model, computed once instead of per cell: `modelKeyOf` reads the model id (or
- * builds an `idx-N` fallback) and the matrix asks for it rows × models times — twice per cell, since `:key` wants it too.
- */
+/** The key `winners` was built with, per model, computed once instead of per cell: the matrix asks for it rows × models
+ * times, twice per cell since `:key` wants it too. */
 const modelKeys = computed(() => props.models.map((model, index) => modelKeyOf(model, index)));
 
 function getWinner(row: CompareRow<ArtificialAnalysisModel>, index: number): Winner | null {

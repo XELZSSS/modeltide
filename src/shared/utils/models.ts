@@ -23,8 +23,7 @@ export function modelDetailPath(source: ModelSource, id: string): string {
   return `/model/${source}/${encodeModelIdPath(id)}`;
 }
 
-/** The detail link for a row, or `undefined` when its id is blank (a row with no id gets no link). Every caller passes a
- * `string` id — `modelId`, `item.id` and the row-id helpers all return `string` — so the parameter is narrowed to that. */
+/** The detail link for a row, or `undefined` when its id is blank; every caller passes a `string` id, so the parameter is narrowed to that. */
 export function modelDetailHref(source: ModelSource, id: string): string | undefined {
   const key = id.trim();
   return key ? modelDetailPath(source, key) : undefined;
@@ -81,11 +80,8 @@ export interface ProviderStats {
 }
 
 /**
- * Per-provider averages, accumulated in a single pass over each group.
- *
- * The three averages used to be built as `group.map(...).filter(...)` each — six intermediate arrays per provider, and
- * an AA refresh hands this a few hundred models across dozens of providers. The sums are added in the same group order
- * the `reduce` behind `avg` used, so the floating-point result is identical.
+ * Per-provider averages, accumulated in a single pass over each group: the sums are added in the same group order the
+ * `reduce` behind `avg` used, so the floating-point result is identical to the six arrays it replaced.
  */
 function averageOf<T>(group: readonly T[], read: (row: T) => number | null | undefined): number | null {
   let sum = 0;

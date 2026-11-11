@@ -6,10 +6,8 @@ import type { TFunction } from "@/shared/i18n";
 import RankedTableView from "@/client/components/table/ranked-table-view.vue";
 import { modelNameCol, monoCol, type DataTableColumn } from "@/client/components/table/table-columns.ts";
 
-/**
- * Cursor prints the effort variant into the model label (`Opus 5.5 Max`), so the rank badge is the page's own number and
- * the name is not a link: a CursorBench label identifies a ranked entry, not a model this app has a page for.
- */
+/** Cursor prints the effort variant into the model label (`Opus 5.5 Max`), so the rank badge is the page's own number and
+ * the name is not a link: a CursorBench label is a ranked entry, not a model this app has a page for. */
 function buildCursorBenchColumns(t: TFunction): DataTableColumn<CursorBenchEntry>[] {
   return [
     modelNameCol(t("model"), (row) => row.model, { rankOf: (row) => row.rank }),

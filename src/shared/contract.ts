@@ -14,12 +14,9 @@ import type {
 export type { ApiDomain };
 
 /**
- * The payload shape behind every API domain, keyed by `ApiDomain` itself.
- *
- * The two tables — this one and `API_DOMAINS` in `./config/api` — are the contract's two halves, and neither compiler
- * nor test compared them: a domain added to `API_DOMAINS` without a row here left `PayloadOf` silently answering `never`,
- * and a row here for a domain that does not exist was simply dead. `assertDomainCoverage` below turns both directions
- * into a type error, so the only way to add a domain is to state its payload.
+ * The payload shape behind every API domain, keyed by `ApiDomain` itself. This table and `API_DOMAINS` in
+ * `./config/api` are the contract's two halves, and `assertDomainCoverage` below turns both directions of drift into a
+ * type error, so the only way to add a domain is to state its payload.
  */
 interface ApiContract {
   artificialIndex: ArtificialAnalysisModel[];
@@ -33,10 +30,7 @@ interface ApiContract {
   cursorBench: CursorBenchEntry[];
 }
 
-/**
- * A domain the contract has no payload for resolves to `never`, and `never` is what makes the coverage check fail: the
- * conditional below is only satisfied when the two key sets are identical, so neither table can outgrow the other.
- */
+/** A domain the contract has no payload for resolves to `never`, which is what makes the coverage check fail in both directions. */
 type MissingPayload<D extends ApiDomain> = ApiContract extends Record<D, unknown> ? D : never;
 type ContractOnlyDomain = Exclude<keyof ApiContract, ApiDomain>;
 

@@ -24,10 +24,8 @@ export const qOpenRouterList = createApiQuery("openRouterRankings", queryKeys.op
   isPartialData: isPartialPayload,
 });
 
-// The dashboard's client TTL must match its origin TTL (`FIVE_MINUTES`): a longer one let the tab keep serving a copy
-// the server had already replaced. Every other domain here holds for at most the server TTL — see
-// `cacheDurationsForTtl`. How long a payload stays resident after it goes stale is `createApiQuery`'s default, not a
-// per-domain decision.
+// The dashboard's client TTL must match its origin TTL (`FIVE_MINUTES`); every other domain holds for at most the server
+// TTL — see `cacheDurationsForTtl`. How long a stale payload stays resident is `createApiQuery`'s default.
 export const qHomeDashboard = createApiQuery("homeDashboard", queryKeys.homeDashboard, {
   ttl: FIVE_MINUTES,
   partialRefetchMs: ONE_MINUTE,
@@ -51,8 +49,8 @@ function memoQuery<K extends string, T>(max: number, create: (key: K) => T): (in
 type NewsQuery = ReturnType<typeof createApiQuery<"news">>;
 
 /**
- * One query per news category. The API serves a single category per request (firing every category's feeds at once was
- * the heaviest thing an invocation did), so each tab owns its cache entry, its partial flag and its refetch timing.
+ * One query per news category: the API serves a single category per request, so each tab owns its cache entry, its
+ * partial flag and its refetch timing.
  */
 export const qNewsByCategory: (category: NewsCategory) => NewsQuery = memoQuery(8, (category): NewsQuery =>
   createApiQuery("news", queryKeys.news(category), {

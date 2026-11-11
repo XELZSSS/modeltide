@@ -47,10 +47,7 @@ export function openSourceRow(fields: Partial<OpenSourceModelEntry> = {}): OpenS
   };
 }
 
-/**
- * The two leg factories `fan-out.test.ts` and `join-legs.test.ts` each carried a copy of. They are the whole input
- * shape of `runLegs`, so the pair belongs with the other fixtures rather than once per caller.
- */
+/** The two leg factories `fan-out.test.ts` and `join-legs.test.ts` each carried a copy of; they are the whole input shape of `runLegs`. */
 export const okLeg = <T>(label: string, value: T) => ({ label, run: async () => value });
 
 export const failingLeg = (label: string, reason: unknown) => ({

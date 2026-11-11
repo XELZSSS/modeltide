@@ -1,12 +1,9 @@
 <script setup lang="ts">
-/**
- * One contestant's facts, printed identically by the addressable detail page and by the decision ranking's expanded
- * row — the place the open-source ranking already keeps the same thing (`OsModelFacts`). The two hero numbers are the
- * pair the evaluation is read for; the run's latency sits with the rest of the run's facts. The five evaluation scores
- * are printed as the upstream sends them (`formatRatio`): the payload's scale is its own, so no site-side conversion.
- */
+/** One contestant's facts, printed identically by the addressable detail page and by the decision ranking's expanded row
+ * — the place the open-source ranking already keeps the same thing (`OsModelFacts`). The evaluation scores are 0-100
+ * numbers, printed as percentages. */
 import { useTranslation } from "@/client/i18n";
-import { formatDollar, formatDurationMs, formatRatio, formatScore, orNA } from "@/shared/utils";
+import { formatDollar, formatDurationMs, formatPercent, formatScore, orNA } from "@/shared/utils";
 import type { DecisionIndexEntry } from "@/shared/types";
 import { DETAIL_BLOCK_GAP } from "@/client/nav/layout";
 import StatGrid from "@/client/components/layout/stat-grid.vue";
@@ -35,16 +32,41 @@ const { t } = useTranslation();
         <InfoRow :label="t('contestantId')">{{ props.entry.id }}</InfoRow>
         <InfoRow :label="t('timePerTask')">{{ formatDurationMs(props.entry.timePerTaskMs, t) }}</InfoRow>
       </InfoCard>
-      <InfoCard :title="t('benchmarks')">
+      <InfoCard :title="t('evalAccuracy')">
         <InfoRow :label="t('omniscienceAccuracy')">
-          {{ formatRatio(props.entry.scores.omniscienceAccuracy, t) }}
+          {{ formatPercent(props.entry.scores.omniscienceAccuracy, t) }}
         </InfoRow>
         <InfoRow :label="t('nonHallucinationRate')">
-          {{ formatRatio(props.entry.scores.omniscienceNonHallucinationRate, t) }}
+          {{ formatPercent(props.entry.scores.omniscienceNonHallucinationRate, t) }}
         </InfoRow>
-        <InfoRow :label="t('hleTextMcq')">{{ formatRatio(props.entry.scores.hleTextMcqAccuracy, t) }}</InfoRow>
-        <InfoRow :label="t('when2call')">{{ formatRatio(props.entry.scores.when2callAccuracy, t) }}</InfoRow>
-        <InfoRow :label="t('wildguardF1')">{{ formatRatio(props.entry.scores.wildguardtestAverageF1, t) }}</InfoRow>
+        <InfoRow :label="t('hleAccuracy')">{{ formatPercent(props.entry.scores.hleAccuracy, t) }}</InfoRow>
+        <InfoRow :label="t('hleNonHallucination')">
+          {{ formatPercent(props.entry.scores.hleNonHallucinationRate, t) }}
+        </InfoRow>
+        <InfoRow :label="t('when2call')">{{ formatPercent(props.entry.scores.when2callAccuracy, t) }}</InfoRow>
+        <InfoRow :label="t('evalsafeOnet')">{{ formatPercent(props.entry.scores.evalsafeOnetAccuracy, t) }}</InfoRow>
+        <InfoRow :label="t('documentDecision')">
+          {{ formatPercent(props.entry.scores.documentDecisionAllPassRate, t) }}
+        </InfoRow>
+        <InfoRow :label="t('invariance')">{{ formatPercent(props.entry.scores.invarianceAllPassRate, t) }}</InfoRow>
+        <InfoRow :label="t('invarianceSymmetry')">
+          {{ formatPercent(props.entry.scores.invarianceSymmetry, t) }}
+        </InfoRow>
+      </InfoCard>
+      <InfoCard :title="t('decisionScores')">
+        <InfoRow :label="t('omniscience')">
+          {{ formatPercent(props.entry.scores.omniscienceDecisionScore, t) }}
+        </InfoRow>
+        <InfoRow :label="t('hle')">{{ formatPercent(props.entry.scores.hleDecisionScore, t) }}</InfoRow>
+        <InfoRow :label="t('when2call')">
+          {{ formatPercent(props.entry.scores.when2callDecisionScore, t) }}
+        </InfoRow>
+        <InfoRow :label="t('evalsafeOnet')">
+          {{ formatPercent(props.entry.scores.evalsafeOnetDecisionScore, t) }}
+        </InfoRow>
+        <InfoRow :label="t('documentDecision')">
+          {{ formatPercent(props.entry.scores.documentDecisionDecisionScore, t) }}
+        </InfoRow>
       </InfoCard>
     </InfoGrid>
   </div>

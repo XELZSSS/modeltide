@@ -1,8 +1,6 @@
 <script setup lang="ts">
-/**
- * The page column: shared max width, the responsive gutter and the vertical rhythm every view starts from. A page passes
- * only what makes it different (`class`), never the width or the gutter.
- */
+/** The page column: shared max width, the responsive gutter and the vertical rhythm every view starts from; a page passes
+ * only what makes it different (`class`), never the width or the gutter. */
 import { computed } from "vue";
 import { cn } from "@/client/utils/cn";
 import { PAGE_GUTTER, PAGE_WIDTH } from "@/client/nav/layout";

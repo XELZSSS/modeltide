@@ -11,7 +11,7 @@ export interface SlotPool {
   max: number;
 }
 
-// One pool per invocation, not a global singleton: the platform budget is 6 connections per invocation.
+// One pool per invocation, not a global singleton: the platform's connection budget is per invocation.
 export function createSlotPool(): SlotPool {
   return { active: 0, waiters: [], max: UPSTREAM_MAX_CONNECTIONS };
 }
@@ -25,10 +25,7 @@ function wakeWaiters(pool: SlotPool): void {
   }
 }
 
-/**
- * `signal` is required because every caller has one (the composed attempt signal) and losing the slot race without
- * being able to drop out of the queue would leave a waiter behind that nobody wakes.
- */
+/** `signal` is required because every caller has one (the composed attempt signal); without it a lost slot race would leave a waiter nobody wakes. */
 export async function acquireSlot(signal: AbortSignal, pool: SlotPool): Promise<void> {
   if (signal.aborted) return Promise.reject(signal.reason);
   if (pool.active < pool.max) {

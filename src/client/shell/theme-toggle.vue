@@ -1,14 +1,7 @@
 <script setup lang="ts">
-/**
- * The bar's theme switch, cycling the three modes the settings sheet offers: light → dark → system.
- *
- * It is a cycle rather than a light/dark flip because the bar is now the only place a desktop reader can set it — the
- * settings button that used to open the sheet is gone from the bar, and dropping "follow the system" from the cycle
- * would have quietly removed that option on a desktop.
- *
- * The glyph names the mode on screen: a stored "system" resolves to the OS preference, and the reader should see the
- * shade they are actually looking at, not the word "system".
- */
+/** The bar's theme switch, cycling the three modes the settings sheet offers: light → dark → system. "System" is in the
+ * cycle because the bar is the only place a desktop reader can set it. The glyph names the mode on screen: a stored
+ * "system" resolves to the OS preference, so the reader sees the shade they are actually looking at. */
 import { computed } from "vue";
 import { Moon, Sun, SunMoon } from "@lucide/vue";
 import { useSettingsStore } from "@/client/stores";

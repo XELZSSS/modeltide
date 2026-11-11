@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { modelPricing } from "@/test/fixtures";
 import { PRICE_LEG_IDS, PRICE_LEGS, resolveEffectivePricing } from "./pricing";
 
-/** What every unusable or absent leg resolves to. */
 const ALL_NULL_PRICING = { input: null, output: null, cacheHit: null, cacheWrite: null };
 
 /** Each leg id and the pricing field it reads, so the map and its ids stay in step. */

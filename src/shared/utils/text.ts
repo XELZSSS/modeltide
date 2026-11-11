@@ -12,16 +12,12 @@ export function dedupeBy<T>(items: T[], keyFn: (item: T) => string | null | unde
 const QUALIFIER_TOKENS = new Set(["adaptive", "effort", "xhigh", "extended"]);
 
 /**
- * A variant suffix that names a price tier rather than a model. `openai/gpt-4o:free` used to normalize to `free`, and so
- * did every other free variant in the catalog — one key for the whole price tier, so a pricing or metadata lookup could
- * answer with another model's row and nothing reported the mismatch. The base model is what the key has to carry.
+ * A variant suffix that names a price tier rather than a model: `openai/gpt-4o:free` keys the whole price tier, so a
+ * lookup could answer with another model's row. The base model is what the key carries.
  */
 const PRICE_TIER_TAGS = new Set(["free"]);
 
-/**
- * Concatenates the alphanumeric runs of a segment, dropping qualifier words. Scanning replaces `split` + `filter` +
- * `join`, which allocated a token array for every model id in a 20k-row directory.
- */
+/** Concatenates the alphanumeric runs of a segment, dropping qualifier words; scanning replaces `split` + `filter` + `join`, which allocated a token array for every model id in a 20k-row directory. */
 function tokensOf(segment: string): string {
   let out = "";
   let runStart = -1;
@@ -56,8 +52,7 @@ export function normalizeModelKey(raw: string): string {
   const stripped = lowered.includes("(") ? lowered.replace(PAREN_GROUP_RE, " ") : lowered;
   const { tail, parent } = splitTail(stripped);
   if (tail && !PRICE_TIER_TAGS.has(tail)) return tail;
-  // A price tier is not a name: `openai/gpt-4o:free` is the model `openai/gpt-4o`, and the key has to say so. The
-  // parent is split the same way, so a price-tier tail drops the same way a provider prefix does.
+  // A price tier is not a name: `openai/gpt-4o:free` is the model `openai/gpt-4o`, and the parent is split the same way.
   if (tail && parent) {
     const base = splitTail(parent).tail;
     if (base) return base;

@@ -2,12 +2,8 @@ import type { TranslationKey } from "@/shared/i18n";
 import type { BenchmarkKey } from "@/shared/types/benchmark";
 
 /**
- * Benchmarks whose upstream value is already on its own scale and is kept exactly as sent: Briefcase Elo (832-1817), the
- * Cyber index (12-56, a 0-100 style score), GDPval, which the upstream now ships as an Elo (~1000-1900, negative for the
- * weakest rows) after retiring the 0-1 `gdpvalNormalized` field, omniscience, a *signed* index (down to about -89 for
- * models that hallucinate more than they know), and the two generation ladders, Code2Video (303-1536) and AA-3D
- * (573-1199). Verified against the live leaderboard, /models and /evaluations/omniscience payloads: every other benchmark
- * arrives as a 0-1 ratio.
+ * Benchmarks whose upstream value is already on its own scale and is kept exactly as sent: Briefcase Elo, the Cyber index,
+ * GDPval, omniscience (a *signed* index), Code2Video and AA-3D. Every other benchmark arrives as a 0-1 ratio.
  */
 export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>([
   "briefcase_elo",
@@ -19,16 +15,33 @@ export const ABSOLUTE_SCORE_BENCHMARKS = new Set<BenchmarkKey>([
 ]);
 
 /**
- * How a benchmark value is scaled inside `ArtificialAnalysisModel.benchmarks`.
- *
- * One record carries two scales — `ratio` values are the upstream 0-1 number as sent, `index` ones keep their own range
- * (Elo around 1500, a signed omniscience index) — so anything that formats, plots or compares a benchmark has to branch
- * on the scale instead of assuming one. `benchmarkScaleOf` decides, and nothing is rescaled on the way in.
+ * How a benchmark value is scaled inside `ArtificialAnalysisModel.benchmarks`: `ratio` values are the upstream 0-1
+ * number as sent, `index` ones keep their own range (an Elo ladder, a signed omniscience index), and nothing is
+ * rescaled on the way in - so `benchmarkScaleOf` decides and every formatter, plot and comparison branches on the scale.
  */
 type BenchmarkScale = "ratio" | "index";
 
 export function benchmarkScaleOf(key: string): BenchmarkScale {
   return ABSOLUTE_SCORE_BENCHMARKS.has(key as BenchmarkKey) ? "index" : "ratio";
+}
+
+/** The badge AA prints beside an evaluation, mirrored from its own `type`/`removeAfter` map; re-sync when AA flags another evaluation. */
+export interface BenchmarkNotice {
+  kind: "new" | "underReview";
+  /** Last day the badge is shown (AA's `removeAfter`), ISO `YYYY-MM-DD`. */
+  until?: string;
+}
+
+const BENCHMARK_NOTICES: Partial<Record<BenchmarkKey, BenchmarkNotice>> = {
+  mka: { kind: "new", until: "2026-11-24" },
+  vials: { kind: "new", until: "2026-11-20" },
+  scicode: { kind: "underReview" },
+};
+
+export function benchmarkNoticeOf(key: BenchmarkKey, today: string): BenchmarkNotice | undefined {
+  const notice = BENCHMARK_NOTICES[key];
+  if (notice?.until === undefined) return notice;
+  return today > notice.until ? undefined : notice;
 }
 
 export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
@@ -68,12 +81,11 @@ export const BENCHMARK_LABELS: Record<BenchmarkKey, TranslationKey> = {
   omniscience: "benchmarkOmniscience",
   code2video_elo: "benchmarkCode2videoElo",
   aa_3d: "benchmarkAa3dElo",
+  mka: "benchmarkMka",
+  vials: "benchmarkVials",
 };
 
-/**
- * The headings the benchmark grid sorts its columns under, in display order. A heading says what the evaluations in it
- * measure, so a reader can tell a code-agent score from a safety one without knowing each acronym.
- */
+/** The headings the benchmark grid sorts its columns under, in display order. */
 export type BenchmarkGroupId = "knowledge" | "coding" | "terminal" | "safety" | "generation";
 
 export const BENCHMARK_GROUPS: readonly { readonly id: BenchmarkGroupId; readonly labelKey: TranslationKey }[] = [
@@ -84,10 +96,7 @@ export const BENCHMARK_GROUPS: readonly { readonly id: BenchmarkGroupId; readonl
   { id: "generation", labelKey: "benchmarkGroupGeneration" },
 ];
 
-/**
- * The heading each benchmark is filed under. A total record over `BenchmarkKey` on purpose: a benchmark added without
- * filing it here would silently disappear from the grid, which is the one mistake this table has to make impossible.
- */
+/** The heading each benchmark is filed under; a total record over `BenchmarkKey`, so an unfiled one cannot disappear from the grid. */
 export const BENCHMARK_GROUP_OF: Record<BenchmarkKey, BenchmarkGroupId> = {
   gpqa: "knowledge",
   hle: "knowledge",
@@ -125,4 +134,6 @@ export const BENCHMARK_GROUP_OF: Record<BenchmarkKey, BenchmarkGroupId> = {
   deepsec_bench: "safety",
   code2video_elo: "generation",
   aa_3d: "generation",
+  mka: "knowledge",
+  vials: "knowledge",
 };

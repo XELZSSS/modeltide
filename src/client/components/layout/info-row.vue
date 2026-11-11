@@ -1,8 +1,6 @@
 <script setup lang="ts">
-/**
- * One label/value line: the label is a caption and never shrinks, the value is monospaced, right-aligned and truncates
- * on desktop, so a long model id cannot push the label out of the row.
- */
+/** One label/value line: the label is a caption and never shrinks, and the value truncates on desktop, so a long model id
+ * cannot push the label out of the row. */
 import { cn } from "@/client/utils/cn";
 
 defineProps<{ label: string }>();

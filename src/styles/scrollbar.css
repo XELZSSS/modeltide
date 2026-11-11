@@ -1,14 +1,6 @@
 /*
- * Scrollbars are hidden at every width, on every scrollport the app owns: `html` (the browser-level one), `main` (the
- * shell's scroll box) and the `overflow-*-auto` blocks (sheets, the search panel, a wide table).
- *
- * Pointer widths already hid them — the wheel or trackpad is the affordance, and the strip only cost layout. Touch
- * widths hid them too now: on a phone the themed 4px strip was a second indicator that ate content width (iOS paints
- * its own overlay indicator while a finger scrolls, which no stylesheet can style either way; Android Chrome's is the
- * one this rule removes).
- *
- * Hiding the bar does not disable scrolling — `overflow` is untouched — and nothing reserves a gutter for a bar that is
- * never painted.
+ * Scrollbars are hidden at every width, on every scrollport the app owns: `html`, `main` and the `overflow-*-auto`
+ * blocks. Hiding the bar does not disable scrolling - `overflow` is untouched - and nothing reserves a gutter for it.
  */
 
 html,

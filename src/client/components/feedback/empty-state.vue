@@ -1,9 +1,6 @@
 <script setup lang="ts">
-/**
- * The shared "nothing to show" state, in three roles: `empty` (a card, nothing matched), `error` (a card, announced as
- * an alert) and `plain` (no card chrome, for a tab body that already sits inside one). The wrapper element and the
- * `role` both follow the variant, so the markup is correct without the caller passing either.
- */
+/** The shared "nothing to show" state, in three roles: `empty` (a card, nothing matched), `error` (a card, announced as
+ * an alert) and `plain` (no card chrome, for a tab body that already sits inside one). */
 import { computed, type Component } from "vue";
 import { cn } from "@/client/utils/cn";
 import Card from "@/client/components/layout/card.vue";
@@ -28,7 +25,7 @@ const classes = computed(() =>
     : cn(
         props.compact
           ? "flex flex-col items-center justify-center gap-2 p-6 text-center"
-          : "flex min-h-[200px] flex-col items-center justify-center gap-3 p-8 text-center sm:min-h-[240px] sm:p-10",
+          : "flex min-h-50 flex-col items-center justify-center gap-3 p-8 text-center sm:min-h-60 sm:p-10",
         props.class,
       ),
 );
@@ -44,7 +41,10 @@ const classes = computed(() =>
       aria-hidden="true"
     />
     <p v-if="title" class="text-center ui-card-title text-text-primary">{{ title }}</p>
-    <p class="max-w-md text-center ui-body-secondary text-balance">{{ message }}</p>
+    <p class="max-w-md text-center ui-body-secondary text-pretty">{{ message }}</p>
+    <div v-if="$slots.action" class="mt-1 flex flex-wrap items-center justify-center gap-2">
+      <slot name="action" />
+    </div>
     <ul v-if="props.details.length > 0" class="max-w-md space-y-0.5 text-center ui-meta">
       <li v-for="line in props.details" :key="line" class="font-mono break-words">{{ line }}</li>
     </ul>

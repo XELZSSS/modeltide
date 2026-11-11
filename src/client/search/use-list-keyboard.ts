@@ -9,9 +9,8 @@ export function useListKeyboard(
   const count = computed(() => toValue(itemCount));
   const activeIndex = computed(() => (index.value < 0 ? -1 : Math.min(index.value, count.value - 1)));
 
-  // Results arrive from several model sources in waves, so the count changes while the panel is open. The clamp above
-  // keeps the highlight inside the new range; resetting on every change dropped it mid-navigation, which left Enter
-  // doing nothing at all. A new term resets the index explicitly (use-combobox's onChange/onFocus/onClear).
+  // Results arrive from several model sources in waves, so the count changes while the panel is open: the clamp keeps the
+  // highlight inside the new range, and a new term resets the index explicitly.
 
   function setActiveIndex(value: number): void {
     index.value = value;

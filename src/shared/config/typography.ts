@@ -1,13 +1,11 @@
 const SANS_FAMILIES = [
   '"IBM Plex Sans"',
-  // The metric-matched stand-in for Plex (see the `Plex Fallback` @font-face in src/styles/globals.css). It sits second
-  // so the pre-swap frame is laid out with Plex's own line metrics and advance widths instead of the platform default.
+  // The metric-matched stand-in for Plex (see the `Plex Fallback` @font-face in src/styles/globals.css). It sits second so the pre-swap frame is laid out with Plex's own metrics.
   '"Plex Fallback"',
   "-apple-system",
   "BlinkMacSystemFont",
   '"Segoe UI"',
-  // CJK before the symbol face: `Segoe UI Symbol` also covers `…`, `−`, arrows and box drawing, and on Windows it would
-  // otherwise win those characters inside Chinese text, whose metrics and baseline do not match the CJK family.
+  // CJK before the symbol face: `Segoe UI Symbol` also covers `...`, `-`, arrows and box drawing, and on Windows it would otherwise win those characters inside Chinese text.
   '"PingFang SC"',
   '"Hiragino Sans GB"',
   '"Microsoft YaHei"',

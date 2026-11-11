@@ -34,12 +34,7 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/**
- * What a chart uses when a token cannot be read (no layout yet, a renamed variable). It mirrors theme.css rather than the
- * pre-refactor navy palette, and it has a dark set: a single light fallback would paint light grid lines onto a dark
- * canvas, which is worse than no fallback at all. The palette is the shared constant itself — the consistency guard fails
- * the build if `theme.css` ever disagrees with it, so a copy here could only drift.
- */
+/** Fallback when a token cannot be read (no layout yet, renamed variable): it mirrors theme.css and needs a dark set — a light grid on a dark canvas is worse than nothing. */
 function fallbackTheme(): ChartTheme {
   const dark = documentIsDark();
   return {
@@ -52,19 +47,15 @@ function fallbackTheme(): ChartTheme {
   };
 }
 
-export const CHART_HEIGHT = "h-[160px] sm:h-[180px]";
+export const CHART_HEIGHT = "h-40 sm:h-45";
 
-export const FLEX_CHART_HEIGHT = `flex-1 min-h-[160px] ${CHART_HEIGHT}`;
+export const FLEX_CHART_HEIGHT = `flex-1 min-h-40 ${CHART_HEIGHT}`;
 
-// A radar's plot is square, so its shorter side decides the size: on a phone the card is ~300px wide, so the height
-// has to reach that before the polygon stops growing (240px left a ~150px circle in a box twice as tall).
-export const RADAR_CHART_HEIGHT = "h-[320px] sm:h-[400px]";
+// A radar's plot is square, so the height has to reach the card's phone width before the polygon stops growing.
+export const RADAR_CHART_HEIGHT = "h-80 sm:h-100";
 
-/**
- * Ten ranked categories of two bars. The height pays for the label row and the legend, not the bars: in a card this
- * wide the bar thickness comes from the category count against the plot *width*, so extra height buys nothing.
- */
-export const RANKING_CHART_HEIGHT = "flex-1 min-h-[220px] sm:min-h-[240px]";
+/** Ten ranked categories of two bars: the height pays for the label row and legend — bar thickness comes from the plot width. */
+export const RANKING_CHART_HEIGHT = "flex-1 min-h-55 sm:min-h-60";
 
 export const CHART_EMPTY_CLASS = "flex items-center justify-center text-center ui-body-secondary";
 
@@ -79,13 +70,9 @@ const CHART_FONT_SIZE = 12;
 const TOOLTIP_FADE_MS = 150;
 
 /**
- * Chart.js tweens the numbers a tooltip prints, so a value already laid out against the previous label width visibly
- * slides while the panel follows the cursor. The numbers snap and only the opacity fade animates: the panel still
- * arrives softly, nothing inside it moves. Under `prefers-reduced-motion` the fade is dropped too — motion.css zeroes
- * every CSS duration for that preference, and Chart.js animations are not CSS.
- *
- * Plugin defaults only exist once the Tooltip plugin has been registered, so `register.ts` calls this again after every
- * `register()` instead of relying on the module-level call alone.
+ * Chart.js tweens tooltip numbers, so a laid-out value visibly slides while the panel follows the cursor: numbers snap,
+ * only opacity fades (and not at all under reduced motion — motion.css zeroes CSS durations, Chart.js is not CSS).
+ * Plugin defaults exist only once the Tooltip plugin is registered, so `register.ts` calls this again after each `register()`.
  */
 export function applyChartDefaults(chart: typeof ChartJS): void {
   chart.defaults.font.family = chartFontFamily();
@@ -94,20 +81,14 @@ export function applyChartDefaults(chart: typeof ChartJS): void {
   const tooltip = plugins?.tooltip as
     | { animations?: Record<string, { duration?: number }>; callbacks?: { labelColor?: unknown } }
     | undefined;
-  // The default `labelColor` callback hard-codes the colour box to a square; overriding it here keeps every tooltip's
-  // marker rounded without each chart having to redeclare the callback.
+  // The stock `labelColor` hard-codes a square box; overriding it keeps every tooltip marker rounded.
   if (tooltip?.callbacks) tooltip.callbacks.labelColor = tooltipLabelColor;
   if (!tooltip?.animations?.numbers || !tooltip.animations.opacity) return;
   tooltip.animations.numbers.duration = 0;
   tooltip.animations.opacity.duration = prefersReducedMotion() ? 0 : TOOLTIP_FADE_MS;
 }
 
-/**
- * Responsive base for every chart: `maintainAspectRatio: false` lets the frame own the height. There is deliberately no
- * `animation` here — the charts show snapshots and `ChartCanvas` sets `animation: { duration: 0 }` for them, because that
- * component is also what calls `chart.update("none")` and therefore the only place that can guarantee it. Setting it
- * here too would be a second copy of the same decision.
- */
+/** Responsive base for every chart: `maintainAspectRatio: false` lets the frame own the height. No `animation` here — `ChartCanvas` owns `animation: { duration: 0 }` and is the only caller of `chart.update("none")`. */
 export const chartBase = {
   responsive: true,
   maintainAspectRatio: false,
@@ -122,11 +103,6 @@ const TOOLTIP_MARKER_RADIUS = 3;
 
 type TooltipType = "line" | "radar" | "bar" | "doughnut";
 
-/**
- * Chart.js's default `labelColor` callback hard-codes `borderRadius: 0`, so every tooltip colour box is a square even
- * though the tooltip itself is rounded. This keeps the default colours and gives the marker the same 3px radius the
- * bars and slices use.
- */
 function tooltipLabelColor<TType extends ChartType>(item: TooltipItem<TType>): TooltipLabelStyle {
   const style = item.chart.getDatasetMeta(item.datasetIndex).controller.getStyle(item.dataIndex, false);
   return {
@@ -146,8 +122,6 @@ export function defaultTooltipOptions(theme: ChartTheme): Partial<TooltipOptions
     bodyColor: theme.tooltipText,
     borderColor: theme.grid,
     borderWidth: 1,
-    // The last square surface in the UI: every other floating panel is `rounded-lg`, and the tooltip is the one the
-    // pointer sees most often.
     cornerRadius: 10,
     padding: 10,
     boxPadding: 4,
@@ -224,8 +198,6 @@ export const AXIS_MAX = 100;
 export const AXIS_STEP = 20;
 
 export function ceilToStep(peak: number): number {
-  // `step` is always the axis step: both callers (the home bars and the radar) want the same gridline ceiling, so a
-  // per-call step was a knob no caller ever turned.
   return Math.ceil(peak / AXIS_STEP) * AXIS_STEP;
 }
 
@@ -240,9 +212,8 @@ export function legendStyle(theme: ChartTheme) {
     labels: {
       color: theme.tickSecondary,
       font: { size: LEGEND_DOT_SIZE },
-      // A legend marker is one shape everywhere: a solid dot in the series colour. Chart.js derives a point marker's
-      // radius as `boxHeight * √2 / 2`, so `pointStyleWidth` plus `boxHeight = size / √2` draw a circle exactly as tall
-      // as the 12px label instead of the default 40px colour box.
+      // A legend marker is one shape everywhere: Chart.js derives a point marker's radius as `boxHeight * √2 / 2`, so
+      // `boxHeight = size / √2` draws a circle as tall as the 12px label instead of a full colour box.
       usePointStyle: true,
       pointStyle: "circle" as const,
       pointStyleWidth: LEGEND_DOT_SIZE,

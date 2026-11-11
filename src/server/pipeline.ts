@@ -7,8 +7,6 @@ import type { Logger } from "./api/logger";
 import type { CacheScope } from "./cache/types";
 import { degraded, served, type ServedPayload } from "./served-payload";
 
-// All four callers pass both a logger and a label, so `log` was never the no-logger path and `label` never the
-// `"parser"` default: requiring them drops the dead optional-chain branch and the untaken default.
 export function requireParsed<T>(result: ParseResult<T>, log: Logger, label: string): T {
   if (!result.ok) throw new UpstreamError(result.error);
   if (result.warnings.length > 0) log("warn", `[${label}] ${result.warnings.join("; ")}`);
@@ -36,10 +34,7 @@ interface SourceSpec<P, TRaw, TData> {
   ttl: number;
   scope?: CacheScope;
   label: string;
-  /**
-   * True when a route returns this payload to a client. Internal sources compose their value into another source and
-   * never answer a request, so the cache skips the response copy they would never serve.
-   */
+  /** True when a route returns this payload to a client; internal sources compose their value into another source, so the cache skips the response copy. */
   served?: boolean;
   fetch: (ctx: AppContext, params: P) => Promise<TRaw>;
   /** `params` are the ones `fetch` received, so a gate that depends on the query is read where it applies. */
@@ -49,10 +44,7 @@ interface SourceSpec<P, TRaw, TData> {
   partialWhen?: (stats: { raw: TRaw }) => PartialVerdict;
 }
 
-/**
- * A source with a fixed cache key. The envelope it answers is the one a route returns — `{ data, partial }` — so a
- * source never states a `partial` flag it did not compute.
- */
+/** A source with a fixed cache key; the envelope it answers (`{ data, partial }`) is the one a route returns. */
 export type FixedSource<T> = (ctx: AppContext) => Promise<ServedPayload<T>>;
 
 /** A source whose cache key and upstream request depend on the validated query. */
@@ -89,9 +81,7 @@ export function defineParamSource<P, TRaw, TData>(
       )
       .then(({ value, degraded: isDegraded, body, producedAt }) =>
         // A stale fallback rewrites the stored copy into a partial response, so the body stored beside it still says
-        // `partial: false`. Serving those bytes would ship a payload whose flag, ETag and cache headers disagree with
-        // its own body, and the client would never show the partial notice or start polling. Only an unchanged payload
-        // may be served from the copy the cache encoded.
+        // `partial: false`: only an unchanged payload may be served from the bytes the cache encoded.
         isDegraded ? degraded<TData>(value, producedAt) : served<TData>(value, { body, producedAt }),
       );
   };
@@ -108,14 +98,7 @@ export interface PartialData<T> {
   readonly partial: boolean;
 }
 
-/**
- * A source whose `fetch` already knows whether its payload is partial: it resolves the payload together with the flag,
- * so the spec restates neither.
- *
- * The four partial sources used to declare a raw shape of their own (`{ entry, partial }`, `{ models, partial }`, …)
- * plus a `pick` that selected the field holding the payload. Naming that field `data` lets the wrapper read it, and the
- * flag travels beside the value it was computed for instead of through a `partialWhen` that could disagree with it.
- */
+/** A source whose `fetch` already knows whether its payload is partial: it resolves the payload together with the flag, so the spec restates neither. The payload field is named `data`, so the flag travels beside the value it was computed for instead of through a `partialWhen`. */
 export function definePartialSource<T>(spec: {
   key: string;
   ttl: number;

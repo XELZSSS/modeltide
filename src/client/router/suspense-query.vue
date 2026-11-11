@@ -14,16 +14,10 @@ function reset(): void {
 
 <template>
   <!--
-    The cold-load placeholder, and the only loader a first load ever shows. It lives *inside* the boundary, so the dots
-    exist only while the awaiting setup is still unresolved: Vue swaps them for the content in the same commit, which is
-    the one mechanism that can neither be left behind nor overlap data that has already arrived.
-
-    Every page scopes this boundary to the region that will be filled (the tab panel, the release list, the dashboard
-    grid), so the page header and tabs stay put and the plate does not jump. The dots themselves are held back for a
-    short delay (see `DelayedDots`): a warm switch resolves before they would appear, so it shows nothing rather than a
-    loader that the next frame throws away, while the reserved height keeps the geometry identical either way. This is the
-    app's only loading state: a background refetch of data that is already on screen stays silent, and a degraded payload
-    keeps its own `PartialNotice` rather than growing a second indicator.
+    The cold-load placeholder, and the only loader a first load ever shows: it lives inside the boundary, so the dots
+    exist only while the awaiting setup is unresolved and Vue swaps them for the content in the same commit. Pages scope
+    the boundary to the region that will be filled, and `DelayedDots` holds the dots back so a warm switch shows nothing
+    rather than a loader the next frame throws away.
   -->
   <ErrorBoundary :reset="reset">
     <slot />

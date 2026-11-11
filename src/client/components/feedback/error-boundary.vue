@@ -1,11 +1,6 @@
 <script setup lang="ts">
-/**
- * Catches render and async errors from everything below it, reports them once, and offers a retry that remounts the
- * subtree through the `Suspense` key. The failure is shown as the kind of failure it is — `errorText` names it and
- * puts its source and statuses underneath — instead of one shared "something went wrong" for every cause. Retrying is
- * blocked while the browser reports itself offline, because the retry could only fail again and the notice already
- * says why.
- */
+/** Catches render and async errors from everything below it, reports them once, and offers a retry that remounts the
+ * subtree through the `Suspense` key. Retrying is blocked while the browser reports itself offline. */
 import { computed, onErrorCaptured, onMounted, onUnmounted, ref } from "vue";
 import { TriangleAlert } from "@lucide/vue";
 import { useTranslation } from "@/client/i18n";

@@ -18,10 +18,7 @@ class FailureCooldown {
   /** Keys whose detached refresh failed: the failure is known, but no attempt was awaited, so there is no cooldown. */
   private staleFailures = new Map<string, number>();
 
-  /**
-   * The recorded entry for `key` while it is still inside its cooldown window, dropping it once the window has passed.
-   * Both readers below go through here so they cannot disagree about when a window ends.
-   */
+  /** The recorded entry for `key` while it is still inside its cooldown window, dropping it once the window has passed. */
   private liveEntry(key: string): CooldownEntry | undefined {
     const entry = this.lastFail.get(key);
     if (entry == null) return undefined;
@@ -43,24 +40,12 @@ class FailureCooldown {
     return true;
   }
 
-  /**
-   * Whether `key`'s refresh is known to be failing: either a failure was recorded by the detached stale-while-
-   * revalidate refresh (`noteRefreshFailure`), or a refresh attempt is inside its cooldown. The cache reads this
-   * before serving a stale copy — one whose refresh has failed can no longer be brought up to date, so it has to be
-   * reported as degraded instead of as current data.
-   */
+  /** Whether `key`'s refresh is known to be failing: a failure recorded by a detached refresh or an attempt inside its cooldown, which makes a stale copy degraded instead of current data. */
   isFailing(key: string): boolean {
     return this.liveStaleFailure(key) || this.liveEntry(key) !== undefined;
   }
 
-  /**
-   * Records that a detached refresh failed — the read side of a failure whose response was already written.
-   * `RefreshRunner` only cools down failures it awaited (`shouldCoolDown`), while the stale-while-revalidate path
-   * hands its rejection to `onDetach` and answers immediately. Without this record the next request served the same
-   * stale bytes as current data with `partial: false`, and the client's partial-poll never started.
-   *
-   * A client abort is not a source failure: the reader went away, and the next reader should still get a normal answer.
-   */
+  /** Records that a detached refresh failed — a failure whose response was already written — so the next request does not serve the same stale bytes as current data; a client abort is not a source failure. */
   noteRefreshFailure(key: string, err: unknown): void {
     if (err instanceof ClientAbortError) return;
     this.staleFailures.delete(key);
@@ -68,21 +53,12 @@ class FailureCooldown {
     pruneBounded(this.staleFailures, FAILURE_COOLDOWN_MAX_KEYS, (at) => Date.now() - at >= FAILURE_COOLDOWN_MS);
   }
 
-  /**
-   * Records that a refresh reached the source and produced a payload. A recorded failure describes a key that could not
-   * be brought up to date; once it has been, the record has to go, or the next stale read of that key reports a data gap
-   * for a refresh that has since succeeded. `lastFail` needs no counterpart: `RefreshRunner` refuses to start a refresh
-   * inside that window (`throwIfCooling`), so a success is only reachable with no live entry there.
-   */
+  /** Records that a refresh produced a payload: a recorded failure has to go, or the next stale read reports a data gap for a refresh that has since succeeded. */
   noteRefreshSuccess(key: string): void {
     this.staleFailures.delete(key);
   }
 
-  /**
-   * Rethrows the recorded failure while `key` lies inside its cooldown window — the failure's response shape
-   * (timeout/statusCode/retryAfterMs) is preserved so a 429 keeps surfacing as 503 + Retry-After for the rest of
-   * the window instead of degrading to a generic 502.
-   */
+  /** Rethrows the recorded failure inside its cooldown window, preserving its shape so a 429 keeps surfacing as 503 + Retry-After instead of a generic 502. */
   throwIfCooling(key: string): void {
     const entry = this.liveEntry(key);
     if (entry == null) return;
@@ -115,11 +91,7 @@ class FailureCooldown {
 
 export const refreshFailureCooldown = new FailureCooldown();
 
-/**
- * A client abort or an inflight-watchdog timeout says nothing about upstream health. Every other UpstreamError does —
- * a 5xx, a rate limit, and also a 200 whose body was unusable (zero rows, oversized payload, invalid JSON): retrying
- * those on every request is what turns one bad upstream response into a per-request stampede.
- */
+/** A client abort or an inflight-watchdog timeout says nothing about upstream health; every other UpstreamError does — a 5xx, a rate limit, and a 200 whose body was unusable. */
 export function shouldCoolDown(err: unknown): boolean {
   if (err instanceof ClientAbortError) return false;
   if (err instanceof UpstreamError) return !err.watchdog;

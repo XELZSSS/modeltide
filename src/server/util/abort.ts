@@ -17,8 +17,7 @@ export function raceAbort<T>(
       }
       reject(makeError());
     };
-    // A listener added to an already-aborted signal never fires, so that case has to be answered here or this promise
-    // would hang. `work` still gets a rejection handler so the abandoned request cannot surface as an unhandled one.
+    // A listener added to an already-aborted signal never fires, so that case has to be answered here; `work` still gets a rejection handler.
     if (signal.aborted) {
       work.then(undefined, () => {});
       reject(makeError());

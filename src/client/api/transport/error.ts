@@ -1,11 +1,8 @@
 import type { ApiDomain } from "@/shared/config/api";
 import type { ApiErrorKind } from "@/shared/types/api-error";
 
-/**
- * Every failure the client can name: the API's own kinds plus the three only the browser knows about — `network` for a
- * request that never reached the server, `offline` for the device having no connection, and `malformed` for a response
- * that arrived but could not be read.
- */
+/** Every failure the client can name: the API's own kinds plus the three only the browser knows — `network` for a request
+ * that never reached the server, `offline` for the device having no connection, and `malformed` for an unreadable body. */
 export type ClientErrorKind = ApiErrorKind | "malformed" | "network" | "offline" | "unknown";
 
 interface ClientErrorDetail {
@@ -16,11 +13,8 @@ interface ClientErrorDetail {
   retryAfterS?: number;
 }
 
-/**
- * A failed API read, named by `kind` so the reader is told what actually happened instead of one shared "something went
- * wrong". The status fields are the technical half and are kept apart from the message for that reason: they are shown
- * under the reader's text rather than inside it.
- */
+/** A failed API read, named by `kind` so the reader is told what happened instead of one shared "something went wrong".
+ * The status fields are the technical half and are shown under the reader's text rather than inside it. */
 export class ApiClientError extends Error {
   readonly kind: ClientErrorKind;
   readonly status?: number;

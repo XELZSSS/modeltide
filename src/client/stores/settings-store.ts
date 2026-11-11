@@ -19,16 +19,12 @@ function isLang(value: unknown): value is Lang {
   return value === "zh" || value === "en";
 }
 
-/**
- * Nothing persisted means "follow the OS" — the same preference `index.html` resolves for its first paint. It is a mode
- * and not a snapshot: `app-shell` re-resolves it every time the OS preference changes.
- */
+/** Nothing persisted means "follow the OS" — the same preference `index.html` resolves for its first paint. It is a mode
+ * and not a snapshot: `app-shell` re-resolves it every time the OS preference changes. */
 const DEFAULT_THEME_MODE: ThemeMode = "system";
 
-/**
- * The browser's own language, read only when nothing is persisted. Anything that is not an English tag gets the
- * Chinese copy, which is what `index.html` does too.
- */
+/** The browser's own language, read only when nothing is persisted. Anything that is not an English tag gets the Chinese
+ * copy, which is what `index.html` does too. */
 function initialLang(): Lang {
   return navigator.language.toLowerCase().startsWith("en") ? "en" : "zh";
 }

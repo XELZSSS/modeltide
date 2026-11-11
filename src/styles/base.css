@@ -1,13 +1,9 @@
 /*
  * Element normalisation, in Tailwind's `base` layer so any utility in `src/client` still wins without `!important`.
- * Imported after `@import "tailwindcss"` so it refines preflight rather than replacing it.
- *
- * Kept small on purpose: these are the defaults that must hold for *every* element (document metrics, font
- * inheritance, wrapping), not component styles that happen to be global.
+ * Kept small on purpose: only the defaults that must hold for every element, not component styles.
  */
 
 @layer base {
-  /* Document metrics */
   html,
   body,
   #root {
@@ -27,10 +23,8 @@
     font-size: 16px;
     line-height: var(--leading-text);
     letter-spacing: var(--tracking-text);
-    /* No font-smoothing override: the platform default keeps subpixel (LCD) antialiasing on Windows, where forcing
-       `antialiased` turns every glyph into grayscale coverage — thinner and softer at the sizes this UI uses. */
-    /* Proportional figures for prose; `th, td` and the `ui-mono-value` / `ui-metric` roles opt back in (see the table
-       rule below), so a figure in a column still lines up while a number inside a sentence keeps its own rhythm. */
+    /* No font-smoothing override: the platform default keeps subpixel (LCD) antialiasing on Windows, where `antialiased` turns every glyph into grayscale - thinner and softer at these sizes. */
+    /* Proportional figures for prose; `th, td` and the `ui-mono-value` / `ui-metric` roles opt back into tabular. */
     font-variant-numeric: proportional-nums;
     font-synthesis: none;
     background-color: var(--bg-primary);
@@ -56,15 +50,13 @@
     background-color: var(--color-selected);
   }
 
-  /* A control that looks clickable should say so on a desktop pointer; preflight leaves `cursor: default` on a
-     <button>, which reads as dead text in a toolbar of ghost buttons. */
+  /* A control that looks clickable should say so on a desktop pointer: preflight leaves `cursor: default` on a <button>. */
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]) {
     cursor: pointer;
   }
 
-  /* Media defaults: nothing overflows its column, and an unsized image keeps its own aspect ratio. The `[class*="h-"]`
-     / `[class*="w-"]` escape hatches let an explicitly sized element keep both dimensions. */
+  /* Media defaults: nothing overflows its column and an unsized image keeps its aspect ratio; the `[class*="h-"]` / `[class*="w-"]` escapes let an explicitly sized element keep both dimensions. */
   img:not([class*="h-"]):not([class*="w-"]),
   video:not([class*="h-"]):not([class*="w-"]) {
     max-width: 100%;

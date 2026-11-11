@@ -1,8 +1,5 @@
-/**
- * Every route path the client links to, plus the query param names those links carry. `routes.ts` declares its records
- * from these, and so do the two call sites that build a link by hand: the source back-links in `nav/sources.ts` and the
- * comparison-view switch in the AA rankings tab.
- */
+/** Every route path the client links to, plus the query param names those links carry. `routes.ts` declares its records
+ * from these, and so do the two call sites that build a link by hand. */
 export const PATHS = {
   home: "/",
   rankings: "/models",

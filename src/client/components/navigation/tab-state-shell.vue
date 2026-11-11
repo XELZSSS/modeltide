@@ -1,9 +1,7 @@
 <script setup lang="ts">
-/**
- * The gate every tab body passes through: a partial notice, an empty state when the query returned nothing, and the
- * slot when there is data. A malformed payload is raised to the nearest ErrorBoundary instead of being rendered as an
- * empty list — the tab is wrapped in one.
- */
+/** The gate every tab body passes through: a partial notice, an empty state when the query returned nothing, and the slot
+ * when there is data. A malformed payload is raised to the nearest ErrorBoundary (the tab is wrapped in one) instead of
+ * being rendered as an empty list. */
 import { useMalformedGuard } from "@/client/hooks/use-malformed-guard";
 import PartialNotice from "@/client/components/feedback/partial-notice.vue";
 import EmptyState from "@/client/components/feedback/empty-state.vue";

@@ -46,11 +46,8 @@ const LIST_FIELDS = [
 
 type HomeListField = (typeof LIST_FIELDS)[number];
 
-/**
- * The envelope has already been validated by `payloadData`; each list field is read as its declared type and a
- * missing or wrongly-typed one degrades to `[]` while `malformed` records it, so one bad field cannot blank the
- * dashboard the other five still fill.
- */
+/** Each list field is read as its declared type: a missing or wrongly-typed one degrades to `[]` and sets `malformed`,
+ * so one bad field cannot blank the dashboard the other five still fill. */
 export function normalizeHomeDashboard(payload: unknown): NormalizedHomeDashboard {
   const label = "homeDashboard";
   let raw: HomeDashboardData | null = null;

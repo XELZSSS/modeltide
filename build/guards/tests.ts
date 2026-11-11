@@ -1,16 +1,9 @@
 import { listDirRecursive, type GuardContext, type GuardRule } from "./context.ts";
 
 /**
- * The Vitest file set, frozen at its current size (AGENTS.md rule 3).
- *
- * "Never add a `*.test.ts` / `*.spec.ts`" was stated in AGENTS.md, restated in `vitest.config.ts` and counted in
- * `build/check.ts`, and none of the three could fail: a new suite passed type-check, lint, format and the four rules
- * that existed, so the only enforcement was a maintainer noticing the diff. Naming the files makes the rule
- * mechanical in both directions — a suite that is added *or* deleted fails here — which is what "frozen" means.
- *
- * The list is spelled out rather than derived from a count: a count alone would let one suite be swapped for another
- * with the gate still green, and the point is that this is the set the repository agreed on. Changing it is a
- * deliberate edit of this file, which is the conversation AGENTS.md asks for.
+ * The Vitest file set, frozen at its current size (AGENTS.md rule 3): "never add a `*.test.ts`" was restated in three
+ * places and none of them could fail, so naming the files makes the rule mechanical in both directions - a suite added
+ * *or* deleted fails here. The list is spelled out rather than derived from a count, so changing it is a deliberate edit.
  */
 const FROZEN_TEST_FILES: readonly string[] = [
   "src/client/api/decode/payload.test.ts",
@@ -75,10 +68,8 @@ function assertFrozenTestFiles(ctx: GuardContext): void {
 }
 
 /**
- * The frozen suite list.
- *
- * It watches the whole `src` tree: a suite is added by creating a file, so a rule that named only the current files
- * would never re-run on the change that violates it.
+ * The frozen suite list. It watches the whole `src` tree: a suite is added by creating a file, so a rule naming only
+ * the current files would never re-run on the change that violates it.
  */
 export const testsRule: GuardRule = {
   id: "tests",

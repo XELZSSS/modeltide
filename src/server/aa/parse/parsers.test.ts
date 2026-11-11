@@ -413,8 +413,7 @@ describe("toClosedReleases", () => {
       "claude-opus-5-5",
       "mystery-1",
     ]);
-    // Two variants of one release are two rows, each labelled with its own name: AA files both under one release, and the
-    // feed used to print only the family name for that pair.
+    // Two variants of one release are two rows, each labelled with its own name.
     expect(entries.filter((e) => e.releaseDate === "2026-10-17").map((e) => e.model)).toEqual([
       "DeepSeek V4.1 Flash 1017 (Max)",
       "DeepSeek V4.1 Flash 1017 (Non-reasoning)",

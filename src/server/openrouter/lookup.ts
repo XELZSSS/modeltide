@@ -5,10 +5,7 @@ export type Lookup<T> = Map<string, T> | Record<string, T>;
 const NORMALIZED_KEY_CACHE_MAX = 8192;
 const normalizedKeyCache = new Map<string, string>();
 
-/**
- * `normalizeModelKey` behind a shared memo. Exported because the AA catalog's metadata backfill normalizes the same
- * model names on every refresh: one cache serves both lookups instead of a second copy of the same table.
- */
+/** `normalizeModelKey` behind a shared memo, exported so the AA catalog's metadata backfill normalizes through the same cache. */
 export function normalizedModelKey(raw: string): string {
   const cached = normalizedKeyCache.get(raw);
   if (cached !== undefined) {
@@ -20,8 +17,7 @@ export function normalizedModelKey(raw: string): string {
   }
   const normalized = normalizeModelKey(raw);
   normalizedKeyCache.set(raw, normalized);
-  // Evict the oldest key directly: `pruneBounded` with a constant-false predicate walked the whole 8k-entry cache on
-  // every miss past the cap, and a cold directory refresh misses tens of thousands of times.
+  // Evict the oldest key directly: `pruneBounded` with a constant-false predicate walked the whole cache on every miss.
   if (normalizedKeyCache.size > NORMALIZED_KEY_CACHE_MAX) {
     const oldest = normalizedKeyCache.keys().next();
     if (!oldest.done) normalizedKeyCache.delete(oldest.value);
@@ -37,18 +33,12 @@ export function lookupHit<T>(table: Lookup<T>, key: string): T | undefined {
 
 /**
  * Every index form one model row is filed under, in lookup order: each raw value lowercased first, then each value's
- * normalized form. Writers (`recordPricing`, `recordMeta`) and readers (`resolvePricing`, `resolveExpiry`) have to
- * build the same set — a candidate the writer never filed is a silent miss that surfaces as a lost price or a lost
- * expiry date, never as an error — so both sides come through here.
- *
- * The raw forms come first on purpose: a normalized form is lossy by design (a variant tail keeps only its own
- * segment), so it must never shadow the exact key beside it. `target` is passed in because the directory records reuse
- * one Set across 20k rows.
+ * normalized form. Writers and readers have to build the same set — a candidate the writer never filed is a silent miss —
+ * so both sides come through here. Raw forms come first: a normalized form is lossy and must not shadow the exact key.
  */
 export function fillModelKeys(target: Set<string>, values: readonly unknown[]): void {
   target.clear();
-  // Two passes over `values` rather than one over a `present` copy: every raw form has to be probed before any
-  // normalized one, and that copy was an array per call for a directory that makes tens of thousands of them.
+  // Two passes over `values` rather than one over a `present` copy: every raw form has to be probed before any normalized one.
   for (const value of values) if (typeof value === "string" && value !== "") target.add(value.toLowerCase());
   for (const value of values) {
     if (typeof value !== "string" || value === "") continue;

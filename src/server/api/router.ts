@@ -63,8 +63,7 @@ const RATE_LIMIT_FALLBACK_S = 60;
 
 function rateLimitedResponse(retryAfterMs: number | undefined, source: ApiDomain): Response {
   const seconds = retryAfterMs == null ? RATE_LIMIT_FALLBACK_S : Math.max(1, Math.ceil(retryAfterMs / 1000));
-  // 429 is the one failure where the upstream unambiguously answered, so it carries its status like the 502 path does:
-  // the client shows "upstream 429" under the rate-limit notice.
+  // 429 is the one failure where the upstream unambiguously answered, so it carries its status like the 502 path does.
   const res = errorJson(503, "rate-limited", "Upstream rate limited, retry shortly", { source, upstreamStatus: 429 });
   res.headers.set("Retry-After", String(seconds));
   return res;
@@ -107,8 +106,7 @@ function mapApiError(err: unknown, method: string, path: string, clientAborted: 
     return rateLimitedResponse(err.retryAfterMs, source);
   }
   if (err instanceof ApiError) {
-    // Every ApiError subclass is constructed with a 4xx/5xx status (400 validation, 499 caller abort, 502 upstream,
-    // 504 timeout), so the status is used as-is.
+    // Every ApiError subclass is constructed with a 4xx/5xx status, so the status is used as-is.
     if (err.status === 502) {
       const detail = upstreamDetail(err, source);
       const origin = detail.upstreamStatus === undefined ? "" : ` (upstream ${detail.upstreamStatus})`;
@@ -127,11 +125,7 @@ export interface ApiRouteDef<D extends ApiDomain = ApiDomain, S extends QuerySch
   query?: S;
   /** How long this route's payload may be kept. The router renders it into the browser and edge headers. */
   cache: CacheDurations;
-  /**
-   * Per-payload override of `cache`. A source that answers an empty list for a miss (the Hugging Face by-id lookup)
-   * would otherwise hand the route's multi-hour TTL to a payload it only keeps for a minute, so it leaves out
-   * `staleIfErrorS` as well: "not found" must not be pinnable at the edge.
-   */
+  /** Per-payload override of `cache`: a source that answers an empty list for a miss (the Hugging Face by-id lookup) must not hand the route's multi-hour TTL, or `staleIfErrorS`, to a payload it keeps for a minute. */
   cacheFor?(payload: DomainPayload<D>): CacheDurations | undefined;
   handler(ctx: AppContext, params: ValidatedQuery<S>): Promise<ServedPayload<PayloadOf<D>>>;
 }
@@ -147,12 +141,10 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
   try {
     const context = buildContext(env, { callerSignal: req.signal, onDetach: hooks?.onDetach });
     const rawParams = collectQueryParams(url);
-    // `def.query` is optional on the route definition; a route without a schema accepts no params, which is what the
-    // empty object says. Both uses read it once, so the default is applied here rather than at each site.
+    // `def.query` is optional on the route definition; a route without a schema accepts no params.
     const schema = def.query ?? {};
     const schemaKeys = new Set(Object.keys(schema));
-    // `?v=` carries the client's cache version and is deliberately outside the route's schema, but it is still a query
-    // param the client chooses: an unbounded one would be echoed into logs and cache keys, so it is bounded like any other.
+    // `?v=` is deliberately outside the route's schema but is still a client-chosen param: an unbounded one would be echoed into logs and cache keys.
     const version = rawParams[API_VERSION_PARAM];
     if (version !== undefined) {
       if (Array.isArray(version)) throw new ValidationError(`Query param "${API_VERSION_PARAM}" must not be repeated`);
@@ -171,14 +163,11 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
     const payload = answer.payload;
     const headers = new Headers({ "content-type": "application/json" });
     const durations = def.cacheFor?.(payload) ?? def.cache;
-    // A partial payload is held for less time, and `renderPartialCacheSpec` decides how much less. The route's
-    // stale-if-error decision comes along unchanged, so a miss that must not be pinned at the edge stays unpinnable
-    // after it degrades too.
+    // A partial payload is held for less time, and `renderPartialCacheSpec` decides how much less; the route's stale-if-error decision comes along unchanged.
     applyCacheHeaders(headers, payload.partial ? renderPartialCacheSpec(durations) : renderCacheSpec(durations));
     applyApiHeaders(headers);
-    // Every route's spec renders a `public` header, so a payload that got here is always cacheable and there is no
-    // `no-store` response whose validator would have to be skipped.
-    // A payload the cache did not produce (a test handler) carries no stamp; a fresh one costs a 304, never a body.
+    // Every route's spec renders a `public` header, so a payload that got here is always cacheable. A payload the cache
+    // did not produce (a test handler) carries no stamp; a fresh one costs a 304, never a body.
     const etag = payloadEtag(new Date(answer.producedAt ?? Date.now()).toISOString(), {
       rows: Array.isArray(payload.data) ? payload.data.length : undefined,
       partial: payload.partial,
@@ -189,13 +178,11 @@ export async function handleApiRoute<D extends ApiDomain, S extends QuerySchema>
       return new Response(null, { status: 304, headers });
     }
     if (req.method === "HEAD") return new Response(null, { headers });
-    // The cache stored this payload together with its encoded body, so a hit serves the bytes it already holds. Only a
-    // payload that never went through the cache (a degraded copy, a route handler in tests) is encoded here.
+    // The cache stored this payload together with its encoded body, so a hit serves the bytes it already holds.
     return new Response(answer.body ?? JSON.stringify(payload), { headers });
   } catch (err) {
     const res = mapApiError(err, req.method, path, req.signal.aborted, def.domain);
-    // A HEAD response carries no body, error or not: the success path above already answers with `null`, and the
-    // entry point does the same for a 404.
+    // A HEAD response carries no body, error or not.
     return req.method === "HEAD" ? stripBodyForHead(res) : res;
   }
 }

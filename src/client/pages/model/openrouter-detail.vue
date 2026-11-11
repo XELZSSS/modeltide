@@ -33,11 +33,7 @@ const priceRows = computed<[TranslationKey, number | null | undefined][]>(() =>
 
 const cacheWrite = computed(() => (pricing.value ? PRICE_LEGS.cacheWritePrice(pricing.value) : null));
 
-/**
- * Headline numbers only, taken from the same columns the usage ranking prints: a creator name and a category label sat
- * here before, which made two of the four "stats" text — and the category then appeared a second time in the info card
- * below. The text facts live in that card; the row counts.
- */
+/** Headline numbers only, taken from the same columns the usage ranking prints; the text facts live in the info card below. */
 const usageStats = computed<[TranslationKey, string][]>(() => [
   ["totalTokens", formatShortNumber(props.model.totalTokens, t("notAvailable"))],
   ["inputTokens", formatShortNumber(props.model.promptTokens, t("notAvailable"))],

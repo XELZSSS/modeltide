@@ -3,10 +3,8 @@ import type { Logger } from "@/server/api/logger";
 import { throttleGate } from "@/server/util/throttle";
 
 /**
- * Per-isolate counters for the cache path. Without them "is the cache working" is invisible: a regression that turns
- * L1 hits into KV reads, or KV reads into upstream refreshes, only surfaces as latency in production.
- *
- * Logging is gated, so the cost is one line per window instead of one line per request.
+ * Per-isolate counters for the cache path: without them a regression that turns L1 hits into KV reads only surfaces as
+ * latency in production. Logging is gated to one line per window.
  */
 const STATS_LOG_INTERVAL_MS = 30 * ONE_MINUTE;
 
@@ -40,9 +38,8 @@ export function noteCacheStat(key: keyof CacheStats): void {
 }
 
 /**
- * Emits one aggregate line each time the 30-minute gate opens, then clears the counters. While the gate is closed the
- * counters keep accumulating and nothing is logged, so a line covers at least one interval and the silent stretch in
- * between is carried into the next one rather than dropped.
+ * Emits one aggregate line each time the 30-minute gate opens, then clears the counters; while it is closed they keep
+ * accumulating, so a line covers at least one interval.
  */
 export function flushCacheStats(log: Logger): void {
   if (!statsLogGate.open()) return;

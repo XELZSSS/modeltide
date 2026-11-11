@@ -2,11 +2,7 @@ import { rethrowIfAllAborted, UpstreamError } from "./api/errors";
 import { runCapped } from "./upstream/task-pool";
 import { UPSTREAM_MAX_CONNECTIONS } from "./upstream/timeouts";
 
-/**
- * How many legs of one fan-out may be in flight at once: every leg is an upstream call, and the shared pool only lets
- * `UPSTREAM_MAX_CONNECTIONS` of them hold a connection, so a wider fan-out would queue inside the pool anyway. Sources
- * whose legs are themselves bulk fan-outs (news feeds) pass their own, smaller limit.
- */
+/** How many legs of one fan-out may be in flight at once: the shared pool only lets `UPSTREAM_MAX_CONNECTIONS` of them hold a connection, so a wider fan-out would queue inside the pool anyway. */
 const DEFAULT_LEG_CONCURRENCY = UPSTREAM_MAX_CONNECTIONS;
 
 export interface Leg<T> {
@@ -34,9 +30,6 @@ export async function runLegs<L extends readonly Leg<unknown>[]>(
   opts: RunLegsOptions = {},
 ): Promise<{ values: LegValues<L>; failures: LegFailure[] }> {
   const tasks = legs.map((leg) => leg.run);
-  // Legs are upstream calls, and the shared pool only lets UPSTREAM_MAX_CONNECTIONS of them hold a connection at once:
-  // anything past that queues inside the pool anyway, so the default cap is the pool's size rather than the leg count.
-  // A source whose legs are themselves bulk fan-outs (news feeds) passes a smaller explicit `concurrency`.
   const settled = await runCapped(tasks, opts.concurrency ?? Math.min(tasks.length, DEFAULT_LEG_CONCURRENCY));
 
   const failures: LegFailure[] = [];
@@ -48,8 +41,7 @@ export async function runLegs<L extends readonly Leg<unknown>[]>(
   });
   rethrowIfAllAborted(settled);
 
-  // News is the one dynamic list: `rssFeeds[category].map(...)` with three feeds in every category (see feeds.ts), so a
-  // zero-leg fan-out cannot arrive — which is also why `legs.length > 0` is not guarded here.
+  // News is the one dynamic list: three feeds in every category, so a zero-leg fan-out cannot arrive.
   if (opts.allFailedMessage != null && failures.length === legs.length) {
     throw new UpstreamError(opts.allFailedMessage, { retryable: true });
   }

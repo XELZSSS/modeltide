@@ -7,10 +7,8 @@ import { ExpandedRowPanel } from "./expanded-row-panel.ts";
 import type { RowListEmits, RowListProps } from "./table-columns.ts";
 import { useRowList } from "./use-row-list";
 
-/**
- * The desktop table body: one `<tr>` per row plus its expander row. The header half lives in table-header.ts, and both
- * read their cell classes from cell-classes.ts so a hidden or right-aligned column behaves the same in the two.
- */
+/** The desktop table body: one `<tr>` per row plus its expander row. The header half lives in table-header.ts, and both
+ * read their cell classes from cell-classes.ts so a hidden or right-aligned column behaves the same in the two. */
 const props = defineProps<RowListProps<T>>();
 
 const emit = defineEmits<RowListEmits>();
@@ -25,7 +23,7 @@ const ROW_CLASS = cn(
 );
 const ROW_CLASS_EXPANDED = cn(
   // The same bottom edge `ROW_CLASS` draws: it is the divider between the row and its detail panel, and without it the
-  // opened row also lost that 1px of height against its collapsed neighbours.
+  // opened row sat shorter than its collapsed neighbours.
   "border-b border-border bg-bg-secondary",
   "ui-anim-swap",
   "hoverable:hover:bg-surface-hover",

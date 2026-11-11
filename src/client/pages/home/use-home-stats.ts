@@ -23,10 +23,8 @@ interface HomeStats {
   codingAgents: ComputedRef<CodingAgentEntry[]>;
 }
 
-/**
- * The dashboard payload already carries the top-N slices the home cards need and in the order they are drawn, so this
- * hook only formats them. Keeping the aggregation and the slice server-side is what lets `/` skip the full AA index.
- */
+/** The dashboard payload already carries the top-N slices the home cards need, in the order they are drawn, so this hook
+ * only formats them. Keeping the aggregation server-side is what lets `/` skip the full AA index. */
 export function useHomeStats(dashboardData: MaybeRefOrGetter<NormalizedHomeDashboard>, t: TFunction): HomeStats {
   const codingAgents = computed(() => toValue(dashboardData).codingAgents);
 

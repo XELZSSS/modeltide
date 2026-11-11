@@ -57,9 +57,7 @@ const ENTRIES = {
       id: qStr({ maxLength: MAX_MODEL_ID_CHARS, optional: true }),
     },
     cache: cacheDurationsForTtl(SLOW_TTL_MS),
-    // `getOpenSourceModels` answers 200 + an empty list for an id that does not exist; that miss is only kept for a
-    // minute, so it must not inherit the list TTL. `SHORTEST_CACHE_DURATIONS` carries no `staleIfErrorS` for the same
-    // reason: the edge must not serve "not found" for a day after an origin failure.
+    // `getOpenSourceModels` answers 200 + an empty list for an id that does not exist; that miss is kept for a minute and must not inherit the list TTL or a `staleIfErrorS`.
     cacheFor: (payload) => (payload.data.length === 0 ? SHORTEST_CACHE_DURATIONS : undefined),
     handler: getOpenSourceModels,
   }),
@@ -79,8 +77,7 @@ const ENTRIES = {
     cache: cacheDurationsForTtl(STATIC_TTL_MS),
     handler: getCursorBench,
   }),
-  // AA's coding-agent index: a separate upstream page from the intelligence index, cached for the hour the source asks
-  // for. It answers both the rankings tab and the home card, so it is a domain like every other one.
+  // AA's coding-agent index: a separate upstream page from the intelligence index, cached for the hour the source asks for.
   codingAgentRankings: defineRoute("codingAgentRankings", {
     cache: cacheDurationsForTtl(ONE_HOUR),
     handler: getCodingAgentRankings,

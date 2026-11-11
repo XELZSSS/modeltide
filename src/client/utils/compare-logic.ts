@@ -35,11 +35,8 @@ export function computeWinners<T>(
   return winners;
 }
 
-/**
- * The rows a verdict can be decided from, or `null` when fewer than two models carry a number. Collected in one pass:
- * the `map` + `filter` pair built an intermediate object for every model — including the ones with no value — on
- * every metric row of every comparison.
- */
+/** The rows a verdict can be decided from, or `null` when fewer than two models carry a number. Collected in one pass, so
+ * no intermediate object is built for the models with no value. */
 function collectNumeric<T>(
   row: CompareRow<T>,
   models: T[],
@@ -89,12 +86,8 @@ interface RadarRow {
   values: Record<string, number | null>;
 }
 
-/**
- * The metrics the radar plots *and* the table below it lists. One table, because the two are read together: a metric
- * added to one of two hand-written lists is a metric the other one silently lacks. Only 0..100 values belong here — the
- * indexes as they are, and a benchmark ratio through `percentOf`, because the benchmarks themselves are stored exactly
- * as the upstream sent them (0-1) and one axis cannot carry both 0.83 and 1500.
- */
+/** The metrics the radar plots *and* the table below it lists, in one table because the two are read together. Only 0..100
+ * values belong here — a benchmark ratio goes through `percentOf`, since one axis cannot carry both a ratio and a raw score. */
 const percentOf = (v: number | null | undefined): number | null => (v == null ? null : Math.min(100, v * 100));
 
 const COMPARE_METRICS: readonly {
@@ -108,10 +101,13 @@ const COMPARE_METRICS: readonly {
   { id: "hle", get: (m) => percentOf(m.benchmarks?.hle) },
   { id: "scicode", get: (m) => percentOf(m.benchmarks?.scicode) },
   { id: "ifbench", get: (m) => percentOf(m.benchmarks?.ifbench) },
+  { id: "benchmarkMka", get: (m) => percentOf(m.benchmarks?.mka) },
+  { id: "benchmarkVials", get: (m) => percentOf(m.benchmarks?.vials) },
 ];
 
+/** The radar's rows: a metric fewer than two compared models carry is left out, because a `null` vertex breaks the polygon. */
 export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]): RadarRow[] {
-  return COMPARE_METRICS.map(({ id, get }) => {
+  const rows = COMPARE_METRICS.map(({ id, get }) => {
     const values: Record<string, number | null> = {};
     for (const model of models) {
       const key = modelId(model);
@@ -121,6 +117,7 @@ export function buildRadarData(t: TFunction, models: ArtificialAnalysisModel[]):
     }
     return { metric: t(id), values };
   });
+  return rows.filter((row) => Object.values(row.values).filter((value) => isFiniteNumber(value)).length >= 2);
 }
 
 // The single caller (the radar) always wants the 0..100 axis floor, so `fallback` was an untaken knob; it is inlined.
@@ -147,10 +144,7 @@ export function buildPriceRows(t: TFunction): CompareRow<ArtificialAnalysisModel
   }));
 }
 
-/**
- * The model-comparison metric rows: the entries the radar plots, listed so a reader can read the numbers the chart can
- * only draw. `bestIs: "max"` is what marks a row's winner.
- */
+/** The model-comparison metric rows: the entries the radar plots, listed so a reader can read the numbers the chart can only draw. */
 export function buildMetricRows(t: TFunction): CompareRow<ArtificialAnalysisModel>[] {
   return COMPARE_METRICS.map(({ id, get }) => ({ id, label: t(id), getNumeric: get, bestIs: "max" }));
 }

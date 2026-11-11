@@ -3,13 +3,8 @@ import { TrendingDown, TrendingUp } from "@lucide/vue";
 import { cn } from "@/client/utils/cn";
 import type { Winner } from "@/client/utils/compare-logic";
 
-/**
- * The two cell renderers the comparison pages share: a win mark and a value tinted by its verdict.
- *
- * They live here rather than inside `compare-table.vue` because three callers need them — the table, the cost estimator
- * and the cell renderer the pages pass in — and exporting them from the table made a leaf component import a page
- * component. Nothing here reads a setup scope, so any of those callers can use it.
- */
+/** The two cell renderers the comparison pages share: a win mark and a value tinted by its verdict. Nothing here reads a
+ * setup scope, so the table, the cost estimator and the pages' own cell renderer can all use it. */
 export const WinnerMark: FunctionalComponent = () =>
   h(TrendingUp, { size: 12, class: "inline ml-0.5 text-success", "aria-hidden": "true" });
 

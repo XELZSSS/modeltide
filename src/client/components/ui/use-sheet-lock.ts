@@ -2,12 +2,8 @@ import { nextTick, onMounted, onUnmounted, watch, type Ref } from "vue";
 
 /**
  * The modal lock behind `sheet.vue`: scroll lock on <body>, `inert` on the rest of the app, and a focus trap inside the
- * panel.
- *
- * The lock is global while the machine is per sheet: the shell mounts sheets on first use and can have several open in
- * sequence, so only the oldest entry in `lockStack` holds <body> — entries are pushed on open and removed on close, so
- * the first one is the sheet that was opened first, and closing a later one hands the lock back to it instead of
- * releasing it outright.
+ * panel. The lock is global while the machine is per sheet, so only the oldest entry in `lockStack` holds <body>, and
+ * closing a later sheet hands the lock back to it instead of releasing it outright.
  */
 
 const FOCUSABLE_SELECTOR =
@@ -79,8 +75,7 @@ export function useSheetLock(options: SheetLockOptions): void {
   let openToken = 0;
 
   function onKeydown(event: KeyboardEvent): void {
-    // A sheet can hold a text field, so an Escape that dismisses an IME candidate list belongs to the field: the
-    // composition state says whether that is what the key is doing.
+    // A sheet can hold a text field, so an Escape that dismisses an IME candidate list belongs to the field.
     if (event.key === "Escape" && !event.isComposing) options.onClose();
     if (event.key !== "Tab") return;
     const panel = options.panel.value;

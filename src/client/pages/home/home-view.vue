@@ -1,9 +1,6 @@
 <script setup lang="ts">
-/**
- * The home route. The visible h1 and the first screen live in `home-content.vue`, which owns the payload they describe;
- * this file only supplies the page column and the suspense boundary, so a loading state never leaves a stray heading
- * above a screen that has not arrived yet.
- */
+/** The home route: the visible h1 and the first screen live in `home-content.vue`, which owns the payload they describe,
+ * so a loading state never leaves a stray heading above a screen that has not arrived yet. */
 import PageContainer from "@/client/components/layout/page-container.vue";
 import SuspenseQuery from "@/client/router/suspense-query.vue";
 import HomeContent from "./home-content.vue";

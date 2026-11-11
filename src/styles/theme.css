@@ -1,30 +1,11 @@
 /*
- * Design tokens — the palette, plus the Tailwind namespace mapping that exposes it.
- *
- * shadcn/ui's "new-york" zinc theme: a monochrome primary, a muted surface for controls, hairline borders and one
- * accent ramp reserved for data. Every value is a hex literal so it can be shared verbatim with
- * src/shared/config/ui.ts.
- *
- *   1. `@theme inline` publishes Tailwind names for the properties declared in 2 and 3. `inline` keeps the
- *      *reference* rather than the resolved value, which is what lets `.dark` re-point the same property instead
- *      of every utility needing a dark twin.
- *   2. `:root` — the light palette.
- *   3. `.dark` — the dark palette, same names in the same order, so a diff between the two blocks lists every
- *      themed value and nothing else.
- *   4. `html:lang(zh)` — the two typographic tokens the Chinese typography needs.
- *
- * Colours only ever enter the UI through this file. build/consistency-guard.ts pins `--bg-primary`, the
- * `--chart-*` / `--donut-*` scales and both font stacks to src/shared/config/{ui,typography}.ts, so changing a
- * value here without changing that constant fails the build.
- *
- * Two naming generations coexist on purpose: the app's own roles (`bg-bg-card`, `text-text-secondary`, `accent`,
- * `hover`, `selected`) and the shadcn names (`bg-card`, `bg-muted`, `text-muted-foreground`, `bg-surface-hover`)
- * new components read, so a copied recipe keeps its meaning. `primary` and `accent` are the same value; shadcn's
- * `accent` (a subtle hover surface) is called `surface-hover` here to keep the two apart.
+ * Design tokens: the palette plus the Tailwind namespace mapping; every value is a hex literal so it can be shared
+ * verbatim with src/shared/config/ui.ts. `.dark` re-points the same `:root` names in the same order, and `@theme inline`
+ * keeps the *reference* rather than the resolved value. build/consistency-guard.ts pins `--bg-primary`, the `--chart-*` /
+ * `--donut-*` scales and both font stacks to src/shared/config/{ui,typography}.ts.
  */
 
 @theme inline {
-  /* shadcn-compatible semantics */
   --color-background: var(--bg-primary);
   --color-foreground: var(--text-primary);
   --color-card: var(--bg-card);
@@ -40,7 +21,6 @@
   --color-surface-hover: var(--hover);
   --color-input: var(--border);
 
-  /* Surfaces and text */
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
   --color-bg-card: var(--bg-card);
@@ -50,33 +30,28 @@
   --color-text-tertiary: var(--text-tertiary);
   --color-border: var(--border);
 
-  /* Interaction */
   --color-hover: var(--hover);
   --color-selected: var(--selected);
   --color-accent: var(--accent);
   --color-accent-contrast: var(--accent-contrast);
   --color-ring: var(--ring);
 
-  /* Status */
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
   --color-info: var(--info);
 
-  /* Radii: one base value, the three steps the components use */
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* Type scale: tracking and leading are tokens too, so the `tracking-*` utilities never carry a literal. Only the steps
-     something actually uses are declared — the wide "caps" step and the label step died with the uppercase table headers. */
+  /* Type scale: tracking and leading are tokens too, so the `tracking-*` utilities never carry a literal. */
   --tracking-text: 0.01em;
   --tracking-title: -0.02em;
   --tracking-display: -0.025em;
   --leading-text: 1.65;
-  /* Page titles get their own leading, between the 1.15 a 30px Latin title is tight at and the 1.32 Chinese felt it
-     needed: one value for both scripts, so switching language cannot change a block's height. */
+  /* Page titles get their own leading: one value for both scripts, so switching language cannot change a block's height. */
   --leading-title: 1.2;
 
   /* Stacks are pinned by the consistency guard: the same strings appear in src/shared/config/typography.ts. */
@@ -93,56 +68,33 @@
   color-scheme: light;
 
   /*
-   * One radius scale, three steps, nothing off-scale:
-   *   `rounded-xl`  14px — surfaces: `ui-card`, `ui-overlay`, and the filled input (a field, not a button)
-   *   `rounded-lg`  10px — strips and inline notices: the segmented-control track, `notice.vue`, the mobile icon pill
-   *   `rounded-md`   8px — controls: buttons, badges, tab triggers, icon buttons, the skip link
-   * A bordered or filled block *inside* a rounded surface is not rounded itself: it is a section of that surface (a
-   * table's expanded row, a sheet's list), and the surface's `overflow` clips it to its own corners.
+   * One radius scale, three steps: `rounded-xl` 14px surfaces, `rounded-lg` 10px strips and inline notices, `rounded-md`
+   * 8px controls. A bordered or filled block *inside* a rounded surface is not rounded itself.
    */
   --radius: 0.625rem;
 
-  /* Surfaces */
   --bg-primary: #ffffff;
   --bg-secondary: #f4f4f5;
   --bg-card: #ffffff;
   --bg-overlay: #ffffff;
-  /* The dimmed page behind a modal. Its own token because it is a shadow over the page, not a surface: at 50% it
-     separates the sheet from the content on the light palette. */
+  /* The dimmed page behind a modal — a shadow over the page, not a surface: at 50% it separates the sheet from the content. */
   --scrim: color-mix(in srgb, #000000 50%, transparent);
 
-  /*
-   * The three text steps, measured against the surface each sits on (card #ffffff light, #18181b dark):
-   *   primary 19.9:1 / 17.0:1, secondary 6.0:1 / 6.8:1, tertiary 4.6:1 / 5.2:1.
-   * Every step clears 4.5:1, because `ui-caption`, `ui-meta` and `ui-table-header` are 13px text a reader actually
-   * reads, not 20px decoration. The previous tertiary (#9f9fa9) measured 2.62:1 on white: it read as "quiet grey" and
-   * was illegible at 13px, so it moved a step darker — and `--text-secondary` moved darker with it, or the third step
-   * would have collapsed into the second.
-   */
+  /* The three text steps: primary, secondary, then the quietest step `ui-caption` / `ui-meta` text still reads at, both themes. */
   --text-primary: #09090b;
   --text-secondary: #62626b;
   --text-tertiary: #75757e;
 
-  /* Lines and interaction: the accent *is* the primary colour, so a filled button is monochrome and the brand colour
-     only ever shows up in data. */
+  /* The accent *is* the primary colour, so a filled button is monochrome and the brand colour only ever shows up in data. */
   --border: #e4e4e7;
   --accent: #18181b;
   --accent-contrast: #fafafa;
   --hover: color-mix(in srgb, var(--accent) 6%, transparent);
   --selected: color-mix(in srgb, var(--accent) 9%, transparent);
-  /*
-   * The focus ring is drawn opaque, never through an alpha multiplier: a focus indicator has to clear 3:1 against the
-   * surface it sits on, and the previous #9f9fa9 at 15–50% measured 1.4–1.9:1. At full strength this value is 7.7:1 on
-   * the card and 7.3:1 on muted, so a 2–3px ring is unmistakable without turning into a black outline.
-   */
+  /* The focus ring is drawn opaque, never through an alpha multiplier: a focus indicator has to stand out from the surface it sits on. */
   --ring: #52525b;
 
-  /*
-   * Status colours are text colours first: `text-success` / `text-warning` / `text-info` / `text-destructive` label 12px
-   * metadata, so each value clears 4.5:1 on the card *and* on its own 8% tint (10% pushed amber under the floor). The
-   * dark block keeps the lighter 400 step for the same reason — 6:1 and up on the dark card.
-   */
-  /* Status */
+  /* Status colours are text colours first: each has to stay legible on the card *and* on its own tint. */
   --destructive: #c81e1e;
   --success: #047857;
   --warning: #ab4e08;
@@ -215,15 +167,9 @@
 }
 
 /*
- * Only the tracking is script-specific. CJK glyphs sit almost edge to edge, so the positive body tracking that helps
- * Latin at 16px makes Chinese feel loose, and the negative display tracking closes the gaps until strokes touch — both
- * therefore flatten here.
- *
- * The leading used to differ as well (1.7 body and 1.32 titles for Chinese). It no longer does: a per-script leading
- * means every text block on every page changes height the instant the language switches, so the whole page jumps. That
- * cost is paid on each switch to buy 0.05em of line spacing; the two languages now share one leading, set between the
- * two old values so neither reads tight.
- */
+   * Only the tracking is script-specific: CJK glyphs sit almost edge to edge, so positive body tracking makes Chinese
+   * feel loose and the negative display tracking closes gaps until strokes touch. Leading is shared by both scripts.
+   */
 html:lang(zh) {
   --tracking-text: 0em;
   --tracking-title: 0em;

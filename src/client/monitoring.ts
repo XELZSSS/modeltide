@@ -1,11 +1,8 @@
 import { CACHE_VERSION } from "@/shared/config/cache-version.gen.ts";
 
-/**
- * Single funnel for client-side failures, so nothing is only a bare `console.error` inside a component. Every report
- * carries the build id, the current path and connectivity: without them a stack trace from a shipped bundle says
- * nothing about which screen and which build produced it. A transport can be attached here later without touching the
- * call sites.
- */
+/** Single funnel for client-side failures, so nothing is only a bare `console.error` inside a component. Every report
+ * carries the build id, the current path and connectivity: without them a stack trace from a shipped bundle says nothing
+ * about which screen and which build produced it. */
 export function reportClientError(scope: string, err: unknown, detail?: Record<string, unknown>): void {
   const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
   console.error(`[client] ${scope} ${message}`, {

@@ -7,11 +7,8 @@ interface TooltipState {
 
 const states = new WeakMap<HTMLElement, TooltipState>();
 
-/**
- * The current binding per element. `mounted` closes over the binding object it was called with, and Vue hands the
- * directive a fresh one on every update, so reading the mount-time copy left an updated `v-tooltip` value showing the
- * text it had when the element was created. `updated` refreshes this; `enter` reads it.
- */
+/** The current binding per element: `mounted` closes over the binding it was called with and Vue hands the directive a
+ * fresh one on every update, so `updated` refreshes this and `enter` reads it. */
 const bindings = new WeakMap<HTMLElement, DirectiveBinding>();
 
 function textOf(el: HTMLElement, binding: DirectiveBinding): string {
@@ -33,10 +30,10 @@ function show(el: HTMLElement, text: string): void {
   hide(el);
 
   const tip = document.createElement("div");
-  // `max-w-[min(...)]` rather than `max-w-xs`: the bubble is clamped 8px inside the viewport on both sides below, so a
-  // flat 20rem cap would put its right edge 8px past the viewport on a 320px screen.
+  // `max-w-[min(...)]` rather than `max-w-xs`: the bubble is clamped inside the viewport on both sides below, so a
+  // flat rem cap would put its right edge past the viewport on a narrow screen.
   tip.className =
-    "ui-surface pointer-events-none fixed z-[9999] max-w-[min(20rem,calc(100vw-16px))] rounded-lg bg-popover px-2.5 py-1.5 text-[0.8125rem] leading-[1.125rem] text-text-primary break-words";
+    "ui-surface pointer-events-none fixed z-[9999] max-w-[min(20rem,calc(100vw-16px))] rounded-lg bg-popover px-2.5 py-1.5 ui-label text-text-primary break-words";
   tip.setAttribute("role", "tooltip");
   tip.textContent = text;
   tip.style.visibility = "hidden";
@@ -46,8 +43,7 @@ function show(el: HTMLElement, text: string): void {
   const tipRect = tip.getBoundingClientRect();
   let left = rect.left + rect.width / 2 - tipRect.width / 2;
   left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
-  // Above the element, unless that would leave the viewport at the top — then below it, and clamped to the bottom edge
-  // for an element in the last row of a short viewport.
+  // Above the element unless that would leave the viewport, then below it and clamped to the bottom edge.
   let top = rect.top - tipRect.height - 6;
   if (top < 8) top = Math.min(rect.bottom + 6, window.innerHeight - tipRect.height - 8);
   top = Math.max(8, top);

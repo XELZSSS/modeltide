@@ -1,8 +1,6 @@
 <script setup lang="ts">
-/**
- * A titled block inside a page. With a title it renders a `section` element labelled by its own heading id; without one
- * it is a plain wrapper, so a section without a heading never claims a landmark a screen reader cannot name.
- */
+/** A titled block inside a page. With a title it renders a `section` element labelled by its own heading id; without one
+ * it is a plain wrapper, so a section without a heading never claims a landmark a screen reader cannot name. */
 import { useId } from "vue";
 
 defineProps<{ title?: string }>();

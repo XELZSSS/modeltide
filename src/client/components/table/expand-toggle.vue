@@ -7,10 +7,8 @@ import { useTranslation } from "@/client/i18n";
 import type { RowListEmits } from "./table-columns.ts";
 import { rowPanelId } from "./expanded-row-panel.ts";
 
-/**
- * The row expander. It is a plain button, not a cell-level control: the label announces the row name because the chevron
- * alone says nothing to a screen reader, and `aria-controls` only points at the panel while that panel exists.
- */
+/** The row expander. A plain button, not a cell-level control: the label announces the row name because the chevron alone
+ * says nothing to a screen reader, and `aria-controls` only points at the panel while that panel exists. */
 const props = withDefaults(defineProps<{ rowId: string; rowName: string; isExpanded: boolean; size?: number }>(), {
   size: 14,
 });

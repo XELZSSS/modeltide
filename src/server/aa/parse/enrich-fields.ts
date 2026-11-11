@@ -6,8 +6,7 @@ import { copyField, MODALITY_WIRE_NAMES, OMNISCIENCE_MODALITY_WIRE_NAMES, type A
  * that page is where the normalized row's names come from.
  *
  * The list is typed `readonly (keyof AaRow)[]`: a field renamed in the wire contract, or a key the normalized row does
- * not have, no longer compiles here. That is the check the old `readonly string[]` could not make — it accepted any
- * literal, and a projection list asking for a name nothing sends produced rows that parsed and carried `null`s.
+ * not have, does not compile here.
  */
 const ENRICH_BASE_FIELDS: readonly (keyof AaRow)[] = [
   "id",

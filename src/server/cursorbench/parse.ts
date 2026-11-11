@@ -4,16 +4,9 @@ import { stripHtml } from "@/server/formats/html-to-text";
 import { parseFail, parseOk, type ParseResult } from "@/server/formats/parse-result";
 import { numCoerce } from "@/server/formats/scalars";
 import type { CursorBenchEntry } from "@/shared/types";
-import { CURSORBENCH_CELL_COUNT, type CursorBenchCells } from "./wire";
+import { CURSORBENCH_CELL_COUNT, cellOf, type CursorBenchCells } from "./wire";
 
-/**
- * CursorBench is an HTML page with no JSON behind it: the leaderboard is server-rendered as one `<table>`, six cells a
- * row (rank, model, score, cost, tokens, steps). The document carries that markup twice — React ships the same subtree
- * for both layouts — so the first table is the payload and the copy is never read.
- *
- * Every scan below is an `indexOf` walk rather than a regex over the document: the page is ~500 KB, and a pattern that
- * can backtrack across it is the one thing this source must not do inside a request.
- */
+/** CursorBench is an HTML page with no JSON behind it: the leaderboard is server-rendered as one `<table>`, six cells a row (rank, model, score, cost, tokens, steps), and the first table is the payload. Every scan is an `indexOf` walk rather than a regex, since a pattern that can backtrack across a large body must not run in a request. */
 const TABLE_OPEN = "<table";
 const TABLE_CLOSE = "</table>";
 const BODY_OPEN = "<tbody";
@@ -21,8 +14,6 @@ const ROW_OPEN = "<tr";
 const ROW_CLOSE = "</tr>";
 const CELL_OPEN = "<td";
 const CELL_CLOSE = "</td>";
-
-/** A row must carry every column the page prints; the count comes from the table in `./wire`, never from a literal. */
 
 const PERCENT_RE = /^\d+(?:\.\d+)?%$/;
 const DIGITS_RE = /^\d+$/;
@@ -77,16 +68,13 @@ function cellsOf(row: string): CursorBenchCells {
   }
 }
 
-/**
- * One row, or `null` when the cells are not the six the ranking prints. The label is the identity — `Opus 5.5 Max` and
- * `Opus 5.5 High` are two ranked entries — so its slug is the row key.
- */
+/** One row, or `null` when the cells are not the six the ranking prints. The label is the identity (`Opus 5.5 Max` and `Opus 5.5 High` are two entries), so its slug is the row key; every cell is read by column name. */
 function entryOf(cells: CursorBenchCells): CursorBenchEntry | null {
+  // The cell count is the gate: a shorter row is a different table.
   if (cells.length < CURSORBENCH_CELL_COUNT) return null;
-  const [rankText, modelText, scoreText, costText, tokensText, stepsText] = cells;
-  const rank = countOf(rankText ?? "");
-  const score = percentOf(scoreText ?? "");
-  const model = modelText ?? "";
+  const model = cellOf(cells, "model");
+  const rank = countOf(cellOf(cells, "rank"));
+  const score = percentOf(cellOf(cells, "score"));
   const id = slugOf(model);
   if (rank == null || score == null || !isValidRowId(id)) return null;
   return {
@@ -94,9 +82,9 @@ function entryOf(cells: CursorBenchCells): CursorBenchEntry | null {
     model,
     rank,
     score,
-    costPerTask: moneyOf(costText ?? ""),
-    tokensPerTask: countOf(tokensText ?? ""),
-    stepsPerTask: countOf(stepsText ?? ""),
+    costPerTask: moneyOf(cellOf(cells, "costPerTask")),
+    tokensPerTask: countOf(cellOf(cells, "tokensPerTask")),
+    stepsPerTask: countOf(cellOf(cells, "stepsPerTask")),
   };
 }
 

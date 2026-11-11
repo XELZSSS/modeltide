@@ -62,7 +62,7 @@ function onFieldChange(field: CostFieldDef, value: string): void {
   </template>
   <div v-if="avgCost !== undefined" class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
     <span class="ui-body-secondary">{{ t("estimatedMonthlyCost") }}:</span>
-    <span class="ui-mono-value text-lg font-semibold">
+    <span class="ui-mono-value font-semibold">
       {{ avgCost == null ? t("notAvailable") : formatDollar(avgCost, t) }}
     </span>
     <span class="ui-caption">{{ t("perModelAvg") }}</span>

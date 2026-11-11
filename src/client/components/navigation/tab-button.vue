@@ -6,14 +6,9 @@ import { FOCUS_RING } from "@/client/components/ui/interactive-classes";
 
 /**
  * One tab in a tab strip, acting as a `tab` in a tablist or a `radio` in a segmented control — hence the selected state
- * binding to `aria-selected` or `aria-checked` rather than always the same attribute.
- *
- * The look is the reference segmented control: the strip is the muted container (see `segmented-group.vue`) and the
- * active trigger is the raised `bg-background` pill with a hairline lift. Selection is a surface change, not an
- * underline.
- *
- * Defaults live in the prop defaults below; the variants carry no `defaultVariants`, because `active` and `size` are
- * always supplied by them and a second set could only drift.
+ * binding to `aria-selected` or `aria-checked` rather than always the same attribute. The strip is the muted container
+ * (see `segmented-group.vue`) and the active trigger a raised `bg-background` pill: selection is a surface change.
+ * Defaults live in the prop defaults below; the variants carry no `defaultVariants`.
  */
 const tabButtonVariants = cva(
   `relative inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap ui-motion ${FOCUS_RING} disabled:pointer-events-none disabled:opacity-50`,
@@ -21,15 +16,15 @@ const tabButtonVariants = cva(
     variants: {
       active: {
         // The pill has no border, so this lift is its only edge: without it the white fill on the muted track is a
-        // ~1.1:1 step and the selected tab reads as unselected.
+        // barely-there step and the selected tab reads as unselected.
         true: "bg-background text-text-primary shadow-xs",
         false: "text-text-secondary hoverable:hover:bg-background/60 hoverable:hover:text-text-primary",
       },
       // Touch first again: `h-10` under the `md:` breakpoint keeps a 40px target, then the desktop height matches the
       // 32px pill the reference segmented control uses.
       size: {
-        sm: "h-10 px-3 text-[0.8125rem] md:h-7 md:px-2.5",
-        md: "h-10 px-3.5 text-[0.9375rem] md:h-8 md:px-3",
+        sm: "h-10 px-3 ui-label md:h-7 md:px-2.5",
+        md: "h-10 px-3.5 ui-label md:h-8 md:px-3",
       },
     },
   },

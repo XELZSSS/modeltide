@@ -9,8 +9,8 @@ const SOURCE_EXTENSIONS = new Set([".vue", ".ts"]);
 
 /**
  * `export const MOTION_FAST_MS = <number>;`, read as text rather than imported: pulling a client module into the config
- * graph makes Vite's native config loader resolve that module's own imports, which are extensionless by the client-side
- * convention. The declaration is what has to agree with motion.css, so this reads the source of truth directly.
+ * graph makes Vite's native loader resolve that module's extensionless imports. The declaration is what has to agree
+ * with motion.css, so this reads the source of truth directly.
  */
 const MOTION_FAST_DECLARATION = /export const MOTION_FAST_MS = (\d+);/;
 
@@ -57,10 +57,7 @@ function readVocabulary(css: string): MotionVocabulary {
   return { utilities, recipes };
 }
 
-/**
- * The one JS-side hold (the Suspense dots' delay) counts on `MOTION_FAST_MS`. That is one number in the comments and
- * another in the code otherwise, so pin the declaration against the CSS it was derived from.
- */
+/** The one JS-side hold (the Suspense dots' delay) counts on `MOTION_FAST_MS`: pin the declaration against the CSS. */
 function assertFastDuration(css: string, timing: string): void {
   const declared = /--motion-duration-fast:\s*(\d+)ms/.exec(css)?.[1];
   const constant = MOTION_FAST_DECLARATION.exec(timing)?.[1];
@@ -131,8 +128,7 @@ export function motionGuard(): Plugin {
   let ran = false;
   return {
     name: "modeltide:motion-guard",
-    // Runs on `vite dev` and `vite build`: the motion vocabulary is invisible to type-check and lint, so otherwise
-    // violations accumulate locally until someone builds for production.
+    // Runs on `vite dev` and `vite build`: the motion vocabulary is invisible to type-check and lint.
     buildStart() {
       if (ran) return;
       if (this.environment?.name != null && this.environment.name !== "client") return;

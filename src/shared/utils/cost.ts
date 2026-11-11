@@ -12,8 +12,7 @@ export interface CostScenario {
 
 /**
  * One model priced under one scenario. `blendedPrice` and `monthlyCost` come from the same numbers, so the invariant
- * `monthlyCost === blendedPrice * dailyTokensM * days` (days clamped to at least one) holds by construction: the
- * blended price is the average price of one token in this traffic mix, not a second, separately weighted figure.
+ * `monthlyCost === blendedPrice * dailyTokensM * days` (days clamped to at least one) holds by construction.
  */
 export interface CostEstimate {
   /** Millions of tokens per day across input, output and reasoning. */
@@ -27,13 +26,9 @@ export interface CostEstimate {
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 const nonNeg = (v: number): number => Math.max(0, v);
 
-/**
- * The only price calculation in the app. Both figures a reader compares — the blended $/M and the monthly estimate —
- * are derived here from the same effective rates and the same scenario.
- */
+/** The only price calculation in the app: the blended $/M and the monthly estimate are derived here from the same effective rates and the same scenario. */
 export function estimateCost(pricing: ModelPricing | null | undefined, scenario: CostScenario): CostEstimate | null {
-  // The wire parser produces only finite numbers or `null` (`numCoerceNonNegative`), so a leg is either priced or
-  // absent: re-testing finiteness here could never change the answer.
+  // The wire parser produces only finite numbers or `null` (`numCoerceNonNegative`), so a leg is either priced or absent.
   if (pricing == null || pricing.input == null || pricing.output == null) return null;
 
   const hitRate = clamp01(scenario.cacheHitRate);

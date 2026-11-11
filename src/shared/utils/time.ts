@@ -3,7 +3,6 @@ import { localeOf } from "@/shared/config/ui";
 import type { Lang, TFunction } from "@/shared/i18n";
 import { isFiniteNumber } from "./number";
 
-// The single caller passes an explicit `lang` and never a clock, so both defaults were dead; the now is read inline.
 export function formatRelativeTime(isoString: string, t: TFunction, lang: Lang): string {
   const nowMs = Date.now();
   const date = new Date(isoString);

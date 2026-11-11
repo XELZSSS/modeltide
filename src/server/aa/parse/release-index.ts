@@ -3,6 +3,7 @@ import { extractNeedleJsonArrays, type NeedleScanStats } from "@/server/formats/
 import { MAX_RSC_BYTES } from "@/server/formats/limits";
 import { L1_TTL_CAP_MS } from "@/server/cache/config";
 import type { AaChangelogRow, AaReleaseRow } from "../wire";
+import { hasReleaseLink } from "../wire-read";
 
 const CANDIDATE_PREFIX_CHARS = 256;
 
@@ -15,6 +16,13 @@ const AA_SCAN_OPTS = {
   // Only has to cover a body the transport already caps at MAX_RSC_BYTES: a wider window cannot see more.
   maxSuffixChars: MAX_RSC_BYTES + CANDIDATE_PREFIX_CHARS,
 };
+
+/** The row arrays among one needle scan's slices, and nothing else: a slice the scan could not parse arrives as something other than an array. */
+export function* rowArrays(slices: readonly unknown[]): Generator<unknown[]> {
+  for (const slice of slices) {
+    if (Array.isArray(slice)) yield slice as unknown[];
+  }
+}
 
 export interface ReleaseInfo {
   name: string;
@@ -40,9 +48,8 @@ function releaseInfo(raw: unknown): { slug: string; info: ReleaseInfo } | null {
 
 function collectReleases(html: string, stats: NeedleScanStats): Map<string, ReleaseInfo> {
   const releases = new Map<string, ReleaseInfo>();
-  for (const value of extractNeedleJsonArrays(html, AA_RELEASES_KEY, AA_SCAN_OPTS, stats)) {
-    if (!Array.isArray(value)) continue;
-    for (const raw of value as unknown[]) {
+  for (const rows of rowArrays(extractNeedleJsonArrays(html, AA_RELEASES_KEY, AA_SCAN_OPTS, stats))) {
+    for (const raw of rows) {
       const entry = releaseInfo(raw);
       if (!entry || releases.has(entry.slug)) continue;
       releases.set(entry.slug, entry.info);
@@ -55,18 +62,13 @@ interface ReleaseIndexScan {
   releases: Map<string, ReleaseInfo>;
   modelArrays: unknown[];
   /**
-   * Slices this scan could not parse. A non-zero count is reported by the caller that logs; it is not a parse failure,
-   * because the arrays that did parse are the ones the ranking needs and one bad slice must not fail the whole body.
+   * Slices this scan could not parse; a non-zero count is reported by the caller that logs, and one bad slice must not
+   * fail the whole body.
    */
   unparsableSlices: number;
 }
 
-/**
- * How long an idle scan stays memoized. The leaderboard and changelog parsers both receive the same cached body string,
- * and L1 hands that one instance back for as long as it holds the entry — never longer than `L1_TTL_CAP_MS`. Retention is
- * capped on purpose: the identity comparison is what keeps the body alive, so a memo with no expiry would pin a
- * superseded multi-MB payload in the isolate for as long as the isolate lives.
- */
+/** How long an idle scan stays memoized. Both parsers receive the same cached body string, which L1 hands back for as long as it holds the entry (never past `L1_TTL_CAP_MS`): the identity comparison keeps the body alive, so a memo with no expiry would pin a superseded multi-MB payload for the isolate's lifetime. */
 const SCAN_MEMO_IDLE_MS = L1_TTL_CAP_MS;
 
 let cachedHtml: string | null = null;
@@ -74,9 +76,8 @@ let cachedScan: ReleaseIndexScan | null = null;
 let cachedScanAt = 0;
 
 export function scanReleaseIndex(html: string): ReleaseIndexScan {
-  // Identity, not a content hash: the leaderboard and changelog parsers both receive the same cached body string, so
-  // this hits, while `fnv1aHash(html)` walked the whole multi-MB body on every call and a 32-bit collision could have
-  // answered with another body's releases.
+  // Identity, not a content hash: both parsers receive the same cached body string, and `fnv1aHash(html)` walked the whole
+  // multi-MB body on every call with a 32-bit collision risk.
   const now = Date.now();
   if (cachedScan !== null && cachedHtml === html && now - cachedScanAt < SCAN_MEMO_IDLE_MS) return cachedScan;
   const stats: NeedleScanStats = { unparsableSlices: 0 };
@@ -94,13 +95,10 @@ export function scanReleaseIndex(html: string): ReleaseIndexScan {
 
 export function collectModelReleaseLinksFromArrays(arrays: readonly unknown[]): Map<string, string> {
   const links = new Map<string, string>();
-  for (const value of arrays) {
-    if (!Array.isArray(value)) continue;
-    const rows = value as unknown[];
-    // Whether this array is the model array is decided by *any* row carrying a `releaseSlug`, not by the first one: a
-    // placeholder or deprecated entry ahead of the rest used to make the whole array look like something else, and the
-    // index then answered every model with no release date — a missing field, not an error.
-    if (!rows.some((row) => isRecord(row) && "releaseSlug" in row)) continue;
+  for (const rows of rowArrays(arrays)) {
+    // Whether this is the model array is decided by *any* row carrying a `releaseSlug`, not by the first one: a placeholder
+    // or deprecated entry ahead of the rest would make the whole array look like something else.
+    if (!rows.some((row) => isRecord(row) && hasReleaseLink(row))) continue;
     for (const raw of rows) {
       if (!isRecord(raw)) continue;
       const row: AaChangelogRow = raw;

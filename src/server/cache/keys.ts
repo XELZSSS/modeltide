@@ -9,10 +9,7 @@ function modelIdHash(raw: string): string {
   return `${fnv1aHash(raw)}-${fnv1aHash(raw, SECOND_HASH_BASIS, SECOND_HASH_PRIME)}`;
 }
 
-/**
- * Every entry is built through `cacheKey(domain, …)`, so its first segment is a `ApiDomain` by construction: the link
- * this table has to the domain list is the function signature, not a second hand-maintained mapping.
- */
+/** Every entry is built through `cacheKey(domain, …)`, so its first segment is a `ApiDomain` by construction. */
 export const cacheKeys = {
   intelligenceIndex: cacheKey("artificialIndex"),
   aaLeaderboardBody: cacheKey("artificialIndex", "leaderboard-body"),
@@ -29,8 +26,7 @@ export const cacheKeys = {
   decisionIndex: cacheKey("decisionIndex"),
   cursorBench: cacheKey("cursorBench"),
 
-  // `artificialIndex` names the Artificial Analysis data family, not one page: the coding-agent leaderboard is another
-  // page of the same upstream, so it lives under this prefix with its own segment. The index payload itself is the
-  // suffixless key above, so the two can never collide.
+  // `artificialIndex` names the Artificial Analysis data family, not one page: the coding-agent leaderboard is another page
+  // of the same upstream, under this prefix with its own segment.
   codingAgents: cacheKey("artificialIndex", "coding-agents"),
 } as const;

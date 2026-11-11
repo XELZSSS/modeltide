@@ -19,10 +19,6 @@ interface RscRowsSpec<T> {
 /**
  * The skeleton every "rows out of one Flight marker" parser shares: an empty body is a parse failure, the marker is
  * resolved through `parseRscPayload`, `mapRows` counts what the mapper rejects, and that count becomes the only warning.
- *
- * Written once because two parsers already spelled it out identically, and the third copy is what would have made the
- * three drift on message wording — the tests pin the messages, so a drift there is a silent difference in what a log
- * line says, not a failure.
  */
 export function parseRscRows<T>(body: unknown, spec: RscRowsSpec<T>): ParseResult<T[]> {
   if (typeof body !== "string" || !body) return parseFail(`${spec.label} returned an empty body`);

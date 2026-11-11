@@ -44,9 +44,8 @@ function isNonEmptyString(v: unknown): v is string {
 }
 
 /**
- * `PLACEHOLDER_TEXTS` holds only short words, so the lowercase copy is skipped past the longest of them. The length
- * bound is derived from the set instead of hardcoded: a longer placeholder added later would otherwise be silently
- * unreachable behind this guard.
+ * `PLACEHOLDER_TEXTS` holds only short words, so the lowercase copy is skipped past the longest of them; the bound is
+ * derived from the set, so a longer placeholder cannot become unreachable behind this guard.
  */
 const MAX_PLACEHOLDER_CHARS = Math.max(...[...PLACEHOLDER_TEXTS].map((t) => t.length));
 

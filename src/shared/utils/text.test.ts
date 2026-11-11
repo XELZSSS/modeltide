@@ -11,8 +11,6 @@ const KEY_CASES: KeyCase[] = [
   ["drops a parenthesised qualifier before matching", "vendor/model (high effort)", "model"],
   ["strips tuning qualifiers that only appear after a variant separator", "vendor/model:extended", "vendormodel"],
   ["keeps a variant tail that carries a real name", "vendor/model:thinking", "thinking"],
-  // `free` named the tier, not the model: every free variant in the catalog normalized to the same key, so a pricing
-  // or metadata lookup could answer with a different model's row. The key has to carry the base model.
   ["keys openai/gpt-6-1-sol:free by its base model", "openai/gpt-6-1-sol:free", "gpt61sol"],
   ["keys anthropic/claude-sonnet-5.5:free by its base model", "anthropic/claude-sonnet-5.5:free", "claudesonnet55"],
 ];

@@ -2,6 +2,7 @@
 import { computed, ref, useSlots, watch, type VNodeChild } from "vue";
 import EmptyState from "@/client/components/feedback/empty-state.vue";
 import Pagination from "@/client/components/navigation/pagination.vue";
+import Button from "@/client/components/ui/button.vue";
 import { useTranslation } from "@/client/i18n";
 import { useDevice } from "@/client/device";
 import { filterByTerm, foldSearchStr } from "@/client/search/match";
@@ -14,20 +15,13 @@ import TableBody from "./desktop.vue";
 import { TableHeader } from "./table-header.ts";
 import MobileTableBody from "./mobile.vue";
 
-/**
- * The searchable, paged table. It owns what the two bodies must not each own: filtering by the route's search term,
- * page state (a different page size per device), which row is expanded, and the empty state that replaces both bodies
- * when nothing matches. Both bodies receive the same bindings, so a contract change reaches the desktop table and the
- * phone card list at once.
- */
+/** The searchable, paged table. It owns what the two bodies must not each own: filtering by the route's search term,
+ * page state (a different page size per device), which row is expanded, and the empty state that replaces both bodies. */
 const props = defineProps<
   RowAccessors<T> & {
     data: T[];
     columns: DataTableColumn<T>[];
-    /**
-     * The table's accessible name: every rankings table is a landmark of its own, so an unnamed one is announced bare.
-     * A key rather than a string keeps the name in the dictionary the rest of the view reads.
-     */
+    /** The table's accessible name: every rankings table is a landmark of its own, so an unnamed one is announced bare. */
     captionKey: TranslationKey;
     getSearchFields: (row: T) => (string | null | undefined)[];
     renderExpandedRow?: (row: T) => VNodeChild;
@@ -39,13 +33,10 @@ defineSlots<{ expandedRow?: (props: { row: T }) => VNodeChild }>();
 const slots = useSlots();
 const isMobile = useDevice();
 const { t } = useTranslation();
-const { term } = useRouteSearchTerm();
+const { term, setTerm } = useRouteSearchTerm();
 
 const filtered = computed(() => filterByTerm(props.data, term.value, props.getSearchFields));
-/**
- * Folded once for both readers below. It used to be folded twice — here and again inside `filterByTerm` — so every
- * keystroke folded the term one time more than the table needed.
- */
+/** Folded once for both readers below: `filterByTerm` receives the folded term. */
 const foldedTerm = computed(() => foldSearchStr(term.value));
 const emptyMessage = computed(() => (foldedTerm.value === "" ? t("noData") : t("noResults")));
 const expandedId = ref<string | null>(null);
@@ -96,15 +87,17 @@ function handlePageChange(next: number): void {
 
 <template>
   <div class="flex min-w-0 flex-col gap-4">
-    <EmptyState v-if="dedupedData.length === 0" :message="emptyMessage" />
+    <EmptyState v-if="dedupedData.length === 0" :message="emptyMessage">
+      <template v-if="foldedTerm !== ''" #action>
+        <Button variant="outline" size="sm" @click="setTerm('')">{{ t("clear") }}</Button>
+      </template>
+    </EmptyState>
     <template v-else>
       <MobileTableBody v-if="isMobile" v-bind="bodyBindings" @toggle-expand="expandedId = $event" />
-      <div v-else class="ui-card overflow-x-auto">
-        <table class="w-full table-fixed text-base">
+      <div v-else class="ui-card overflow-x-auto overflow-y-clip">
+        <table class="w-full table-fixed ui-body">
           <caption class="sr-only">
-            {{
-              t(captionKey)
-            }}
+            {{ t(captionKey) }}
           </caption>
           <TableHeader :columns="columns" :is-expandable="isExpandable" />
           <TableBody v-bind="bodyBindings" @toggle-expand="expandedId = $event" />

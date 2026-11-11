@@ -12,18 +12,13 @@ const ROBOTS_SELECTOR = 'meta[name="robots"]';
 const softNotFound = ref(false);
 const SOFT_NOT_FOUND_OWNER = { n: 0 };
 
-/**
- * Title a detail view wants instead of the route's generic one — a model name, so the tab keeps it across a
- * language switch. Owned here for the same reason as `softNotFound`: `useDocumentMeta` is the only writer of
- * `document.title`, so nothing else may overwrite the model name with the generic route title.
- */
+/** Title a detail view wants instead of the route's generic one — a model name, so the tab keeps it across a language
+ * switch. `useDocumentMeta` is the only writer of `document.title`, so nothing else may overwrite it. */
 const detailTitle = ref<string | null>(null);
 const DETAIL_TITLE_OWNER = { n: 0 };
 
-/**
- * Writes `target` from `read` while this scope owns `owner`, and restores `cleared` on dispose. Keyed by owner because
- * the incoming detail view mounts before the outgoing one unmounts: a stale instance may neither set nor clear it.
- */
+/** Writes `target` from `read` while this scope owns `owner`, and restores `cleared` on dispose. Keyed by owner because
+ * the incoming detail view mounts before the outgoing one unmounts: a stale instance may neither set nor clear it. */
 function useOwnedWrite<T>(target: Ref<T>, owner: { n: number }, read: () => T, cleared: T): void {
   const self = ++owner.n;
   watch(
@@ -38,11 +33,8 @@ function useOwnedWrite<T>(target: Ref<T>, owner: { n: number }, read: () => T, c
   });
 }
 
-/**
- * Detail views call this when the URL is routable but the thing it points at is missing. The URL is preserved, while
- * the title falls back to the not-found copy and `robots` gets `noindex`, so a soft 404 is not published to crawlers as
- * a real page.
- */
+/** Detail views call this when the URL is routable but the thing it points at is missing: the URL is preserved, the title
+ * falls back to the not-found copy and `robots` gets `noindex`, so a soft 404 is not published as a real page. */
 export function useSoftNotFound(missing: MaybeRefOrGetter<boolean>): void {
   useOwnedWrite(softNotFound, SOFT_NOT_FOUND_OWNER, () => toValue(missing), false);
 }

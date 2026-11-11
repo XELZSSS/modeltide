@@ -1,7 +1,6 @@
 /**
- * FNV-1a, 32-bit. One copy, because two consumers hash the same strings: the cache keys (`server/util/hash.ts`) and
- * the provider dot hue (`shared/utils/color.ts`). A second hand-written loop is a silent divergence the day one of them
- * changes its constants, and neither shows it: keys just stop matching, colours just rotate.
+ * FNV-1a, 32-bit. One copy, because two consumers hash the same strings (the cache keys and the provider dot hue); a
+ * second hand-written loop diverges silently the day one changes its constants.
  */
 export function fnv1aHashUint32(raw: string, seed = 2166136261, prime = 16777619): number {
   let h = seed;

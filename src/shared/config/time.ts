@@ -21,11 +21,9 @@ export function todayIso(): string {
 }
 
 /**
- * An entry the upstream has retired: `expiresAt` is the first day the row is gone, so it is served through the day before
- * it. The source drops these while parsing; the ranking drops them again from a copy cached before the date passed,
- * because the array order is the ranking and a retired row would push every row below it down a place. The detail view
- * keeps them: a retired row is still the model a reader followed a link to, so its last snapshot is shown with a notice
- * instead of a dead page.
+ * An entry the upstream has retired: `expiresAt` is the first day the row is gone, so it is served through the day
+ * before. The source drops these while parsing and the ranking drops them again from a cached copy (the array order is
+ * the ranking); the detail view keeps them with a notice instead of a dead page.
  */
 export function isRetiredRankEntry(expiresAt: string | null, today: string = todayIso()): boolean {
   return expiresAt != null && expiresAt <= today;

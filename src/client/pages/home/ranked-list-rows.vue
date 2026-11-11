@@ -1,12 +1,7 @@
 <script setup lang="ts" generic="T extends { label: string; valueLabel?: string; color?: string }">
-/**
- * The ranked rows a home card shows: a rank number, a label and a right-aligned figure.
- *
- * Each row is a full 40px tall — the height does the separating between rows, so no divider is drawn.
- *
- * Generic over the row so a caller that prints more than the pair — the coding-agents card adds the model under the
- * agent's name — receives its own row in the slot instead of looking it up by index again.
- */
+/** The ranked rows a home card shows: a rank number, a label and a right-aligned figure. Each row fills its height —
+ * the height does the separating, so no divider is drawn. Generic over the row so a caller that prints more than the
+ * pair (the coding-agents card adds the model) receives its own row in the slot. */
 
 defineProps<{ rows: T[] }>();
 </script>
